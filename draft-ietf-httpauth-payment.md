@@ -376,7 +376,7 @@ Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
 ```
 
 The server MAY return a different token in `Payment-Authorization` than
-the original credential (e.g., a session token optimized for reuse).
+the original credential (e.g., a access token optimized for reuse).
 
 #### 5.4.1. Client Behavior
 
@@ -403,7 +403,7 @@ Servers that issue `Payment-Authorization` MUST:
 4. NOT require re-payment for requests within the authorization window
 
 Servers MAY issue a credential in `Payment-Authorization` that differs from
-the original payment credential. This allows servers to issue session tokens,
+the original payment credential. This allows servers to issue access tokens,
 reduce credential size, or implement other optimizations.
 
 Servers MAY revoke authorizations before their expiry time. When an
