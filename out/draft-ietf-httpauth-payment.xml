@@ -1,0 +1,1594 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc [
+  <!ENTITY nbsp "&#160;">
+  <!ENTITY zwsp "&#8203;">
+]>
+<rfc xmlns:xi="http://www.w3.org/2001/XInclude"
+     ipr="trust200902"
+     docName="draft-ietf-httpauth-payment-01"
+     submissionType="IETF"
+     category="std"
+     consensus="true"
+     version="3">
+
+  <front>
+    <title>The &quot;Payment&quot; HTTP Authentication Scheme</title>
+    <seriesInfo name="Internet-Draft" value="draft-ietf-httpauth-payment-01"/>
+    <author fullname="Jake Moxey">
+      <address>
+        <email>jake@tempo.xyz</email>
+      </address>
+    </author>
+    <date/>
+    <abstract>
+      <t>This document defines the &quot;Payment&quot; HTTP authentication scheme, enabling
+HTTP resources to require a payment challenge to be fulfilled before access. The scheme
+extends HTTP Authentication, using the HTTP 402 &quot;Payment
+Required&quot; status code.</t>
+      <t>The protocol is payment-method agnostic, supporting any payment network
+or currency through registered payment method identifiers. Specific
+payment methods (blockchain networks, traditional payment rails) are
+defined in separate payment method specifications.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="introduction">
+      <name>Introduction</name>
+      <t>HTTP 402 &quot;Payment Required&quot; was reserved in HTTP/1.1 <xref target="RFC9110"/> for future use but never standardized. This specification defines the &quot;Payment&quot; authentication scheme that gives 402 its semantics, enabling resources to require a payment challenge to be fulfilled before access.</t>
+      <section anchor="relationship-to-payment-method-specifications">
+        <name>Relationship to Payment Method Specifications</name>
+        <t>This specification defines the abstract protocol framework. Concrete payment methods are defined in payment method specifications that:</t>
+        <ul>
+          <li>Register a payment method identifier</li>
+          <li>Define the <tt>WWW-Authenticate</tt> format for that method</li>
+          <li>Define the <tt>Authorization</tt> format for that method</li>
+          <li>Specify verification procedures</li>
+        </ul>
+        <t>See Section 6.2 for registered payment method  specifications.</t>
+      </section>
+    </section>
+    <section anchor="requirements-language">
+      <name>Requirements Language</name>
+      <t>The key words &quot;<bcp14>MUST</bcp14>&quot;, &quot;<bcp14>MUST NOT</bcp14>&quot;, &quot;<bcp14>REQUIRED</bcp14>&quot;, &quot;<bcp14>SHALL</bcp14>&quot;, &quot;<bcp14>SHALL NOT</bcp14>&quot;, &quot;<bcp14>SHOULD</bcp14>&quot;, &quot;<bcp14>SHOULD NOT</bcp14>&quot;, &quot;<bcp14>RECOMMENDED</bcp14>&quot;, &quot;<bcp14>NOT RECOMMENDED</bcp14>&quot;, &quot;<bcp14>MAY</bcp14>&quot;, and &quot;<bcp14>OPTIONAL</bcp14>&quot; in this document are to be interpreted as described in BCP 14 <xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when, they appear in all capitals, as shown here.</t>
+    </section>
+    <section anchor="terminology">
+      <name>Terminology</name>
+      <dl>
+        <dt>Payment Challenge</dt>
+        <dd><t>A <tt>WWW-Authenticate</tt> header with scheme &quot;Payment&quot; indicating the payment requirements for accessing a resource.</t></dd>
+        <dt>Payment Credential</dt>
+        <dd><t>An <tt>Authorization</tt> header with scheme &quot;Payment&quot; containing payment authorization data.</t></dd>
+        <dt>Payment Method</dt>
+        <dd><t>A mechanism for transferring value, identified by a registered identifier (e.g., &quot;tempo&quot;, &quot;x402&quot;, &quot;lightning&quot;, &quot;solana&quot;).</t></dd>
+        <dt>Payment Intent</dt>
+        <dd><t>The type of payment request (e.g., &quot;charge&quot;, &quot;authorization&quot;). Defines the relationship between payer and payee.</t></dd>
+        <dt>Request</dt>
+        <dd><t>Method-specific data in the challenge enabling payment completion (e.g., invoice, address, authorization parameters). Encoded as base64url JSON in the <tt>request</tt> parameter.</t></dd>
+        <dt>Payload</dt>
+        <dd><t>Method-specific data in the credential proving payment (e.g., signature, preimage, transaction ID).</t></dd>
+      </dl>
+    </section>
+    <section anchor="protocol-overview">
+      <name>Protocol Overview</name>
+
+      <section anchor="request-flow">
+        <name>Request Flow</name>
+        <artwork type="ascii-art"><![CDATA[
+   Client                                            Server
+      │                                                 │
+      │  (1) GET /resource                              │
+      ├────────────────────────────────────────────────>│
+      │                                                 │
+      │  (2) 402 Payment Required                       │
+      │      WWW-Authenticate: Payment id="..",         │
+      │        method="..", intent="..", request=".."   │
+      │<────────────────────────────────────────────────┤
+      │                                                 │
+      │  (3) Client handles a payment challenge         │
+      │      (signs transaction, pays invoice, etc.)    │
+      │                                                 │
+      │  (4) GET /resource                              │
+      │      Authorization: Payment <credential>        │
+      ├────────────────────────────────────────────────>│
+      │                                                 │
+      │  (5) Server verifies and settles                │
+      │                                                 │
+      │  (6) 200 OK                                     │
+      │      Payment-Receipt: <receipt>                 │
+      │<────────────────────────────────────────────────┤
+      │                                                 │
+]]></artwork>
+      </section>
+      <section anchor="status-codes">
+        <name>Status Codes</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>402</td>
+              <td>Resource requires payment; see <tt>WWW-Authenticate</tt></td>
+            </tr>
+            <tr>
+              <td>200</td>
+              <td>Payment verified; resource provided</td>
+            </tr>
+            <tr>
+              <td>400</td>
+              <td>Malformed payment credential or proof</td>
+            </tr>
+            <tr>
+              <td>401</td>
+              <td>Valid format but payment verification failed</td>
+            </tr>
+            <tr>
+              <td>403</td>
+              <td>Payment verified but access denied (policy)</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>Servers <bcp14>MUST</bcp14> return 402 with a <tt>WWW-Authenticate: Payment</tt> header when payment is required. Servers <bcp14>SHOULD NOT</bcp14> return 402 without this header.</t>
+      </section>
+      <section anchor="relationship-to-401-unauthorized">
+        <name>Relationship to 401 Unauthorized</name>
+        <t>This specification uses 402 (Payment Required) for the initial payment challenge, diverging from the traditional 401 pattern used by other HTTP authentication schemes. This distinction is intentional:</t>
+        <ul>
+          <li><strong>402</strong> indicates the resource requires payment (economic barrier)</li>
+          <li><strong>401</strong> indicates authentication/authorization failure (credential barrier)</li>
+        </ul>
+        <t>When a client submits an invalid Payment credential, servers <bcp14>MUST</bcp14> return 401 (Unauthorized) with a <tt>WWW-Authenticate: Payment</tt> header containing a fresh challenge. This allows clients to distinguish between &quot;payment needed&quot; (402) and &quot;payment attempt failed&quot; (401).</t>
+        <t>Servers <bcp14>MAY</bcp14> also use 401 with <tt>WWW-Authenticate: Payment</tt> for resources that accept either traditional authentication or payment, allowing clients to choose their preferred mechanism.</t>
+      </section>
+    </section>
+    <section anchor="the-payment-authentication-scheme">
+      <name>The Payment Authentication Scheme</name>
+
+      <section anchor="challenge-www-authenticate">
+        <name>Challenge (WWW-Authenticate)</name>
+        <t>The Payment challenge is sent in the <tt>WWW-Authenticate</tt> header per <xref target="RFC7235"/>. The challenge uses the auth-param syntax defined in Section 2.1 of <xref target="RFC7235"/>:</t>
+        <sourcecode type="abnf"><![CDATA[
+challenge       = "Payment" [ 1*SP auth-params ]
+auth-params     = auth-param *( OWS "," OWS auth-param )
+auth-param      = token BWS "=" BWS ( token / quoted-string )
+]]></sourcecode>
+        <t>The following parameters are defined for the Payment scheme:</t>
+        <section anchor="required-parameters">
+          <name>Required Parameters</name>
+          <t><strong><tt>id</tt></strong>: Unique identifier for this payment challenge. Servers <bcp14>MUST</bcp14>   generate a cryptographically random value with at least 128 bits of   entropy for each challenge. Clients <bcp14>MUST</bcp14> include this value in the   credential to correlate the response with the challenge. Servers   <bcp14>MUST</bcp14> reject credentials with unknown, expired, or already-used <tt>id</tt>   values.</t>
+          <t><strong><tt>realm</tt></strong>: Protection space identifier per <xref target="RFC7235"/>. Servers <bcp14>MUST</bcp14>   include this parameter to define the scope of the payment requirement.   The realm value is a case-sensitive string that identifies the   protection space. Clients <bcp14>MAY</bcp14> use the realm to determine whether   cached payment authorizations apply. Examples:   - <tt>realm=&quot;api.example.com&quot;</tt> — entire API   - <tt>realm=&quot;api.example.com/v1&quot;</tt> — API version scope   - <tt>realm=&quot;Premium Content&quot;</tt> — access tier   - <tt>realm=&quot;Acme Corp Image Generation&quot;</tt> — branded service</t>
+          <t><strong><tt>method</tt></strong>: Payment method identifier (Section 6). <bcp14>MUST</bcp14> be a lowercase   ASCII string. Examples: &quot;tempo&quot;, &quot;lightning&quot;, &quot;solana&quot;.</t>
+          <t><strong><tt>intent</tt></strong>: Payment intent type (Section 7). Values: &quot;charge&quot;, &quot;approval&quot;.</t>
+          <t><strong><tt>request</tt></strong>: Base64url-encoded <xref target="RFC4648"/> JSON <xref target="RFC8259"/> containing   payment-method-specific data needed to complete payment (e.g., invoice,   address, payment authorization parameters). Structure is defined by the   payment method specification. Padding characters (&quot;=&quot;) <bcp14>MUST NOT</bcp14> be   included.</t>
+        </section>
+        <section anchor="optional-parameters">
+          <name>Optional Parameters</name>
+          <t><strong><tt>description</tt></strong>: Human-readable description of the resource or payment   purpose. This parameter is for display purposes only and <bcp14>MUST NOT</bcp14> be   relied upon for payment verification (see Section 12.5).</t>
+          <t>Unknown parameters <bcp14>MUST</bcp14> be ignored by clients.</t>
+        </section>
+        <section anchor="example-challenge">
+          <name>Example Challenge</name>
+          <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
+    realm="api.example.com",
+    method="tempo",
+    intent="charge",
+    request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
+]]></sourcecode>
+          <t>Example decoded <tt>request</tt> with <tt>method=&quot;tempo&quot;, intent=&quot;charge&quot;</tt>:</t>
+          <sourcecode type="jsonc"><![CDATA[
+{
+  "transaction": {
+    "to": "0x20c0000000000000000000000000000000000000",
+    "data": "0xa9059cbb...",
+    "validBefore": "0x59682000"
+  }
+}
+]]></sourcecode>
+        </section>
+      </section>
+      <section anchor="credentials-authorization">
+        <name>Credentials (Authorization)</name>
+        <t>The Payment credential is sent in the <tt>Authorization</tt> header using the token68 syntax defined in <xref target="RFC7235"/>:</t>
+        <sourcecode type="abnf"><![CDATA[
+credentials     = "Payment" 1*SP token68
+token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
+]]></sourcecode>
+        <t>The token68 value is a base64url-encoded JSON object (without padding) containing:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>id</tt></td>
+              <td>string</td>
+              <td>Yes</td>
+              <td>Challenge identifier (must match challenge <tt>id</tt>)</td>
+            </tr>
+            <tr>
+              <td><tt>payload</tt></td>
+              <td>object</td>
+              <td>Yes</td>
+              <td>Payload to fulfil the payment challenge (method-specific)</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>The <tt>payload</tt> field contains the payment-method-specific data needed to complete the payment challenge (e.g., signature, preimage, transaction ID).</t>
+        <t>Payment method specifications define the exact structure of <tt>payload</tt>.</t>
+        <section anchor="example-credential">
+          <name>Example Credential</name>
+          <sourcecode type="http"><![CDATA[
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZCI6eyJ0cmFuc2FjdGlvbiI6eyJjaGFpbklkIjo4MDA4NSwibm9uY2VLZXkiOiIweDAiLCJub25jZSI6MCwibWF4RmVlUGVyR2FzIjoiMTAwMDAwMDAwMCIsImdhc0xpbWl0IjoxMDAwMDAsImNhbGxzIjpbeyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIn1dLCJ2YWxpZEJlZm9yZSI6MTcwNDExMDQwMDAwMH0sInNpZ25hdHVyZSI6IjB4Li4uIn19
+]]></sourcecode>
+          <t>Decoded credential:</t>
+          <sourcecode type="jsonc"><![CDATA[
+{
+  "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+  "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
+}
+]]></sourcecode>
+        </section>
+      </section>
+      <section anchor="payment-receipt-header">
+        <name>Payment-Receipt Header</name>
+        <t>Servers <bcp14>SHOULD</bcp14> include a <tt>Payment-Receipt</tt> header on successful responses:</t>
+        <sourcecode type="abnf"><![CDATA[
+Payment-Receipt = token68
+]]></sourcecode>
+        <t>The decoded JSON object contains:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>status</tt></td>
+              <td>string</td>
+              <td>Payment status: &quot;success&quot; or &quot;failed&quot;</td>
+            </tr>
+            <tr>
+              <td><tt>method</tt></td>
+              <td>string</td>
+              <td>Payment method used</td>
+            </tr>
+            <tr>
+              <td><tt>timestamp</tt></td>
+              <td>string</td>
+              <td>ISO 8601 settlement time</td>
+            </tr>
+            <tr>
+              <td><tt>reference</tt></td>
+              <td>string</td>
+              <td>Method-specific reference (tx hash, etc.)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="reusing-credentials">
+        <name>Reusing Credentials</name>
+        <t>Payment credentials are generally single-use. Unlike traditional HTTP authentication schemes where credentials can be reused across requests, Payment credentials are bound to specific challenges and typically represent one-time proofs of payment.</t>
+        <t>Clients <bcp14>MUST NOT</bcp14> reuse Payment credentials across different challenges. Each 402 response contains a unique challenge <tt>id</tt>, and the corresponding credential is valid only for that specific challenge.</t>
+        <t>For repeated access to the same resource, clients <bcp14>SHOULD</bcp14>:</t>
+        <ol type="1">
+          <li>Use the <tt>authorization</tt> intent to establish ongoing payment rights, or</li>
+          <li>Request a new challenge and generate a fresh credential for each access</li>
+        </ol>
+        <t>Servers <bcp14>MAY</bcp14> cache successful payment verifications and allow subsequent requests without re-verification, but this is an implementation choice and not guaranteed by this specification.</t>
+        <t>The scope of credential validity is determined by:</t>
+        <ul>
+          <li><strong>Origin</strong>: Credentials are bound to the origin (scheme, host, port)</li>
+        </ul>
+        <t>that issued the challenge</t>
+        <ul>
+          <li><strong>Resource</strong>: Credentials are typically bound to the specific resource</li>
+        </ul>
+        <t>or protection space (<tt>realm</tt>) for which they were issued</t>
+        <ul>
+          <li><strong>Time</strong>: Credentials may have expiry as defined in the <tt>request</tt> payload</li>
+        </ul>
+      </section>
+    </section>
+    <section anchor="payment-methods">
+      <name>Payment Methods</name>
+
+      <section anchor="method-identifier-format">
+        <name>Method Identifier Format</name>
+        <t>Payment methods are identified by lowercase ASCII strings. Method identifiers <bcp14>SHOULD</bcp14> follow the patterns established by W3C Payment Method Identifiers <xref target="w3c-pmi"/>:</t>
+        <sourcecode type="abnf"><![CDATA[
+payment-method-id = method-name [ ":" sub-method ]
+method-name       = 1*ALPHA
+sub-method        = 1*( ALPHA / DIGIT / "-" )
+]]></sourcecode>
+        <t>Method identifiers are case-sensitive and <bcp14>MUST</bcp14> be lowercase.</t>
+        <t>The optional <tt>sub-method</tt> component allows payment methods to specify variants, networks, or chains. Payment method specifications <bcp14>MUST</bcp14> define the semantics of their sub-methods.</t>
+      </section>
+      <section anchor="registered-methods">
+        <name>Registered Methods</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Identifier</th>
+              <th>Description</th>
+              <th>Specification</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>tempo</tt></td>
+              <td>Tempo Network</td>
+              <td><xref target="tempo-payment-method"/></td>
+            </tr>
+            <tr>
+              <td><tt>x402</tt></td>
+              <td>x402</td>
+              <td><xref target="x402-payment-method"/></td>
+            </tr>
+          </tbody>
+        </table>
+        <t>Additional payment methods (blockchain networks, traditional payment processors, mobile wallets) may be registered per Section 13.3. See Appendix C for illustrative examples of potential payment methods.</t>
+      </section>
+    </section>
+    <section anchor="payment-intents">
+      <name>Payment Intents</name>
+      <t>Payment intents describe the type of payment proof being requested. This specification defines base intents that apply across all payment methods. Payment method specifications <bcp14>MAY</bcp14> define additional method-specific intents.</t>
+      <section anchor="intent-identifiers">
+        <name>Intent Identifiers</name>
+        <t>Intent identifiers follow this syntax:</t>
+        <sourcecode type="abnf"><![CDATA[
+intent      = 1*( ALPHA / DIGIT / "-" )
+]]></sourcecode>
+        <t>The base intent <tt>charge</tt> is defined by this specification. Payment method specifications <bcp14>MAY</bcp14> define additional intents by registering them in the Payment Intent Registry (Section 13.4).</t>
+      </section>
+      <section anchor="base-intent-charge">
+        <name>Base Intent: &quot;charge&quot;</name>
+        <t>A one-time payment of the specified amount. The payer pushes payment immediately.</t>
+      </section>
+      <section anchor="payment-method-intents">
+        <name>Payment Method Intents</name>
+        <t>Payment method specifications <bcp14>MAY</bcp14> define additional intents by registering them in the Payment Intent Registry (Section 13.4).</t>
+        <t>Examples of payment method intents:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Intent</th>
+              <th>Applicable Methods</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>approval</tt></td>
+              <td><tt>tempo</tt>, <tt>stripe</tt>, <tt>x402</tt></td>
+              <td>Pre-authorize future charges</td>
+            </tr>
+            <tr>
+              <td><tt>hodl</tt></td>
+              <td><tt>lightning</tt></td>
+              <td>Hold invoice; payment held until released</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>Clients that do not recognize a payment method intent <bcp14>SHOULD</bcp14> treat the challenge as unsupported and <bcp14>MAY</bcp14> fall back to other offered challenges.</t>
+      </section>
+      <section anchor="intent-negotiation">
+        <name>Intent Negotiation</name>
+        <t>If a server supports multiple intents, it <bcp14>MAY</bcp14> issue multiple challenges:</t>
+        <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approval", request="..."
+]]></sourcecode>
+        <t>Clients choose which challenge to respond to.</t>
+      </section>
+    </section>
+    <section anchor="error-handling">
+      <name>Error Handling</name>
+
+      <section anchor="error-response-format">
+        <name>Error Response Format</name>
+        <t>Servers <bcp14>SHOULD</bcp14> return JSON error bodies with 402 responses:</t>
+        <sourcecode type="jsonc"><![CDATA[
+{
+  "error": "error_code",
+  "message": "Human-readable description"
+}
+]]></sourcecode>
+      </section>
+      <section anchor="error-codes">
+        <name>Error Codes</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>HTTP</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>payment_required</tt></td>
+              <td>402</td>
+              <td>Resource requires payment</td>
+            </tr>
+            <tr>
+              <td><tt>payment_insufficient</tt></td>
+              <td>402</td>
+              <td>Amount too low</td>
+            </tr>
+            <tr>
+              <td><tt>payment_expired</tt></td>
+              <td>402</td>
+              <td>Challenge or authorization expired</td>
+            </tr>
+            <tr>
+              <td><tt>payment_verification_failed</tt></td>
+              <td>401</td>
+              <td>Proof invalid</td>
+            </tr>
+            <tr>
+              <td><tt>payment_method_unsupported</tt></td>
+              <td>400</td>
+              <td>Method not accepted</td>
+            </tr>
+            <tr>
+              <td><tt>malformed_proof</tt></td>
+              <td>400</td>
+              <td>Invalid proof format</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="retry-behavior">
+        <name>Retry Behavior</name>
+        <t>Servers <bcp14>SHOULD</bcp14> use the <tt>Retry-After</tt> HTTP header <xref target="RFC9110"/> to indicate when clients may retry:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Retry-After: 60
+WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa", realm="api.example.com", method="tempo", ...
+]]></sourcecode>
+        <t>The <tt>Retry-After</tt> value is in seconds. Absence of this header indicates the client may retry immediately with a corrected payment. Servers <bcp14>SHOULD</bcp14> omit the header when retry will not succeed (e.g., fundamental policy issues).</t>
+      </section>
+    </section>
+    <section anchor="discovery">
+      <name>Discovery</name>
+
+      <section anchor="well-known-endpoint">
+        <name>Well-Known Endpoint</name>
+        <t>Servers <bcp14>MAY</bcp14> expose payment capabilities at:</t>
+        <sourcecode><![CDATA[
+GET /.well-known/payment
+]]></sourcecode>
+        <section anchor="request">
+          <name>Request</name>
+          <t>The client issues a GET request to <tt>/.well-known/payment</tt>. The request <bcp14>SHOULD</bcp14> include an <tt>Accept</tt> header with <tt>application/json</tt>:</t>
+          <sourcecode type="http"><![CDATA[
+GET /.well-known/payment HTTP/1.1
+Host: api.example.com
+Accept: application/json
+]]></sourcecode>
+        </section>
+        <section anchor="response">
+          <name>Response</name>
+          <t>The server responds with a JSON object describing its payment capabilities. The response <bcp14>MUST</bcp14> use <tt>Content-Type: application/json</tt>.</t>
+          <t>Response Schema:</t>
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><tt>version</tt></td>
+                <td>integer</td>
+                <td><bcp14>REQUIRED</bcp14></td>
+                <td>Schema version. Currently <tt>1</tt>.</td>
+              </tr>
+              <tr>
+                <td><tt>realm</tt></td>
+                <td>string</td>
+                <td><bcp14>OPTIONAL</bcp14></td>
+                <td>Default realm for payment challenges.</td>
+              </tr>
+              <tr>
+                <td><tt>methods</tt></td>
+                <td>object</td>
+                <td><bcp14>REQUIRED</bcp14></td>
+                <td>Map of supported payment methods.</td>
+              </tr>
+            </tbody>
+          </table>
+          <t>Method Object Schema:</t>
+          <t>Each key in <tt>methods</tt> is a registered payment method identifier. The value is an object with:</t>
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><tt>intents</tt></td>
+                <td>array</td>
+                <td><bcp14>REQUIRED</bcp14></td>
+                <td>Supported intent types (e.g., <tt>[&quot;charge&quot;, &quot;approval&quot;]</tt>).</td>
+              </tr>
+              <tr>
+                <td><tt>assets</tt></td>
+                <td>array</td>
+                <td><bcp14>REQUIRED</bcp14></td>
+                <td>Accepted asset identifiers (method-specific format).</td>
+              </tr>
+            </tbody>
+          </table>
+          <t>Example Response:</t>
+          <sourcecode type="http"><![CDATA[
+HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: max-age=3600
+
+{
+  "version": 1,
+  "realm": "api.example.com",
+  "methods": {
+    "tempo": {
+      "intents": ["charge", "approval"],
+      "assets": ["0x1", "0x1a"],
+    },
+    "lightning": {
+      "intents": ["charge"],
+      "assets": ["BTC"],
+      "description": "Pay with Bitcoin Lightning"
+    }
+  }
+}
+]]></sourcecode>
+        </section>
+      </section>
+      <section anchor="dns-discovery">
+        <name>DNS Discovery</name>
+        <t>Servers <bcp14>MAY</bcp14> advertise payment support via DNS TXT records:</t>
+        <sourcecode><![CDATA[
+_payment.api.example.com. TXT "v=payment1; methods=tempo,evm"
+]]></sourcecode>
+      </section>
+    </section>
+    <section anchor="extensibility">
+      <name>Extensibility</name>
+
+      <section anchor="payment-method-specifications">
+        <name>Payment Method Specifications</name>
+        <t>Payment method specifications <bcp14>MUST</bcp14> define:</t>
+        <ol type="1">
+          <li><strong>Method Identifier</strong>: Unique lowercase string</li>
+          <li><strong>Request Schema</strong>: JSON structure for the <tt>request</tt> parameter</li>
+          <li><strong>Payload Schema</strong>: JSON structure for credential payloads</li>
+          <li><strong>Verification Procedure</strong>: How servers validate proofs</li>
+          <li><strong>Settlement Procedure</strong>: How payment is finalized</li>
+          <li><strong>Security Considerations</strong>: Method-specific threats and mitigations</li>
+        </ol>
+      </section>
+      <section anchor="custom-parameters">
+        <name>Custom Parameters</name>
+        <t>Implementations <bcp14>MAY</bcp14> define additional parameters in challenges:</t>
+        <ul>
+          <li>Parameters <bcp14>MUST</bcp14> use lowercase names</li>
+          <li>Parameters <bcp14>SHOULD</bcp14> be documented</li>
+          <li>Unknown parameters <bcp14>MUST</bcp14> be ignored by clients</li>
+        </ul>
+      </section>
+      <section anchor="custom-headers">
+        <name>Custom Headers</name>
+        <t>Implementations <bcp14>MAY</bcp14> define additional headers:</t>
+        <ul>
+          <li>Headers <bcp14>MUST</bcp14> follow RFC 6648 (no &quot;X-&quot; prefix)</li>
+          <li>Headers <bcp14>MUST</bcp14> be documented</li>
+          <li>Headers <bcp14>SHOULD</bcp14> remain optional</li>
+        </ul>
+      </section>
+    </section>
+    <section anchor="internationalization-considerations">
+      <name>Internationalization Considerations</name>
+
+      <section anchor="character-encoding">
+        <name>Character Encoding</name>
+        <t>All string values in the Payment scheme use UTF-8 encoding <xref target="RFC3629"/>:</t>
+        <ul>
+          <li>The <tt>request</tt> and credential payloads are JSON <xref target="RFC8259"/>, which mandates</li>
+        </ul>
+        <t>UTF-8 encoding</t>
+        <ul>
+          <li>Payment method identifiers are restricted to ASCII lowercase letters</li>
+          <li>The <tt>realm</tt> and <tt>description</tt> parameters may contain UTF-8 text</li>
+        </ul>
+      </section>
+      <section anchor="human-readable-text">
+        <name>Human-Readable Text</name>
+        <t>The <tt>description</tt> parameter and error messages may contain localized text. Servers <bcp14>SHOULD</bcp14> use the <tt>Accept-Language</tt> request header <xref target="RFC9110"/> to determine the appropriate language for human-readable content.</t>
+        <t>The <tt>realm</tt> parameter carries data that can be considered textual; however, <xref target="RFC7235"/> does not define a way to reliably transport non-US-ASCII characters. Implementations <bcp14>SHOULD</bcp14> use ASCII-only values for <tt>realm</tt> to ensure interoperability.</t>
+      </section>
+      <section anchor="payment-method-considerations">
+        <name>Payment Method Considerations</name>
+        <t>Payment method specifications may define additional internationalization requirements for their specific <tt>request</tt> and <tt>payload</tt> structures.</t>
+      </section>
+    </section>
+    <section anchor="security-considerations">
+      <name>Security Considerations</name>
+
+      <section anchor="threat-model">
+        <name>Threat Model</name>
+        <t>This specification assumes:</t>
+        <ul>
+          <li>Attackers can observe all network traffic</li>
+          <li>Attackers can inject, modify, or replay messages</li>
+          <li>Attackers may control malicious servers or clients</li>
+        </ul>
+      </section>
+      <section anchor="transport-security">
+        <name>Transport Security</name>
+        <t>Implementations <bcp14>MUST</bcp14> use TLS 1.3 <xref target="RFC8446"/> or later when transmitting Payment challenges and credentials. Payment credentials contain sensitive authorization data that could result in financial loss if intercepted.</t>
+        <t>Servers <bcp14>MUST NOT</bcp14> issue Payment challenges over unencrypted HTTP. Clients <bcp14>MUST NOT</bcp14> send Payment credentials over unencrypted HTTP.</t>
+        <t>Implementations <bcp14>SHOULD</bcp14> be aware of intermediaries (proxies, TLS termination points) that may have access to Payment headers. Organizations deploying payment-enabled services should ensure appropriate trust boundaries.</t>
+      </section>
+      <section anchor="challenge-identifier-security">
+        <name>Challenge Identifier Security</name>
+        <t>The challenge <tt>id</tt> parameter <bcp14>MUST</bcp14> be:</t>
+        <ul>
+          <li><strong>Unpredictable</strong>: Not guessable by clients or attackers</li>
+          <li><strong>Unique</strong>: Never reused across challenges</li>
+          <li><strong>Bound</strong>: Each <tt>id</tt> <bcp14>MUST</bcp14> be bound to:</li>
+        </ul>
+        <t>- The origin that issued it   - The resource or realm it protects   - The payment parameters in <tt>request</tt></t>
+        <t>Servers <bcp14>MUST</bcp14> reject credentials containing:</t>
+        <ul>
+          <li>Invalid <tt>id</tt> values</li>
+          <li>Expired <tt>id</tt> values</li>
+          <li>Previously-used <tt>id</tt> values (for single-use intents)</li>
+        </ul>
+      </section>
+      <section anchor="replay-protection">
+        <name>Replay Protection</name>
+        <t>Payment methods <bcp14>MUST</bcp14> define their own replay protection mechanisms (e.g., on-chain nonce consumption, preimage revelation, authorization expiry). This specification does not mandate a specific approach.</t>
+        <t>Payment method specifications <bcp14>SHOULD</bcp14> define expiry semantics in the <tt>request</tt> payload. Servers <bcp14>SHOULD</bcp14> reject credentials for expired challenges.</t>
+      </section>
+      <section anchor="amount-verification">
+        <name>Amount Verification</name>
+        <t>Clients <bcp14>MUST</bcp14> verify before authorizing payment:</t>
+        <ol type="1">
+          <li>Requested amount is reasonable for the resource</li>
+          <li>Recipient/address is expected</li>
+          <li>Currency/asset is as expected</li>
+          <li>Validity window is appropriate</li>
+        </ol>
+        <t>Blind authorization of payments is dangerous.</t>
+        <t>Clients <bcp14>MUST NOT</bcp14> rely on the <tt>description</tt> parameter for payment verification. The <tt>description</tt> is human-readable metadata that is not cryptographically bound to the payment data in <tt>request</tt>. Malicious servers could provide a misleading description (e.g., &quot;Pay 1 USD&quot;) while the actual <tt>request</tt> payload requests a different amount. Clients <bcp14>MUST</bcp14> decode and verify the <tt>request</tt> parameter directly.</t>
+      </section>
+      <section anchor="privacy">
+        <name>Privacy</name>
+        <ul>
+          <li>Servers <bcp14>MUST NOT</bcp14> require user accounts for payment</li>
+          <li>Payment methods <bcp14>SHOULD</bcp14> support pseudonymous payments where possible</li>
+          <li>Servers <bcp14>SHOULD NOT</bcp14> log Payment credentials or receipts in plaintext</li>
+          <li>Servers <bcp14>SHOULD NOT</bcp14> include Payment headers in analytics or telemetry</li>
+          <li>Payment privacy depends on the underlying payment method</li>
+        </ul>
+      </section>
+      <section anchor="credential-storage-and-logging">
+        <name>Credential Storage and Logging</name>
+        <t>Implementations <bcp14>MUST</bcp14> treat <tt>Authorization: Payment</tt> headers and <tt>Payment-Receipt</tt> headers as sensitive data:</t>
+        <ul>
+          <li>Servers <bcp14>MUST NOT</bcp14> log these headers in plaintext access logs</li>
+          <li>Clients <bcp14>SHOULD</bcp14> protect stored wallet keys used to generate credentials</li>
+          <li>Implementations <bcp14>SHOULD</bcp14> exclude Payment headers from debug output</li>
+        </ul>
+      </section>
+      <section anchor="caching">
+        <name>Caching</name>
+        <t>Servers <bcp14>SHOULD</bcp14> send appropriate cache-control headers with 402 responses:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment ...
+]]></sourcecode>
+        <t>The <tt>no-store</tt> directive prevents caching of payment challenges, which may contain time-sensitive or single-use payment parameters.</t>
+        <t>Similarly, responses with <tt>Payment-Receipt</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt> to prevent intermediary caching of payment confirmation data.</t>
+      </section>
+      <section anchor="cross-origin-considerations">
+        <name>Cross-Origin Considerations</name>
+        <t>Payment challenges may be triggered by cross-origin requests. Clients (particularly browser-based wallets) <bcp14>SHOULD</bcp14>:</t>
+        <ul>
+          <li>Clearly display the origin requesting payment</li>
+          <li>Require explicit user confirmation before authorizing payments</li>
+          <li>Not automatically respond to Payment challenges without user interaction</li>
+        </ul>
+        <t>Servers <bcp14>SHOULD</bcp14> use appropriate CORS headers to control which origins may trigger payment flows.</t>
+      </section>
+      <section anchor="denial-of-service">
+        <name>Denial of Service</name>
+        <t>Servers <bcp14>SHOULD</bcp14> implement rate limiting on:</t>
+        <ul>
+          <li>402 challenges issued</li>
+          <li>Credential verification attempts</li>
+          <li>Settlement requests</li>
+        </ul>
+      </section>
+      <section anchor="settlement-finality">
+        <name>Settlement Finality</name>
+        <t>The <tt>Payment-Receipt</tt> header indicates the server&apos;s assertion that payment was received, but is not a cryptographic proof of settlement. The actual settlement finality depends on the underlying payment Authentication method:</t>
+        <ul>
+          <li>Some methods provide instant finality (e.g., Lightning preimage reveal)</li>
+          <li>Others may have delayed finality (e.g., blockchain confirmations)</li>
+          <li>Some may be reversible (e.g., traditional payment chargebacks)</li>
+        </ul>
+        <t>Clients and servers should understand the finality guarantees of their chosen payment method as documented in the payment method specification.</t>
+      </section>
+    </section>
+    <section anchor="iana-considerations">
+      <name>IANA Considerations</name>
+
+      <section anchor="authentication-scheme-registration">
+        <name>Authentication Scheme Registration</name>
+        <t>This document registers the &quot;Payment&quot; authentication scheme in the &quot;Hypertext Transfer Protocol (HTTP) Authentication Scheme Registry&quot; established by <xref target="RFC7235"/>:</t>
+        <ul>
+          <li><strong>Authentication Scheme Name</strong>: Payment</li>
+          <li><strong>Reference</strong>: This document, Section 5</li>
+          <li><strong>Notes</strong>: Used with HTTP 402 status code for proof-of-payment flows</li>
+        </ul>
+      </section>
+      <section anchor="header-field-registration">
+        <name>Header Field Registration</name>
+        <t>This document registers the following header field in the &quot;Hypertext Transfer Protocol (HTTP) Field Name Registry&quot;:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field Name</th>
+              <th>Status</th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Payment-Receipt</td>
+              <td>permanent</td>
+              <td>This document, Section 5.3</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="payment-method-registry">
+        <name>Payment Method Registry</name>
+        <t>This document establishes the &quot;HTTP Payment Methods&quot; registry. This registry uses the &quot;Specification Required&quot; policy defined in <xref target="RFC8126"/>.</t>
+        <t>Registration requests must include:</t>
+        <ul>
+          <li><strong>Method Identifier</strong>: Unique lowercase ASCII string</li>
+          <li><strong>Description</strong>: Brief description of the payment method</li>
+          <li><strong>Reference</strong>: Reference to the specification document</li>
+          <li><strong>Contact</strong>: Contact information for the registrant</li>
+        </ul>
+        <t>Initial registry contents:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Identifier</th>
+              <th>Description</th>
+              <th>Reference</th>
+              <th>Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>tempo</tt></td>
+              <td>Tempo Network</td>
+              <td><xref target="tempo-payment-method"/></td>
+              <td>TBD</td>
+            </tr>
+            <tr>
+              <td><tt>x402</tt></td>
+              <td>x402</td>
+              <td><xref target="x402-payment-method"/></td>
+              <td>TBD</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="payment-intent-registry">
+        <name>Payment Intent Registry</name>
+        <t>This document establishes the &quot;HTTP Payment Intents&quot; registry. This registry uses the &quot;Specification Required&quot; policy defined in <xref target="RFC8126"/>.</t>
+        <t>Registration requests for extension intents must include:</t>
+        <ul>
+          <li><strong>Intent Identifier</strong>: Unique lowercase ASCII string</li>
+          <li><strong>Applicable Methods</strong>: Payment methods that support this intent</li>
+          <li><strong>Description</strong>: Brief description of the intent semantics</li>
+          <li><strong>Reference</strong>: Reference to the specification document</li>
+          <li><strong>Contact</strong>: Contact information for the registrant</li>
+        </ul>
+        <t>Initial registry contents:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Intent</th>
+              <th>Applicable Methods</th>
+              <th>Description</th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>charge</tt></td>
+              <td>(all)</td>
+              <td>One-time payment charge</td>
+              <td>This document, Section 7.2</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="well-known-uri-registration">
+        <name>Well-Known URI Registration</name>
+        <t>This document registers the following well-known URI in the &quot;Well-Known URIs&quot; registry established by <xref target="RFC8615"/>:</t>
+        <ul>
+          <li><strong>URI Suffix</strong>: payment</li>
+          <li><strong>Change Controller</strong>: IETF</li>
+          <li><strong>Reference</strong>: This document, Section 9.1</li>
+          <li><strong>Status</strong>: permanent</li>
+          <li><strong>Related Information</strong>: None</li>
+        </ul>
+      </section>
+    </section>
+  </middle>
+
+  <back>
+    <references>
+      <name>References</name>
+      <references>
+        <name>Normative References</name>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.2119.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.3629.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.4648.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.5234.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.7235.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8126.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8174.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8259.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8446.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8615.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9110.xml"/>
+      </references>
+      <references>
+        <name>Informative References</name>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.6648.xml"/>
+        <reference anchor="tempo-payment-method">
+          <front>
+            <title>Payment Authentication Method: Tempo</title>
+            <author/>
+          </front>
+        </reference>
+        <reference anchor="x402-payment-method" target="https://github.com/coinbase/x402/blob/main/specs/x402-specification-v2.md">
+          <front>
+            <title>X402 Protocol Specification</title>
+            <author/>
+          </front>
+        </reference>
+        <reference anchor="w3c-pmi" target="https://www.w3.org/TR/payment-method-id/">
+          <front>
+            <title>Payment Method Identifiers</title>
+            <author><organization>W3C</organization></author>
+          </front>
+        </reference>
+      </references>
+    </references>
+    <section anchor="abnf-collected">
+      <name>ABNF Collected</name>
+      <t>This appendix collects all ABNF defined in this document per <xref target="RFC5234"/>. Core rules (ALPHA, DIGIT, SP, HTAB, DQUOTE, OWS, BWS, token, quoted-string, token68) are imported from <xref target="RFC9110"/> and <xref target="RFC7235"/>.</t>
+      <sourcecode type="abnf"><![CDATA[
+; HTTP Authentication Challenge (following RFC 7235 Section 2.1)
+payment-challenge = "Payment" [ 1*SP auth-params ]
+auth-params       = auth-param *( OWS "," OWS auth-param )
+auth-param        = token BWS "=" BWS ( token / quoted-string )
+
+; Required parameters: id, realm, method, intent, request
+; Optional parameters: description
+
+; HTTP Authorization Credentials (following RFC 7235 token68)
+payment-credentials = "Payment" 1*SP token68
+
+; Payment-Receipt header field value
+Payment-Receipt     = token68
+
+; Payment method identifier
+payment-method-id   = method-name [ ":" sub-method ]
+method-name         = 1*ALPHA
+sub-method          = 1*( ALPHA / DIGIT / "-" )
+]]></sourcecode>
+    </section>
+    <section anchor="examples">
+      <name>Examples</name>
+
+      <section anchor="tempo-charge">
+        <name>Tempo Charge</name>
+        <t>One-time payment using a signed Tempo transaction:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                           Tempo Network
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │  (2) 402 Payment Required            │                                  │
+   │      method="tempo"                  │                                  │
+   │      intent="charge"                 │                                  │
+   │      request={transaction details}   │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (3) Sign transaction                │                                  │
+   │                                      │                                  │
+   │                                      │                                  │
+   │  (4) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={signature}             │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (5) Submit signed transaction   │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (6) Transaction confirmed       │
+   │                                      │                                  │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (7) 200 OK + Payment-Receipt        │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
+    realm="api.example.com/v1",
+    method="tempo",
+    intent="charge",
+    request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
+Content-Type: application/json
+
+{"error": "payment_required", "message": "Payment required for API access"}
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="jsonc"><![CDATA[
+{
+  "transaction": {
+    "to": "0x20c0000000000000000000000000000000000000",
+    "data": "0xa9059cbb...",
+    "validBefore": "0x59682000"
+  }
+}
+]]></sourcecode>
+        <t>The <tt>transaction</tt> object contains the Tempo transaction fields for the client to sign. The <tt>data</tt> field is encoded TIP-20 <tt>transfer(to, amount)</tt>.</t>
+        <t>Request with Payment:</t>
+        <sourcecode type="http"><![CDATA[
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAxIiwicGF5bG9hZCI6eyJ0eGlkIjoiMHhhYmMxMjMuLi4iLCJzaWduYXR1cmUiOiIweC4uLiJ9fQ
+]]></sourcecode>
+        <t>Decoded credential:</t>
+        <sourcecode type="jsonc"><![CDATA[
+{
+  "method": "tempo",
+  "id": "qB3wErTyU7iOpAsD9fGhJk",
+  "payload": {
+    "txid": "0xabc123...",
+    "signature": "0x..."
+  }
+}
+]]></sourcecode>
+        <t>Success:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 200 OK
+Cache-Control: private
+Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJyZWZlcmVuY2UiOiIweGFiYzEyMy4uLiJ9
+Content-Type: application/json
+
+{"data": "..."}
+]]></sourcecode>
+      </section>
+      <section anchor="tempo-authorization">
+        <name>Tempo Authorization</name>
+        <t>Authorize the server to charge future payments within limits using Tempo access keys:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                           Tempo Network
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │  (2) 402 Payment Required            │                                  │
+   │      method="tempo"                  │                                  │
+   │      intent="approval"               │                                  │
+   │      request={keyId, limits, expiry} │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (3) Sign access key authorization   │                                  │
+   │                                      │                                  │
+   │                                      │                                  │
+   │  (4) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={signed authorization}  │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (5) Register access key         │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (6) Key registered              │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (7) 200 OK + Payment-Receipt        │                                  │
+   │      (key provisioned)               │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │                                      │                                  │
+   │  --- Future requests ---             │                                  │
+   │                                      │                                  │
+   │  (8) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (9) Charge via access key       │
+   │                                      │                                  │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │  (10) 200 OK                         │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
+    realm="api.example.com/v1",
+    method="tempo",
+    intent="approval",
+    description="Authorize API usage",
+    request="eyJhdXRob3JpemF0aW9uIjp7ImtleUlkIjoiMHhzZXJ2ZXJrZXkuLi4iLCJleHBpcnkiOjE3MDY3NDU2MDAwMDAsImxpbWl0cyI6W3sidG9rZW4iOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJhbW91bnQiOiIxMDAwMDAwMDAiLCJwZXJpb2QiOjg2NDAwfV19fQ"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="jsonc"><![CDATA[
+{
+  "authorization": {
+    "chainId": "0xa5bd",
+    "keyId": "0x0ab24fa...",
+    "keyType": "0x01",
+    "expiry": "0x65b8d980",
+    "limits": [
+      {
+        "token": "0x20c0000000000000000000000000000000000000",
+        "amount": "0x5f5e100" // 100 USD
+      }
+    ]
+  }
+}
+]]></sourcecode>
+        <t>The <tt>authorization</tt> object contains the access key authorization for the client to sign.</t>
+        <t>Request with Authorization:</t>
+        <sourcecode type="http"><![CDATA[
+GET /api/v1/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAyIiwicGF5bG9hZCI6IjB4Li4uIn0
+]]></sourcecode>
+        <t>Decoded credential:</t>
+        <sourcecode type="jsonc"><![CDATA[
+{
+  "method": "tempo",
+  "id": "zL4xCvBnM6kJhGfD8sAaWe",
+  "payload": "0x..." // RLP-encoded Tempo key authorization
+}
+]]></sourcecode>
+        <t>Success:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 200 OK
+Cache-Control: private
+Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJyZWZlcmVuY2UiOiIweHR4aGFzaC4uLiIsImtleUlkIjoiMHhzZXJ2ZXJrZXkuLi4iLCJleHBpcnkiOjE3MDY3NDU2MDAwMDB9
+Content-Type: application/json
+
+{"message": "Access key provisioned", "keyId": "0xserverkey..."}
+]]></sourcecode>
+      </section>
+      <section anchor="multiple-payment-options">
+        <name>Multiple Payment Options</name>
+        <t>Servers <bcp14>MAY</bcp14> offer multiple payment methods or intents. Each option gets its own <tt>WWW-Authenticate</tt> header:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="pT7yHnKmQ2wErXsZ5vCbNl", realm="api.example.com", method="tempo", intent="charge", request="eyJ0cmFuc2FjdGlvbiI6ey4uLn19"
+WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="tempo", intent="approval", request="eyJhdXRob3JpemF0aW9uIjp7Li4ufX0"
+WWW-Authenticate: Payment id="hG9iKlMnO4pQrStU7vWxYz", realm="api.example.com", method="lightning", intent="charge", request="eyJpbnZvaWNlIjoibG5iYy4uLiJ9"
+]]></sourcecode>
+        <t>Client selects preferred method/intent and responds accordingly.</t>
+      </section>
+      <section anchor="failed-payment-verification">
+        <name>Failed Payment Verification</name>
+        <t>When a client submits an invalid payment credential:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 401 Unauthorized
+Cache-Control: no-store
+WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="tempo", intent="charge", request="..."
+Content-Type: application/json
+
+{"error": "payment_verification_failed", "message": "Signature verification failed"}
+]]></sourcecode>
+        <t>Note the use of 401 (not 402) to indicate the payment attempt failed, with a fresh challenge for retry.</t>
+      </section>
+    </section>
+    <section anchor="payment-method-examples">
+      <name>Payment Method Examples</name>
+      <t>This appendix provides illustrative examples of how various payment methods could be implemented. These are non-normative and intended to guide future payment method specifications.</t>
+      <section anchor="ethereum-evm-chains">
+        <name>Ethereum (EVM Chains)</name>
+        <t>EVM-compatible chains using EIP-3009 <tt>transferWithAuthorization</tt>:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                          Blockchain
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │  (2) 402 Payment Required            │                                  │
+   │      method="ethereum:8453"          │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (3) Sign EIP-712 typed data         │                                  │
+   │      (transferWithAuthorization)     │                                  │
+   │                                      │                                  │
+   │  (4) GET /resource                   │                                  │
+   │      Authorization: Payment ...      │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (5) Submit signed transfer      │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (6) Transaction confirmed       │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (7) 200 OK + Payment-Receipt        │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment id="sT5uVwXy6zAbCdEf7gHiJk",
+    realm="api.example.com",
+    method="ethereum:8453",
+    intent="charge",
+    request="eyJ0cmFuc2ZlciI6eyJmcm9tIjoiMHgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwidG8iOiIweGFiYzEyMy4uLiIsInZhbHVlIjoiMTAwMDAwMCIsInZhbGlkQWZ0ZXIiOjAsInZhbGlkQmVmb3JlIjoxNzA0MTEwNDAwLCJub25jZSI6IjB4MTIzLi4uIn19"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "transfer": {
+    "token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "to": "0xabc123...",
+    "value": "1000000",
+    "validAfter": 0,
+    "validBefore": 1704110400,
+    "nonce": "0x123..."
+  }
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "signature": "0x...",
+  "from": "0x..."
+}
+]]></sourcecode>
+      </section>
+      <section anchor="lightning-network">
+        <name>Lightning Network</name>
+        <t>Bitcoin Lightning using BOLT11 invoices:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                     Lightning Network
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │  (2) 402 Payment Required            │                                  │
+   │      method="lightning"              │                                  │
+   │      request={invoice, payment_hash}    │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (3) Pay BOLT11 invoice              │                                  │
+   ├──────────────────────────────────────┼─────────────────────────────────>│
+   │                                      │                                  │
+   │  (4) Receive preimage                │                                  │
+   │<─────────────────────────────────────┼──────────────────────────────────┤
+   │                                      │                                  │
+   │  (5) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={preimage}              │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (6) Verify preimage matches     │
+   │                                      │      payment_hash                │
+   │                                      │                                  │
+   │  (7) 200 OK + Payment-Receipt        │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment id="lM8nOpQr9sTuVwXy0zAbCd",
+    realm="api.example.com",
+    method="lightning",
+    intent="charge",
+    request="eyJpbnZvaWNlIjoibG5iYzE1MDB1MXB3NWtqaHBwNXh3eXE5cXFxcXFxcXFxcXFxcXFxcXFxcXEuLi4iLCJhbW91bnRNc2F0IjoiMTUwMDAwMCIsImRlc2NyaXB0aW9uIjoiQVBJIGFjY2VzcyJ9"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "invoice": "lnbc1500u1pw5kjhpp5xwyq9qqqqqqqqqqqqqqqqqqqq...",
+  "amountMsat": "1500000",
+  "description": "API access",
+  "expiry": 3600
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "preimage": "0123456789abcdef..."
+}
+]]></sourcecode>
+        <t>The preimage proves payment of the invoice.</t>
+      </section>
+      <section anchor="apple-pay">
+        <name>Apple Pay</name>
+        <t>Tokenized card payment via Apple Pay:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                        Apple Pay                Server              Processor
+   │                              │                       │                     │
+   │  (1) GET /resource           │                       │                     │
+   ├──────────────────────────────┼──────────────────────>│                     │
+   │                              │                       │                     │
+   │  (2) 402 Payment Required    │                       │                     │
+   │      method="applepay"       │                       │                     │
+   │<─────────────────────────────┼───────────────────────┤                     │
+   │                              │                       │                     │
+   │  (3) Show payment sheet      │                       │                     │
+   ├─────────────────────────────>│                       │                     │
+   │                              │                       │                     │
+   │  (4) User authenticates      │                       │                     │
+   │      (Face ID / Touch ID)    │                       │                     │
+   │                              │                       │                     │
+   │  (5) PKPaymentToken          │                       │                     │
+   │<─────────────────────────────┤                       │                     │
+   │                              │                       │                     │
+   │  (6) GET /resource           │                       │                     │
+   │      Authorization: Payment  │                       │                     │
+   │      payload={token}         │                       │                     │
+   ├──────────────────────────────┼──────────────────────>│                     │
+   │                              │                       │                     │
+   │                              │                       │  (7) Decrypt token  │
+   │                              │                       ├────────────────────>│
+   │                              │                       │                     │
+   │                              │                       │  (8) Charge result  │
+   │                              │                       │<────────────────────┤
+   │                              │                       │                     │
+   │  (9) 200 OK + Payment-Receipt│                       │                     │
+   │<─────────────────────────────┼───────────────────────┤                     │
+   │                              │                       │                     │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment id="eF3gHiJk4lMnOpQr5sTuVw",
+    realm="api.example.com",
+    method="applepay",
+    intent="charge",
+    request="eyJtZXJjaGFudElkIjoibWVyY2hhbnQuY29tLmV4YW1wbGUuYXBpIiwiYW1vdW50IjoiMTAuMDAiLCJjdXJyZW5jeSI6IlVTRCIsImNvdW50cnlDb2RlIjoiVVMiLCJzdXBwb3J0ZWROZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyQ2FyZCJdfQ"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "merchantId": "merchant.com.example.api",
+  "amount": "10.00",
+  "currency": "USD",
+  "countryCode": "US",
+  "supportedNetworks": ["visa", "masterCard"],
+  "merchantCapabilities": ["supports3DS"]
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "token": {
+    "paymentData": "<encrypted card data>",
+    "paymentMethod": {
+      "network": "Visa",
+      "type": "debit",
+      "displayName": "Visa 1234"
+    },
+    "transactionIdentifier": "ABC123..."
+  }
+}
+]]></sourcecode>
+        <t>Server decrypts token via payment processor (Stripe, Adyen, etc.).</t>
+      </section>
+      <section anchor="stripe-charge">
+        <name>Stripe Charge</name>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                           Stripe API
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (2) Create PaymentIntent        │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (3) client_secret               │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (4) 402 Payment Required            │                                  │
+   │      method="stripe"                 │                                  │
+   │      request={client_secret, amount}    │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (5) Confirm payment (Stripe.js)     │                                  │
+   ├──────────────────────────────────────┼─────────────────────────────────>│
+   │                                      │                                  │
+   │  (6) Payment confirmed               │                                  │
+   │<─────────────────────────────────────┼──────────────────────────────────┤
+   │                                      │                                  │
+   │  (7) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={paymentIntentId}       │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (8) Verify PaymentIntent status │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (9) status: succeeded           │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (10) 200 OK + Payment-Receipt       │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment id="xY6zAbCd7eFgHiJk8lMnOp",
+    realm="api.example.com",
+    method="stripe",
+    intent="charge",
+    request="eyJwYXltZW50SW50ZW50IjoicGlfM01xMllaQTJlWnZLWWxvMk8iLCJjbGllbnRTZWNyZXQiOiJwaV8zTXEyWVpBMmVadktZbG8yT19zZWNyZXRfLi4uIiwiYW1vdW50IjoxMDAwLCJjdXJyZW5jeSI6InVzZCJ9"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "paymentIntent": "pi_3Mq2YZA2eZvKYlo2O",
+  "clientSecret": "pi_3Mq2YZA2eZvKYlo2O_secret_...",
+  "amount": 1000,
+  "currency": "usd"
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "paymentIntentId": "pi_3Mq2YZA2eZvKYlo2O",
+  "paymentMethodId": "pm_..."
+}
+]]></sourcecode>
+        <t>Server confirms payment via Stripe API.</t>
+      </section>
+      <section anchor="stripe-authorization">
+        <name>Stripe Authorization</name>
+        <t>Stripe SetupIntent for recurring/metered billing:</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                           Stripe API
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (2) Create SetupIntent          │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (3) client_secret               │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (4) 402 Payment Required            │                                  │
+   │      method="stripe"                 │                                  │
+   │      intent="approval"               │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (5) Confirm setup (Stripe.js)       │                                  │
+   │      User enters card details        │                                  │
+   ├──────────────────────────────────────┼─────────────────────────────────>│
+   │                                      │                                  │
+   │  (6) SetupIntent confirmed           │                                  │
+   │<─────────────────────────────────────┼──────────────────────────────────┤
+   │                                      │                                  │
+   │  (7) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={setupIntentId}         │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (8) Attach PaymentMethod to     │
+   │                                      │      Customer for future use     │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │  (9) 200 OK + Payment-Receipt        │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │                                      │                                  │
+   │  --- Future requests ---             │                                  │
+   │                                      │                                  │
+   │  (10) GET /resource                  │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (11) Charge saved PaymentMethod │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │  (12) 200 OK                         │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="qR9sTuVw0xYzAbCd1eFgHi",
+    realm="api.example.com",
+    method="stripe",
+    intent="approval",
+    description="Authorize monthly API usage",
+    request="eyJzZXR1cEludGVudCI6InNldGlfMUFCQzEyMyIsImNsaWVudFNlY3JldCI6InNldGlfMUFCQzEyM19zZWNyZXRfLi4uIiwidXNhZ2UiOiJvZmZfc2Vzc2lvbiIsImxpbWl0cyI6eyJhbW91bnQiOjEwMDAwLCJjdXJyZW5jeSI6InVzZCIsInBlcmlvZCI6Im1vbnRoIn19"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "setupIntent": "seti_1ABC123",
+  "clientSecret": "seti_1ABC123_secret_...",
+  "usage": "off_session",
+  "limits": {
+    "amount": 10000,
+    "currency": "usd",
+    "period": "month"
+  }
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt>:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "setupIntentId": "seti_1ABC123",
+  "paymentMethodId": "pm_..."
+}
+]]></sourcecode>
+        <t>After authorization, the server can charge the saved PaymentMethod for future requests without additional user interaction, up to the specified limits.</t>
+      </section>
+      <section anchor="x402">
+        <name>x402</name>
+        <t>The x402 protocol can be wrapped as a payment method for backwards compatibility with existing x402 implementations. This example follows x402 Protocol Specification v2.</t>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                          Facilitator
+   │                                      │                                  │
+   │  (1) GET /resource                   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │  (2) 402 Payment Required            │                                  │
+   │      method="x402"                   │                                  │
+   │      request={x402 PaymentRequired}  │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+   │  (3) Create x402 PaymentPayload      │                                  │
+   │      (EIP-3009 signature, etc.)      │                                  │
+   │                                      │                                  │
+   │  (4) GET /resource                   │                                  │
+   │      Authorization: Payment          │                                  │
+   │      payload={x402 PaymentPayload}   │                                  │
+   ├─────────────────────────────────────>│                                  │
+   │                                      │                                  │
+   │                                      │  (5) POST /verify                │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (6) VerifyResponse {isValid}    │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │                                      │  (7) POST /settle                │
+   │                                      ├─────────────────────────────────>│
+   │                                      │                                  │
+   │                                      │  (8) SettlementResponse          │
+   │                                      │<─────────────────────────────────┤
+   │                                      │                                  │
+   │  (9) 200 OK + Payment-Receipt        │                                  │
+   │<─────────────────────────────────────┤                                  │
+   │                                      │                                  │
+]]></artwork>
+        <t>Challenge:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="jK2lMnOp3qRsTuVw4xYzAb",
+    realm="api.example.com",
+    method="x402",
+    intent="charge",
+    request="eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOnsidXJsIjoiL2FwaS9kYXRhIiwiZGVzY3JpcHRpb24iOiJBUEkgYWNjZXNzIn0sImFjY2VwdHMiOlt7InNjaGVtZSI6ImV4YWN0IiwibmV0d29yayI6ImVpcDE1NTo4NDUzIiwiYW1vdW50IjoiMTAwMDAwMCIsImFzc2V0IjoiMHg4MzM1ODlmQ0Q2ZURiNkUwOGY0YzdDMzJENGY3MWI1NGJkQTAyOTEzIiwicGF5VG8iOiIweGFiYzEyMy4uLiIsIm1heFRpbWVvdXRTZWNvbmRzIjo2MH1dfQ"
+]]></sourcecode>
+        <t>Decoded <tt>request</tt> (x402 v2 PaymentRequired structure):</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "x402Version": 2,
+  "resource": {
+    "url": "/api/data",
+    "description": "API access"
+  },
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "eip155:8453",
+      "amount": "1000000",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "payTo": "0xabc123...",
+      "maxTimeoutSeconds": 60
+    }
+  ]
+}
+]]></sourcecode>
+        <t>Decoded credential <tt>payload</tt> (x402 v2 PaymentPayload structure):</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "x402Version": 2,
+  "resource": {
+    "url": "/api/data",
+    "description": "API access"
+  },
+  "accepted": {
+    "scheme": "exact",
+    "network": "eip155:8453",
+    "amount": "1000000",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "payTo": "0xabc123...",
+    "maxTimeoutSeconds": 60
+  },
+  "payload": {
+    "signature": "0x...",
+    "authorization": {
+      "from": "0x...",
+      "to": "0xabc123...",
+      "value": "1000000",
+      "validAfter": "0",
+      "validBefore": "1704110400",
+      "nonce": "0x..."
+    }
+  }
+}
+]]></sourcecode>
+        <t>The <tt>payload.authorization</tt> follows EIP-3009 <tt>transferWithAuthorization</tt> format for the &quot;exact&quot; scheme on EVM networks.</t>
+        <t>This approach allows:</t>
+        <ul>
+          <li>Servers to accept both native Payment scheme clients and x402 clients</li>
+          <li>Gradual migration from x402 to the Payment authentication scheme</li>
+          <li>Reuse of existing x402 facilitator infrastructure for verification and</li>
+        </ul>
+        <t>settlement</t>
+      </section>
+    </section>
+    <section anchor="acknowledgements" numbered="false">
+      <name>Acknowledgements</name>
+      <t>TBD</t>
+    </section>
+  </back>
+
+</rfc>
