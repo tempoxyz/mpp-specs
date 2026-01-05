@@ -272,14 +272,14 @@ Example decoded `request` with `method="tempo", intent="charge"`:
 ### 5.2. Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
-token68 syntax defined in [RFC7235]:
+b64token syntax as defined in [RFC6750]:
 
 ```abnf
-credentials     = "Payment" 1*SP token68
-token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
+credentials     = "Payment" 1*SP b64token
+b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
 ```
 
-The token68 value is a base64url-encoded JSON object (without padding)
+The b64token value is a base64url-encoded JSON object (without padding)
 containing:
 
 | Field | Type | Required | Description |
@@ -326,7 +326,7 @@ The `source` field is optional; clients MAY omit it for anonymous payments.
 Servers SHOULD include a `Payment-Receipt` header on successful responses:
 
 ```abnf
-Payment-Receipt = token68
+Payment-Receipt = b64token
 ```
 
 The decoded JSON object contains:
@@ -346,11 +346,11 @@ header value can be used directly as the `Authorization` header value for
 subsequent requests:
 
 ```abnf
-Payment-Authorization = "Payment" 1*SP token68 *( OWS "," OWS auth-param )
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 auth-param            = token BWS "=" BWS ( token / quoted-string )
 ```
 
-The credential portion (`Payment` followed by `token68`) is directly usable
+The credential portion (`Payment` followed by `b64token`) is directly usable
 as an `Authorization` header value. The following parameters are appended:
 
 | Parameter | Required | Description |
@@ -382,7 +382,7 @@ the original credential (e.g., a session token optimized for reuse).
 
 Clients that receive a `Payment-Authorization` header SHOULD:
 
-1. Extract the credential portion (`Payment <token68>`) for reuse
+1. Extract the credential portion (`Payment <b64token>`) for reuse
 2. Cache it along with the `expires` timestamp and `realm`
 3. Use the cached credential as the `Authorization` header for subsequent
    requests to the same realm
@@ -959,6 +959,9 @@ URIs" registry established by [RFC8615]:
 - **[RFC5234]** Crocker, D., Ed. and P. Overell, "Augmented BNF for
   Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 
+- **[RFC6750]** Jones, M. and D. Hardt, "The OAuth 2.0 Authorization
+  Framework: Bearer Token Usage", RFC 6750, October 2012.
+
 - **[RFC7235]** Fielding, R., Ed. and J. Reschke, Ed., "Hypertext
   Transfer Protocol (HTTP/1.1): Authentication", RFC 7235, June 2014.
 
@@ -1003,7 +1006,7 @@ URIs" registry established by [RFC8615]:
 
 This appendix collects all ABNF defined in this document per [RFC5234].
 Core rules (ALPHA, DIGIT, SP, HTAB, DQUOTE, OWS, BWS, token, quoted-string,
-token68) are imported from [RFC9110] and [RFC7235].
+b64token) are imported from [RFC9110], [RFC7235], and [RFC6750].
 
 ```abnf
 ; HTTP Authentication Challenge (following RFC 7235 Section 2.1)
@@ -1014,14 +1017,14 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 ; Required parameters: id, realm, method, intent, request
 ; Optional parameters: expires, description
 
-; HTTP Authorization Credentials (following RFC 7235 token68)
-payment-credentials = "Payment" 1*SP token68
+; HTTP Authorization Credentials (following RFC 6750 b64token)
+payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
-Payment-Receipt       = token68
+Payment-Receipt       = b64token
 
 ; Payment-Authorization header field value
-Payment-Authorization = "Payment" 1*SP token68 *( OWS "," OWS auth-param )
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
