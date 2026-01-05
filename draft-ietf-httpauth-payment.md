@@ -231,6 +231,14 @@ The following parameters are defined for the Payment scheme:
 
 #### 5.1.2. Optional Parameters
 
+**`expires`**: Timestamp indicating when this challenge expires, formatted
+  as an [RFC3339] date-time string (e.g., `"2025-01-15T12:00:00Z"`).
+  Servers SHOULD include this parameter to indicate challenge validity.
+  Clients MUST NOT submit credentials for expired challenges. Servers
+  MUST reject credentials for challenges past their expiry time. If omitted,
+  the server determines expiry policy; clients SHOULD assume challenges
+  are short-lived.
+
 **`description`**: Human-readable description of the resource or payment
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see Section 12.5).
@@ -245,6 +253,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     realm="api.example.com",
     method="tempo",
     intent="charge",
+    expires="2025-01-15T12:05:00Z",
     request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
 ```
 
@@ -263,20 +272,29 @@ Example decoded `request` with `method="tempo", intent="charge"`:
 ### 5.2. Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
-token68 syntax defined in [RFC7235]:
+b64token syntax as defined in [RFC6750]:
 
 ```abnf
-credentials     = "Payment" 1*SP token68
-token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
+credentials     = "Payment" 1*SP b64token
+b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
 ```
 
-The token68 value is a base64url-encoded JSON object (without padding)
+The b64token value is a base64url-encoded JSON object (without padding)
 containing:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Challenge identifier (must match challenge `id`) |
+| `source` | string | No | Payer identifier as a DID [W3C-DID] (e.g., `"did:key:z6Mk..."`) |
 | `payload` | object | Yes | Payload to fulfil the payment challenge (method-specific) |
+
+**`source`**: An OPTIONAL Decentralized Identifier [W3C-DID] identifying the
+  payer. Clients MAY include this field to enable servers to associate
+  payments with a persistent identity across requests. The DID method
+  SHOULD be appropriate for the payment method (e.g., `did:pkh` for
+  blockchain addresses, `did:key` for ephemeral keys). Servers MUST NOT
+  require this field unless the payment method specification mandates it.
+  See Section 12.6 for privacy considerations.
 
 The `payload` field contains the payment-method-specific data needed to complete the payment challenge
 (e.g., signature, preimage, transaction ID).
@@ -296,16 +314,19 @@ Decoded credential:
 ```jsonc
 {
   "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+  "source": "did:pkh:0x1234567890abcdef1234567890abcdef12345678",
   "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
 }
 ```
+
+The `source` field is optional; clients MAY omit it for anonymous payments.
 
 ### 5.3. Payment-Receipt Header
 
 Servers SHOULD include a `Payment-Receipt` header on successful responses:
 
 ```abnf
-Payment-Receipt = token68
+Payment-Receipt = b64token
 ```
 
 The decoded JSON object contains:
@@ -317,33 +338,101 @@ The decoded JSON object contains:
 | `timestamp` | string | ISO 8601 settlement time |
 | `reference` | string | Method-specific reference (tx hash, etc.) |
 
-### 5.4. Reusing Credentials
+### 5.4. Payment-Authorization Header
 
-Payment credentials are generally single-use. Unlike traditional HTTP
-authentication schemes where credentials can be reused across requests,
-Payment credentials are bound to specific challenges and typically
-represent one-time proofs of payment.
+Servers MAY include a `Payment-Authorization` header on successful responses
+to indicate that a credential may be reused for subsequent requests. The
+header value can be used directly as the `Authorization` header value for
+subsequent requests:
 
-Clients MUST NOT reuse Payment credentials across different challenges.
-Each 402 response contains a unique challenge `id`, and the corresponding
-credential is valid only for that specific challenge.
+```abnf
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
+auth-param            = token BWS "=" BWS ( token / quoted-string )
+```
+
+The credential portion (`Payment` followed by `b64token`) is directly usable
+as an `Authorization` header value. The following parameters are appended:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `expires` | Yes | RFC 3339 timestamp after which the authorization expires |
+| `realm` | No | Protection space scope (defaults to challenge realm) |
+
+**Example:**
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJ0aW1lc3RhbXAiOiIyMDI1LTAxLTE1VDEyOjAwOjAwWiIsInJlZmVyZW5jZSI6IjB4YWJjMTIzLi4uIn0
+Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
+```
+
+Subsequent requests reuse the credential directly:
+
+```http
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
+```
+
+The server MAY return a different token in `Payment-Authorization` than
+the original credential (e.g., a access token optimized for reuse).
+
+#### 5.4.1. Client Behavior
+
+Clients that receive a `Payment-Authorization` header SHOULD:
+
+1. Extract the credential portion (`Payment <b64token>`) for reuse
+2. Cache it along with the `expires` timestamp and `realm`
+3. Use the cached credential as the `Authorization` header for subsequent
+   requests to the same realm
+4. Stop reusing the credential after the `expires` timestamp
+5. Retain the `Payment-Receipt` separately for audit purposes
+
+When a cached authorization expires, clients MUST obtain a new challenge
+and submit a fresh credential.
+
+#### 5.4.2. Server Behavior
+
+Servers that issue `Payment-Authorization` MUST:
+
+1. Track which authorizations are valid and not yet expired
+2. Accept the issued credential for requests within the authorized realm
+3. Return 401 (Unauthorized) with a fresh challenge if the authorization
+   has expired or been revoked
+4. NOT require re-payment for requests within the authorization window
+
+Servers MAY issue a credential in `Payment-Authorization` that differs from
+the original payment credential. This allows servers to issue access tokens,
+reduce credential size, or implement other optimizations.
+
+Servers MAY revoke authorizations before their expiry time. When an
+authorization is revoked, the server MUST return 401 with a fresh
+challenge.
+
+### 5.5. Reusing Credentials
+
+Payment credentials are generally single-use unless the server explicitly
+grants reuse via the `Payment-Authorization` header.
+
+Clients MUST NOT reuse Payment credentials across different challenges
+unless the server has returned a `Payment-Authorization` header indicating
+the credential may be reused.
 
 For repeated access to the same resource, clients SHOULD:
 
-1. Use the `authorization` intent to establish ongoing payment rights, or
-2. Request a new challenge and generate a fresh credential for each access
-
-Servers MAY cache successful payment verifications and allow subsequent
-requests without re-verification, but this is an implementation choice
-and not guaranteed by this specification.
+1. Check for a cached `Payment-Authorization` that covers the realm
+2. If valid, reuse the cached credential
+3. Otherwise, request a new challenge and generate a fresh credential
 
 The scope of credential validity is determined by:
 
 - **Origin**: Credentials are bound to the origin (scheme, host, port)
   that issued the challenge
-- **Resource**: Credentials are typically bound to the specific resource
-  or protection space (`realm`) for which they were issued
-- **Time**: Credentials may have expiry as defined in the `request` payload
+- **Realm**: Credentials are bound to the protection space (`realm`) for
+  which they were issued
+- **Authorization**: If `Payment-Authorization` was returned, the credential
+  is valid until the authorization `expires` timestamp
 
 ---
 
@@ -706,9 +795,9 @@ WWW-Authenticate: Payment ...
 The `no-store` directive prevents caching of payment challenges, which
 may contain time-sensitive or single-use payment parameters.
 
-Similarly, responses with `Payment-Receipt` headers SHOULD include
-`Cache-Control: private` to prevent intermediary caching of payment
-confirmation data.
+Similarly, responses with `Payment-Receipt` or `Payment-Authorization`
+headers SHOULD include `Cache-Control: private` to prevent intermediary
+caching of payment confirmation and authorization data.
 
 ### 12.9. Cross-Origin Considerations
 
@@ -743,6 +832,39 @@ settlement finality depends on the underlying payment Authentication method:
 Clients and servers should understand the finality guarantees of their
 chosen payment method as documented in the payment method specification.
 
+### 12.12. Authorization Reuse
+
+When servers issue `Payment-Authorization` headers to allow credential
+reuse, additional security considerations apply:
+
+**Credential Theft**: Reusable credentials are higher-value targets. If an
+attacker captures a credential with valid authorization, they can reuse it
+until expiry. Mitigations:
+
+- Servers SHOULD use short authorization windows (minutes to hours, not days)
+- Clients MUST store cached credentials securely
+- TLS is REQUIRED to prevent credential interception
+
+**Revocation**: Servers MUST be able to revoke authorizations before expiry.
+Common revocation triggers include:
+
+- Anomalous usage patterns (rate, geography, resource access)
+- User-initiated session termination
+- Security incidents
+
+When revoking, servers return 401 with a fresh challenge. Clients MUST NOT
+assume authorization validity solely based on the `expires` timestamp.
+
+**Authorization Scope**: The `realm` in `Payment-Authorization` defines the
+scope of reuse. Servers MUST NOT issue authorizations that grant access
+beyond what the original payment covered. Clients SHOULD verify the realm
+matches expectations before reusing credentials.
+
+**Replay Window**: Unlike single-use credentials, reusable credentials have
+a replay window equal to the authorization lifetime. Servers MUST use
+server-side state to track authorization validity rather than relying solely
+on timestamp checks.
+
 ---
 
 ## 13. IANA Considerations
@@ -759,12 +881,13 @@ established by [RFC7235]:
 
 ### 13.2. Header Field Registration
 
-This document registers the following header field in the "Hypertext
+This document registers the following header fields in the "Hypertext
 Transfer Protocol (HTTP) Field Name Registry":
 
 | Field Name | Status | Reference |
 |------------|--------|-----------|
 | Payment-Receipt | permanent | This document, Section 5.3 |
+| Payment-Authorization | permanent | This document, Section 5.4 |
 
 ### 13.3. Payment Method Registry
 
@@ -824,6 +947,9 @@ URIs" registry established by [RFC8615]:
 - **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
   Requirement Levels", BCP 14, RFC 2119, March 1997.
 
+- **[RFC3339]** Klyne, G. and C. Newman, "Date and Time on the Internet:
+  Timestamps", RFC 3339, July 2002.
+
 - **[RFC3629]** Yergeau, F., "UTF-8, a transformation format of ISO
   10646", STD 63, RFC 3629, November 2003.
 
@@ -832,6 +958,9 @@ URIs" registry established by [RFC8615]:
 
 - **[RFC5234]** Crocker, D., Ed. and P. Overell, "Augmented BNF for
   Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
+
+- **[RFC6750]** Jones, M. and D. Hardt, "The OAuth 2.0 Authorization
+  Framework: Bearer Token Usage", RFC 6750, October 2012.
 
 - **[RFC7235]** Fielding, R., Ed. and J. Reschke, Ed., "Hypertext
   Transfer Protocol (HTTP/1.1): Authentication", RFC 7235, June 2014.
@@ -865,6 +994,9 @@ URIs" registry established by [RFC8615]:
 
 - **[x402 Payment Method]** "X402 Protocol Specification", <https://github.com/coinbase/x402/blob/main/specs/x402-specification-v2.md>.
 
+- **[W3C-DID]** W3C, "Decentralized Identifiers (DIDs) v1.0",
+  <https://www.w3.org/TR/did-core/>.
+
 - **[W3C-PMI]** W3C, "Payment Method Identifiers",
   <https://www.w3.org/TR/payment-method-id/>.
 
@@ -874,7 +1006,7 @@ URIs" registry established by [RFC8615]:
 
 This appendix collects all ABNF defined in this document per [RFC5234].
 Core rules (ALPHA, DIGIT, SP, HTAB, DQUOTE, OWS, BWS, token, quoted-string,
-token68) are imported from [RFC9110] and [RFC7235].
+b64token) are imported from [RFC9110], [RFC7235], and [RFC6750].
 
 ```abnf
 ; HTTP Authentication Challenge (following RFC 7235 Section 2.1)
@@ -883,13 +1015,16 @@ auth-params       = auth-param *( OWS "," OWS auth-param )
 auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; Required parameters: id, realm, method, intent, request
-; Optional parameters: description
+; Optional parameters: expires, description
 
-; HTTP Authorization Credentials (following RFC 7235 token68)
-payment-credentials = "Payment" 1*SP token68
+; HTTP Authorization Credentials (following RFC 6750 b64token)
+payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
-Payment-Receipt     = token68
+Payment-Receipt       = b64token
+
+; Payment-Authorization header field value
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
@@ -946,6 +1081,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     realm="api.example.com/v1",
     method="tempo",
     intent="charge",
+    expires="2025-01-15T12:05:00Z",
     request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
 Content-Type: application/json
 
@@ -988,15 +1124,25 @@ Decoded credential:
 }
 ```
 
-**Success:**
+**Success (with reusable authorization):**
 
 ```http
 HTTP/1.1 200 OK
 Cache-Control: private
 Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJyZWZlcmVuY2UiOiIweGFiYzEyMy4uLiJ9
+Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
 Content-Type: application/json
 
 {"data": "..."}
+```
+
+The client extracts the credential portion and reuses it for subsequent
+requests:
+
+```http
+GET /api/other-resource HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
 ```
 
 ### B.2. Tempo Authorization
@@ -1058,6 +1204,7 @@ WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
     realm="api.example.com/v1",
     method="tempo",
     intent="approval",
+    expires="2025-01-15T12:05:00Z",
     description="Authorize API usage",
     request="eyJhdXRob3JpemF0aW9uIjp7ImtleUlkIjoiMHhzZXJ2ZXJrZXkuLi4iLCJleHBpcnkiOjE3MDY3NDU2MDAwMDAsImxpbWl0cyI6W3sidG9rZW4iOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJhbW91bnQiOiIxMDAwMDAwMDAiLCJwZXJpb2QiOjg2NDAwfV19fQ"
 ```
