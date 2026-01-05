@@ -1,0 +1,170 @@
+name: Check Specs
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pr-${{ github.event.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [build-and-check]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: ietf-spec-tools:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Lint frontmatter
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_frontmatter.py
+
+      - name: Lint external section references
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_external_section_refs.py
+
+      - name: Build and validate specs
+        run: |
+          mkdir -p .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/check.sh
+
+      - name: Download main branch artifacts
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          workflow: deploy.yml
+          name_is_regexp: true
+          name: ietf-specs-.*
+          path: /tmp/main-artifacts
+        continue-on-error: true
+
+      - name: Generate diffs against main
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/diffs
+          MAIN_DIR=$(find /tmp/main-artifacts -maxdepth 1 -type d -name "ietf-specs-*" 2>/dev/null | head -1)
+          if [[ -z "$MAIN_DIR" ]]; then
+            MAIN_DIR="/tmp/main-artifacts"
+          fi
+          for file in artifacts/draft-*.txt; do
+            name=$(basename "$file" .txt)
+            if [[ -f "$MAIN_DIR/${name}.txt" ]]; then
+              diff -u "$MAIN_DIR/${name}.txt" "$file" > "artifacts/diffs/${name}-diff.txt" || true
+            else
+              echo "New spec (no base on main to compare)" > "artifacts/diffs/${name}-diff.txt"
+            fi
+          done
+
+      - name: Upload spec artifacts
+        id: upload-specs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ github.event.number && format('pr-{0}-specs', github.event.number) || format('manual-{0}-specs', github.run_id) }}
+          path: |
+            artifacts/draft-*.html
+            artifacts/draft-*.txt
+            artifacts/draft-*.xml
+            artifacts/draft-*.pdf
+          retention-days: 30
+
+      - name: Upload diff artifacts
+        id: upload-diffs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ format('pr-{0}-diffs', github.event.number) }}
+          path: artifacts/diffs/
+          retention-days: 30
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const artifactsDir = 'artifacts';
+            const diffsDir = path.join(artifactsDir, 'diffs');
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            let table = '| Spec | Changed |\n|------|--------|\n';
+
+            const htmlFiles = fs.readdirSync(artifactsDir)
+              .filter(f => f.startsWith('draft-') && f.endsWith('.html'))
+              .sort();
+
+            for (const file of htmlFiles) {
+              const name = file.replace('.html', '');
+              const diffFile = path.join(diffsDir, `${name}-diff.txt`);
+              let changed = '-';
+              if (fs.existsSync(diffFile)) {
+                const content = fs.readFileSync(diffFile, 'utf8');
+                if (content.trim() && !content.includes('New spec')) {
+                  changed = 'Yes';
+                }
+              }
+              table += `| \`${name}\` | ${changed} |\n`;
+            }
+
+            const body = `<!-- ietf-spec-preview -->
+            ## Spec Preview
+
+            ${table}
+
+            **[Download spec artifacts](${runUrl}#artifacts)** (HTML, TXT, XML, PDF)
+            `;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c => c.body.includes('<!-- ietf-spec-preview -->'));
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

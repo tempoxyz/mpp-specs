@@ -1,0 +1,68 @@
+name: Resubmit IETF Draft
+
+# IETF I-Ds expire after 185 days (~6 months).
+# This checks weekly and opens a version-bump PR once 165 days have passed.
+# Merging the PR triggers submit-draft.yml which submits to the IETF
+# datatracker automatically. An author must then confirm via email.
+
+on:
+  schedule:
+    # Check weekly; the job skips unless 165+ days since last revision bump
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-and-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if 165+ days since last bump
+        id: check
+        run: |
+          SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
+          LAST_TOUCH=$(git log -1 --format=%ct -- "$SPEC")
+          NOW=$(date +%s)
+          DAYS_AGO=$(( (NOW - LAST_TOUCH) / 86400 ))
+          echo "days_since_bump=$DAYS_AGO" >> "$GITHUB_OUTPUT"
+          if [[ "$DAYS_AGO" -lt 165 ]]; then
+            echo "Only $DAYS_AGO days since last bump — skipping (threshold: 165)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$DAYS_AGO days since last bump — time to resubmit"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump revision
+        if: steps.check.outputs.skip == 'false'
+        id: bump
+        run: |
+          chmod +x scripts/bump_and_rename.sh
+          NEW_VER=$(scripts/bump_and_rename.sh)
+          echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="ietf/resubmit-${{ steps.bump.outputs.new_ver }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: bump draft revision to -${{ steps.bump.outputs.new_ver }}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: bump IETF draft to revision -${{ steps.bump.outputs.new_ver }}" \
+            --body "Automated revision bump to prevent the IETF Internet-Draft from expiring (185-day limit).
+
+          Merging this PR will automatically submit the new revision to the IETF datatracker.
+          An author must then confirm via the email sent by the IETF." \
+            --base main

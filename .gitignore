@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+*.swp
+*~
+
+# Editor directories
+.idea/
+.vscode/
+*.sublime-*
+
+# Generated artifacts
+artifacts/
+!artifacts/.gitkeep
+pages/index.html
+pages/problems/
+__pycache__/

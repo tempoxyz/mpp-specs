@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  {% include "head-meta.html" %}
+  <title>Problem Types – Payment Auth</title>
+  <style>
+    {% include "base-styles.html" %}
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .header-links {
+      font-size: 0.8rem;
+      margin-top: 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    .header-links a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .header-links a:hover {
+      text-decoration: underline;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.4rem 0.75rem 0.4rem 0;
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: 700;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    td {
+      border-bottom: 1px solid #ddd;
+    }
+
+    td a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    td a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      font-size: 0.85em;
+    }
+
+    .back {
+      margin-top: 2rem;
+      font-size: 0.85rem;
+    }
+
+    .back a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .back a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      th, td {
+        padding-right: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Problem Types</h1>
+  <p class="header-links"><a href="/">← Specifications</a></p>
+
+  <p>Problem type URIs used in <code>application/problem+json</code> error
+  responses per <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>.</p>
+
+  <h2>Core</h2>
+  <table>
+    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
+    {% for p in core_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
+      <td><code>{{ p.http_status }}</code></td>
+      <td>{{ p.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Session</h2>
+  <table>
+    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
+    {% for p in session_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
+      <td><code>{{ p.http_status }}</code></td>
+      <td>{{ p.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+</body>
+</html>
