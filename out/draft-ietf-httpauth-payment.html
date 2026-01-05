@@ -1225,7 +1225,7 @@ li > p:last-of-type:only-child {
 </tr></thead>
 <tfoot><tr>
 <td class="left">Moxey</td>
-<td class="center">Expires 9 July 2026</td>
+<td class="center">Expires 10 July 2026</td>
 <td class="right">[Page]</td>
 </tr></tfoot>
 </table>
@@ -1238,12 +1238,12 @@ li > p:last-of-type:only-child {
 <dd class="internet-draft">draft-ietf-httpauth-payment-01</dd>
 <dt class="label-published">Published:</dt>
 <dd class="published">
-<time datetime="2026-01-05" class="published">5 January 2026</time>
+<time datetime="2026-01-06" class="published">6 January 2026</time>
     </dd>
 <dt class="label-intended-status">Intended Status:</dt>
 <dd class="intended-status">Standards Track</dd>
 <dt class="label-expires">Expires:</dt>
-<dd class="expires"><time datetime="2026-07-09">9 July 2026</time></dd>
+<dd class="expires"><time datetime="2026-07-10">10 July 2026</time></dd>
 <dt class="label-authors">Author:</dt>
 <dd class="authors">
 <div class="author">
@@ -1283,7 +1283,7 @@ defined in separate payment method specifications.<a href="#section-abstract-2" 
         time. It is inappropriate to use Internet-Drafts as reference
         material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
 <p id="section-boilerplate.1-4">
-        This Internet-Draft will expire on 9 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+        This Internet-Draft will expire on 10 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="copyright">
@@ -1369,7 +1369,18 @@ defined in separate payment method specifications.<a href="#section-abstract-2" 
                 <p id="section-toc.1-1.5.2.3.1"><a href="#section-5.3" class="auto internal xref">5.3</a>.  <a href="#name-payment-receipt-header" class="internal xref">Payment-Receipt Header</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.4">
-                <p id="section-toc.1-1.5.2.4.1"><a href="#section-5.4" class="auto internal xref">5.4</a>.  <a href="#name-reusing-credentials" class="internal xref">Reusing Credentials</a></p>
+                <p id="section-toc.1-1.5.2.4.1"><a href="#section-5.4" class="auto internal xref">5.4</a>.  <a href="#name-payment-authorization-heade" class="internal xref">Payment-Authorization Header</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.4.2.1">
+                    <p id="section-toc.1-1.5.2.4.2.1.1"><a href="#section-5.4.1" class="auto internal xref">5.4.1</a>.  <a href="#name-client-behavior" class="internal xref">Client Behavior</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.4.2.2">
+                    <p id="section-toc.1-1.5.2.4.2.2.1"><a href="#section-5.4.2" class="auto internal xref">5.4.2</a>.  <a href="#name-server-behavior" class="internal xref">Server Behavior</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.5">
+                <p id="section-toc.1-1.5.2.5.1"><a href="#section-5.5" class="auto internal xref">5.5</a>.  <a href="#name-reusing-credentials" class="internal xref">Reusing Credentials</a></p>
 </li>
             </ul>
 </li>
@@ -1497,6 +1508,9 @@ defined in separate payment method specifications.<a href="#section-abstract-2" 
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12.2.11">
                 <p id="section-toc.1-1.12.2.11.1"><a href="#section-12.11" class="auto internal xref">12.11</a>. <a href="#name-settlement-finality" class="internal xref">Settlement Finality</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12.2.12">
+                <p id="section-toc.1-1.12.2.12.1"><a href="#section-12.12" class="auto internal xref">12.12</a>. <a href="#name-authorization-reuse" class="internal xref">Authorization Reuse</a></p>
 </li>
             </ul>
 </li>
@@ -1793,8 +1807,9 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
           <h4 id="name-optional-parameters">
 <a href="#section-5.1.2" class="section-number selfRef">5.1.2. </a><a href="#name-optional-parameters" class="section-name selfRef">Optional Parameters</a>
           </h4>
-<p id="section-5.1.2-1"><strong><code>description</code></strong>: Human-readable description of the resource or payment   purpose. This parameter is for display purposes only and <span class="bcp14">MUST NOT</span> be   relied upon for payment verification (see Section 12.5).<a href="#section-5.1.2-1" class="pilcrow">¶</a></p>
-<p id="section-5.1.2-2">Unknown parameters <span class="bcp14">MUST</span> be ignored by clients.<a href="#section-5.1.2-2" class="pilcrow">¶</a></p>
+<p id="section-5.1.2-1"><strong><code>expires</code></strong>: Timestamp indicating when this challenge expires, formatted   as an <span>[<a href="#RFC3339" class="cite xref">RFC3339</a>]</span> date-time string (e.g., <code>"2025-01-15T12:00:00Z"</code>).   Servers <span class="bcp14">SHOULD</span> include this parameter to indicate challenge validity.   Clients <span class="bcp14">MUST NOT</span> submit credentials for expired challenges. Servers   <span class="bcp14">MUST</span> reject credentials for challenges past their expiry time. If omitted,   the server determines expiry policy; clients <span class="bcp14">SHOULD</span> assume challenges   are short-lived.<a href="#section-5.1.2-1" class="pilcrow">¶</a></p>
+<p id="section-5.1.2-2"><strong><code>description</code></strong>: Human-readable description of the resource or payment   purpose. This parameter is for display purposes only and <span class="bcp14">MUST NOT</span> be   relied upon for payment verification (see Section 12.5).<a href="#section-5.1.2-2" class="pilcrow">¶</a></p>
+<p id="section-5.1.2-3">Unknown parameters <span class="bcp14">MUST</span> be ignored by clients.<a href="#section-5.1.2-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="example-challenge">
@@ -1809,6 +1824,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     realm="api.example.com",
     method="tempo",
     intent="charge",
+    expires="2025-01-15T12:05:00Z",
     request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
 </pre><a href="#section-5.1.3-1" class="pilcrow">¶</a>
 </div>
@@ -1833,14 +1849,14 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
         <h3 id="name-credentials-authorization">
 <a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-credentials-authorization" class="section-name selfRef">Credentials (Authorization)</a>
         </h3>
-<p id="section-5.2-1">The Payment credential is sent in the <code>Authorization</code> header using the token68 syntax defined in <span>[<a href="#RFC7235" class="cite xref">RFC7235</a>]</span>:<a href="#section-5.2-1" class="pilcrow">¶</a></p>
+<p id="section-5.2-1">The Payment credential is sent in the <code>Authorization</code> header using the b64token syntax as defined in <span>[<a href="#RFC6750" class="cite xref">RFC6750</a>]</span>:<a href="#section-5.2-1" class="pilcrow">¶</a></p>
 <div class="lang-abnf sourcecode" id="section-5.2-2">
 <pre>
-credentials     = "Payment" 1*SP token68
-token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
+credentials     = "Payment" 1*SP b64token
+b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
 </pre><a href="#section-5.2-2" class="pilcrow">¶</a>
 </div>
-<p id="section-5.2-3">The token68 value is a base64url-encoded JSON object (without padding) containing:<a href="#section-5.2-3" class="pilcrow">¶</a></p>
+<p id="section-5.2-3">The b64token value is a base64url-encoded JSON object (without padding) containing:<a href="#section-5.2-3" class="pilcrow">¶</a></p>
 <table class="center" id="table-2">
           <caption><a href="#table-2" class="selfRef">Table 2</a></caption>
 <thead>
@@ -1862,6 +1878,14 @@ token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
+                <code>source</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">No</td>
+              <td class="text-left" rowspan="1" colspan="1">Payer identifier as a DID <span>[<a href="#w3c-did" class="cite xref">w3c-did</a>]</span> (e.g., <code>"did:key:z6Mk..."</code>)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
                 <code>payload</code>
 </td>
               <td class="text-left" rowspan="1" colspan="1">object</td>
@@ -1870,8 +1894,9 @@ token68         = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
             </tr>
           </tbody>
         </table>
-<p id="section-5.2-5">The <code>payload</code> field contains the payment-method-specific data needed to complete the payment challenge (e.g., signature, preimage, transaction ID).<a href="#section-5.2-5" class="pilcrow">¶</a></p>
-<p id="section-5.2-6">Payment method specifications define the exact structure of <code>payload</code>.<a href="#section-5.2-6" class="pilcrow">¶</a></p>
+<p id="section-5.2-5"><strong><code>source</code></strong>: An <span class="bcp14">OPTIONAL</span> Decentralized Identifier <span>[<a href="#w3c-did" class="cite xref">w3c-did</a>]</span> identifying the   payer. Clients <span class="bcp14">MAY</span> include this field to enable servers to associate   payments with a persistent identity across requests. The DID method   <span class="bcp14">SHOULD</span> be appropriate for the payment method (e.g., <code>did:pkh</code> for   blockchain addresses, <code>did:key</code> for ephemeral keys). Servers <span class="bcp14">MUST NOT</span>   require this field unless the payment method specification mandates it.   See Section 12.6 for privacy considerations.<a href="#section-5.2-5" class="pilcrow">¶</a></p>
+<p id="section-5.2-6">The <code>payload</code> field contains the payment-method-specific data needed to complete the payment challenge (e.g., signature, preimage, transaction ID).<a href="#section-5.2-6" class="pilcrow">¶</a></p>
+<p id="section-5.2-7">Payment method specifications define the exact structure of <code>payload</code>.<a href="#section-5.2-7" class="pilcrow">¶</a></p>
 <div id="example-credential">
 <section id="section-5.2.1">
           <h4 id="name-example-credential">
@@ -1889,10 +1914,12 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZ
 <pre>
 {
   "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+  "source": "did:pkh:0x1234567890abcdef1234567890abcdef12345678",
   "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
 }
 </pre><a href="#section-5.2.1-3" class="pilcrow">¶</a>
 </div>
+<p id="section-5.2.1-4">The <code>source</code> field is optional; clients <span class="bcp14">MAY</span> omit it for anonymous payments.<a href="#section-5.2.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -1905,7 +1932,7 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZ
 <p id="section-5.3-1">Servers <span class="bcp14">SHOULD</span> include a <code>Payment-Receipt</code> header on successful responses:<a href="#section-5.3-1" class="pilcrow">¶</a></p>
 <div class="lang-abnf sourcecode" id="section-5.3-2">
 <pre>
-Payment-Receipt = token68
+Payment-Receipt = b64token
 </pre><a href="#section-5.3-2" class="pilcrow">¶</a>
 </div>
 <p id="section-5.3-3">The decoded JSON object contains:<a href="#section-5.3-3" class="pilcrow">¶</a></p>
@@ -1951,39 +1978,147 @@ Payment-Receipt = token68
         </table>
 </section>
 </div>
-<div id="reusing-credentials">
+<div id="payment-authorization-header">
 <section id="section-5.4">
-        <h3 id="name-reusing-credentials">
-<a href="#section-5.4" class="section-number selfRef">5.4. </a><a href="#name-reusing-credentials" class="section-name selfRef">Reusing Credentials</a>
+        <h3 id="name-payment-authorization-heade">
+<a href="#section-5.4" class="section-number selfRef">5.4. </a><a href="#name-payment-authorization-heade" class="section-name selfRef">Payment-Authorization Header</a>
         </h3>
-<p id="section-5.4-1">Payment credentials are generally single-use. Unlike traditional HTTP authentication schemes where credentials can be reused across requests, Payment credentials are bound to specific challenges and typically represent one-time proofs of payment.<a href="#section-5.4-1" class="pilcrow">¶</a></p>
-<p id="section-5.4-2">Clients <span class="bcp14">MUST NOT</span> reuse Payment credentials across different challenges. Each 402 response contains a unique challenge <code>id</code>, and the corresponding credential is valid only for that specific challenge.<a href="#section-5.4-2" class="pilcrow">¶</a></p>
-<p id="section-5.4-3">For repeated access to the same resource, clients <span class="bcp14">SHOULD</span>:<a href="#section-5.4-3" class="pilcrow">¶</a></p>
-<ol start="1" type="1" class="normal type-1" id="section-5.4-4">
-          <li id="section-5.4-4.1">Use the <code>authorization</code> intent to establish ongoing payment rights, or<a href="#section-5.4-4.1" class="pilcrow">¶</a>
+<p id="section-5.4-1">Servers <span class="bcp14">MAY</span> include a <code>Payment-Authorization</code> header on successful responses to indicate that a credential may be reused for subsequent requests. The header value can be used directly as the <code>Authorization</code> header value for subsequent requests:<a href="#section-5.4-1" class="pilcrow">¶</a></p>
+<div class="lang-abnf sourcecode" id="section-5.4-2">
+<pre>
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
+auth-param            = token BWS "=" BWS ( token / quoted-string )
+</pre><a href="#section-5.4-2" class="pilcrow">¶</a>
+</div>
+<p id="section-5.4-3">The credential portion (<code>Payment</code> followed by <code>b64token</code>) is directly usable as an <code>Authorization</code> header value. The following parameters are appended:<a href="#section-5.4-3" class="pilcrow">¶</a></p>
+<table class="center" id="table-4">
+          <caption><a href="#table-4" class="selfRef">Table 4</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Parameter</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>expires</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Yes</td>
+              <td class="text-left" rowspan="1" colspan="1">RFC 3339 timestamp after which the authorization expires</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>realm</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">No</td>
+              <td class="text-left" rowspan="1" colspan="1">Protection space scope (defaults to challenge realm)</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-5.4-5">Example:<a href="#section-5.4-5" class="pilcrow">¶</a></p>
+<div class="lang-http sourcecode" id="section-5.4-6">
+<pre>
+HTTP/1.1 200 OK
+Content-Type: application/json
+Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJ0aW1lc3RhbXAiOiIyMDI1LTAxLTE1VDEyOjAwOjAwWiIsInJlZmVyZW5jZSI6IjB4YWJjMTIzLi4uIn0
+Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
+</pre><a href="#section-5.4-6" class="pilcrow">¶</a>
+</div>
+<p id="section-5.4-7">Subsequent requests reuse the credential directly:<a href="#section-5.4-7" class="pilcrow">¶</a></p>
+<div class="lang-http sourcecode" id="section-5.4-8">
+<pre>
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
+</pre><a href="#section-5.4-8" class="pilcrow">¶</a>
+</div>
+<p id="section-5.4-9">The server <span class="bcp14">MAY</span> return a different token in <code>Payment-Authorization</code> than the original credential (e.g., a access token optimized for reuse).<a href="#section-5.4-9" class="pilcrow">¶</a></p>
+<div id="client-behavior">
+<section id="section-5.4.1">
+          <h4 id="name-client-behavior">
+<a href="#section-5.4.1" class="section-number selfRef">5.4.1. </a><a href="#name-client-behavior" class="section-name selfRef">Client Behavior</a>
+          </h4>
+<p id="section-5.4.1-1">Clients that receive a <code>Payment-Authorization</code> header <span class="bcp14">SHOULD</span>:<a href="#section-5.4.1-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.4.1-2">
+            <li id="section-5.4.1-2.1">Extract the credential portion (<code>Payment &lt;b64token&gt;</code>) for reuse<a href="#section-5.4.1-2.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-5.4-4.2">Request a new challenge and generate a fresh credential for each access<a href="#section-5.4-4.2" class="pilcrow">¶</a>
+            <li id="section-5.4.1-2.2">Cache it along with the <code>expires</code> timestamp and <code>realm</code><a href="#section-5.4.1-2.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-5.4.1-2.3">Use the cached credential as the <code>Authorization</code> header for subsequent<a href="#section-5.4.1-2.3" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-5.4.1-3">requests to the same realm<a href="#section-5.4.1-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.4.1-4">
+            <li id="section-5.4.1-4.1">Stop reusing the credential after the <code>expires</code> timestamp<a href="#section-5.4.1-4.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-5.4.1-4.2">Retain the <code>Payment-Receipt</code> separately for audit purposes<a href="#section-5.4.1-4.2" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-5.4.1-5">When a cached authorization expires, clients <span class="bcp14">MUST</span> obtain a new challenge and submit a fresh credential.<a href="#section-5.4.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="server-behavior">
+<section id="section-5.4.2">
+          <h4 id="name-server-behavior">
+<a href="#section-5.4.2" class="section-number selfRef">5.4.2. </a><a href="#name-server-behavior" class="section-name selfRef">Server Behavior</a>
+          </h4>
+<p id="section-5.4.2-1">Servers that issue <code>Payment-Authorization</code> <span class="bcp14">MUST</span>:<a href="#section-5.4.2-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.4.2-2">
+            <li id="section-5.4.2-2.1">Track which authorizations are valid and not yet expired<a href="#section-5.4.2-2.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-5.4.2-2.2">Accept the issued credential for requests within the authorized realm<a href="#section-5.4.2-2.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-5.4.2-2.3">Return 401 (Unauthorized) with a fresh challenge if the authorization<a href="#section-5.4.2-2.3" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-5.4.2-3">has expired or been revoked<a href="#section-5.4.2-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.4.2-4">
+            <li id="section-5.4.2-4.1">NOT require re-payment for requests within the authorization window<a href="#section-5.4.2-4.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-5.4.2-5">Servers <span class="bcp14">MAY</span> issue a credential in <code>Payment-Authorization</code> that differs from the original payment credential. This allows servers to issue access tokens, reduce credential size, or implement other optimizations.<a href="#section-5.4.2-5" class="pilcrow">¶</a></p>
+<p id="section-5.4.2-6">Servers <span class="bcp14">MAY</span> revoke authorizations before their expiry time. When an authorization is revoked, the server <span class="bcp14">MUST</span> return 401 with a fresh challenge.<a href="#section-5.4.2-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="reusing-credentials">
+<section id="section-5.5">
+        <h3 id="name-reusing-credentials">
+<a href="#section-5.5" class="section-number selfRef">5.5. </a><a href="#name-reusing-credentials" class="section-name selfRef">Reusing Credentials</a>
+        </h3>
+<p id="section-5.5-1">Payment credentials are generally single-use unless the server explicitly grants reuse via the <code>Payment-Authorization</code> header.<a href="#section-5.5-1" class="pilcrow">¶</a></p>
+<p id="section-5.5-2">Clients <span class="bcp14">MUST NOT</span> reuse Payment credentials across different challenges unless the server has returned a <code>Payment-Authorization</code> header indicating the credential may be reused.<a href="#section-5.5-2" class="pilcrow">¶</a></p>
+<p id="section-5.5-3">For repeated access to the same resource, clients <span class="bcp14">SHOULD</span>:<a href="#section-5.5-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.5-4">
+          <li id="section-5.5-4.1">Check for a cached <code>Payment-Authorization</code> that covers the realm<a href="#section-5.5-4.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.5-4.2">If valid, reuse the cached credential<a href="#section-5.5-4.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.5-4.3">Otherwise, request a new challenge and generate a fresh credential<a href="#section-5.5-4.3" class="pilcrow">¶</a>
 </li>
         </ol>
-<p id="section-5.4-5">Servers <span class="bcp14">MAY</span> cache successful payment verifications and allow subsequent requests without re-verification, but this is an implementation choice and not guaranteed by this specification.<a href="#section-5.4-5" class="pilcrow">¶</a></p>
-<p id="section-5.4-6">The scope of credential validity is determined by:<a href="#section-5.4-6" class="pilcrow">¶</a></p>
+<p id="section-5.5-5">The scope of credential validity is determined by:<a href="#section-5.5-5" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.4-7.1">
-            <strong>Origin</strong>: Credentials are bound to the origin (scheme, host, port)<a href="#section-5.4-7.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.5-6.1">
+            <strong>Origin</strong>: Credentials are bound to the origin (scheme, host, port)<a href="#section-5.5-6.1" class="pilcrow">¶</a>
 </li>
         </ul>
-<p id="section-5.4-8">that issued the challenge<a href="#section-5.4-8" class="pilcrow">¶</a></p>
+<p id="section-5.5-7">that issued the challenge<a href="#section-5.5-7" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.4-9.1">
-            <strong>Resource</strong>: Credentials are typically bound to the specific resource<a href="#section-5.4-9.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.5-8.1">
+            <strong>Realm</strong>: Credentials are bound to the protection space (<code>realm</code>) for<a href="#section-5.5-8.1" class="pilcrow">¶</a>
 </li>
         </ul>
-<p id="section-5.4-10">or protection space (<code>realm</code>) for which they were issued<a href="#section-5.4-10" class="pilcrow">¶</a></p>
+<p id="section-5.5-9">which they were issued<a href="#section-5.5-9" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.4-11.1">
-            <strong>Time</strong>: Credentials may have expiry as defined in the <code>request</code> payload<a href="#section-5.4-11.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.5-10.1">
+            <strong>Authorization</strong>: If <code>Payment-Authorization</code> was returned, the credential<a href="#section-5.5-10.1" class="pilcrow">¶</a>
 </li>
         </ul>
+<p id="section-5.5-11">is valid until the authorization <code>expires</code> timestamp<a href="#section-5.5-11" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2015,8 +2150,8 @@ sub-method        = 1*( ALPHA / DIGIT / "-" )
         <h3 id="name-registered-methods">
 <a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-registered-methods" class="section-name selfRef">Registered Methods</a>
         </h3>
-<table class="center" id="table-4">
-          <caption><a href="#table-4" class="selfRef">Table 4</a></caption>
+<table class="center" id="table-5">
+          <caption><a href="#table-5" class="selfRef">Table 5</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Identifier</th>
@@ -2085,8 +2220,8 @@ intent      = 1*( ALPHA / DIGIT / "-" )
         </h3>
 <p id="section-7.3-1">Payment method specifications <span class="bcp14">MAY</span> define additional intents by registering them in the Payment Intent Registry (Section 13.4).<a href="#section-7.3-1" class="pilcrow">¶</a></p>
 <p id="section-7.3-2">Examples of payment method intents:<a href="#section-7.3-2" class="pilcrow">¶</a></p>
-<table class="center" id="table-5">
-          <caption><a href="#table-5" class="selfRef">Table 5</a></caption>
+<table class="center" id="table-6">
+          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Intent</th>
@@ -2161,8 +2296,8 @@ WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", 
         <h3 id="name-error-codes">
 <a href="#section-8.2" class="section-number selfRef">8.2. </a><a href="#name-error-codes" class="section-name selfRef">Error Codes</a>
         </h3>
-<table class="center" id="table-6">
-          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
+<table class="center" id="table-7">
+          <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Code</th>
@@ -2273,8 +2408,8 @@ Accept: application/json
           </h4>
 <p id="section-9.1.2-1">The server responds with a JSON object describing its payment capabilities. The response <span class="bcp14">MUST</span> use <code>Content-Type: application/json</code>.<a href="#section-9.1.2-1" class="pilcrow">¶</a></p>
 <p id="section-9.1.2-2">Response Schema:<a href="#section-9.1.2-2" class="pilcrow">¶</a></p>
-<table class="center" id="table-7">
-            <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
+<table class="center" id="table-8">
+            <caption><a href="#table-8" class="selfRef">Table 8</a></caption>
 <thead>
               <tr>
                 <th class="text-left" rowspan="1" colspan="1">Field</th>
@@ -2318,8 +2453,8 @@ Accept: application/json
           </table>
 <p id="section-9.1.2-4">Method Object Schema:<a href="#section-9.1.2-4" class="pilcrow">¶</a></p>
 <p id="section-9.1.2-5">Each key in <code>methods</code> is a registered payment method identifier. The value is an object with:<a href="#section-9.1.2-5" class="pilcrow">¶</a></p>
-<table class="center" id="table-8">
-            <caption><a href="#table-8" class="selfRef">Table 8</a></caption>
+<table class="center" id="table-9">
+            <caption><a href="#table-9" class="selfRef">Table 9</a></caption>
 <thead>
               <tr>
                 <th class="text-left" rowspan="1" colspan="1">Field</th>
@@ -2642,7 +2777,7 @@ WWW-Authenticate: Payment ...
 </pre><a href="#section-12.8-2" class="pilcrow">¶</a>
 </div>
 <p id="section-12.8-3">The <code>no-store</code> directive prevents caching of payment challenges, which may contain time-sensitive or single-use payment parameters.<a href="#section-12.8-3" class="pilcrow">¶</a></p>
-<p id="section-12.8-4">Similarly, responses with <code>Payment-Receipt</code> headers <span class="bcp14">SHOULD</span> include <code>Cache-Control: private</code> to prevent intermediary caching of payment confirmation data.<a href="#section-12.8-4" class="pilcrow">¶</a></p>
+<p id="section-12.8-4">Similarly, responses with <code>Payment-Receipt</code> or <code>Payment-Authorization</code> headers <span class="bcp14">SHOULD</span> include <code>Cache-Control: private</code> to prevent intermediary caching of payment confirmation and authorization data.<a href="#section-12.8-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="cross-origin-considerations">
@@ -2695,6 +2830,35 @@ WWW-Authenticate: Payment ...
 <p id="section-12.11-3">Clients and servers should understand the finality guarantees of their chosen payment method as documented in the payment method specification.<a href="#section-12.11-3" class="pilcrow">¶</a></p>
 </section>
 </div>
+<div id="authorization-reuse">
+<section id="section-12.12">
+        <h3 id="name-authorization-reuse">
+<a href="#section-12.12" class="section-number selfRef">12.12. </a><a href="#name-authorization-reuse" class="section-name selfRef">Authorization Reuse</a>
+        </h3>
+<p id="section-12.12-1">When servers issue <code>Payment-Authorization</code> headers to allow credential reuse, additional security considerations apply:<a href="#section-12.12-1" class="pilcrow">¶</a></p>
+<p id="section-12.12-2"><strong>Credential Theft</strong>: Reusable credentials are higher-value targets. If an attacker captures a credential with valid authorization, they can reuse it until expiry. Mitigations:<a href="#section-12.12-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-12.12-3.1">Servers <span class="bcp14">SHOULD</span> use short authorization windows (minutes to hours, not days)<a href="#section-12.12-3.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-12.12-3.2">Clients <span class="bcp14">MUST</span> store cached credentials securely<a href="#section-12.12-3.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-12.12-3.3">TLS is <span class="bcp14">REQUIRED</span> to prevent credential interception<a href="#section-12.12-3.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-12.12-4"><strong>Revocation</strong>: Servers <span class="bcp14">MUST</span> be able to revoke authorizations before expiry. Common revocation triggers include:<a href="#section-12.12-4" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-12.12-5.1">Anomalous usage patterns (rate, geography, resource access)<a href="#section-12.12-5.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-12.12-5.2">User-initiated session termination<a href="#section-12.12-5.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-12.12-5.3">Security incidents<a href="#section-12.12-5.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-12.12-6">When revoking, servers return 401 with a fresh challenge. Clients <span class="bcp14">MUST NOT</span> assume authorization validity solely based on the <code>expires</code> timestamp.<a href="#section-12.12-6" class="pilcrow">¶</a></p>
+<p id="section-12.12-7"><strong>Authorization Scope</strong>: The <code>realm</code> in <code>Payment-Authorization</code> defines the scope of reuse. Servers <span class="bcp14">MUST NOT</span> issue authorizations that grant access beyond what the original payment covered. Clients <span class="bcp14">SHOULD</span> verify the realm matches expectations before reusing credentials.<a href="#section-12.12-7" class="pilcrow">¶</a></p>
+<p id="section-12.12-8"><strong>Replay Window</strong>: Unlike single-use credentials, reusable credentials have a replay window equal to the authorization lifetime. Servers <span class="bcp14">MUST</span> use server-side state to track authorization validity rather than relying solely on timestamp checks.<a href="#section-12.12-8" class="pilcrow">¶</a></p>
+</section>
+</div>
 </section>
 </div>
 <div id="iana-considerations">
@@ -2726,9 +2890,9 @@ WWW-Authenticate: Payment ...
         <h3 id="name-header-field-registration">
 <a href="#section-13.2" class="section-number selfRef">13.2. </a><a href="#name-header-field-registration" class="section-name selfRef">Header Field Registration</a>
         </h3>
-<p id="section-13.2-1">This document registers the following header field in the "Hypertext Transfer Protocol (HTTP) Field Name Registry":<a href="#section-13.2-1" class="pilcrow">¶</a></p>
-<table class="center" id="table-9">
-          <caption><a href="#table-9" class="selfRef">Table 9</a></caption>
+<p id="section-13.2-1">This document registers the following header fields in the "Hypertext Transfer Protocol (HTTP) Field Name Registry":<a href="#section-13.2-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-10">
+          <caption><a href="#table-10" class="selfRef">Table 10</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Field Name</th>
@@ -2741,6 +2905,11 @@ WWW-Authenticate: Payment ...
               <td class="text-left" rowspan="1" colspan="1">Payment-Receipt</td>
               <td class="text-left" rowspan="1" colspan="1">permanent</td>
               <td class="text-left" rowspan="1" colspan="1">This document, Section 5.3</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">Payment-Authorization</td>
+              <td class="text-left" rowspan="1" colspan="1">permanent</td>
+              <td class="text-left" rowspan="1" colspan="1">This document, Section 5.4</td>
             </tr>
           </tbody>
         </table>
@@ -2768,8 +2937,8 @@ WWW-Authenticate: Payment ...
 </li>
         </ul>
 <p id="section-13.3-4">Initial registry contents:<a href="#section-13.3-4" class="pilcrow">¶</a></p>
-<table class="center" id="table-10">
-          <caption><a href="#table-10" class="selfRef">Table 10</a></caption>
+<table class="center" id="table-11">
+          <caption><a href="#table-11" class="selfRef">Table 11</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Identifier</th>
@@ -2828,8 +2997,8 @@ WWW-Authenticate: Payment ...
 </li>
         </ul>
 <p id="section-13.4-4">Initial registry contents:<a href="#section-13.4-4" class="pilcrow">¶</a></p>
-<table class="center" id="table-11">
-          <caption><a href="#table-11" class="selfRef">Table 11</a></caption>
+<table class="center" id="table-12">
+          <caption><a href="#table-12" class="selfRef">Table 12</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Intent</th>
@@ -2891,6 +3060,10 @@ WWW-Authenticate: Payment ...
         <dd>
 <span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
 <dd class="break"></dd>
+<dt id="RFC3339">[RFC3339]</dt>
+        <dd>
+<span class="refAuthor">Klyne, G.</span> and <span class="refAuthor">C. Newman</span>, <span class="refTitle">"Date and Time on the Internet: Timestamps"</span>, <span class="seriesInfo">RFC 3339</span>, <span class="seriesInfo">DOI 10.17487/RFC3339</span>, <time datetime="2002-07" class="refDate">July 2002</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc3339">https://www.rfc-editor.org/info/rfc3339</a>&gt;</span>. </dd>
+<dd class="break"></dd>
 <dt id="RFC3629">[RFC3629]</dt>
         <dd>
 <span class="refAuthor">Yergeau, F.</span>, <span class="refTitle">"UTF-8, a transformation format of ISO 10646"</span>, <span class="seriesInfo">STD 63</span>, <span class="seriesInfo">RFC 3629</span>, <span class="seriesInfo">DOI 10.17487/RFC3629</span>, <time datetime="2003-11" class="refDate">November 2003</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc3629">https://www.rfc-editor.org/info/rfc3629</a>&gt;</span>. </dd>
@@ -2902,6 +3075,10 @@ WWW-Authenticate: Payment ...
 <dt id="RFC5234">[RFC5234]</dt>
         <dd>
 <span class="refAuthor">Crocker, D., Ed.</span> and <span class="refAuthor">P. Overell</span>, <span class="refTitle">"Augmented BNF for Syntax Specifications: ABNF"</span>, <span class="seriesInfo">STD 68</span>, <span class="seriesInfo">RFC 5234</span>, <span class="seriesInfo">DOI 10.17487/RFC5234</span>, <time datetime="2008-01" class="refDate">January 2008</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc5234">https://www.rfc-editor.org/info/rfc5234</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC6750">[RFC6750]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span> and <span class="refAuthor">D. Hardt</span>, <span class="refTitle">"The OAuth 2.0 Authorization Framework: Bearer Token Usage"</span>, <span class="seriesInfo">RFC 6750</span>, <span class="seriesInfo">DOI 10.17487/RFC6750</span>, <time datetime="2012-10" class="refDate">October 2012</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc6750">https://www.rfc-editor.org/info/rfc6750</a>&gt;</span>. </dd>
 <dd class="break"></dd>
 <dt id="RFC7235">[RFC7235]</dt>
         <dd>
@@ -2950,6 +3127,10 @@ WWW-Authenticate: Payment ...
         <dd>
 <span class="refTitle">"X402 Protocol Specification"</span>, <span>&lt;<a href="https://github.com/coinbase/x402/blob/main/specs/x402-specification-v2.md">https://github.com/coinbase/x402/blob/main/specs/x402-specification-v2.md</a>&gt;</span>. </dd>
 <dd class="break"></dd>
+<dt id="w3c-did">[w3c-did]</dt>
+        <dd>
+<span class="refAuthor">W3C</span>, <span class="refTitle">"Decentralized Identifiers (DIDs) v1.0"</span>, <span>&lt;<a href="https://www.w3.org/TR/did-core/">https://www.w3.org/TR/did-core/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
 <dt id="w3c-pmi">[w3c-pmi]</dt>
       <dd>
 <span class="refAuthor">W3C</span>, <span class="refTitle">"Payment Method Identifiers"</span>, <span>&lt;<a href="https://www.w3.org/TR/payment-method-id/">https://www.w3.org/TR/payment-method-id/</a>&gt;</span>. </dd>
@@ -2962,7 +3143,7 @@ WWW-Authenticate: Payment ...
       <h2 id="name-abnf-collected">
 <a href="#appendix-A" class="section-number selfRef">Appendix A. </a><a href="#name-abnf-collected" class="section-name selfRef">ABNF Collected</a>
       </h2>
-<p id="appendix-A-1">This appendix collects all ABNF defined in this document per <span>[<a href="#RFC5234" class="cite xref">RFC5234</a>]</span>. Core rules (ALPHA, DIGIT, SP, HTAB, DQUOTE, OWS, BWS, token, quoted-string, token68) are imported from <span>[<a href="#RFC9110" class="cite xref">RFC9110</a>]</span> and <span>[<a href="#RFC7235" class="cite xref">RFC7235</a>]</span>.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+<p id="appendix-A-1">This appendix collects all ABNF defined in this document per <span>[<a href="#RFC5234" class="cite xref">RFC5234</a>]</span>. Core rules (ALPHA, DIGIT, SP, HTAB, DQUOTE, OWS, BWS, token, quoted-string, b64token) are imported from <span>[<a href="#RFC9110" class="cite xref">RFC9110</a>]</span>, <span>[<a href="#RFC7235" class="cite xref">RFC7235</a>]</span>, and <span>[<a href="#RFC6750" class="cite xref">RFC6750</a>]</span>.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
 <div class="lang-abnf sourcecode" id="appendix-A-2">
 <pre>
 ; HTTP Authentication Challenge (following RFC 7235 Section 2.1)
@@ -2971,13 +3152,16 @@ auth-params       = auth-param *( OWS "," OWS auth-param )
 auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; Required parameters: id, realm, method, intent, request
-; Optional parameters: description
+; Optional parameters: expires, description
 
-; HTTP Authorization Credentials (following RFC 7235 token68)
-payment-credentials = "Payment" 1*SP token68
+; HTTP Authorization Credentials (following RFC 6750 b64token)
+payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
-Payment-Receipt     = token68
+Payment-Receipt       = b64token
+
+; Payment-Authorization header field value
+Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
@@ -3040,6 +3224,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     realm="api.example.com/v1",
     method="tempo",
     intent="charge",
+    expires="2025-01-15T12:05:00Z",
     request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
 Content-Type: application/json
 
@@ -3080,16 +3265,25 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAxIiwicGF5b
 }
 </pre><a href="#appendix-B.1-11" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.1-12">Success:<a href="#appendix-B.1-12" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-12">Success (with reusable authorization):<a href="#appendix-B.1-12" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-13">
 <pre>
 HTTP/1.1 200 OK
 Cache-Control: private
 Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJyZWZlcmVuY2UiOiIweGFiYzEyMy4uLiJ9
+Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
 Content-Type: application/json
 
 {"data": "..."}
 </pre><a href="#appendix-B.1-13" class="pilcrow">¶</a>
+</div>
+<p id="appendix-B.1-14">The client extracts the credential portion and reuses it for subsequent requests:<a href="#appendix-B.1-14" class="pilcrow">¶</a></p>
+<div class="lang-http sourcecode" id="appendix-B.1-15">
+<pre>
+GET /api/other-resource HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
+</pre><a href="#appendix-B.1-15" class="pilcrow">¶</a>
 </div>
 </section>
 </div>
@@ -3154,6 +3348,7 @@ WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
     realm="api.example.com/v1",
     method="tempo",
     intent="approval",
+    expires="2025-01-15T12:05:00Z",
     description="Authorize API usage",
     request="eyJhdXRob3JpemF0aW9uIjp7ImtleUlkIjoiMHhzZXJ2ZXJrZXkuLi4iLCJleHBpcnkiOjE3MDY3NDU2MDAwMDAsImxpbWl0cyI6W3sidG9rZW4iOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJhbW91bnQiOiIxMDAwMDAwMDAiLCJwZXJpb2QiOjg2NDAwfV19fQ"
 </pre><a href="#appendix-B.2-4" class="pilcrow">¶</a>
