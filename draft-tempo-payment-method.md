@@ -228,7 +228,7 @@ For `intent="charge"`, the request specifies a one-time payment:
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
 | `asset` | string | REQUIRED | TIP-20 token address |
 | `destination` | string | REQUIRED | Recipient address |
-| `expires` | string | REQUIRED | Expiry timestamp in milliseconds (stringified number) |
+| `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
 
 **Example:**
 
@@ -237,7 +237,7 @@ For `intent="charge"`, the request specifies a one-time payment:
   "amount": "1000000",
   "asset": "0x20c0000000000000000000000000000000000000",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z"
 }
 ```
 
@@ -255,16 +255,16 @@ For `intent="approve"`, the request specifies a deferred authorization:
 |-------|------|----------|-------------|
 | `asset` | string | REQUIRED | TIP-20 token address |
 | `destination` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
-| `expires` | string | REQUIRED | Expiry timestamp in milliseconds (stringified number) |
+| `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
 | `limit` | string | REQUIRED | Maximum spend amount in base units (stringified number) |
-| `validFrom` | string | OPTIONAL | Start timestamp in milliseconds (stringified number) |
+| `validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
 
 **Example:**
 
 ```json
 {
   "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
 ```
@@ -287,9 +287,9 @@ For `intent="subscription"`, the request specifies recurring authorization:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount per period in base units (stringified number) |
 | `asset` | string | REQUIRED | TIP-20 token address |
-| `expires` | string | REQUIRED | Total expiry timestamp in milliseconds (stringified number) |
+| `expires` | string | REQUIRED | Total expiry timestamp in ISO 8601 format |
 | `period` | string | REQUIRED | Period duration in seconds (stringified number) |
-| `validFrom` | string | OPTIONAL | Start timestamp in milliseconds (stringified number) |
+| `validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
 
 **Example:**
 
@@ -297,7 +297,7 @@ For `intent="subscription"`, the request specifies recurring authorization:
 {
   "amount": "10000000",
   "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 ```
@@ -883,7 +883,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIyMDI1LTAxLTA2VDEyOjAwOjAwWiJ9"
 ```
 
 The `request` decodes to:
@@ -893,7 +893,7 @@ The `request` decodes to:
   "amount": "1000000",
   "asset": "0x20c0000000000000000000000000000000000000",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z"
 }
 ```
 
@@ -969,7 +969,7 @@ WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj",
   realm="api.example.com",
   method="tempo",
   intent="approve",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImxpbWl0IjoiNTAwMDAwMDAiLCJleHBpcmVzIjoiMTczODc0MjQwMDAwMCJ9"
+  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImV4cGlyZXMiOiIyMDI1LTAyLTA1VDEyOjAwOjAwWiIsImxpbWl0IjoiNTAwMDAwMDAifQ"
 ```
 
 The `request` decodes to:
@@ -977,7 +977,7 @@ The `request` decodes to:
 ```json
 {
   "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
 ```
@@ -1057,7 +1057,7 @@ WWW-Authenticate: Payment id="qT8wErYuI3oPlKjH6gFdSa",
   realm="api.example.com",
   method="tempo",
   intent="subscription",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAwIiwicGVyaW9kIjoiMjU5MjAwMCIsImV4cGlyZXMiOiIxNzY3Njg2NDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImFzc2V0IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwiZXhwaXJlcyI6IjIwMjYtMDEtMDZUMDA6MDA6MDBaIiwicGVyaW9kIjoiMjU5MjAwMCJ9"
 ```
 
 The `request` decodes to:
@@ -1066,7 +1066,7 @@ The `request` decodes to:
 {
   "amount": "10000000",
   "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 ```
