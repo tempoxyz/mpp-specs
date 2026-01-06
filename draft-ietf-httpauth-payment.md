@@ -254,18 +254,17 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     method="tempo",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
-    request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
+    request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
 ```
 
 Example decoded `request` with `method="tempo", intent="charge"`:
 
-```jsonc
+```json
 {
-  "transaction": {
-    "to": "0x20c0000000000000000000000000000000000000",
-    "data": "0xa9059cbb...",
-    "validBefore": "0x59682000"
-  }
+  "amount": "1000000",
+  "asset": "0x20c0000000000000000000000000000000000000",
+  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "expires": "1736150400000"
 }
 ```
 
@@ -306,16 +305,19 @@ Payment method specifications define the exact structure of `payload`.
 ```http
 GET /api/data HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZCI6eyJ0cmFuc2FjdGlvbiI6eyJjaGFpbklkIjo4MDA4NSwibm9uY2VLZXkiOiIweDAiLCJub25jZSI6MCwibWF4RmVlUGVyR2FzIjoiMTAwMDAwMDAwMCIsImdhc0xpbWl0IjoxMDAwMDAsImNhbGxzIjpbeyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIn1dLCJ2YWxpZEJlZm9yZSI6MTcwNDExMDQwMDAwMH0sInNpZ25hdHVyZSI6IjB4Li4uIn19
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJzb3VyY2UiOiJkaWQ6cGtoOmVpcDE1NTo0MjQzMToweDEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2NzgiLCJwYXlsb2FkIjp7InR5cGUiOiJ0cmFuc2FjdGlvbiIsInNpZ25hdHVyZSI6IjB4NzZmOTAxLi4uc2lnbmVkIHRyYW5zYWN0aW9uIGJ5dGVzLi4uIn19
 ```
 
 Decoded credential:
 
-```jsonc
+```json
 {
   "id": "x7Tg2pLqR9mKvNwY3hBcZa",
-  "source": "did:pkh:0x1234567890abcdef1234567890abcdef12345678",
-  "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678",
+  "payload": {
+    "type": "transaction",
+    "signature": "0x76f901...signed transaction bytes..."
+  }
 }
 ```
 
@@ -501,7 +503,8 @@ Examples of payment method intents:
 
 | Intent | Applicable Methods | Description |
 |--------|-------------------|-------------|
-| `approval` | `tempo`, `stripe`, `x402` | Pre-authorize future charges |
+| `approve` | `tempo`, `x402` | Pre-authorize future charges |
+| `subscription` | `tempo` | Recurring payment authorization |
 | `hodl` | `lightning` | Hold invoice; payment held until released |
 
 Clients that do not recognize a payment method intent SHOULD treat the
@@ -513,7 +516,7 @@ If a server supports multiple intents, it MAY issue multiple challenges:
 
 ```http
 WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb", realm="api.example.com", method="tempo", intent="charge", request="..."
-WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approval", request="..."
+WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approve", request="..."
 ```
 
 Clients choose which challenge to respond to.
@@ -617,13 +620,12 @@ Cache-Control: max-age=3600
   "realm": "api.example.com",
   "methods": {
     "tempo": {
-      "intents": ["charge", "approval"],
-      "assets": ["0x1", "0x1a"],
+      "intents": ["charge", "approve", "subscription"],
+      "assets": ["0x20c0000000000000000000000000000000000000"]
     },
     "lightning": {
       "intents": ["charge"],
       "assets": ["BTC"],
-      "description": "Pay with Bitcoin Lightning"
     }
   }
 }
