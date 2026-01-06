@@ -661,42 +661,7 @@ Clients MUST parse and verify the `request` payload before signing:
 4. For `approve`: verify `expiry` is not unreasonably far in the future
 5. For `subscription`: verify `period` and `amount` match expectations
 
-### 11.4. Transaction Finality
-
-Tempo provides immediate finality via Simplex consensus. Once a transaction
-is included in a block, it cannot be reverted. Servers MAY grant access
-immediately upon block inclusion without waiting for additional
-confirmations.
-
-### 11.5. Access Key Registration Race
-
-When using access key payloads, a race condition exists between credential
-submission and key registration:
-
-1. Client provisions key authorization offline
-2. Client submits credential to server
-3. Server registers key on-chain
-4. Server executes transfer using the key
-
-If another party registers the same key ID with different parameters
-between steps 2 and 3, the registration will fail. Servers SHOULD:
-
-- Use unique, randomly-generated key IDs
-- Handle registration failures gracefully
-- Return appropriate error codes
-
-### 11.6. Subscription Abuse
-
-For subscription intents, servers have ongoing permission to charge within
-limits. Clients SHOULD:
-
-- Only authorize subscriptions for trusted services
-- Use destination restrictions to limit transfer targets
-- Set reasonable total expiry timestamps
-- Monitor on-chain activity for unexpected charges
-- Revoke keys promptly when canceling subscriptions
-
-### 11.7. Source Verification
+### 11.4. Source Verification
 
 If a credential includes the optional `source` field (a DID identifying the
 payer), servers MUST NOT trust this value without verification. The `source`
