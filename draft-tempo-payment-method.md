@@ -235,7 +235,7 @@ For `intent="charge"`, the request specifies a one-time payment:
 ```json
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z"
 }
@@ -263,7 +263,7 @@ For `intent="approve"`, the request specifies a deferred authorization:
 
 ```json
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
@@ -296,7 +296,7 @@ For `intent="subscription"`, the request specifies recurring authorization:
 ```json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
@@ -891,7 +891,7 @@ The `request` decodes to:
 ```json
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z"
 }
@@ -976,7 +976,7 @@ The `request` decodes to:
 
 ```json
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
@@ -1065,7 +1065,7 @@ The `request` decodes to:
 ```json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
