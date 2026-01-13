@@ -297,7 +297,8 @@ The client fulfills this by either:
 
 If `feePayer` is `true`, the client signs with `fee_payer_signature` set to
 `0x00` and `fee_token` empty. If `feePayer` is `false` or omitted, the client
-MUST set `fee_token` and pay fees themselves.
+MUST NOT sign a key authorization; the client MUST sign a transaction with
+`fee_token` set to pay fees themselves.
 
 ### 6.3. Subscription Request
 
