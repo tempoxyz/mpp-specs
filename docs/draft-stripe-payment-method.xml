@@ -750,7 +750,7 @@ const paymentIntent = await stripe.paymentIntents.create({
         <name>PCI DSS Compliance</name>
         <t>Stripe&apos;s SPT model ensures clients never handle raw payment method details, significantly reducing PCI DSS compliance scope. Servers using this specification inherit Stripe&apos;s PCI Level 1 certification.</t>
       </section>
-      <section anchor="three-d-secure-and-strong-customer-authentication">
+      <section anchor="sec-3d-secure-and-strong-customer-authentication">
         <name>3D Secure and Strong Customer Authentication</name>
         <t>Stripe.js automatically handles 3D Secure challenges when required by the customer&apos;s bank or EU Strong Customer Authentication regulations. Clients <bcp14>MUST</bcp14> use Stripe.js or equivalent SDKs that support challenge flows.</t>
       </section>

@@ -24,7 +24,7 @@
       <t>This document defines the &quot;tempo&quot; payment method for use with the Payment
 HTTP Authentication Scheme [I-D.ietf-httpauth-payment]. It specifies how
 clients and servers exchange TIP-20 token payments on the Tempo blockchain,
-supporting one-time charges, deferred approvals, and recurring subscriptions.</t>
+supporting one-time charges, payment authorizations, and recurring subscriptions.</t>
     </abstract>
   </front>
 
@@ -43,7 +43,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.</t
       <t>This specification supports three payment intents:</t>
       <ul>
         <li><strong>charge</strong>: One-time TIP-20 token transfer</li>
-        <li><strong>approve</strong>: Deferred payment authorization with spending limits</li>
+        <li><strong>authorize</strong>: Payment authorization with spending limits</li>
         <li><strong>subscription</strong>: Recurring payment authorization with periodic limits</li>
       </ul>
       <section anchor="tempo-payment-flow">
@@ -96,6 +96,8 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.</t
         <dd><t>A delegated signing key. Access keys may have an expiry timestamp and  a per-token spending limit.</t></dd>
         <dt>2D Nonce</dt>
         <dd><t>Tempo&apos;s nonce system where each account has multiple independent nonce lanes (<tt>nonce_key</tt>), enabling parallel transaction submission.</t></dd>
+        <dt>Fee Payer</dt>
+        <dd><t>An account that pays transaction fees on behalf of another account. Tempo Transactions support fee payment via a separate signature domain (<tt>0x78</tt>), allowing the server to pay for fees while the client only signs the payment authorization.</t></dd>
       </dl>
     </section>
     <section anchor="method-identifier">
@@ -118,9 +120,9 @@ tempo
         </ol>
         <t>Transaction calling <tt>transfer(recipient, amount)</tt> on the specified    TIP-20 token.</t>
       </section>
-      <section anchor="intent-approve">
-        <name>Intent: &quot;approve&quot;</name>
-        <t>A deferred payment authorization. The payer grants the server permission to charge up to the specified amount before the expiry timestamp.</t>
+      <section anchor="intent-authorize">
+        <name>Intent: &quot;authorize&quot;</name>
+        <t>A payment authorization. The payer grants the server permission to charge up to the specified amount before the expiry timestamp.</t>
         <t>Required parameters:</t>
         <ul>
           <li>Expiry timestamp (<bcp14>MUST</bcp14> be a reasonable future time)</li>
@@ -190,7 +192,13 @@ tempo
               <td><tt>expires</tt></td>
               <td>string</td>
               <td><bcp14>REQUIRED</bcp14></td>
-              <td>Expiry timestamp in milliseconds (stringified number)</td>
+              <td>Expiry timestamp in ISO 8601 format</td>
+            </tr>
+            <tr>
+              <td><tt>feePayer</tt></td>
+              <td>boolean</td>
+              <td><bcp14>OPTIONAL</bcp14></td>
+              <td>If <tt>true</tt>, server will pay transaction fees (default: <tt>false</tt>)</td>
             </tr>
           </tbody>
         </table>
@@ -198,16 +206,18 @@ tempo
         <sourcecode type="json"><![CDATA[
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z",
+  "feePayer": true
 }
 ]]></sourcecode>
         <t>The client fulfills this by signing a Tempo Transaction with <tt>transfer(destination, amount)</tt> on the specified <tt>asset</tt>, with <tt>validBefore</tt> set to <tt>expires</tt>. The client <bcp14>SHOULD</bcp14> use a dedicated <tt>nonceKey</tt> (2D nonce lane) for payment transactions to avoid blocking other account activity if the transaction is not immediately settled.</t>
+        <t>If <tt>feePayer</tt> is <tt>true</tt>, the client signs with <tt>fee_payer_signature</tt> set to <tt>0x00</tt> and <tt>fee_token</tt> empty, allowing the server to sponsor fees. If <tt>feePayer</tt> is <tt>false</tt> or omitted, the client <bcp14>MUST</bcp14> set <tt>fee_token</tt> and pay fees themselves.</t>
       </section>
-      <section anchor="approve-request">
-        <name>Approve Request</name>
-        <t>For <tt>intent=&quot;approve&quot;</tt>, the request specifies a deferred authorization:</t>
+      <section anchor="authorize-request">
+        <name>Authorize Request</name>
+        <t>For <tt>intent=&quot;authorize&quot;</tt>, the request specifies a payment authorization:</t>
         <table>
           <thead>
             <tr>
@@ -234,7 +244,13 @@ tempo
               <td><tt>expires</tt></td>
               <td>string</td>
               <td><bcp14>REQUIRED</bcp14></td>
-              <td>Expiry timestamp in milliseconds (stringified number)</td>
+              <td>Expiry timestamp in ISO 8601 format</td>
+            </tr>
+            <tr>
+              <td><tt>feePayer</tt></td>
+              <td>boolean</td>
+              <td><bcp14>OPTIONAL</bcp14></td>
+              <td>If <tt>true</tt>, server will pay transaction fees (default: <tt>false</tt>)</td>
             </tr>
             <tr>
               <td><tt>limit</tt></td>
@@ -246,15 +262,16 @@ tempo
               <td><tt>validFrom</tt></td>
               <td>string</td>
               <td><bcp14>OPTIONAL</bcp14></td>
-              <td>Start timestamp in milliseconds (stringified number)</td>
+              <td>Start timestamp in ISO 8601 format</td>
             </tr>
           </tbody>
         </table>
         <t>Example:</t>
         <sourcecode type="json"><![CDATA[
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-05T12:00:00Z",
+  "feePayer": true,
   "limit": "50000000"
 }
 ]]></sourcecode>
@@ -267,6 +284,7 @@ tempo
           <li>Signing a Key Authorization with expiry = <tt>expires</tt> and a spending limit</li>
         </ol>
         <t>= <tt>limit</tt> for the specified <tt>asset</tt></t>
+        <t>If <tt>feePayer</tt> is <tt>true</tt>, the client signs with <tt>fee_payer_signature</tt> set to <tt>0x00</tt> and <tt>fee_token</tt> empty. If <tt>feePayer</tt> is <tt>false</tt> or omitted, the client <bcp14>MUST NOT</bcp14> sign a key authorization; the client <bcp14>MUST</bcp14> sign a transaction with <tt>fee_token</tt> set to pay fees themselves.</t>
       </section>
       <section anchor="subscription-request">
         <name>Subscription Request</name>
@@ -297,7 +315,7 @@ tempo
               <td><tt>expires</tt></td>
               <td>string</td>
               <td><bcp14>REQUIRED</bcp14></td>
-              <td>Total expiry timestamp in milliseconds (stringified number)</td>
+              <td>Total expiry timestamp in ISO 8601 format</td>
             </tr>
             <tr>
               <td><tt>period</tt></td>
@@ -309,7 +327,7 @@ tempo
               <td><tt>validFrom</tt></td>
               <td>string</td>
               <td><bcp14>OPTIONAL</bcp14></td>
-              <td>Start timestamp in milliseconds (stringified number)</td>
+              <td>Start timestamp in ISO 8601 format</td>
             </tr>
           </tbody>
         </table>
@@ -317,8 +335,8 @@ tempo
         <sourcecode type="json"><![CDATA[
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 ]]></sourcecode>
@@ -401,7 +419,7 @@ tempo
         <t>When <tt>type</tt> is <tt>&quot;transaction&quot;</tt>, <tt>signature</tt> contains the complete signed Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with <tt>0x</tt> prefix. The transaction <bcp14>MUST</bcp14> contain the appropriate TIP-20 call:</t>
         <ul>
           <li>For <tt>charge</tt>: <tt>transfer(recipient, amount)</tt></li>
-          <li>For <tt>approve</tt>: <tt>approve(spender, amount)</tt></li>
+          <li>For <tt>authorize</tt>: <tt>approve(spender, amount)</tt></li>
         </ul>
         <t>Example:</t>
         <sourcecode type="json"><![CDATA[
@@ -453,34 +471,89 @@ tempo
     <section anchor="settlement-procedure">
       <name>Settlement Procedure</name>
       <t>Settlement converts a verified credential into actual token transfer.</t>
+      <section anchor="fee-payment">
+        <name>Fee Payment</name>
+        <t>When a request includes <tt>feePayer: true</tt>, the server commits to paying transaction fees on behalf of the client. This allows clients to complete payments without holding fee tokens.</t>
+        <section anchor="server-paid-fees">
+          <name>Server-Paid Fees</name>
+          <t>When <tt>feePayer: true</tt>:</t>
+          <ol type="1">
+            <li><strong>Client signs with placeholder</strong>: The client signs the Tempo Transaction</li>
+          </ol>
+          <t>with <tt>fee_payer_signature</tt> set to a placeholder value (<tt>0x00</tt>) and    <tt>fee_token</tt> left empty. The client uses signature domain <tt>0x76</tt>.</t>
+          <ol type="1">
+            <li><strong>Server receives credential</strong>: The server extracts the client-signed</li>
+          </ol>
+          <t>transaction from the credential payload.</t>
+          <ol type="1">
+            <li><strong>Server adds fee payment signature</strong>: The server selects a <tt>fee_token</tt> (any</li>
+          </ol>
+          <t>USD-denominated TIP-20 stablecoin) and signs the transaction using    signature domain <tt>0x78</tt>. This signature commits to the transaction    including the <tt>fee_token</tt> and client&apos;s address.</t>
+          <ol type="1">
+            <li><strong>Server broadcasts</strong>: The final transaction contains both signatures:</li>
+          </ol>
+          <t>- Client&apos;s signature (authorizing the payment)    - Server&apos;s <tt>fee_payer_signature</tt> (committing to pay fees)</t>
+        </section>
+        <section anchor="client-paid-fees">
+          <name>Client-Paid Fees</name>
+          <t>When <tt>feePayer: false</tt> or omitted, the client <bcp14>MUST</bcp14> set <tt>fee_token</tt> to a valid USD TIP-20 token address and pay fees themselves. The server broadcasts the transaction as-is without adding a fee payer signature.</t>
+        </section>
+        <section anchor="server-requirements">
+          <name>Server Requirements</name>
+          <t>When acting as fee payer, servers:</t>
+          <ul>
+            <li><bcp14>MUST</bcp14> maintain sufficient balance of a USD TIP-20 token to pay</li>
+          </ul>
+          <t>transaction fees</t>
+          <ul>
+            <li><bcp14>MAY</bcp14> use any USD-denominated TIP-20 token with sufficient AMM</li>
+          </ul>
+          <t>liquidity as the fee token</t>
+          <ul>
+            <li><bcp14>MAY</bcp14> recover fee costs through pricing or other business logic</li>
+          </ul>
+        </section>
+        <section anchor="client-requirements">
+          <name>Client Requirements</name>
+          <ul>
+            <li>When <tt>feePayer: true</tt>: Clients <bcp14>MUST</bcp14> sign with <tt>fee_payer_signature</tt> set</li>
+          </ul>
+          <t>to <tt>0x00</tt> and <tt>fee_token</tt> empty or <tt>0x80</tt> (RLP null)</t>
+          <ul>
+            <li>When <tt>feePayer: false</tt> or omitted: Clients <bcp14>MUST</bcp14> set <tt>fee_token</tt> to a</li>
+          </ul>
+          <t>valid USD TIP-20 token and have sufficient balance to pay fees</t>
+        </section>
+      </section>
       <section anchor="charge-settlement-transaction">
         <name>Charge Settlement (Transaction)</name>
-        <t>For <tt>intent=&quot;charge&quot;</tt> fulfilled via transaction, the client signs a transaction containing the <tt>transfer</tt> call. The server broadcasts it directly:</t>
+        <t>For <tt>intent=&quot;charge&quot;</tt> fulfilled via transaction, the client signs a transaction containing the <tt>transfer</tt> call. If <tt>feePayer: true</tt>, the server adds its fee payer signature before broadcasting:</t>
         <artwork type="ascii-art"><![CDATA[
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment <credential>   │                             │
-      │      (signed transaction)   │                             │
-      ├────────────────────────────>│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's signed tx)   │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (3) Transfer executed      │
-      │                             │      (~500ms finality)      │
-      │                             │<────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      <txHash>               │                             │
-      │<────────────────────────────┤                             │
-      │                             │                             │
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment <credential>      │                                │
+      ├───────────────────────────────>│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (4) Transfer executed         │
+      │                                │      (~500ms finality)         │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: <txHash> │                                │
+      │<───────────────────────────────┤                                │
+      │                                │                                │
 ]]></artwork>
         <ol type="1">
           <li>Client submits credential containing signed <tt>transfer</tt> transaction</li>
-          <li>Server broadcasts to Tempo via <tt>eth_sendRawTransactionSync</tt></li>
+          <li>If <tt>feePayer: true</tt>, server adds fee sponsorship (signs with <tt>0x78</tt> domain)</li>
+          <li>Server broadcasts transaction to Tempo</li>
           <li>Transaction included in block with immediate finality (~500ms)</li>
           <li>Server returns receipt with transaction hash</li>
         </ol>
@@ -536,50 +609,51 @@ tempo
           <li>Process repeats each period until authorization expires</li>
         </ol>
       </section>
-      <section anchor="approve-settlement-transaction">
-        <name>Approve Settlement (Transaction)</name>
-        <t>For <tt>intent=&quot;approve&quot;</tt> fulfilled via transaction, the client signs an <tt>approve</tt> transaction granting the server a spending allowance:</t>
+      <section anchor="authorize-settlement-transaction">
+        <name>Authorize Settlement (Transaction)</name>
+        <t>For <tt>intent=&quot;authorize&quot;</tt> fulfilled via transaction, the client signs an <tt>approve</tt> transaction granting the server a spending allowance. If <tt>feePayer: true</tt>, the server adds its fee payer signature before broadcasting:</t>
         <artwork type="ascii-art"><![CDATA[
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment <credential>   │                             │
-      │      (signed approve tx)    │                             │
-      ├────────────────────────────>│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's approve tx)  │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (3) Approval granted       │
-      │                             │<────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      <txHash>               │                             │
-      │<────────────────────────────┤                             │
-      │                             │                             │
-      │         ... later, when service is consumed ...           │
-      │                             │                             │
-      │                             │  (5) transferFrom(client,   │
-      │                             │      server, amount)        │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (6) Transfer executed      │
-      │                             │<────────────────────────────┤
-      │                             │                             │
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment <credential>      │                                │
+      ├───────────────────────────────>│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (4) Approval granted          │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: <txHash> │                                │
+      │<───────────────────────────────┤                                │
+      │                                │                                │
+      │         ... later, when service is consumed ...                 │
+      │                                │                                │
+      │                                │  (6) transferFrom(client,      │
+      │                                │      server, amount)           │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (7) Transfer executed         │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
 ]]></artwork>
         <ol type="1">
           <li>Client submits credential containing signed <tt>approve</tt> transaction</li>
-          <li>Server broadcasts to register the spending allowance</li>
+          <li>If <tt>feePayer: true</tt>, server adds fee sponsorship (signs with <tt>0x78</tt> domain)</li>
+          <li>Server broadcasts transaction; approval registered on-chain</li>
           <li>Server returns receipt (approval is now active)</li>
           <li>Later, when the server needs to charge, it calls <tt>transferFrom</tt></li>
           <li>Charges can occur up to the approved limit before expiry</li>
         </ol>
       </section>
-      <section anchor="approve-settlement-key-authorization">
-        <name>Approve Settlement (Key Authorization)</name>
-        <t>For <tt>intent=&quot;approve&quot;</tt> fulfilled via key authorization, the client signs an authorization granting the server permission to charge up to a limit:</t>
+      <section anchor="authorize-settlement-key-authorization">
+        <name>Authorize Settlement (Key Authorization)</name>
+        <t>For <tt>intent=&quot;authorize&quot;</tt> fulfilled via key authorization, the client signs an authorization granting the server permission to charge up to a limit:</t>
         <artwork type="ascii-art"><![CDATA[
    Client                        Server                     Tempo Network
       │                             │                             │
@@ -689,7 +763,7 @@ tempo
         <name>Access Key Security</name>
         <t>Access keys present additional security considerations:</t>
         <t><strong>Short Expiry for Charges</strong>: Access keys used for <tt>charge</tt> intent <bcp14>MUST</bcp14> have expiry within 5 minutes to minimize exposure window. Servers <bcp14>MUST</bcp14> reject access keys with longer expiry for charge intents.</t>
-        <t><strong>Destination Scoping</strong>: For <tt>approve</tt> and <tt>subscription</tt> intents, clients <bcp14>SHOULD</bcp14> include destination restrictions to limit the addresses the key can transfer to. This prevents key compromise from enabling transfers to attacker-controlled addresses.</t>
+        <t><strong>Destination Scoping</strong>: For <tt>authorize</tt> and <tt>subscription</tt> intents, clients <bcp14>SHOULD</bcp14> include destination restrictions to limit the addresses the key can transfer to. This prevents key compromise from enabling transfers to attacker-controlled addresses.</t>
         <t><strong>Spending Limits</strong>: Access key spending limits are enforced by the AccountKeychain precompile on-chain. Servers cannot exceed the authorized limits even if compromised.</t>
         <t><strong>Key Revocation</strong>: Users can revoke access keys at any time via the AccountKeychain precompile. Servers <bcp14>SHOULD</bcp14> handle revocation gracefully by requesting new authorization.</t>
       </section>
@@ -700,40 +774,9 @@ tempo
           <li>Verify <tt>amount</tt> is reasonable for the service</li>
           <li>Verify <tt>token</tt> is the expected token address</li>
           <li>Verify <tt>recipient</tt> is controlled by the expected party</li>
-          <li>For <tt>approve</tt>: verify <tt>expiry</tt> is not unreasonably far in the future</li>
+          <li>For <tt>authorize</tt>: verify <tt>expiry</tt> is not unreasonably far in the future</li>
           <li>For <tt>subscription</tt>: verify <tt>period</tt> and <tt>amount</tt> match expectations</li>
         </ol>
-      </section>
-      <section anchor="transaction-finality">
-        <name>Transaction Finality</name>
-        <t>Tempo provides immediate finality via Simplex consensus. Once a transaction is included in a block, it cannot be reverted. Servers <bcp14>MAY</bcp14> grant access immediately upon block inclusion without waiting for additional confirmations.</t>
-      </section>
-      <section anchor="access-key-registration-race">
-        <name>Access Key Registration Race</name>
-        <t>When using access key payloads, a race condition exists between credential submission and key registration:</t>
-        <ol type="1">
-          <li>Client provisions key authorization offline</li>
-          <li>Client submits credential to server</li>
-          <li>Server registers key on-chain</li>
-          <li>Server executes transfer using the key</li>
-        </ol>
-        <t>If another party registers the same key ID with different parameters between steps 2 and 3, the registration will fail. Servers <bcp14>SHOULD</bcp14>:</t>
-        <ul>
-          <li>Use unique, randomly-generated key IDs</li>
-          <li>Handle registration failures gracefully</li>
-          <li>Return appropriate error codes</li>
-        </ul>
-      </section>
-      <section anchor="subscription-abuse">
-        <name>Subscription Abuse</name>
-        <t>For subscription intents, servers have ongoing permission to charge within limits. Clients <bcp14>SHOULD</bcp14>:</t>
-        <ul>
-          <li>Only authorize subscriptions for trusted services</li>
-          <li>Use destination restrictions to limit transfer targets</li>
-          <li>Set reasonable total expiry timestamps</li>
-          <li>Monitor on-chain activity for unexpected charges</li>
-          <li>Revoke keys promptly when canceling subscriptions</li>
-        </ul>
       </section>
       <section anchor="source-verification">
         <name>Source Verification</name>
@@ -748,6 +791,12 @@ tempo
         </ul>
         <t>field in the key authorization</t>
         <t>If <tt>source</tt> is present, servers <bcp14>SHOULD</bcp14> verify that the recovered address matches the address in the DID (e.g., for <tt>did:pkh:eip155:42431:0xABC...</tt>, verify the recovered address equals <tt>0xABC...</tt>). Servers <bcp14>MUST</bcp14> reject credentials where the <tt>source</tt> does not match the recovered signer.</t>
+      </section>
+      <section anchor="server-paid-fees-2">
+        <name>Server-Paid Fees</name>
+        <t>Servers acting as fee payers accept financial risk in exchange for providing a seamless payment experience.</t>
+        <t><strong>Denial of Service</strong>: Malicious clients could submit valid-looking credentials that fail on-chain, causing the server to pay fees without receiving payment. Servers <bcp14>SHOULD</bcp14> implement rate limiting and <bcp14>MAY</bcp14> require client authentication before accepting payment credentials.</t>
+        <t><strong>Fee Token Exhaustion</strong>: Servers <bcp14>MUST</bcp14> monitor their fee token balance and reject new payment requests when balance is insufficient. Servers <bcp14>SHOULD</bcp14> alert operators when fee token balance falls below a threshold.</t>
       </section>
     </section>
     <section anchor="iana-considerations">
@@ -783,9 +832,9 @@ tempo
               <td>This document, Section 5.1</td>
             </tr>
             <tr>
-              <td><tt>approve</tt></td>
+              <td><tt>authorize</tt></td>
               <td><tt>tempo</tt></td>
-              <td>Deferred payment authorization</td>
+              <td>Payment authorization</td>
               <td>This document, Section 5.2</td>
             </tr>
             <tr>
@@ -827,15 +876,15 @@ charge-asset = %s"asset" ":" eth-address
 charge-destination = %s"destination" ":" eth-address
 charge-expires = %s"expires" ":" number-string
 
-; Approve request
-approve-request = "{" approve-members "}"
-approve-members = approve-asset "," [ approve-destination "," ]
-                  approve-expires "," approve-limit [ "," approve-valid-from ]
-approve-asset = %s"asset" ":" eth-address
-approve-destination = %s"destination" ":" eth-address
-approve-expires = %s"expires" ":" number-string
-approve-limit = %s"limit" ":" number-string
-approve-valid-from = %s"validFrom" ":" number-string
+; Authorize request
+authorize-request = "{" authorize-members "}"
+authorize-members = authorize-asset "," [ authorize-destination "," ]
+authorize-expires "," authorize-limit [ "," authorize-valid-from ]
+authorize-asset = %s"asset" ":" eth-address
+authorize-destination = %s"destination" ":" eth-address
+authorize-expires = %s"expires" ":" number-string
+authorize-limit = %s"limit" ":" number-string
+authorize-valid-from = %s"validFrom" ":" number-string
 
 ; Subscription request
 subscription-request = "{" subscription-members "}"
@@ -902,15 +951,15 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIyMDI1LTAxLTA2VDEyOjAwOjAwWiJ9"
 ]]></sourcecode>
         <t>The <tt>request</tt> decodes to:</t>
         <sourcecode type="json"><![CDATA[
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z"
 }
 ]]></sourcecode>
         <t>This requests a transfer of 1.00 alphaUSD (1000000 base units).</t>
@@ -941,8 +990,8 @@ Content-Type: application/json
 { "data": "..." }
 ]]></sourcecode>
       </section>
-      <section anchor="approve">
-        <name>Approve</name>
+      <section anchor="authorize">
+        <name>Authorize</name>
         <artwork type="ascii-art"><![CDATA[
    Client                        Server                     Tempo Network
       │                             │                             │
@@ -950,7 +999,7 @@ Content-Type: application/json
       ├────────────────────────────>│                             │
       │                             │                             │
       │  (2) 402 Payment Required   │                             │
-      │      intent="approve"       │                             │
+      │      intent="authorize"       │                             │
       │<────────────────────────────┤                             │
       │                             │                             │
       │  (3) Sign keyAuthorization  │                             │
@@ -974,14 +1023,14 @@ HTTP/1.1 402 Payment Required
 WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj",
   realm="api.example.com",
   method="tempo",
-  intent="approve",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImxpbWl0IjoiNTAwMDAwMDAiLCJleHBpcmVzIjoiMTczODc0MjQwMDAwMCJ9"
+  intent="authorize",
+  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImV4cGlyZXMiOiIyMDI1LTAyLTA1VDEyOjAwOjAwWiIsImxpbWl0IjoiNTAwMDAwMDAifQ"
 ]]></sourcecode>
         <t>The <tt>request</tt> decodes to:</t>
         <sourcecode type="json"><![CDATA[
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
 ]]></sourcecode>
@@ -1049,14 +1098,14 @@ WWW-Authenticate: Payment id="qT8wErYuI3oPlKjH6gFdSa",
   realm="api.example.com",
   method="tempo",
   intent="subscription",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAwIiwicGVyaW9kIjoiMjU5MjAwMCIsImV4cGlyZXMiOiIxNzY3Njg2NDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImFzc2V0IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwiZXhwaXJlcyI6IjIwMjYtMDEtMDZUMDA6MDA6MDBaIiwicGVyaW9kIjoiMjU5MjAwMCJ9"
 ]]></sourcecode>
         <t>The <tt>request</tt> decodes to:</t>
         <sourcecode type="json"><![CDATA[
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 ]]></sourcecode>

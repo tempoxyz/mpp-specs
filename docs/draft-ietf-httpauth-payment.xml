@@ -180,16 +180,15 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     method="tempo",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
-    request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
+    request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
 ]]></sourcecode>
           <t>Example decoded <tt>request</tt> with <tt>method=&quot;tempo&quot;, intent=&quot;charge&quot;</tt>:</t>
-          <sourcecode type="jsonc"><![CDATA[
+          <sourcecode type="json"><![CDATA[
 {
-  "transaction": {
-    "to": "0x20c0000000000000000000000000000000000000",
-    "data": "0xa9059cbb...",
-    "validBefore": "0x59682000"
-  }
+  "amount": "1000000",
+  "asset": "0x20c0000000000000000000000000000000000000",
+  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "expires": "1736150400000"
 }
 ]]></sourcecode>
         </section>
@@ -240,14 +239,17 @@ b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
           <sourcecode type="http"><![CDATA[
 GET /api/data HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZCI6eyJ0cmFuc2FjdGlvbiI6eyJjaGFpbklkIjo4MDA4NSwibm9uY2VLZXkiOiIweDAiLCJub25jZSI6MCwibWF4RmVlUGVyR2FzIjoiMTAwMDAwMDAwMCIsImdhc0xpbWl0IjoxMDAwMDAsImNhbGxzIjpbeyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIn1dLCJ2YWxpZEJlZm9yZSI6MTcwNDExMDQwMDAwMH0sInNpZ25hdHVyZSI6IjB4Li4uIn19
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJzb3VyY2UiOiJkaWQ6cGtoOmVpcDE1NTo0MjQzMToweDEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2NzgiLCJwYXlsb2FkIjp7InR5cGUiOiJ0cmFuc2FjdGlvbiIsInNpZ25hdHVyZSI6IjB4NzZmOTAxLi4uc2lnbmVkIHRyYW5zYWN0aW9uIGJ5dGVzLi4uIn19
 ]]></sourcecode>
           <t>Decoded credential:</t>
-          <sourcecode type="jsonc"><![CDATA[
+          <sourcecode type="json"><![CDATA[
 {
   "id": "x7Tg2pLqR9mKvNwY3hBcZa",
-  "source": "did:pkh:0x1234567890abcdef1234567890abcdef12345678",
-  "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678",
+  "payload": {
+    "type": "transaction",
+    "signature": "0x76f901...signed transaction bytes..."
+  }
 }
 ]]></sourcecode>
           <t>The <tt>source</tt> field is optional; clients <bcp14>MAY</bcp14> omit it for anonymous payments.</t>
@@ -460,9 +462,14 @@ intent      = 1*( ALPHA / DIGIT / "-" )
           </thead>
           <tbody>
             <tr>
-              <td><tt>approval</tt></td>
-              <td><tt>tempo</tt>, <tt>stripe</tt>, <tt>x402</tt></td>
+              <td><tt>approve</tt></td>
+              <td><tt>tempo</tt>, <tt>x402</tt></td>
               <td>Pre-authorize future charges</td>
+            </tr>
+            <tr>
+              <td><tt>subscription</tt></td>
+              <td><tt>tempo</tt></td>
+              <td>Recurring payment authorization</td>
             </tr>
             <tr>
               <td><tt>hodl</tt></td>
@@ -478,7 +485,7 @@ intent      = 1*( ALPHA / DIGIT / "-" )
         <t>If a server supports multiple intents, it <bcp14>MAY</bcp14> issue multiple challenges:</t>
         <sourcecode type="http"><![CDATA[
 WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb", realm="api.example.com", method="tempo", intent="charge", request="..."
-WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approval", request="..."
+WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approve", request="..."
 ]]></sourcecode>
         <t>Clients choose which challenge to respond to.</t>
       </section>
@@ -640,13 +647,12 @@ Cache-Control: max-age=3600
   "realm": "api.example.com",
   "methods": {
     "tempo": {
-      "intents": ["charge", "approval"],
-      "assets": ["0x1", "0x1a"],
+      "intents": ["charge", "approve", "subscription"],
+      "assets": ["0x20c0000000000000000000000000000000000000"]
     },
     "lightning": {
       "intents": ["charge"],
       "assets": ["BTC"],
-      "description": "Pay with Bitcoin Lightning"
     }
   }
 }

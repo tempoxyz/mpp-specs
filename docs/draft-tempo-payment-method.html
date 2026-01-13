@@ -10,7 +10,7 @@
        This document defines the "tempo" payment method for use with the Payment
 HTTP Authentication Scheme [I-D.ietf-httpauth-payment]. It specifies how
 clients and servers exchange TIP-20 token payments on the Tempo blockchain,
-supporting one-time charges, deferred approvals, and recurring subscriptions. 
+supporting one-time charges, payment authorizations, and recurring subscriptions. 
     ' name="description">
 <meta content="xml2rfc 3.31.0" name="generator">
 <meta content="draft-tempo-payment-method-00" name="ietf.draft">
@@ -1221,7 +1221,7 @@ li > p:last-of-type:only-child {
 </tr></thead>
 <tfoot><tr>
 <td class="left">Moxey</td>
-<td class="center">Expires 10 July 2026</td>
+<td class="center">Expires 17 July 2026</td>
 <td class="right">[Page]</td>
 </tr></tfoot>
 </table>
@@ -1234,12 +1234,12 @@ li > p:last-of-type:only-child {
 <dd class="internet-draft">draft-tempo-payment-method-00</dd>
 <dt class="label-published">Published:</dt>
 <dd class="published">
-<time datetime="2026-01-06" class="published">6 January 2026</time>
+<time datetime="2026-01-13" class="published">13 January 2026</time>
     </dd>
 <dt class="label-intended-status">Intended Status:</dt>
 <dd class="intended-status">Standards Track</dd>
 <dt class="label-expires">Expires:</dt>
-<dd class="expires"><time datetime="2026-07-10">10 July 2026</time></dd>
+<dd class="expires"><time datetime="2026-07-17">17 July 2026</time></dd>
 <dt class="label-authors">Author:</dt>
 <dd class="authors">
 <div class="author">
@@ -1254,7 +1254,7 @@ li > p:last-of-type:only-child {
 <p id="section-abstract-1">This document defines the "tempo" payment method for use with the Payment
 HTTP Authentication Scheme [I-D.ietf-httpauth-payment]. It specifies how
 clients and servers exchange TIP-20 token payments on the Tempo blockchain,
-supporting one-time charges, deferred approvals, and recurring subscriptions.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+supporting one-time charges, payment authorizations, and recurring subscriptions.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
 </section>
 <div id="status-of-memo">
 <section id="section-boilerplate.1">
@@ -1275,7 +1275,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
         time. It is inappropriate to use Internet-Drafts as reference
         material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
 <p id="section-boilerplate.1-4">
-        This Internet-Draft will expire on 10 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+        This Internet-Draft will expire on 17 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="copyright">
@@ -1331,7 +1331,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
                 <p id="section-toc.1-1.5.2.1.1"><a href="#section-5.1" class="auto internal xref">5.1</a>.  <a href="#name-intent-charge" class="internal xref">Intent: "charge"</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.2">
-                <p id="section-toc.1-1.5.2.2.1"><a href="#section-5.2" class="auto internal xref">5.2</a>.  <a href="#name-intent-approve" class="internal xref">Intent: "approve"</a></p>
+                <p id="section-toc.1-1.5.2.2.1"><a href="#section-5.2" class="auto internal xref">5.2</a>.  <a href="#name-intent-authorize" class="internal xref">Intent: "authorize"</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.3">
                 <p id="section-toc.1-1.5.2.3.1"><a href="#section-5.3" class="auto internal xref">5.3</a>.  <a href="#name-intent-subscription" class="internal xref">Intent: "subscription"</a></p>
@@ -1345,7 +1345,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
                 <p id="section-toc.1-1.6.2.1.1"><a href="#section-6.1" class="auto internal xref">6.1</a>.  <a href="#name-charge-request" class="internal xref">Charge Request</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.2">
-                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-approve-request" class="internal xref">Approve Request</a></p>
+                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-authorize-request" class="internal xref">Authorize Request</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.3">
                 <p id="section-toc.1-1.6.2.3.1"><a href="#section-6.3" class="auto internal xref">6.3</a>.  <a href="#name-subscription-request" class="internal xref">Subscription Request</a></p>
@@ -1384,19 +1384,36 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
             <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-settlement-procedure" class="internal xref">Settlement Procedure</a></p>
 <ul class="compact toc ulBare ulEmpty">
 <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1">
-                <p id="section-toc.1-1.9.2.1.1"><a href="#section-9.1" class="auto internal xref">9.1</a>.  <a href="#name-charge-settlement-transacti" class="internal xref">Charge Settlement (Transaction)</a></p>
+                <p id="section-toc.1-1.9.2.1.1"><a href="#section-9.1" class="auto internal xref">9.1</a>.  <a href="#name-fee-payment" class="internal xref">Fee Payment</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1.2.1">
+                    <p id="section-toc.1-1.9.2.1.2.1.1"><a href="#section-9.1.1" class="auto internal xref">9.1.1</a>.  <a href="#name-server-paid-fees" class="internal xref">Server-Paid Fees</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1.2.2">
+                    <p id="section-toc.1-1.9.2.1.2.2.1"><a href="#section-9.1.2" class="auto internal xref">9.1.2</a>.  <a href="#name-client-paid-fees" class="internal xref">Client-Paid Fees</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1.2.3">
+                    <p id="section-toc.1-1.9.2.1.2.3.1"><a href="#section-9.1.3" class="auto internal xref">9.1.3</a>.  <a href="#name-server-requirements" class="internal xref">Server Requirements</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1.2.4">
+                    <p id="section-toc.1-1.9.2.1.2.4.1"><a href="#section-9.1.4" class="auto internal xref">9.1.4</a>.  <a href="#name-client-requirements" class="internal xref">Client Requirements</a></p>
+</li>
+                </ul>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.2">
-                <p id="section-toc.1-1.9.2.2.1"><a href="#section-9.2" class="auto internal xref">9.2</a>.  <a href="#name-subscription-settlement-key" class="internal xref">Subscription Settlement (Key Authorization)</a></p>
+                <p id="section-toc.1-1.9.2.2.1"><a href="#section-9.2" class="auto internal xref">9.2</a>.  <a href="#name-charge-settlement-transacti" class="internal xref">Charge Settlement (Transaction)</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.3">
-                <p id="section-toc.1-1.9.2.3.1"><a href="#section-9.3" class="auto internal xref">9.3</a>.  <a href="#name-approve-settlement-transact" class="internal xref">Approve Settlement (Transaction)</a></p>
+                <p id="section-toc.1-1.9.2.3.1"><a href="#section-9.3" class="auto internal xref">9.3</a>.  <a href="#name-subscription-settlement-key" class="internal xref">Subscription Settlement (Key Authorization)</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.4">
-                <p id="section-toc.1-1.9.2.4.1"><a href="#section-9.4" class="auto internal xref">9.4</a>.  <a href="#name-approve-settlement-key-auth" class="internal xref">Approve Settlement (Key Authorization)</a></p>
+                <p id="section-toc.1-1.9.2.4.1"><a href="#section-9.4" class="auto internal xref">9.4</a>.  <a href="#name-authorize-settlement-transa" class="internal xref">Authorize Settlement (Transaction)</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.5">
-                <p id="section-toc.1-1.9.2.5.1"><a href="#section-9.5" class="auto internal xref">9.5</a>.  <a href="#name-receipt-generation" class="internal xref">Receipt Generation</a></p>
+                <p id="section-toc.1-1.9.2.5.1"><a href="#section-9.5" class="auto internal xref">9.5</a>.  <a href="#name-authorize-settlement-key-au" class="internal xref">Authorize Settlement (Key Authorization)</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.6">
+                <p id="section-toc.1-1.9.2.6.1"><a href="#section-9.6" class="auto internal xref">9.6</a>.  <a href="#name-receipt-generation" class="internal xref">Receipt Generation</a></p>
 </li>
             </ul>
 </li>
@@ -1421,16 +1438,10 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
                 <p id="section-toc.1-1.11.2.3.1"><a href="#section-11.3" class="auto internal xref">11.3</a>.  <a href="#name-amount-verification" class="internal xref">Amount Verification</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.4">
-                <p id="section-toc.1-1.11.2.4.1"><a href="#section-11.4" class="auto internal xref">11.4</a>.  <a href="#name-transaction-finality" class="internal xref">Transaction Finality</a></p>
+                <p id="section-toc.1-1.11.2.4.1"><a href="#section-11.4" class="auto internal xref">11.4</a>.  <a href="#name-source-verification" class="internal xref">Source Verification</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.5">
-                <p id="section-toc.1-1.11.2.5.1"><a href="#section-11.5" class="auto internal xref">11.5</a>.  <a href="#name-access-key-registration-rac" class="internal xref">Access Key Registration Race</a></p>
-</li>
-              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.6">
-                <p id="section-toc.1-1.11.2.6.1"><a href="#section-11.6" class="auto internal xref">11.6</a>.  <a href="#name-subscription-abuse" class="internal xref">Subscription Abuse</a></p>
-</li>
-              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.7">
-                <p id="section-toc.1-1.11.2.7.1"><a href="#section-11.7" class="auto internal xref">11.7</a>.  <a href="#name-source-verification" class="internal xref">Source Verification</a></p>
+                <p id="section-toc.1-1.11.2.5.1"><a href="#section-11.5" class="auto internal xref">11.5</a>.  <a href="#name-server-paid-fees-2" class="internal xref">Server-Paid Fees</a></p>
 </li>
             </ul>
 </li>
@@ -1463,7 +1474,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
                 <p id="section-toc.1-1.15.2.1.1"><a href="#appendix-B.1" class="auto internal xref">B.1</a>.  <a href="#name-charge" class="internal xref">Charge</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.15.2.2">
-                <p id="section-toc.1-1.15.2.2.1"><a href="#appendix-B.2" class="auto internal xref">B.2</a>.  <a href="#name-approve" class="internal xref">Approve</a></p>
+                <p id="section-toc.1-1.15.2.2.1"><a href="#appendix-B.2" class="auto internal xref">B.2</a>.  <a href="#name-authorize" class="internal xref">Authorize</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.15.2.3">
                 <p id="section-toc.1-1.15.2.3.1"><a href="#appendix-B.3" class="auto internal xref">B.3</a>.  <a href="#name-subscription" class="internal xref">Subscription</a></p>
@@ -1504,7 +1515,7 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
           <strong>charge</strong>: One-time TIP-20 token transfer<a href="#section-1-7.1" class="pilcrow">¶</a>
 </li>
         <li class="normal" id="section-1-7.2">
-          <strong>approve</strong>: Deferred payment authorization with spending limits<a href="#section-1-7.2" class="pilcrow">¶</a>
+          <strong>authorize</strong>: Payment authorization with spending limits<a href="#section-1-7.2" class="pilcrow">¶</a>
 </li>
         <li class="normal" id="section-1-7.3">
           <strong>subscription</strong>: Recurring payment authorization with periodic limits<a href="#section-1-7.3" class="pilcrow">¶</a>
@@ -1589,6 +1600,11 @@ supporting one-time charges, deferred approvals, and recurring subscriptions.<a 
         <dd style="margin-left: 1.5em" id="section-3-1.8">
           <p id="section-3-1.8.1">Tempo's nonce system where each account has multiple independent nonce lanes (<code>nonce_key</code>), enabling parallel transaction submission.<a href="#section-3-1.8.1" class="pilcrow">¶</a></p>
 </dd>
+        <dd class="break"></dd>
+<dt id="section-3-1.9">Fee Payer</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.10">
+          <p id="section-3-1.10.1">An account that pays transaction fees on behalf of another account. Tempo Transactions support fee payment via a separate signature domain (<code>0x78</code>), allowing the server to pay for fees while the client only signs the payment authorization.<a href="#section-3-1.10.1" class="pilcrow">¶</a></p>
+</dd>
       <dd class="break"></dd>
 </dl>
 </section>
@@ -1628,12 +1644,12 @@ tempo
 <p id="section-5.1-4">Transaction calling <code>transfer(recipient, amount)</code> on the specified    TIP-20 token.<a href="#section-5.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
-<div id="intent-approve">
+<div id="intent-authorize">
 <section id="section-5.2">
-        <h3 id="name-intent-approve">
-<a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-intent-approve" class="section-name selfRef">Intent: "approve"</a>
+        <h3 id="name-intent-authorize">
+<a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-intent-authorize" class="section-name selfRef">Intent: "authorize"</a>
         </h3>
-<p id="section-5.2-1">A deferred payment authorization. The payer grants the server permission to charge up to the specified amount before the expiry timestamp.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
+<p id="section-5.2-1">A payment authorization. The payer grants the server permission to charge up to the specified amount before the expiry timestamp.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
 <p id="section-5.2-2">Required parameters:<a href="#section-5.2-2" class="pilcrow">¶</a></p>
 <ul class="normal">
 <li class="normal" id="section-5.2-3.1">Expiry timestamp (<span class="bcp14">MUST</span> be a reasonable future time)<a href="#section-5.2-3.1" class="pilcrow">¶</a>
@@ -1743,7 +1759,17 @@ tempo
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">REQUIRED</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Expiry timestamp in milliseconds (stringified number)</td>
+              <td class="text-left" rowspan="1" colspan="1">Expiry timestamp in ISO 8601 format</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>feePayer</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">boolean</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">OPTIONAL</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">If <code>true</code>, server will pay transaction fees (default: <code>false</code>)</td>
             </tr>
           </tbody>
         </table>
@@ -1752,21 +1778,23 @@ tempo
 <pre>
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z",
+  "feePayer": true
 }
 </pre><a href="#section-6.1-4" class="pilcrow">¶</a>
 </div>
 <p id="section-6.1-5">The client fulfills this by signing a Tempo Transaction with <code>transfer(destination, amount)</code> on the specified <code>asset</code>, with <code>validBefore</code> set to <code>expires</code>. The client <span class="bcp14">SHOULD</span> use a dedicated <code>nonceKey</code> (2D nonce lane) for payment transactions to avoid blocking other account activity if the transaction is not immediately settled.<a href="#section-6.1-5" class="pilcrow">¶</a></p>
+<p id="section-6.1-6">If <code>feePayer</code> is <code>true</code>, the client signs with <code>fee_payer_signature</code> set to <code>0x00</code> and <code>fee_token</code> empty, allowing the server to sponsor fees. If <code>feePayer</code> is <code>false</code> or omitted, the client <span class="bcp14">MUST</span> set <code>fee_token</code> and pay fees themselves.<a href="#section-6.1-6" class="pilcrow">¶</a></p>
 </section>
 </div>
-<div id="approve-request">
+<div id="authorize-request">
 <section id="section-6.2">
-        <h3 id="name-approve-request">
-<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-approve-request" class="section-name selfRef">Approve Request</a>
+        <h3 id="name-authorize-request">
+<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-authorize-request" class="section-name selfRef">Authorize Request</a>
         </h3>
-<p id="section-6.2-1">For <code>intent="approve"</code>, the request specifies a deferred authorization:<a href="#section-6.2-1" class="pilcrow">¶</a></p>
+<p id="section-6.2-1">For <code>intent="authorize"</code>, the request specifies a payment authorization:<a href="#section-6.2-1" class="pilcrow">¶</a></p>
 <table class="center" id="table-2">
           <caption><a href="#table-2" class="selfRef">Table 2</a></caption>
 <thead>
@@ -1806,7 +1834,17 @@ tempo
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">REQUIRED</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Expiry timestamp in milliseconds (stringified number)</td>
+              <td class="text-left" rowspan="1" colspan="1">Expiry timestamp in ISO 8601 format</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>feePayer</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">boolean</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">OPTIONAL</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">If <code>true</code>, server will pay transaction fees (default: <code>false</code>)</td>
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
@@ -1826,7 +1864,7 @@ tempo
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">OPTIONAL</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Start timestamp in milliseconds (stringified number)</td>
+              <td class="text-left" rowspan="1" colspan="1">Start timestamp in ISO 8601 format</td>
             </tr>
           </tbody>
         </table>
@@ -1834,8 +1872,9 @@ tempo
 <div class="lang-json sourcecode" id="section-6.2-4">
 <pre>
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-05T12:00:00Z",
+  "feePayer": true,
   "limit": "50000000"
 }
 </pre><a href="#section-6.2-4" class="pilcrow">¶</a>
@@ -1851,6 +1890,7 @@ tempo
 </li>
         </ol>
 <p id="section-6.2-9">= <code>limit</code> for the specified <code>asset</code><a href="#section-6.2-9" class="pilcrow">¶</a></p>
+<p id="section-6.2-10">If <code>feePayer</code> is <code>true</code>, the client signs with <code>fee_payer_signature</code> set to <code>0x00</code> and <code>fee_token</code> empty. If <code>feePayer</code> is <code>false</code> or omitted, the client <span class="bcp14">MUST NOT</span> sign a key authorization; the client <span class="bcp14">MUST</span> sign a transaction with <code>fee_token</code> set to pay fees themselves.<a href="#section-6.2-10" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="subscription-request">
@@ -1898,7 +1938,7 @@ tempo
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">REQUIRED</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Total expiry timestamp in milliseconds (stringified number)</td>
+              <td class="text-left" rowspan="1" colspan="1">Total expiry timestamp in ISO 8601 format</td>
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
@@ -1918,7 +1958,7 @@ tempo
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">OPTIONAL</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Start timestamp in milliseconds (stringified number)</td>
+              <td class="text-left" rowspan="1" colspan="1">Start timestamp in ISO 8601 format</td>
             </tr>
           </tbody>
         </table>
@@ -1927,8 +1967,8 @@ tempo
 <pre>
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 </pre><a href="#section-6.3-4" class="pilcrow">¶</a>
@@ -2054,7 +2094,7 @@ tempo
 <ul class="normal">
 <li class="normal" id="section-7.3-2.1">For <code>charge</code>: <code>transfer(recipient, amount)</code><a href="#section-7.3-2.1" class="pilcrow">¶</a>
 </li>
-          <li class="normal" id="section-7.3-2.2">For <code>approve</code>: <code>approve(spender, amount)</code><a href="#section-7.3-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.3-2.2">For <code>authorize</code>: <code>approve(spender, amount)</code><a href="#section-7.3-2.2" class="pilcrow">¶</a>
 </li>
         </ul>
 <p id="section-7.3-3">Example:<a href="#section-7.3-3" class="pilcrow">¶</a></p>
@@ -2136,55 +2176,147 @@ tempo
 <a href="#section-9" class="section-number selfRef">9. </a><a href="#name-settlement-procedure" class="section-name selfRef">Settlement Procedure</a>
       </h2>
 <p id="section-9-1">Settlement converts a verified credential into actual token transfer.<a href="#section-9-1" class="pilcrow">¶</a></p>
-<div id="charge-settlement-transaction">
+<div id="fee-payment">
 <section id="section-9.1">
-        <h3 id="name-charge-settlement-transacti">
-<a href="#section-9.1" class="section-number selfRef">9.1. </a><a href="#name-charge-settlement-transacti" class="section-name selfRef">Charge Settlement (Transaction)</a>
+        <h3 id="name-fee-payment">
+<a href="#section-9.1" class="section-number selfRef">9.1. </a><a href="#name-fee-payment" class="section-name selfRef">Fee Payment</a>
         </h3>
-<p id="section-9.1-1">For <code>intent="charge"</code> fulfilled via transaction, the client signs a transaction containing the <code>transfer</code> call. The server broadcasts it directly:<a href="#section-9.1-1" class="pilcrow">¶</a></p>
-<div class="alignLeft art-ascii-art art-text artwork" id="section-9.1-2">
-<pre>
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment &lt;credential&gt;   │                             │
-      │      (signed transaction)   │                             │
-      ├────────────────────────────&gt;│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's signed tx)   │
-      │                             ├────────────────────────────&gt;│
-      │                             │                             │
-      │                             │  (3) Transfer executed      │
-      │                             │      (~500ms finality)      │
-      │                             │&lt;────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      &lt;txHash&gt;               │                             │
-      │&lt;────────────────────────────┤                             │
-      │                             │                             │
-</pre><a href="#section-9.1-2" class="pilcrow">¶</a>
+<p id="section-9.1-1">When a request includes <code>feePayer: true</code>, the server commits to paying transaction fees on behalf of the client. This allows clients to complete payments without holding fee tokens.<a href="#section-9.1-1" class="pilcrow">¶</a></p>
+<div id="server-paid-fees">
+<section id="section-9.1.1">
+          <h4 id="name-server-paid-fees">
+<a href="#section-9.1.1" class="section-number selfRef">9.1.1. </a><a href="#name-server-paid-fees" class="section-name selfRef">Server-Paid Fees</a>
+          </h4>
+<p id="section-9.1.1-1">When <code>feePayer: true</code>:<a href="#section-9.1.1-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1.1-2">
+            <li id="section-9.1.1-2.1">
+              <strong>Client signs with placeholder</strong>: The client signs the Tempo Transaction<a href="#section-9.1.1-2.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-9.1.1-3">with <code>fee_payer_signature</code> set to a placeholder value (<code>0x00</code>) and    <code>fee_token</code> left empty. The client uses signature domain <code>0x76</code>.<a href="#section-9.1.1-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1.1-4">
+            <li id="section-9.1.1-4.1">
+              <strong>Server receives credential</strong>: The server extracts the client-signed<a href="#section-9.1.1-4.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-9.1.1-5">transaction from the credential payload.<a href="#section-9.1.1-5" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1.1-6">
+            <li id="section-9.1.1-6.1">
+              <strong>Server adds fee payment signature</strong>: The server selects a <code>fee_token</code> (any<a href="#section-9.1.1-6.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-9.1.1-7">USD-denominated TIP-20 stablecoin) and signs the transaction using    signature domain <code>0x78</code>. This signature commits to the transaction    including the <code>fee_token</code> and client's address.<a href="#section-9.1.1-7" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1.1-8">
+            <li id="section-9.1.1-8.1">
+              <strong>Server broadcasts</strong>: The final transaction contains both signatures:<a href="#section-9.1.1-8.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-9.1.1-9">- Client's signature (authorizing the payment)    - Server's <code>fee_payer_signature</code> (committing to pay fees)<a href="#section-9.1.1-9" class="pilcrow">¶</a></p>
+</section>
 </div>
-<ol start="1" type="1" class="normal type-1" id="section-9.1-3">
-          <li id="section-9.1-3.1">Client submits credential containing signed <code>transfer</code> transaction<a href="#section-9.1-3.1" class="pilcrow">¶</a>
+<div id="client-paid-fees">
+<section id="section-9.1.2">
+          <h4 id="name-client-paid-fees">
+<a href="#section-9.1.2" class="section-number selfRef">9.1.2. </a><a href="#name-client-paid-fees" class="section-name selfRef">Client-Paid Fees</a>
+          </h4>
+<p id="section-9.1.2-1">When <code>feePayer: false</code> or omitted, the client <span class="bcp14">MUST</span> set <code>fee_token</code> to a valid USD TIP-20 token address and pay fees themselves. The server broadcasts the transaction as-is without adding a fee payer signature.<a href="#section-9.1.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="server-requirements">
+<section id="section-9.1.3">
+          <h4 id="name-server-requirements">
+<a href="#section-9.1.3" class="section-number selfRef">9.1.3. </a><a href="#name-server-requirements" class="section-name selfRef">Server Requirements</a>
+          </h4>
+<p id="section-9.1.3-1">When acting as fee payer, servers:<a href="#section-9.1.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.1.3-2.1">
+              <span class="bcp14">MUST</span> maintain sufficient balance of a USD TIP-20 token to pay<a href="#section-9.1.3-2.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.1-3.2">Server broadcasts to Tempo via <code>eth_sendRawTransactionSync</code><a href="#section-9.1-3.2" class="pilcrow">¶</a>
+          </ul>
+<p id="section-9.1.3-3">transaction fees<a href="#section-9.1.3-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.1.3-4.1">
+              <span class="bcp14">MAY</span> use any USD-denominated TIP-20 token with sufficient AMM<a href="#section-9.1.3-4.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.1-3.3">Transaction included in block with immediate finality (~500ms)<a href="#section-9.1-3.3" class="pilcrow">¶</a>
+          </ul>
+<p id="section-9.1.3-5">liquidity as the fee token<a href="#section-9.1.3-5" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.1.3-6.1">
+              <span class="bcp14">MAY</span> recover fee costs through pricing or other business logic<a href="#section-9.1.3-6.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.1-3.4">Server returns receipt with transaction hash<a href="#section-9.1-3.4" class="pilcrow">¶</a>
+          </ul>
+</section>
+</div>
+<div id="client-requirements">
+<section id="section-9.1.4">
+          <h4 id="name-client-requirements">
+<a href="#section-9.1.4" class="section-number selfRef">9.1.4. </a><a href="#name-client-requirements" class="section-name selfRef">Client Requirements</a>
+          </h4>
+<ul class="normal">
+<li class="normal" id="section-9.1.4-1.1">When <code>feePayer: true</code>: Clients <span class="bcp14">MUST</span> sign with <code>fee_payer_signature</code> set<a href="#section-9.1.4-1.1" class="pilcrow">¶</a>
+</li>
+          </ul>
+<p id="section-9.1.4-2">to <code>0x00</code> and <code>fee_token</code> empty or <code>0x80</code> (RLP null)<a href="#section-9.1.4-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.1.4-3.1">When <code>feePayer: false</code> or omitted: Clients <span class="bcp14">MUST</span> set <code>fee_token</code> to a<a href="#section-9.1.4-3.1" class="pilcrow">¶</a>
+</li>
+          </ul>
+<p id="section-9.1.4-4">valid USD TIP-20 token and have sufficient balance to pay fees<a href="#section-9.1.4-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="charge-settlement-transaction">
+<section id="section-9.2">
+        <h3 id="name-charge-settlement-transacti">
+<a href="#section-9.2" class="section-number selfRef">9.2. </a><a href="#name-charge-settlement-transacti" class="section-name selfRef">Charge Settlement (Transaction)</a>
+        </h3>
+<p id="section-9.2-1">For <code>intent="charge"</code> fulfilled via transaction, the client signs a transaction containing the <code>transfer</code> call. If <code>feePayer: true</code>, the server adds its fee payer signature before broadcasting:<a href="#section-9.2-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-9.2-2">
+<pre>
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment &lt;credential&gt;      │                                │
+      ├───────────────────────────────&gt;│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────&gt;│
+      │                                │                                │
+      │                                │  (4) Transfer executed         │
+      │                                │      (~500ms finality)         │
+      │                                │&lt;───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: &lt;txHash&gt; │                                │
+      │&lt;───────────────────────────────┤                                │
+      │                                │                                │
+</pre><a href="#section-9.2-2" class="pilcrow">¶</a>
+</div>
+<ol start="1" type="1" class="normal type-1" id="section-9.2-3">
+          <li id="section-9.2-3.1">Client submits credential containing signed <code>transfer</code> transaction<a href="#section-9.2-3.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-3.2">If <code>feePayer: true</code>, server adds fee sponsorship (signs with <code>0x78</code> domain)<a href="#section-9.2-3.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-3.3">Server broadcasts transaction to Tempo<a href="#section-9.2-3.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-3.4">Transaction included in block with immediate finality (~500ms)<a href="#section-9.2-3.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-3.5">Server returns receipt with transaction hash<a href="#section-9.2-3.5" class="pilcrow">¶</a>
 </li>
         </ol>
 </section>
 </div>
 <div id="subscription-settlement-key-authorization">
-<section id="section-9.2">
+<section id="section-9.3">
         <h3 id="name-subscription-settlement-key">
-<a href="#section-9.2" class="section-number selfRef">9.2. </a><a href="#name-subscription-settlement-key" class="section-name selfRef">Subscription Settlement (Key Authorization)</a>
+<a href="#section-9.3" class="section-number selfRef">9.3. </a><a href="#name-subscription-settlement-key" class="section-name selfRef">Subscription Settlement (Key Authorization)</a>
         </h3>
-<p id="section-9.2-1">For <code>intent="subscription"</code> fulfilled via key authorization, the client signs an authorization granting the server permission to charge periodically:<a href="#section-9.2-1" class="pilcrow">¶</a></p>
-<div class="alignLeft art-ascii-art art-text artwork" id="section-9.2-2">
+<p id="section-9.3-1">For <code>intent="subscription"</code> fulfilled via key authorization, the client signs an authorization granting the server permission to charge periodically:<a href="#section-9.3-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-9.3-2">
 <pre>
    Client                        Server                     Tempo Network
       │                             │                             │
@@ -2223,83 +2355,85 @@ tempo
       │                             │                             │
       │         ... repeat each period until expiry ...           │
       │                             │                             │
-</pre><a href="#section-9.2-2" class="pilcrow">¶</a>
-</div>
-<ol start="1" type="1" class="normal type-1" id="section-9.2-3">
-          <li id="section-9.2-3.1">Client submits credential containing signed key authorization<a href="#section-9.2-3.1" class="pilcrow">¶</a>
-</li>
-          <li id="section-9.2-3.2">Server constructs transaction with <code>keyAuthorization</code> and first <code>transfer</code><a href="#section-9.2-3.2" class="pilcrow">¶</a>
-</li>
-          <li id="section-9.2-3.3">Transaction registers the key and executes the first charge<a href="#section-9.2-3.3" class="pilcrow">¶</a>
-</li>
-          <li id="section-9.2-3.4">Server returns receipt (subscription is now active)<a href="#section-9.2-3.4" class="pilcrow">¶</a>
-</li>
-          <li id="section-9.2-3.5">When each period elapses, server charges using the registered key<a href="#section-9.2-3.5" class="pilcrow">¶</a>
-</li>
-          <li id="section-9.2-3.6">Process repeats each period until authorization expires<a href="#section-9.2-3.6" class="pilcrow">¶</a>
-</li>
-        </ol>
-</section>
-</div>
-<div id="approve-settlement-transaction">
-<section id="section-9.3">
-        <h3 id="name-approve-settlement-transact">
-<a href="#section-9.3" class="section-number selfRef">9.3. </a><a href="#name-approve-settlement-transact" class="section-name selfRef">Approve Settlement (Transaction)</a>
-        </h3>
-<p id="section-9.3-1">For <code>intent="approve"</code> fulfilled via transaction, the client signs an <code>approve</code> transaction granting the server a spending allowance:<a href="#section-9.3-1" class="pilcrow">¶</a></p>
-<div class="alignLeft art-ascii-art art-text artwork" id="section-9.3-2">
-<pre>
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment &lt;credential&gt;   │                             │
-      │      (signed approve tx)    │                             │
-      ├────────────────────────────&gt;│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's approve tx)  │
-      │                             ├────────────────────────────&gt;│
-      │                             │                             │
-      │                             │  (3) Approval granted       │
-      │                             │&lt;────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      &lt;txHash&gt;               │                             │
-      │&lt;────────────────────────────┤                             │
-      │                             │                             │
-      │         ... later, when service is consumed ...           │
-      │                             │                             │
-      │                             │  (5) transferFrom(client,   │
-      │                             │      server, amount)        │
-      │                             ├────────────────────────────&gt;│
-      │                             │                             │
-      │                             │  (6) Transfer executed      │
-      │                             │&lt;────────────────────────────┤
-      │                             │                             │
 </pre><a href="#section-9.3-2" class="pilcrow">¶</a>
 </div>
 <ol start="1" type="1" class="normal type-1" id="section-9.3-3">
-          <li id="section-9.3-3.1">Client submits credential containing signed <code>approve</code> transaction<a href="#section-9.3-3.1" class="pilcrow">¶</a>
+          <li id="section-9.3-3.1">Client submits credential containing signed key authorization<a href="#section-9.3-3.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.3-3.2">Server broadcasts to register the spending allowance<a href="#section-9.3-3.2" class="pilcrow">¶</a>
+          <li id="section-9.3-3.2">Server constructs transaction with <code>keyAuthorization</code> and first <code>transfer</code><a href="#section-9.3-3.2" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.3-3.3">Server returns receipt (approval is now active)<a href="#section-9.3-3.3" class="pilcrow">¶</a>
+          <li id="section-9.3-3.3">Transaction registers the key and executes the first charge<a href="#section-9.3-3.3" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.3-3.4">Later, when the server needs to charge, it calls <code>transferFrom</code><a href="#section-9.3-3.4" class="pilcrow">¶</a>
+          <li id="section-9.3-3.4">Server returns receipt (subscription is now active)<a href="#section-9.3-3.4" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.3-3.5">Charges can occur up to the approved limit before expiry<a href="#section-9.3-3.5" class="pilcrow">¶</a>
+          <li id="section-9.3-3.5">When each period elapses, server charges using the registered key<a href="#section-9.3-3.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.3-3.6">Process repeats each period until authorization expires<a href="#section-9.3-3.6" class="pilcrow">¶</a>
 </li>
         </ol>
 </section>
 </div>
-<div id="approve-settlement-key-authorization">
+<div id="authorize-settlement-transaction">
 <section id="section-9.4">
-        <h3 id="name-approve-settlement-key-auth">
-<a href="#section-9.4" class="section-number selfRef">9.4. </a><a href="#name-approve-settlement-key-auth" class="section-name selfRef">Approve Settlement (Key Authorization)</a>
+        <h3 id="name-authorize-settlement-transa">
+<a href="#section-9.4" class="section-number selfRef">9.4. </a><a href="#name-authorize-settlement-transa" class="section-name selfRef">Authorize Settlement (Transaction)</a>
         </h3>
-<p id="section-9.4-1">For <code>intent="approve"</code> fulfilled via key authorization, the client signs an authorization granting the server permission to charge up to a limit:<a href="#section-9.4-1" class="pilcrow">¶</a></p>
+<p id="section-9.4-1">For <code>intent="authorize"</code> fulfilled via transaction, the client signs an <code>approve</code> transaction granting the server a spending allowance. If <code>feePayer: true</code>, the server adds its fee payer signature before broadcasting:<a href="#section-9.4-1" class="pilcrow">¶</a></p>
 <div class="alignLeft art-ascii-art art-text artwork" id="section-9.4-2">
+<pre>
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment &lt;credential&gt;      │                                │
+      ├───────────────────────────────&gt;│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────&gt;│
+      │                                │                                │
+      │                                │  (4) Approval granted          │
+      │                                │&lt;───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: &lt;txHash&gt; │                                │
+      │&lt;───────────────────────────────┤                                │
+      │                                │                                │
+      │         ... later, when service is consumed ...                 │
+      │                                │                                │
+      │                                │  (6) transferFrom(client,      │
+      │                                │      server, amount)           │
+      │                                ├───────────────────────────────&gt;│
+      │                                │                                │
+      │                                │  (7) Transfer executed         │
+      │                                │&lt;───────────────────────────────┤
+      │                                │                                │
+</pre><a href="#section-9.4-2" class="pilcrow">¶</a>
+</div>
+<ol start="1" type="1" class="normal type-1" id="section-9.4-3">
+          <li id="section-9.4-3.1">Client submits credential containing signed <code>approve</code> transaction<a href="#section-9.4-3.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.4-3.2">If <code>feePayer: true</code>, server adds fee sponsorship (signs with <code>0x78</code> domain)<a href="#section-9.4-3.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.4-3.3">Server broadcasts transaction; approval registered on-chain<a href="#section-9.4-3.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.4-3.4">Server returns receipt (approval is now active)<a href="#section-9.4-3.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.4-3.5">Later, when the server needs to charge, it calls <code>transferFrom</code><a href="#section-9.4-3.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.4-3.6">Charges can occur up to the approved limit before expiry<a href="#section-9.4-3.6" class="pilcrow">¶</a>
+</li>
+        </ol>
+</section>
+</div>
+<div id="authorize-settlement-key-authorization">
+<section id="section-9.5">
+        <h3 id="name-authorize-settlement-key-au">
+<a href="#section-9.5" class="section-number selfRef">9.5. </a><a href="#name-authorize-settlement-key-au" class="section-name selfRef">Authorize Settlement (Key Authorization)</a>
+        </h3>
+<p id="section-9.5-1">For <code>intent="authorize"</code> fulfilled via key authorization, the client signs an authorization granting the server permission to charge up to a limit:<a href="#section-9.5-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-9.5-2">
 <pre>
    Client                        Server                     Tempo Network
       │                             │                             │
@@ -2327,32 +2461,32 @@ tempo
       │                             │      transfer executed      │
       │                             │&lt;────────────────────────────┤
       │                             │                             │
-</pre><a href="#section-9.4-2" class="pilcrow">¶</a>
+</pre><a href="#section-9.5-2" class="pilcrow">¶</a>
 </div>
-<ol start="1" type="1" class="normal type-1" id="section-9.4-3">
-          <li id="section-9.4-3.1">Client submits credential containing signed key authorization<a href="#section-9.4-3.1" class="pilcrow">¶</a>
+<ol start="1" type="1" class="normal type-1" id="section-9.5-3">
+          <li id="section-9.5-3.1">Client submits credential containing signed key authorization<a href="#section-9.5-3.1" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.4-3.2">Server stores the authorization for future use<a href="#section-9.4-3.2" class="pilcrow">¶</a>
+          <li id="section-9.5-3.2">Server stores the authorization for future use<a href="#section-9.5-3.2" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.4-3.3">Server grants access (approval is now active)<a href="#section-9.4-3.3" class="pilcrow">¶</a>
+          <li id="section-9.5-3.3">Server grants access (approval is now active)<a href="#section-9.5-3.3" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.4-3.4">Later, when the server needs to charge, it constructs a transaction<a href="#section-9.4-3.4" class="pilcrow">¶</a>
+          <li id="section-9.5-3.4">Later, when the server needs to charge, it constructs a transaction<a href="#section-9.5-3.4" class="pilcrow">¶</a>
 </li>
         </ol>
-<p id="section-9.4-4">with the <code>keyAuthorization</code> and <code>transfer</code> call<a href="#section-9.4-4" class="pilcrow">¶</a></p>
-<ol start="1" type="1" class="normal type-1" id="section-9.4-5">
-          <li id="section-9.4-5.1">Charges can occur up to the authorized limit before expiry<a href="#section-9.4-5.1" class="pilcrow">¶</a>
+<p id="section-9.5-4">with the <code>keyAuthorization</code> and <code>transfer</code> call<a href="#section-9.5-4" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.5-5">
+          <li id="section-9.5-5.1">Charges can occur up to the authorized limit before expiry<a href="#section-9.5-5.1" class="pilcrow">¶</a>
 </li>
         </ol>
 </section>
 </div>
 <div id="receipt-generation">
-<section id="section-9.5">
+<section id="section-9.6">
         <h3 id="name-receipt-generation">
-<a href="#section-9.5" class="section-number selfRef">9.5. </a><a href="#name-receipt-generation" class="section-name selfRef">Receipt Generation</a>
+<a href="#section-9.6" class="section-number selfRef">9.6. </a><a href="#name-receipt-generation" class="section-name selfRef">Receipt Generation</a>
         </h3>
-<p id="section-9.5-1">Upon successful settlement, servers <span class="bcp14">MUST</span> return a <code>Payment-Receipt</code> header per Section 5.3 of [I-D.ietf-httpauth-payment].<a href="#section-9.5-1" class="pilcrow">¶</a></p>
-<p id="section-9.5-2">The receipt payload for Tempo:<a href="#section-9.5-2" class="pilcrow">¶</a></p>
+<p id="section-9.6-1">Upon successful settlement, servers <span class="bcp14">MUST</span> return a <code>Payment-Receipt</code> header per Section 5.3 of [I-D.ietf-httpauth-payment].<a href="#section-9.6-1" class="pilcrow">¶</a></p>
+<p id="section-9.6-2">The receipt payload for Tempo:<a href="#section-9.6-2" class="pilcrow">¶</a></p>
 <table class="center" id="table-6">
           <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
 <thead>
@@ -2397,8 +2531,8 @@ tempo
             </tr>
           </tbody>
         </table>
-<p id="section-9.5-4">Example receipt payload:<a href="#section-9.5-4" class="pilcrow">¶</a></p>
-<div class="lang-json sourcecode" id="section-9.5-5">
+<p id="section-9.6-4">Example receipt payload:<a href="#section-9.6-4" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-9.6-5">
 <pre>
 {
   "method": "tempo",
@@ -2406,7 +2540,7 @@ tempo
   "status": "success",
   "timestamp": "2026-01-06T12:00:00Z"
 }
-</pre><a href="#section-9.5-5" class="pilcrow">¶</a>
+</pre><a href="#section-9.6-5" class="pilcrow">¶</a>
 </div>
 </section>
 </div>
@@ -2455,7 +2589,7 @@ tempo
         </h3>
 <p id="section-11.2-1">Access keys present additional security considerations:<a href="#section-11.2-1" class="pilcrow">¶</a></p>
 <p id="section-11.2-2"><strong>Short Expiry for Charges</strong>: Access keys used for <code>charge</code> intent <span class="bcp14">MUST</span> have expiry within 5 minutes to minimize exposure window. Servers <span class="bcp14">MUST</span> reject access keys with longer expiry for charge intents.<a href="#section-11.2-2" class="pilcrow">¶</a></p>
-<p id="section-11.2-3"><strong>Destination Scoping</strong>: For <code>approve</code> and <code>subscription</code> intents, clients <span class="bcp14">SHOULD</span> include destination restrictions to limit the addresses the key can transfer to. This prevents key compromise from enabling transfers to attacker-controlled addresses.<a href="#section-11.2-3" class="pilcrow">¶</a></p>
+<p id="section-11.2-3"><strong>Destination Scoping</strong>: For <code>authorize</code> and <code>subscription</code> intents, clients <span class="bcp14">SHOULD</span> include destination restrictions to limit the addresses the key can transfer to. This prevents key compromise from enabling transfers to attacker-controlled addresses.<a href="#section-11.2-3" class="pilcrow">¶</a></p>
 <p id="section-11.2-4"><strong>Spending Limits</strong>: Access key spending limits are enforced by the AccountKeychain precompile on-chain. Servers cannot exceed the authorized limits even if compromised.<a href="#section-11.2-4" class="pilcrow">¶</a></p>
 <p id="section-11.2-5"><strong>Key Revocation</strong>: Users can revoke access keys at any time via the AccountKeychain precompile. Servers <span class="bcp14">SHOULD</span> handle revocation gracefully by requesting new authorization.<a href="#section-11.2-5" class="pilcrow">¶</a></p>
 </section>
@@ -2473,86 +2607,41 @@ tempo
 </li>
           <li id="section-11.3-2.3">Verify <code>recipient</code> is controlled by the expected party<a href="#section-11.3-2.3" class="pilcrow">¶</a>
 </li>
-          <li id="section-11.3-2.4">For <code>approve</code>: verify <code>expiry</code> is not unreasonably far in the future<a href="#section-11.3-2.4" class="pilcrow">¶</a>
+          <li id="section-11.3-2.4">For <code>authorize</code>: verify <code>expiry</code> is not unreasonably far in the future<a href="#section-11.3-2.4" class="pilcrow">¶</a>
 </li>
           <li id="section-11.3-2.5">For <code>subscription</code>: verify <code>period</code> and <code>amount</code> match expectations<a href="#section-11.3-2.5" class="pilcrow">¶</a>
 </li>
         </ol>
 </section>
 </div>
-<div id="transaction-finality">
-<section id="section-11.4">
-        <h3 id="name-transaction-finality">
-<a href="#section-11.4" class="section-number selfRef">11.4. </a><a href="#name-transaction-finality" class="section-name selfRef">Transaction Finality</a>
-        </h3>
-<p id="section-11.4-1">Tempo provides immediate finality via Simplex consensus. Once a transaction is included in a block, it cannot be reverted. Servers <span class="bcp14">MAY</span> grant access immediately upon block inclusion without waiting for additional confirmations.<a href="#section-11.4-1" class="pilcrow">¶</a></p>
-</section>
-</div>
-<div id="access-key-registration-race">
-<section id="section-11.5">
-        <h3 id="name-access-key-registration-rac">
-<a href="#section-11.5" class="section-number selfRef">11.5. </a><a href="#name-access-key-registration-rac" class="section-name selfRef">Access Key Registration Race</a>
-        </h3>
-<p id="section-11.5-1">When using access key payloads, a race condition exists between credential submission and key registration:<a href="#section-11.5-1" class="pilcrow">¶</a></p>
-<ol start="1" type="1" class="normal type-1" id="section-11.5-2">
-          <li id="section-11.5-2.1">Client provisions key authorization offline<a href="#section-11.5-2.1" class="pilcrow">¶</a>
-</li>
-          <li id="section-11.5-2.2">Client submits credential to server<a href="#section-11.5-2.2" class="pilcrow">¶</a>
-</li>
-          <li id="section-11.5-2.3">Server registers key on-chain<a href="#section-11.5-2.3" class="pilcrow">¶</a>
-</li>
-          <li id="section-11.5-2.4">Server executes transfer using the key<a href="#section-11.5-2.4" class="pilcrow">¶</a>
-</li>
-        </ol>
-<p id="section-11.5-3">If another party registers the same key ID with different parameters between steps 2 and 3, the registration will fail. Servers <span class="bcp14">SHOULD</span>:<a href="#section-11.5-3" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-11.5-4.1">Use unique, randomly-generated key IDs<a href="#section-11.5-4.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.5-4.2">Handle registration failures gracefully<a href="#section-11.5-4.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.5-4.3">Return appropriate error codes<a href="#section-11.5-4.3" class="pilcrow">¶</a>
-</li>
-        </ul>
-</section>
-</div>
-<div id="subscription-abuse">
-<section id="section-11.6">
-        <h3 id="name-subscription-abuse">
-<a href="#section-11.6" class="section-number selfRef">11.6. </a><a href="#name-subscription-abuse" class="section-name selfRef">Subscription Abuse</a>
-        </h3>
-<p id="section-11.6-1">For subscription intents, servers have ongoing permission to charge within limits. Clients <span class="bcp14">SHOULD</span>:<a href="#section-11.6-1" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-11.6-2.1">Only authorize subscriptions for trusted services<a href="#section-11.6-2.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.6-2.2">Use destination restrictions to limit transfer targets<a href="#section-11.6-2.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.6-2.3">Set reasonable total expiry timestamps<a href="#section-11.6-2.3" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.6-2.4">Monitor on-chain activity for unexpected charges<a href="#section-11.6-2.4" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.6-2.5">Revoke keys promptly when canceling subscriptions<a href="#section-11.6-2.5" class="pilcrow">¶</a>
-</li>
-        </ul>
-</section>
-</div>
 <div id="source-verification">
-<section id="section-11.7">
+<section id="section-11.4">
         <h3 id="name-source-verification">
-<a href="#section-11.7" class="section-number selfRef">11.7. </a><a href="#name-source-verification" class="section-name selfRef">Source Verification</a>
+<a href="#section-11.4" class="section-number selfRef">11.4. </a><a href="#name-source-verification" class="section-name selfRef">Source Verification</a>
         </h3>
-<p id="section-11.7-1">If a credential includes the optional <code>source</code> field (a DID identifying the payer), servers <span class="bcp14">MUST NOT</span> trust this value without verification. The <code>source</code> field is client-provided metadata and could be forged.<a href="#section-11.7-1" class="pilcrow">¶</a></p>
-<p id="section-11.7-2">Servers <span class="bcp14">MUST</span> verify the payer identity by:<a href="#section-11.7-2" class="pilcrow">¶</a></p>
+<p id="section-11.4-1">If a credential includes the optional <code>source</code> field (a DID identifying the payer), servers <span class="bcp14">MUST NOT</span> trust this value without verification. The <code>source</code> field is client-provided metadata and could be forged.<a href="#section-11.4-1" class="pilcrow">¶</a></p>
+<p id="section-11.4-2">Servers <span class="bcp14">MUST</span> verify the payer identity by:<a href="#section-11.4-2" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-11.7-3.1">For <code>type="transaction"</code>: Recovering the signer address from the<a href="#section-11.7-3.1" class="pilcrow">¶</a>
+<li class="normal" id="section-11.4-3.1">For <code>type="transaction"</code>: Recovering the signer address from the<a href="#section-11.4-3.1" class="pilcrow">¶</a>
 </li>
         </ul>
-<p id="section-11.7-4">transaction signature using standard ECDSA recovery<a href="#section-11.7-4" class="pilcrow">¶</a></p>
+<p id="section-11.4-4">transaction signature using standard ECDSA recovery<a href="#section-11.4-4" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-11.7-5.1">For <code>type="keyAuthorization"</code>: Deriving the address from the <code>publicKey</code><a href="#section-11.7-5.1" class="pilcrow">¶</a>
+<li class="normal" id="section-11.4-5.1">For <code>type="keyAuthorization"</code>: Deriving the address from the <code>publicKey</code><a href="#section-11.4-5.1" class="pilcrow">¶</a>
 </li>
         </ul>
-<p id="section-11.7-6">field in the key authorization<a href="#section-11.7-6" class="pilcrow">¶</a></p>
-<p id="section-11.7-7">If <code>source</code> is present, servers <span class="bcp14">SHOULD</span> verify that the recovered address matches the address in the DID (e.g., for <code>did:pkh:eip155:42431:0xABC...</code>, verify the recovered address equals <code>0xABC...</code>). Servers <span class="bcp14">MUST</span> reject credentials where the <code>source</code> does not match the recovered signer.<a href="#section-11.7-7" class="pilcrow">¶</a></p>
+<p id="section-11.4-6">field in the key authorization<a href="#section-11.4-6" class="pilcrow">¶</a></p>
+<p id="section-11.4-7">If <code>source</code> is present, servers <span class="bcp14">SHOULD</span> verify that the recovered address matches the address in the DID (e.g., for <code>did:pkh:eip155:42431:0xABC...</code>, verify the recovered address equals <code>0xABC...</code>). Servers <span class="bcp14">MUST</span> reject credentials where the <code>source</code> does not match the recovered signer.<a href="#section-11.4-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="server-paid-fees-2">
+<section id="section-11.5">
+        <h3 id="name-server-paid-fees-2">
+<a href="#section-11.5" class="section-number selfRef">11.5. </a><a href="#name-server-paid-fees-2" class="section-name selfRef">Server-Paid Fees</a>
+        </h3>
+<p id="section-11.5-1">Servers acting as fee payers accept financial risk in exchange for providing a seamless payment experience.<a href="#section-11.5-1" class="pilcrow">¶</a></p>
+<p id="section-11.5-2"><strong>Denial of Service</strong>: Malicious clients could submit valid-looking credentials that fail on-chain, causing the server to pay fees without receiving payment. Servers <span class="bcp14">SHOULD</span> implement rate limiting and <span class="bcp14">MAY</span> require client authentication before accepting payment credentials.<a href="#section-11.5-2" class="pilcrow">¶</a></p>
+<p id="section-11.5-3"><strong>Fee Token Exhaustion</strong>: Servers <span class="bcp14">MUST</span> monitor their fee token balance and reject new payment requests when balance is insufficient. Servers <span class="bcp14">SHOULD</span> alert operators when fee token balance falls below a threshold.<a href="#section-11.5-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2613,12 +2702,12 @@ tempo
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
-                <code>approve</code>
+                <code>authorize</code>
 </td>
               <td class="text-left" rowspan="1" colspan="1">
                 <code>tempo</code>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Deferred payment authorization</td>
+              <td class="text-left" rowspan="1" colspan="1">Payment authorization</td>
               <td class="text-left" rowspan="1" colspan="1">This document, Section 5.2</td>
             </tr>
             <tr>
@@ -2685,15 +2774,15 @@ charge-asset = %s"asset" ":" eth-address
 charge-destination = %s"destination" ":" eth-address
 charge-expires = %s"expires" ":" number-string
 
-; Approve request
-approve-request = "{" approve-members "}"
-approve-members = approve-asset "," [ approve-destination "," ]
-                  approve-expires "," approve-limit [ "," approve-valid-from ]
-approve-asset = %s"asset" ":" eth-address
-approve-destination = %s"destination" ":" eth-address
-approve-expires = %s"expires" ":" number-string
-approve-limit = %s"limit" ":" number-string
-approve-valid-from = %s"validFrom" ":" number-string
+; Authorize request
+authorize-request = "{" authorize-members "}"
+authorize-members = authorize-asset "," [ authorize-destination "," ]
+authorize-expires "," authorize-limit [ "," authorize-valid-from ]
+authorize-asset = %s"asset" ":" eth-address
+authorize-destination = %s"destination" ":" eth-address
+authorize-expires = %s"expires" ":" number-string
+authorize-limit = %s"limit" ":" number-string
+authorize-valid-from = %s"validFrom" ":" number-string
 
 ; Subscription request
 subscription-request = "{" subscription-members "}"
@@ -2771,7 +2860,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIyMDI1LTAxLTA2VDEyOjAwOjAwWiJ9"
 </pre><a href="#appendix-B.1-3" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.1-4">The <code>request</code> decodes to:<a href="#appendix-B.1-4" class="pilcrow">¶</a></p>
@@ -2779,9 +2868,9 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
 <pre>
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "1736150400000"
+  "expires": "2025-01-06T12:00:00Z"
 }
 </pre><a href="#appendix-B.1-5" class="pilcrow">¶</a>
 </div>
@@ -2820,10 +2909,10 @@ Content-Type: application/json
 </div>
 </section>
 </div>
-<div id="approve">
+<div id="authorize">
 <section id="appendix-B.2">
-        <h3 id="name-approve">
-<a href="#appendix-B.2" class="section-number selfRef">B.2. </a><a href="#name-approve" class="section-name selfRef">Approve</a>
+        <h3 id="name-authorize">
+<a href="#appendix-B.2" class="section-number selfRef">B.2. </a><a href="#name-authorize" class="section-name selfRef">Authorize</a>
         </h3>
 <div class="alignLeft art-ascii-art art-text artwork" id="appendix-B.2-1">
 <pre>
@@ -2833,7 +2922,7 @@ Content-Type: application/json
       ├────────────────────────────&gt;│                             │
       │                             │                             │
       │  (2) 402 Payment Required   │                             │
-      │      intent="approve"       │                             │
+      │      intent="authorize"       │                             │
       │&lt;────────────────────────────┤                             │
       │                             │                             │
       │  (3) Sign keyAuthorization  │                             │
@@ -2859,16 +2948,16 @@ HTTP/1.1 402 Payment Required
 WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj",
   realm="api.example.com",
   method="tempo",
-  intent="approve",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImxpbWl0IjoiNTAwMDAwMDAiLCJleHBpcmVzIjoiMTczODc0MjQwMDAwMCJ9"
+  intent="authorize",
+  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImV4cGlyZXMiOiIyMDI1LTAyLTA1VDEyOjAwOjAwWiIsImxpbWl0IjoiNTAwMDAwMDAifQ"
 </pre><a href="#appendix-B.2-3" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.2-4">The <code>request</code> decodes to:<a href="#appendix-B.2-4" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="appendix-B.2-5">
 <pre>
 {
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1738742400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
 </pre><a href="#appendix-B.2-5" class="pilcrow">¶</a>
@@ -2948,7 +3037,7 @@ WWW-Authenticate: Payment id="qT8wErYuI3oPlKjH6gFdSa",
   realm="api.example.com",
   method="tempo",
   intent="subscription",
-  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAwIiwicGVyaW9kIjoiMjU5MjAwMCIsImV4cGlyZXMiOiIxNzY3Njg2NDAwMDAwIn0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImFzc2V0IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwiZXhwaXJlcyI6IjIwMjYtMDEtMDZUMDA6MDA6MDBaIiwicGVyaW9kIjoiMjU5MjAwMCJ9"
 </pre><a href="#appendix-B.3-3" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.3-4">The <code>request</code> decodes to:<a href="#appendix-B.3-4" class="pilcrow">¶</a></p>
@@ -2956,8 +3045,8 @@ WWW-Authenticate: Payment id="qT8wErYuI3oPlKjH6gFdSa",
 <pre>
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000000",
-  "expires": "1767686400000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
 </pre><a href="#appendix-B.3-5" class="pilcrow">¶</a>
