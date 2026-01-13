@@ -689,6 +689,10 @@ policy: First Come First Served.
 : Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels",
   BCP 14, RFC 2119, March 1997.
 
+**[RFC8174]**
+: Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words",
+  BCP 14, RFC 8174, May 2017.
+
 **[RFC7235]**
 : Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer Protocol
   (HTTP/1.1): Authentication", RFC 7235, June 2014.
