@@ -3,9 +3,9 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                            6 January 2026
+Internet-Draft                                           13 January 2026
 Intended status: Standards Track                                        
-Expires: 10 July 2026
+Expires: 17 July 2026
 
 
           Tempo Payment Method for HTTP Payment Authentication
@@ -16,8 +16,8 @@ Abstract
    This document defines the "tempo" payment method for use with the
    Payment HTTP Authentication Scheme [I-D.ietf-httpauth-payment].  It
    specifies how clients and servers exchange TIP-20 token payments on
-   the Tempo blockchain, supporting one-time charges, deferred
-   approvals, and recurring subscriptions.
+   the Tempo blockchain, supporting one-time charges, payment
+   authorizations, and recurring subscriptions.
 
 Status of This Memo
 
@@ -34,7 +34,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 10 July 2026.
+   This Internet-Draft will expire on 17 July 2026.
 
 Copyright Notice
 
@@ -60,11 +60,11 @@ Table of Contents
    4.  Method Identifier
    5.  Payment Intents
      5.1.  Intent: "charge"
-     5.2.  Intent: "approve"
+     5.2.  Intent: "authorize"
      5.3.  Intent: "subscription"
    6.  Request Schema
      6.1.  Charge Request
-     6.2.  Approve Request
+     6.2.  Authorize Request
      6.3.  Subscription Request
    7.  Credential Schema
      7.1.  Credential Structure
@@ -75,21 +75,24 @@ Table of Contents
      8.1.  Credential Verification
      8.2.  Payload Verification
    9.  Settlement Procedure
-     9.1.  Charge Settlement (Transaction)
-     9.2.  Subscription Settlement (Key Authorization)
-     9.3.  Approve Settlement (Transaction)
-     9.4.  Approve Settlement (Key Authorization)
-     9.5.  Receipt Generation
+     9.1.  Fee Payment
+       9.1.1.  Server-Paid Fees
+       9.1.2.  Client-Paid Fees
+       9.1.3.  Server Requirements
+       9.1.4.  Client Requirements
+     9.2.  Charge Settlement (Transaction)
+     9.3.  Subscription Settlement (Key Authorization)
+     9.4.  Authorize Settlement (Transaction)
+     9.5.  Authorize Settlement (Key Authorization)
+     9.6.  Receipt Generation
    10. Internationalization Considerations
      10.1.  Address Encoding
    11. Security Considerations
      11.1.  Transaction Replay
      11.2.  Access Key Security
      11.3.  Amount Verification
-     11.4.  Transaction Finality
-     11.5.  Access Key Registration Race
-     11.6.  Subscription Abuse
-     11.7.  Source Verification
+     11.4.  Source Verification
+     11.5.  Server-Paid Fees
    12. IANA Considerations
      12.1.  Payment Method Registration
      12.2.  Payment Intent Registrations
@@ -98,7 +101,7 @@ Table of Contents
    Appendix A.  ABNF Collected
    Appendix B.  Examples
      B.1.  Charge
-     B.2.  Approve
+     B.2.  Authorize
      B.3.  Subscription
    Acknowledgements
    Author's Address
@@ -124,7 +127,7 @@ Table of Contents
 
    *  *charge*: One-time TIP-20 token transfer
 
-   *  *approve*: Deferred payment authorization with spending limits
+   *  *authorize*: Payment authorization with spending limits
 
    *  *subscription*: Recurring payment authorization with periodic
       limits
@@ -190,6 +193,11 @@ Table of Contents
       independent nonce lanes (nonce_key), enabling parallel transaction
       submission.
 
+   Fee Payer  An account that pays transaction fees on behalf of another
+      account.  Tempo Transactions support fee payment via a separate
+      signature domain (0x78), allowing the server to pay for fees while
+      the client only signs the payment authorization.
+
 4.  Method Identifier
 
    This specification registers the following payment method identifier:
@@ -217,11 +225,10 @@ Table of Contents
    Transaction calling transfer(recipient, amount) on the specified
    TIP-20 token.
 
-5.2.  Intent: "approve"
+5.2.  Intent: "authorize"
 
-   A deferred payment authorization.  The payer grants the server
-   permission to charge up to the specified amount before the expiry
-   timestamp.
+   A payment authorization.  The payer grants the server permission to
+   charge up to the specified amount before the expiry timestamp.
 
    Required parameters:
 
@@ -275,30 +282,34 @@ Table of Contents
 
    For intent="charge", the request specifies a one-time payment:
 
-        +=============+========+==========+======================+
-        | Field       | Type   | Required | Description          |
-        +=============+========+==========+======================+
-        | amount      | string | REQUIRED | Amount in base units |
-        |             |        |          | (stringified number) |
-        +-------------+--------+----------+----------------------+
-        | asset       | string | REQUIRED | TIP-20 token address |
-        +-------------+--------+----------+----------------------+
-        | destination | string | REQUIRED | Recipient address    |
-        +-------------+--------+----------+----------------------+
-        | expires     | string | REQUIRED | Expiry timestamp in  |
-        |             |        |          | milliseconds         |
-        |             |        |          | (stringified number) |
-        +-------------+--------+----------+----------------------+
+        +=============+=========+==========+======================+
+        | Field       | Type    | Required | Description          |
+        +=============+=========+==========+======================+
+        | amount      | string  | REQUIRED | Amount in base units |
+        |             |         |          | (stringified number) |
+        +-------------+---------+----------+----------------------+
+        | asset       | string  | REQUIRED | TIP-20 token address |
+        +-------------+---------+----------+----------------------+
+        | destination | string  | REQUIRED | Recipient address    |
+        +-------------+---------+----------+----------------------+
+        | expires     | string  | REQUIRED | Expiry timestamp in  |
+        |             |         |          | ISO 8601 format      |
+        +-------------+---------+----------+----------------------+
+        | feePayer    | boolean | OPTIONAL | If true, server will |
+        |             |         |          | pay transaction fees |
+        |             |         |          | (default: false)     |
+        +-------------+---------+----------+----------------------+
 
-                                 Table 1
+                                  Table 1
 
    Example:
 
    {
      "amount": "1000000",
-     "asset": "0x20c0000000000000000000000000000000000000",
+     "asset": "0x20c0000000000000000000000000000000000001",
      "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-     "expires": "1736150400000"
+     "expires": "2025-01-06T12:00:00Z",
+     "feePayer": true
    }
 
    The client fulfills this by signing a Tempo Transaction with
@@ -307,39 +318,48 @@ Table of Contents
    nonceKey (2D nonce lane) for payment transactions to avoid blocking
    other account activity if the transaction is not immediately settled.
 
-6.2.  Approve Request
+   If feePayer is true, the client signs with fee_payer_signature set to
+   0x00 and fee_token empty, allowing the server to sponsor fees.  If
+   feePayer is false or omitted, the client MUST set fee_token and pay
+   fees themselves.
 
-   For intent="approve", the request specifies a deferred authorization:
+6.2.  Authorize Request
 
-      +=============+========+==========+==========================+
-      | Field       | Type   | Required | Description              |
-      +=============+========+==========+==========================+
-      | asset       | string | REQUIRED | TIP-20 token address     |
-      +-------------+--------+----------+--------------------------+
-      | destination | string | OPTIONAL | Authorized spender       |
-      |             |        |          | address (required for    |
-      |             |        |          | transaction fulfillment) |
-      +-------------+--------+----------+--------------------------+
-      | expires     | string | REQUIRED | Expiry timestamp in      |
-      |             |        |          | milliseconds             |
-      |             |        |          | (stringified number)     |
-      +-------------+--------+----------+--------------------------+
-      | limit       | string | REQUIRED | Maximum spend amount in  |
-      |             |        |          | base units (stringified  |
-      |             |        |          | number)                  |
-      +-------------+--------+----------+--------------------------+
-      | validFrom   | string | OPTIONAL | Start timestamp in       |
-      |             |        |          | milliseconds             |
-      |             |        |          | (stringified number)     |
-      +-------------+--------+----------+--------------------------+
+   For intent="authorize", the request specifies a payment
+   authorization:
 
-                                 Table 2
+      +=============+=========+==========+==========================+
+      | Field       | Type    | Required | Description              |
+      +=============+=========+==========+==========================+
+      | asset       | string  | REQUIRED | TIP-20 token address     |
+      +-------------+---------+----------+--------------------------+
+      | destination | string  | OPTIONAL | Authorized spender       |
+      |             |         |          | address (required for    |
+      |             |         |          | transaction fulfillment) |
+      +-------------+---------+----------+--------------------------+
+      | expires     | string  | REQUIRED | Expiry timestamp in ISO  |
+      |             |         |          | 8601 format              |
+      +-------------+---------+----------+--------------------------+
+      | feePayer    | boolean | OPTIONAL | If true, server will pay |
+      |             |         |          | transaction fees         |
+      |             |         |          | (default: false)         |
+      +-------------+---------+----------+--------------------------+
+      | limit       | string  | REQUIRED | Maximum spend amount in  |
+      |             |         |          | base units (stringified  |
+      |             |         |          | number)                  |
+      +-------------+---------+----------+--------------------------+
+      | validFrom   | string  | OPTIONAL | Start timestamp in ISO   |
+      |             |         |          | 8601 format              |
+      +-------------+---------+----------+--------------------------+
+
+                                  Table 2
 
    Example:
 
    {
-     "asset": "0x20c0000000000000000000000000000000000000",
-     "expires": "1738742400000",
+     "asset": "0x20c0000000000000000000000000000000000001",
+     "expires": "2025-02-05T12:00:00Z",
+     "feePayer": true,
      "limit": "50000000"
    }
 
@@ -358,39 +378,42 @@ Table of Contents
 
    = limit for the specified asset
 
+   If feePayer is true, the client signs with fee_payer_signature set to
+   0x00 and fee_token empty.  If feePayer is false or omitted, the
+   client MUST NOT sign a key authorization; the client MUST sign a
+   transaction with fee_token set to pay fees themselves.
+
 6.3.  Subscription Request
 
    For intent="subscription", the request specifies recurring
    authorization:
 
-   +===========+========+==========+===================================+
-   | Field     | Type   | Required | Description                       |
-   +===========+========+==========+===================================+
-   | amount    | string | REQUIRED | Amount per period in base         |
-   |           |        |          | units (stringified number)        |
-   +-----------+--------+----------+-----------------------------------+
-   | asset     | string | REQUIRED | TIP-20 token address              |
-   +-----------+--------+----------+-----------------------------------+
-   | expires   | string | REQUIRED | Total expiry timestamp in         |
-   |           |        |          | milliseconds (stringified         |
-   |           |        |          | number)                           |
-   +-----------+--------+----------+-----------------------------------+
-   | period    | string | REQUIRED | Period duration in seconds        |
-   |           |        |          | (stringified number)              |
-   +-----------+--------+----------+-----------------------------------+
-   | validFrom | string | OPTIONAL | Start timestamp in                |
-   |           |        |          | milliseconds (stringified         |
-   |           |        |          | number)                           |
-   +-----------+--------+----------+-----------------------------------+
+      +===========+========+==========+============================+
+      | Field     | Type   | Required | Description                |
+      +===========+========+==========+============================+
+      | amount    | string | REQUIRED | Amount per period in base  |
+      |           |        |          | units (stringified number) |
+      +-----------+--------+----------+----------------------------+
+      | asset     | string | REQUIRED | TIP-20 token address       |
+      +-----------+--------+----------+----------------------------+
+      | expires   | string | REQUIRED | Total expiry timestamp in  |
+      |           |        |          | ISO 8601 format            |
+      +-----------+--------+----------+----------------------------+
+      | period    | string | REQUIRED | Period duration in seconds |
+      |           |        |          | (stringified number)       |
+      +-----------+--------+----------+----------------------------+
+      | validFrom | string | OPTIONAL | Start timestamp in ISO     |
+      |           |        |          | 8601 format                |
+      +-----------+--------+----------+----------------------------+
 
-                                  Table 3
+                                 Table 3
 
    Example:
 
    {
      "amount": "10000000",
-     "asset": "0x20c0000000000000000000000000000000000000",
-     "expires": "1767686400000",
+     "asset": "0x20c0000000000000000000000000000000000001",
+     "expires": "2026-01-06T00:00:00Z",
      "period": "2592000"
    }
 
@@ -455,7 +478,7 @@ Table of Contents
 
    *  For charge: transfer(recipient, amount)
 
-   *  For approve: approve(spender, amount)
+   *  For authorize: approve(spender, amount)
 
    Example:
 
@@ -518,42 +541,111 @@ Table of Contents
 
    Settlement converts a verified credential into actual token transfer.
 
-9.1.  Charge Settlement (Transaction)
+9.1.  Fee Payment
+
+   When a request includes feePayer: true, the server commits to paying
+   transaction fees on behalf of the client.  This allows clients to
+   complete payments without holding fee tokens.
+
+9.1.1.  Server-Paid Fees
+
+   When feePayer: true:
+
+   1.  *Client signs with placeholder*: The client signs the Tempo
+       Transaction
+
+   with fee_payer_signature set to a placeholder value (0x00) and
+   fee_token left empty.  The client uses signature domain 0x76.
+
+   1.  *Server receives credential*: The server extracts the client-
+       signed
+
+   transaction from the credential payload.
+
+   1.  *Server adds fee payment signature*: The server selects a
+       fee_token (any
+
+   USD-denominated TIP-20 stablecoin) and signs the transaction using
+   signature domain 0x78.  This signature commits to the transaction
+   including the fee_token and client's address.
+
+   1.  *Server broadcasts*: The final transaction contains both
+       signatures:
+
+   - Client's signature (authorizing the payment) - Server's
+   fee_payer_signature (committing to pay fees)
+
+9.1.2.  Client-Paid Fees
+
+   When feePayer: false or omitted, the client MUST set fee_token to a
+   valid USD TIP-20 token address and pay fees themselves.  The server
+   broadcasts the transaction as-is without adding a fee payer
+   signature.
+
+9.1.3.  Server Requirements
+
+   When acting as fee payer, servers:
+
+   *  MUST maintain sufficient balance of a USD TIP-20 token to pay
+
+   transaction fees
+
+   *  MAY use any USD-denominated TIP-20 token with sufficient AMM
+
+   liquidity as the fee token
+
+   *  MAY recover fee costs through pricing or other business logic
+
+9.1.4.  Client Requirements
+
+   *  When feePayer: true: Clients MUST sign with fee_payer_signature
+      set
+
+   to 0x00 and fee_token empty or 0x80 (RLP null)
+
+   *  When feePayer: false or omitted: Clients MUST set fee_token to a
+
+   valid USD TIP-20 token and have sufficient balance to pay fees
+
+9.2.  Charge Settlement (Transaction)
 
    For intent="charge" fulfilled via transaction, the client signs a
-   transaction containing the transfer call.  The server broadcasts it
-   directly:
+   transaction containing the transfer call.  If feePayer: true, the
+   server adds its fee payer signature before broadcasting:
 
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment <credential>   │                             │
-      │      (signed transaction)   │                             │
-      ├────────────────────────────>│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's signed tx)   │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (3) Transfer executed      │
-      │                             │      (~500ms finality)      │
-      │                             │<────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      <txHash>               │                             │
-      │<────────────────────────────┤                             │
-      │                             │                             │
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment <credential>      │                                │
+      ├───────────────────────────────>│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (4) Transfer executed         │
+      │                                │      (~500ms finality)         │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: <txHash> │                                │
+      │<───────────────────────────────┤                                │
+      │                                │                                │
 
    1.  Client submits credential containing signed transfer transaction
 
-   2.  Server broadcasts to Tempo via eth_sendRawTransactionSync
+   2.  If feePayer: true, server adds fee sponsorship (signs with 0x78
+       domain)
 
-   3.  Transaction included in block with immediate finality (~500ms)
+   3.  Server broadcasts transaction to Tempo
 
-   4.  Server returns receipt with transaction hash
+   4.  Transaction included in block with immediate finality (~500ms)
 
-9.2.  Subscription Settlement (Key Authorization)
+   5.  Server returns receipt with transaction hash
+
+9.3.  Subscription Settlement (Key Authorization)
 
    For intent="subscription" fulfilled via key authorization, the client
    signs an authorization granting the server permission to charge
@@ -610,53 +702,58 @@ Table of Contents
 
    6.  Process repeats each period until authorization expires
 
-9.3.  Approve Settlement (Transaction)
+9.4.  Authorize Settlement (Transaction)
 
-   For intent="approve" fulfilled via transaction, the client signs an
-   approve transaction granting the server a spending allowance:
+   For intent="authorize" fulfilled via transaction, the client signs an
+   approve transaction granting the server a spending allowance.  If
+   feePayer: true, the server adds its fee payer signature before
+   broadcasting:
 
-   Client                        Server                     Tempo Network
-      │                             │                             │
-      │  (1) Authorization:         │                             │
-      │      Payment <credential>   │                             │
-      │      (signed approve tx)    │                             │
-      ├────────────────────────────>│                             │
-      │                             │                             │
-      │                             │  (2) eth_sendRawTxSync      │
-      │                             │      (client's approve tx)  │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (3) Approval granted       │
-      │                             │<────────────────────────────┤
-      │                             │                             │
-      │  (4) 200 OK                 │                             │
-      │      Payment-Receipt:       │                             │
-      │      <txHash>               │                             │
-      │<────────────────────────────┤                             │
-      │                             │                             │
-      │         ... later, when service is consumed ...           │
-      │                             │                             │
-      │                             │  (5) transferFrom(client,   │
-      │                             │      server, amount)        │
-      │                             ├────────────────────────────>│
-      │                             │                             │
-      │                             │  (6) Transfer executed      │
-      │                             │<────────────────────────────┤
-      │                             │                             │
+   Client                           Server                        Tempo Network
+      │                                │                                │
+      │  (1) Authorization:            │                                │
+      │      Payment <credential>      │                                │
+      ├───────────────────────────────>│                                │
+      │                                │                                │
+      │                                │  (2) If feePayer: true,        │
+      │                                │      add fee payment signature │
+      │                                │                                │
+      │                                │  (3) eth_sendRawTxSync         │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (4) Approval granted          │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
+      │  (5) 200 OK                    │                                │
+      │      Payment-Receipt: <txHash> │                                │
+      │<───────────────────────────────┤                                │
+      │                                │                                │
+      │         ... later, when service is consumed ...                 │
+      │                                │                                │
+      │                                │  (6) transferFrom(client,      │
+      │                                │      server, amount)           │
+      │                                ├───────────────────────────────>│
+      │                                │                                │
+      │                                │  (7) Transfer executed         │
+      │                                │<───────────────────────────────┤
+      │                                │                                │
 
    1.  Client submits credential containing signed approve transaction
 
-   2.  Server broadcasts to register the spending allowance
+   2.  If feePayer: true, server adds fee sponsorship (signs with 0x78
+       domain)
 
-   3.  Server returns receipt (approval is now active)
+   3.  Server broadcasts transaction; approval registered on-chain
 
-   4.  Later, when the server needs to charge, it calls transferFrom
+   4.  Server returns receipt (approval is now active)
 
-   5.  Charges can occur up to the approved limit before expiry
+   5.  Later, when the server needs to charge, it calls transferFrom
 
-9.4.  Approve Settlement (Key Authorization)
+   6.  Charges can occur up to the approved limit before expiry
 
-   For intent="approve" fulfilled via key authorization, the client
+9.5.  Authorize Settlement (Key Authorization)
+
+   For intent="authorize" fulfilled via key authorization, the client
    signs an authorization granting the server permission to charge up to
    a limit:
 
@@ -700,7 +797,7 @@ Table of Contents
 
    1.  Charges can occur up to the authorized limit before expiry
 
-9.5.  Receipt Generation
+9.6.  Receipt Generation
 
    Upon successful settlement, servers MUST return a Payment-Receipt
    header per Section 5.3 of [I-D.ietf-httpauth-payment].
@@ -762,10 +859,10 @@ Table of Contents
    have expiry within 5 minutes to minimize exposure window.  Servers
    MUST reject access keys with longer expiry for charge intents.
 
-   *Destination Scoping*: For approve and subscription intents, clients
-   SHOULD include destination restrictions to limit the addresses the
-   key can transfer to.  This prevents key compromise from enabling
-   transfers to attacker-controlled addresses.
+   *Destination Scoping*: For authorize and subscription intents,
+   clients SHOULD include destination restrictions to limit the
+   addresses the key can transfer to.  This prevents key compromise from
+   enabling transfers to attacker-controlled addresses.
 
    *Spending Limits*: Access key spending limits are enforced by the
    AccountKeychain precompile on-chain.  Servers cannot exceed the
@@ -785,55 +882,12 @@ Table of Contents
 
    3.  Verify recipient is controlled by the expected party
 
-   4.  For approve: verify expiry is not unreasonably far in the future
+   4.  For authorize: verify expiry is not unreasonably far in the
+       future
 
    5.  For subscription: verify period and amount match expectations
 
-11.4.  Transaction Finality
-
-   Tempo provides immediate finality via Simplex consensus.  Once a
-   transaction is included in a block, it cannot be reverted.  Servers
-   MAY grant access immediately upon block inclusion without waiting for
-   additional confirmations.
-
-11.5.  Access Key Registration Race
-
-   When using access key payloads, a race condition exists between
-   credential submission and key registration:
-
-   1.  Client provisions key authorization offline
-
-   2.  Client submits credential to server
-
-   3.  Server registers key on-chain
-
-   4.  Server executes transfer using the key
-
-   If another party registers the same key ID with different parameters
-   between steps 2 and 3, the registration will fail.  Servers SHOULD:
-
-   *  Use unique, randomly-generated key IDs
-
-   *  Handle registration failures gracefully
-
-   *  Return appropriate error codes
-
-11.6.  Subscription Abuse
-
-   For subscription intents, servers have ongoing permission to charge
-   within limits.  Clients SHOULD:
-
-   *  Only authorize subscriptions for trusted services
-
-   *  Use destination restrictions to limit transfer targets
-
-   *  Set reasonable total expiry timestamps
-
-   *  Monitor on-chain activity for unexpected charges
-
-   *  Revoke keys promptly when canceling subscriptions
-
-11.7.  Source Verification
+11.4.  Source Verification
 
    If a credential includes the optional source field (a DID identifying
    the payer), servers MUST NOT trust this value without verification.
@@ -855,6 +909,22 @@ Table of Contents
    did:pkh:eip155:42431:0xABC..., verify the recovered address equals
    0xABC...).  Servers MUST reject credentials where the source does not
    match the recovered signer.
+
+11.5.  Server-Paid Fees
+
+   Servers acting as fee payers accept financial risk in exchange for
+   providing a seamless payment experience.
+
+   *Denial of Service*: Malicious clients could submit valid-looking
+   credentials that fail on-chain, causing the server to pay fees
+   without receiving payment.  Servers SHOULD implement rate limiting
+   and MAY require client authentication before accepting payment
+   credentials.
+
+   *Fee Token Exhaustion*: Servers MUST monitor their fee token balance
+   and reject new payment requests when balance is insufficient.
+   Servers SHOULD alert operators when fee token balance falls below a
+   threshold.
 
 12.  IANA Considerations
 
@@ -883,7 +953,7 @@ Table of Contents
     | charge       | tempo      | One-time TIP-20   | This document, |
     |              |            | transfer          | Section 5.1    |
     +--------------+------------+-------------------+----------------+
-    | approve      | tempo      | Deferred payment  | This document, |
+    | authorize    | tempo      | Payment           | This document, |
     |              |            | authorization     | Section 5.2    |
     +--------------+------------+-------------------+----------------+
     | subscription | tempo      | Recurring payment | This document, |
@@ -934,15 +1004,15 @@ Appendix A.  ABNF Collected
    charge-destination = %s"destination" ":" eth-address
    charge-expires = %s"expires" ":" number-string
 
-   ; Approve request
-   approve-request = "{" approve-members "}"
-   approve-members = approve-asset "," [ approve-destination "," ]
-                     approve-expires "," approve-limit [ "," approve-valid-from ]
-   approve-asset = %s"asset" ":" eth-address
-   approve-destination = %s"destination" ":" eth-address
-   approve-expires = %s"expires" ":" number-string
-   approve-limit = %s"limit" ":" number-string
-   approve-valid-from = %s"validFrom" ":" number-string
+   ; Authorize request
+   authorize-request = "{" authorize-members "}"
+   authorize-members = authorize-asset "," [ authorize-destination "," ]
+   authorize-expires "," authorize-limit [ "," authorize-valid-from ]
+   authorize-asset = %s"asset" ":" eth-address
+   authorize-destination = %s"destination" ":" eth-address
+   authorize-expires = %s"expires" ":" number-string
+   authorize-limit = %s"limit" ":" number-string
+   authorize-valid-from = %s"validFrom" ":" number-string
 
    ; Subscription request
    subscription-request = "{" subscription-members "}"
@@ -1010,15 +1080,15 @@ B.1.  Charge
      realm="api.example.com",
      method="tempo",
      intent="charge",
-     request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
+     request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIyMDI1LTAxLTA2VDEyOjAwOjAwWiJ9"
 
    The request decodes to:
 
    {
      "amount": "1000000",
-     "asset": "0x20c0000000000000000000000000000000000000",
+     "asset": "0x20c0000000000000000000000000000000000001",
      "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-     "expires": "1736150400000"
+     "expires": "2025-01-06T12:00:00Z"
    }
 
    This requests a transfer of 1.00 alphaUSD (1000000 base units).
@@ -1052,7 +1122,7 @@ B.1.  Charge
 
    { "data": "..." }
 
-B.2.  Approve
+B.2.  Authorize
 
    Client                        Server                     Tempo Network
       │                             │                             │
@@ -1060,7 +1130,7 @@ B.2.  Approve
       ├────────────────────────────>│                             │
       │                             │                             │
       │  (2) 402 Payment Required   │                             │
-      │      intent="approve"       │                             │
+      │      intent="authorize"       │                             │
       │<────────────────────────────┤                             │
       │                             │                             │
       │  (3) Sign keyAuthorization  │                             │
@@ -1084,14 +1154,14 @@ B.2.  Approve
    WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj",
      realm="api.example.com",
      method="tempo",
-     intent="approve",
-     request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImxpbWl0IjoiNTAwMDAwMDAiLCJleHBpcmVzIjoiMTczODc0MjQwMDAwMCJ9"
+     intent="authorize",
+     request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImV4cGlyZXMiOiIyMDI1LTAyLTA1VDEyOjAwOjAwWiIsImxpbWl0IjoiNTAwMDAwMDAifQ"
 
    The request decodes to:
 
    {
-     "asset": "0x20c0000000000000000000000000000000000000",
-     "expires": "1738742400000",
+     "asset": "0x20c0000000000000000000000000000000000001",
+     "expires": "2025-02-05T12:00:00Z",
      "limit": "50000000"
    }
 
@@ -1165,14 +1235,14 @@ B.3.  Subscription
      realm="api.example.com",
      method="tempo",
      intent="subscription",
-     request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImFtb3VudCI6IjEwMDAwMDAwIiwicGVyaW9kIjoiMjU5MjAwMCIsImV4cGlyZXMiOiIxNzY3Njg2NDAwMDAwIn0"
+     request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImFzc2V0IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwiZXhwaXJlcyI6IjIwMjYtMDEtMDZUMDA6MDA6MDBaIiwicGVyaW9kIjoiMjU5MjAwMCJ9"
 
    The request decodes to:
 
    {
      "amount": "10000000",
-     "asset": "0x20c0000000000000000000000000000000000000",
-     "expires": "1767686400000",
+     "asset": "0x20c0000000000000000000000000000000000001",
+     "expires": "2026-01-06T00:00:00Z",
      "period": "2592000"
    }
 

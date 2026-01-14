@@ -3,9 +3,9 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                            6 January 2026
+Internet-Draft                                           13 January 2026
 Intended status: Standards Track                                        
-Expires: 10 July 2026
+Expires: 17 July 2026
 
 
                 The "Payment" HTTP Authentication Scheme
@@ -38,7 +38,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 10 July 2026.
+   This Internet-Draft will expire on 17 July 2026.
 
 Copyright Notice
 
@@ -50,110 +50,94 @@ Copyright Notice
    license-info) in effect on the date of publication of this document.
    Please review these documents carefully, as they describe your rights
    and restrictions with respect to this document.  Code Components
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 1]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    extracted from this document must include Revised BSD License text as
    described in Section 4.e of the Trust Legal Provisions and are
    provided without warranty as described in the Revised BSD License.
 
 Table of Contents
 
-   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
-     1.1.  Relationship to Payment Method Specifications . . . . . .   4
-   2.  Requirements Language . . . . . . . . . . . . . . . . . . . .   4
-   3.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4
-   4.  Protocol Overview . . . . . . . . . . . . . . . . . . . . . .   4
-     4.1.  Request Flow  . . . . . . . . . . . . . . . . . . . . . .   5
-     4.2.  Status Codes  . . . . . . . . . . . . . . . . . . . . . .   5
-     4.3.  Relationship to 401 Unauthorized  . . . . . . . . . . . .   6
-   5.  The Payment Authentication Scheme . . . . . . . . . . . . . .   6
-     5.1.  Challenge (WWW-Authenticate)  . . . . . . . . . . . . . .   6
-       5.1.1.  Required Parameters . . . . . . . . . . . . . . . . .   6
-       5.1.2.  Optional Parameters . . . . . . . . . . . . . . . . .   7
-       5.1.3.  Example Challenge . . . . . . . . . . . . . . . . . .   7
-     5.2.  Credentials (Authorization) . . . . . . . . . . . . . . .   8
-       5.2.1.  Example Credential  . . . . . . . . . . . . . . . . .   9
-     5.3.  Payment-Receipt Header  . . . . . . . . . . . . . . . . .   9
-     5.4.  Payment-Authorization Header  . . . . . . . . . . . . . .   9
-       5.4.1.  Client Behavior . . . . . . . . . . . . . . . . . . .  10
-       5.4.2.  Server Behavior . . . . . . . . . . . . . . . . . . .  11
-     5.5.  Reusing Credentials . . . . . . . . . . . . . . . . . . .  11
-   6.  Payment Methods . . . . . . . . . . . . . . . . . . . . . . .  12
-     6.1.  Method Identifier Format  . . . . . . . . . . . . . . . .  12
-     6.2.  Registered Methods  . . . . . . . . . . . . . . . . . . .  12
-   7.  Payment Intents . . . . . . . . . . . . . . . . . . . . . . .  13
-     7.1.  Intent Identifiers  . . . . . . . . . . . . . . . . . . .  13
-     7.2.  Base Intent: "charge" . . . . . . . . . . . . . . . . . .  13
-     7.3.  Payment Method Intents  . . . . . . . . . . . . . . . . .  13
-     7.4.  Intent Negotiation  . . . . . . . . . . . . . . . . . . .  14
-   8.  Error Handling  . . . . . . . . . . . . . . . . . . . . . . .  14
-     8.1.  Error Response Format . . . . . . . . . . . . . . . . . .  14
-     8.2.  Error Codes . . . . . . . . . . . . . . . . . . . . . . .  14
-     8.3.  Retry Behavior  . . . . . . . . . . . . . . . . . . . . .  14
-   9.  Discovery . . . . . . . . . . . . . . . . . . . . . . . . . .  15
-     9.1.  Well-Known Endpoint . . . . . . . . . . . . . . . . . . .  15
-       9.1.1.  Request . . . . . . . . . . . . . . . . . . . . . . .  15
-       9.1.2.  Response  . . . . . . . . . . . . . . . . . . . . . .  15
-     9.2.  DNS Discovery . . . . . . . . . . . . . . . . . . . . . .  16
-   10. Extensibility . . . . . . . . . . . . . . . . . . . . . . . .  17
-     10.1.  Payment Method Specifications  . . . . . . . . . . . . .  17
-     10.2.  Custom Parameters  . . . . . . . . . . . . . . . . . . .  17
-     10.3.  Custom Headers . . . . . . . . . . . . . . . . . . . . .  17
-   11. Internationalization Considerations . . . . . . . . . . . . .  17
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 2]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
-     11.1.  Character Encoding . . . . . . . . . . . . . . . . . . .  17
-     11.2.  Human-Readable Text  . . . . . . . . . . . . . . . . . .  18
-     11.3.  Payment Method Considerations  . . . . . . . . . . . . .  18
-   12. Security Considerations . . . . . . . . . . . . . . . . . . .  18
-     12.1.  Threat Model . . . . . . . . . . . . . . . . . . . . . .  18
-     12.2.  Transport Security . . . . . . . . . . . . . . . . . . .  18
-     12.3.  Challenge Identifier Security  . . . . . . . . . . . . .  19
-     12.4.  Replay Protection  . . . . . . . . . . . . . . . . . . .  19
-     12.5.  Amount Verification  . . . . . . . . . . . . . . . . . .  19
-     12.6.  Privacy  . . . . . . . . . . . . . . . . . . . . . . . .  20
-     12.7.  Credential Storage and Logging . . . . . . . . . . . . .  20
-     12.8.  Caching  . . . . . . . . . . . . . . . . . . . . . . . .  20
-     12.9.  Cross-Origin Considerations  . . . . . . . . . . . . . .  21
-     12.10. Denial of Service  . . . . . . . . . . . . . . . . . . .  21
-     12.11. Settlement Finality  . . . . . . . . . . . . . . . . . .  21
-     12.12. Authorization Reuse  . . . . . . . . . . . . . . . . . .  22
-   13. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  22
-     13.1.  Authentication Scheme Registration . . . . . . . . . . .  22
-     13.2.  Header Field Registration  . . . . . . . . . . . . . . .  23
-     13.3.  Payment Method Registry  . . . . . . . . . . . . . . . .  23
-     13.4.  Payment Intent Registry  . . . . . . . . . . . . . . . .  24
-     13.5.  Well-Known URI Registration  . . . . . . . . . . . . . .  24
-   14. References  . . . . . . . . . . . . . . . . . . . . . . . . .  24
-     14.1.  Normative References . . . . . . . . . . . . . . . . . .  24
-     14.2.  Informative References . . . . . . . . . . . . . . . . .  26
-   Appendix A.  ABNF Collected . . . . . . . . . . . . . . . . . . .  26
-   Appendix B.  Examples . . . . . . . . . . . . . . . . . . . . . .  27
-     B.1.  Tempo Charge  . . . . . . . . . . . . . . . . . . . . . .  27
-     B.2.  Tempo Authorization . . . . . . . . . . . . . . . . . . .  30
-     B.3.  Multiple Payment Options  . . . . . . . . . . . . . . . .  32
-     B.4.  Failed Payment Verification . . . . . . . . . . . . . . .  32
-   Appendix C.  Payment Method Examples  . . . . . . . . . . . . . .  32
-     C.1.  Ethereum (EVM Chains) . . . . . . . . . . . . . . . . . .  32
-     C.2.  Lightning Network . . . . . . . . . . . . . . . . . . . .  34
-     C.3.  Apple Pay . . . . . . . . . . . . . . . . . . . . . . . .  35
-     C.4.  Stripe Charge . . . . . . . . . . . . . . . . . . . . . .  37
-     C.5.  Stripe Authorization  . . . . . . . . . . . . . . . . . .  39
-     C.6.  x402  . . . . . . . . . . . . . . . . . . . . . . . . . .  41
-   Acknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .  44
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  44
+   1.  Introduction
+     1.1.  Relationship to Payment Method Specifications
+   2.  Requirements Language
+   3.  Terminology
+   4.  Protocol Overview
+     4.1.  Request Flow
+     4.2.  Status Codes
+     4.3.  Relationship to 401 Unauthorized
+   5.  The Payment Authentication Scheme
+     5.1.  Challenge (WWW-Authenticate)
+       5.1.1.  Required Parameters
+       5.1.2.  Optional Parameters
+       5.1.3.  Example Challenge
+     5.2.  Credentials (Authorization)
+       5.2.1.  Example Credential
+     5.3.  Payment-Receipt Header
+     5.4.  Payment-Authorization Header
+       5.4.1.  Client Behavior
+       5.4.2.  Server Behavior
+     5.5.  Reusing Credentials
+   6.  Payment Methods
+     6.1.  Method Identifier Format
+     6.2.  Registered Methods
+   7.  Payment Intents
+     7.1.  Intent Identifiers
+     7.2.  Base Intent: "charge"
+     7.3.  Payment Method Intents
+     7.4.  Intent Negotiation
+   8.  Error Handling
+     8.1.  Error Response Format
+     8.2.  Error Codes
+     8.3.  Retry Behavior
+   9.  Discovery
+     9.1.  Well-Known Endpoint
+       9.1.1.  Request
+       9.1.2.  Response
+     9.2.  DNS Discovery
+   10. Extensibility
+     10.1.  Payment Method Specifications
+     10.2.  Custom Parameters
+     10.3.  Custom Headers
+   11. Internationalization Considerations
+     11.1.  Character Encoding
+     11.2.  Human-Readable Text
+     11.3.  Payment Method Considerations
+   12. Security Considerations
+     12.1.  Threat Model
+     12.2.  Transport Security
+     12.3.  Challenge Identifier Security
+     12.4.  Replay Protection
+     12.5.  Amount Verification
+     12.6.  Privacy
+     12.7.  Credential Storage and Logging
+     12.8.  Caching
+     12.9.  Cross-Origin Considerations
+     12.10. Denial of Service
+     12.11. Settlement Finality
+     12.12. Authorization Reuse
+   13. IANA Considerations
+     13.1.  Authentication Scheme Registration
+     13.2.  Header Field Registration
+     13.3.  Payment Method Registry
+     13.4.  Payment Intent Registry
+     13.5.  Well-Known URI Registration
+   14. References
+     14.1.  Normative References
+     14.2.  Informative References
+   Appendix A.  ABNF Collected
+   Appendix B.  Examples
+     B.1.  Tempo Charge
+     B.2.  Tempo Authorization
+     B.3.  Multiple Payment Options
+     B.4.  Failed Payment Verification
+   Appendix C.  Payment Method Examples
+     C.1.  Ethereum (EVM Chains)
+     C.2.  Lightning Network
+     C.3.  Apple Pay
+     C.4.  Stripe Charge
+     C.5.  Stripe Authorization
+     C.6.  x402
+   Acknowledgements
+   Author's Address
 
 1.  Introduction
 
@@ -162,13 +146,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    "Payment" authentication scheme that gives 402 its semantics,
    enabling resources to require a payment challenge to be fulfilled
    before access.
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 3]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 1.1.  Relationship to Payment Method Specifications
 
@@ -218,14 +195,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
 4.  Protocol Overview
 
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 4]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
 4.1.  Request Flow
 
       Client                                            Server
@@ -273,14 +242,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    Servers MUST return 402 with a WWW-Authenticate: Payment header when
    payment is required.  Servers SHOULD NOT return 402 without this
    header.
-
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 5]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 4.3.  Relationship to 401 Unauthorized
 
@@ -330,14 +291,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    requirement.  The realm value is a case-sensitive string that
    identifies the protection space.  Clients MAY use the realm to
    determine whether cached payment authorizations apply.  Examples: -
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 6]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    realm="api.example.com" — entire API - realm="api.example.com/v1" —
    API version scope - realm="Premium Content" — access tier -
    realm="Acme Corp Image Generation" — branded service
@@ -378,28 +331,15 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
        method="tempo",
        intent="charge",
        expires="2025-01-15T12:05:00Z",
-       request="eyJ0cmFuc2FjdGlvbiI6eyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiMDAwMDAwMDAwMDAwMDAwMGQxMjM0NTY3Li4uMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMGY0MjQwIiwidmFsaWRCZWZvcmUiOjE3MDQxMTA0MDAwMDB9fQ"
+       request="eyJhbW91bnQiOiIxMDAwMDAwIiwiYXNzZXQiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXN0aW5hdGlvbiI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCIsImV4cGlyZXMiOiIxNzM2MTUwNDAwMDAwIn0"
 
    Example decoded request with method="tempo", intent="charge":
 
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 7]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
-     "transaction": {
-       "to": "0x20c0000000000000000000000000000000000000",
-       "data": "0xa9059cbb...",
-       "validBefore": "0x59682000"
-     }
+     "amount": "1000000",
+     "asset": "0x20c0000000000000000000000000000000000000",
+     "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+     "expires": "1736150400000"
    }
 
 5.2.  Credentials (Authorization)
@@ -443,27 +383,23 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    complete the payment challenge (e.g., signature, preimage,
    transaction ID).
 
-
-
-Moxey                     Expires 10 July 2026                  [Page 8]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Payment method specifications define the exact structure of payload.
 
 5.2.1.  Example Credential
 
    GET /api/data HTTP/1.1
    Host: api.example.com
-   Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfYWJjMTIzIiwicGF5bG9hZCI6eyJ0cmFuc2FjdGlvbiI6eyJjaGFpbklkIjo4MDA4NSwibm9uY2VLZXkiOiIweDAiLCJub25jZSI6MCwibWF4RmVlUGVyR2FzIjoiMTAwMDAwMDAwMCIsImdhc0xpbWl0IjoxMDAwMDAsImNhbGxzIjpbeyJ0byI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImRhdGEiOiIweGE5MDU5Y2JiLi4uIn1dLCJ2YWxpZEJlZm9yZSI6MTcwNDExMDQwMDAwMH0sInNpZ25hdHVyZSI6IjB4Li4uIn19
+   Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJzb3VyY2UiOiJkaWQ6cGtoOmVpcDE1NTo0MjQzMToweDEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2NzgiLCJwYXlsb2FkIjp7InR5cGUiOiJ0cmFuc2FjdGlvbiIsInNpZ25hdHVyZSI6IjB4NzZmOTAxLi4uc2lnbmVkIHRyYW5zYWN0aW9uIGJ5dGVzLi4uIn19
 
    Decoded credential:
 
    {
      "id": "x7Tg2pLqR9mKvNwY3hBcZa",
-     "source": "did:pkh:0x1234567890abcdef1234567890abcdef12345678",
-     "payload": "0xa5b2d5..." // RLP-encoded Tempo transaction
+     "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678",
+     "payload": {
+       "type": "transaction",
+       "signature": "0x76f901...signed transaction bytes..."
+     }
    }
 
    The source field is optional; clients MAY omit it for anonymous
@@ -498,13 +434,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    responses to indicate that a credential may be reused for subsequent
    requests.  The header value can be used directly as the Authorization
    header value for subsequent requests:
-
-
-
-Moxey                     Expires 10 July 2026                  [Page 9]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
    Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
    auth-param            = token BWS "=" BWS ( token / quoted-string )
@@ -554,14 +483,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    requests to the same realm
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 10]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    1.  Stop reusing the credential after the expires timestamp
 
    2.  Retain the Payment-Receipt separately for audit purposes
@@ -609,14 +530,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    1.  Check for a cached Payment-Authorization that covers the realm
 
    2.  If valid, reuse the cached credential
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 11]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
    3.  Otherwise, request a new challenge and generate a fresh
        credential
@@ -666,14 +579,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
                                   Table 5
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 12]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Additional payment methods (blockchain networks, traditional payment
    processors, mobile wallets) may be registered per Section 13.3.  See
    Appendix C for illustrative examples of potential payment methods.
@@ -707,28 +612,23 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    Examples of payment method intents:
 
-     +==========+=====================+==============================+
-     | Intent   | Applicable Methods  | Description                  |
-     +==========+=====================+==============================+
-     | approval | tempo, stripe, x402 | Pre-authorize future charges |
-     +----------+---------------------+------------------------------+
-     | hodl     | lightning           | Hold invoice; payment held   |
-     |          |                     | until released               |
-     +----------+---------------------+------------------------------+
+   +==============+====================+==============================+
+   | Intent       | Applicable Methods | Description                  |
+   +==============+====================+==============================+
+   | approve      | tempo, x402        | Pre-authorize future charges |
+   +--------------+--------------------+------------------------------+
+   | subscription | tempo              | Recurring payment            |
+   |              |                    | authorization                |
+   +--------------+--------------------+------------------------------+
+   | hodl         | lightning          | Hold invoice; payment held   |
+   |              |                    | until released               |
+   +--------------+--------------------+------------------------------+
 
-                                  Table 6
+                                 Table 6
 
    Clients that do not recognize a payment method intent SHOULD treat
    the challenge as unsupported and MAY fall back to other offered
    challenges.
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 13]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 7.4.  Intent Negotiation
 
@@ -736,7 +636,7 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    challenges:
 
    WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb", realm="api.example.com", method="tempo", intent="charge", request="..."
-   WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approval", request="..."
+   WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj", realm="api.example.com", method="tempo", intent="approve", request="..."
 
    Clients choose which challenge to respond to.
 
@@ -776,15 +676,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    Servers SHOULD use the Retry-After HTTP header [RFC9110] to indicate
    when clients may retry:
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 14]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
    HTTP/1.1 402 Payment Required
    Retry-After: 60
@@ -835,13 +726,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    Method Object Schema:
 
-
-
-Moxey                     Expires 10 July 2026                 [Page 15]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Each key in methods is a registered payment method identifier.  The
    value is an object with:
 
@@ -868,13 +752,12 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
      "realm": "api.example.com",
      "methods": {
        "tempo": {
-         "intents": ["charge", "approval"],
-         "assets": ["0x1", "0x1a"],
+         "intents": ["charge", "approve", "subscription"],
+         "assets": ["0x20c0000000000000000000000000000000000000"]
        },
        "lightning": {
          "intents": ["charge"],
          "assets": ["BTC"],
-         "description": "Pay with Bitcoin Lightning"
        }
      }
    }
@@ -884,19 +767,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    Servers MAY advertise payment support via DNS TXT records:
 
    _payment.api.example.com. TXT "v=payment1; methods=tempo,evm"
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 16]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 10.  Extensibility
 
@@ -946,14 +816,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    *  The request and credential payloads are JSON [RFC8259], which
       mandates
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 17]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    UTF-8 encoding
 
    *  Payment method identifiers are restricted to ASCII lowercase
@@ -1000,15 +862,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    Servers MUST NOT issue Payment challenges over unencrypted HTTP.
    Clients MUST NOT send Payment credentials over unencrypted HTTP.
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 18]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
    Implementations SHOULD be aware of intermediaries (proxies, TLS
    termination points) that may have access to Payment headers.
@@ -1058,14 +911,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    4.  Validity window is appropriate
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 19]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Blind authorization of payments is dangerous.
 
    Clients MUST NOT rely on the description parameter for payment
@@ -1114,14 +959,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    The no-store directive prevents caching of payment challenges, which
    may contain time-sensitive or single-use payment parameters.
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 20]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Similarly, responses with Payment-Receipt or Payment-Authorization
    headers SHOULD include Cache-Control: private to prevent intermediary
    caching of payment confirmation and authorization data.
@@ -1168,15 +1005,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    Clients and servers should understand the finality guarantees of
    their chosen payment method as documented in the payment method
    specification.
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 21]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 12.12.  Authorization Reuse
 
@@ -1227,13 +1055,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    *  *Authentication Scheme Name*: Payment
 
-
-
-Moxey                     Expires 10 July 2026                 [Page 22]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    *  *Reference*: This document, Section 5
 
    *  *Notes*: Used with HTTP 402 status code for proof-of-payment flows
@@ -1280,15 +1101,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
      +------------+---------------+------------------------+---------+
 
                                   Table 11
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 23]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 13.4.  Payment Intent Registry
 
@@ -1338,14 +1150,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
 14.1.  Normative References
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 24]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
@@ -1392,16 +1196,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
               DOI 10.17487/RFC8259, December 2017,
               <https://www.rfc-editor.org/info/rfc8259>.
 
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 25]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    [RFC8446]  Rescorla, E., "The Transport Layer Security (TLS) Protocol
               Version 1.3", RFC 8446, DOI 10.17487/RFC8446, August 2018,
               <https://www.rfc-editor.org/info/rfc8446>.
@@ -1444,20 +1238,6 @@ Appendix A.  ABNF Collected
    token, quoted-string, b64token) are imported from [RFC9110],
    [RFC7235], and [RFC6750].
 
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 26]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    ; HTTP Authentication Challenge (following RFC 7235 Section 2.1)
    payment-challenge = "Payment" [ 1*SP auth-params ]
    auth-params       = auth-param *( OWS "," OWS auth-param )
@@ -1485,34 +1265,6 @@ Appendix B.  Examples
 B.1.  Tempo Charge
 
    One-time payment using a signed Tempo transaction:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 27]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                                 Server                           Tempo Network
    │                                      │                                  │
@@ -1560,16 +1312,6 @@ Client                                 Server                           Tempo Ne
 
    Decoded request:
 
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 28]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
      "transaction": {
        "to": "0x20c0000000000000000000000000000000000000",
@@ -1615,16 +1357,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    GET /api/other-resource HTTP/1.1
    Host: api.example.com
    Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 29]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 B.2.  Tempo Authorization
 
@@ -1674,14 +1406,6 @@ Client                                 Server                           Tempo Ne
    │<─────────────────────────────────────┤                                  │
    │                                      │                                  │
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 30]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Challenge:
 
    HTTP/1.1 402 Payment Required
@@ -1730,14 +1454,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 
    Success:
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 31]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    HTTP/1.1 200 OK
    Cache-Control: private
    Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoidGVtcG8iLCJyZWZlcmVuY2UiOiIweHR4aGFzaC4uLiIsImtleUlkIjoiMHhzZXJ2ZXJrZXkuLi4iLCJleHBpcnkiOjE3MDY3NDU2MDAwMDB9
@@ -1781,18 +1497,6 @@ Appendix C.  Payment Method Examples
 C.1.  Ethereum (EVM Chains)
 
    EVM-compatible chains using EIP-3009 transferWithAuthorization:
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 32]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                                 Server                          Blockchain
    │                                      │                                  │
@@ -1843,13 +1547,6 @@ Client                                 Server                          Blockchai
 
    Decoded credential payload:
 
-
-
-Moxey                     Expires 10 July 2026                 [Page 33]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
      "signature": "0x...",
      "from": "0x..."
@@ -1897,15 +1594,6 @@ Client                                 Server                     Lightning Netw
 
    Decoded request:
 
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 34]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
      "invoice": "lnbc1500u1pw5kjhpp5xwyq9qqqqqqqqqqqqqqqqqqqq...",
      "amountMsat": "1500000",
@@ -1924,43 +1612,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 C.3.  Apple Pay
 
    Tokenized card payment via Apple Pay:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 35]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                        Apple Pay                Server              Processor
    │                              │                       │                     │
@@ -2005,19 +1656,6 @@ Client                        Apple Pay                Server              Proce
 
    Decoded request:
 
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 36]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
      "merchantId": "merchant.com.example.api",
      "amount": "10.00",
@@ -2044,35 +1682,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
    Server decrypts token via payment processor (Stripe, Adyen, etc.).
 
 C.4.  Stripe Charge
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 37]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                                 Server                           Stripe API
    │                                      │                                  │
@@ -2121,15 +1730,6 @@ Client                                 Server                           Stripe A
 
    Decoded request:
 
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 38]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    {
      "paymentIntent": "pi_3Mq2YZA2eZvKYlo2O",
      "clientSecret": "pi_3Mq2YZA2eZvKYlo2O_secret_...",
@@ -2149,42 +1749,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
 C.5.  Stripe Authorization
 
    Stripe SetupIntent for recurring/metered billing:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 39]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                                 Server                           Stripe API
    │                                      │                                  │
@@ -2234,14 +1798,6 @@ Client                                 Server                           Stripe A
    │<─────────────────────────────────────┤                                  │
    │                                      │                                  │
 
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 40]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    Challenge:
 
    HTTP/1.1 402 Payment Required
@@ -2282,21 +1838,6 @@ C.6.  x402
    The x402 protocol can be wrapped as a payment method for backwards
    compatibility with existing x402 implementations.  This example
    follows x402 Protocol Specification v2.
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 41]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
 Client                                 Server                          Facilitator
    │                                      │                                  │
@@ -2343,16 +1884,6 @@ Client                                 Server                          Facilitat
        request="eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOnsidXJsIjoiL2FwaS9kYXRhIiwiZGVzY3JpcHRpb24iOiJBUEkgYWNjZXNzIn0sImFjY2VwdHMiOlt7InNjaGVtZSI6ImV4YWN0IiwibmV0d29yayI6ImVpcDE1NTo4NDUzIiwiYW1vdW50IjoiMTAwMDAwMCIsImFzc2V0IjoiMHg4MzM1ODlmQ0Q2ZURiNkUwOGY0YzdDMzJENGY3MWI1NGJkQTAyOTEzIiwicGF5VG8iOiIweGFiYzEyMy4uLiIsIm1heFRpbWVvdXRTZWNvbmRzIjo2MH1dfQ"
 
    Decoded request (x402 v2 PaymentRequired structure):
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 42]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
 
    {
      "x402Version": 2,
@@ -2401,15 +1932,6 @@ Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
      }
    }
 
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 43]
-
-Internet-Draft  The "Payment" HTTP Authentication Scheme    January 2026
-
-
    The payload.authorization follows EIP-3009 transferWithAuthorization
    format for the "exact" scheme on EVM networks.
 
@@ -2433,32 +1955,3 @@ Author's Address
 
    Jake Moxey
    Email: jake@tempo.xyz
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Moxey                     Expires 10 July 2026                 [Page 44]
