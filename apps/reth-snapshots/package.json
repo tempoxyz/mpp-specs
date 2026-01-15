@@ -9,6 +9,7 @@
 		"check:types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@ai-payments/protocol": "workspace:*",
 		"hono": "catalog:",
 		"viem": "catalog:"
 	},
