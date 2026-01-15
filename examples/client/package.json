@@ -1,0 +1,20 @@
+{
+  "name": "@http-payment-auth/client-example",
+  "version": "0.1.0",
+  "description": "Example TypeScript client for HTTP Payment Authentication protocol",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
