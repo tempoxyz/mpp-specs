@@ -1,6 +1,6 @@
 # HTTP Payment Auth - Example Server
 
-A minimal Express server demonstrating the HTTP Payment Authentication protocol.
+A minimal Hono server demonstrating the HTTP Payment Authentication protocol.
 
 ## Quick Start
 
@@ -113,7 +113,7 @@ app.get("/api/resource", paymentAuth({
 
 ## Files
 
-- `src/index.ts` - Express server with protected endpoint
+- `src/index.ts` - Hono server with protected endpoint
 - `src/payment-auth.ts` - Payment authentication middleware
 
 ## References

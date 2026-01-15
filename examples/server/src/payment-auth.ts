@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Context, MiddlewareHandler } from "hono";
 import { randomBytes } from "crypto";
 import { recoverMessageAddress, type Hex } from "viem";
 
@@ -42,6 +42,12 @@ export interface PaymentAuthConfig {
   asset: string;
   amount: string;
   challengeTtlMs?: number;
+}
+
+declare module "hono" {
+  interface ContextVariableMap {
+    paymentAuth: { signer: string };
+  }
 }
 
 function base64urlEncode(data: string): string {
@@ -119,15 +125,11 @@ async function verifyTempoSignature(
   }
 }
 
-export function paymentAuth(config: PaymentAuthConfig) {
+export function paymentAuth(config: PaymentAuthConfig): MiddlewareHandler {
   const challengeTtlMs = config.challengeTtlMs ?? 5 * 60 * 1000;
 
-  return async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    const authHeader = req.headers.authorization;
+  return async (c: Context, next) => {
+    const authHeader = c.req.header("Authorization");
 
     if (!authHeader) {
       const id = generateChallengeId();
@@ -141,46 +143,38 @@ export function paymentAuth(config: PaymentAuthConfig) {
 
       challenges.set(id, { request, expires, used: false });
 
-      res
-        .status(402)
-        .set(
-          "WWW-Authenticate",
-          buildWwwAuthenticateHeader(id, config, request, expires),
-        )
-        .json({ error: "payment_required", message: "Payment is required" });
-      return;
+      return c.json(
+        { error: "payment_required", message: "Payment is required" },
+        402,
+        {
+          "WWW-Authenticate": buildWwwAuthenticateHeader(id, config, request, expires),
+          "Cache-Control": "no-store",
+        },
+      );
     }
 
     const credential = parseCredential(authHeader);
     if (!credential) {
-      res.status(401).json({ error: "invalid_credentials" });
-      return;
+      return c.json({ error: "invalid_credentials" }, 401);
     }
 
     const challenge = challenges.get(credential.id);
     if (!challenge) {
-      res.status(401).json({ error: "unknown_challenge" });
-      return;
+      return c.json({ error: "unknown_challenge" }, 401);
     }
 
     if (challenge.used) {
-      res.status(401).json({ error: "challenge_already_used" });
-      return;
+      return c.json({ error: "challenge_already_used" }, 401);
     }
 
     if (new Date() > challenge.expires) {
       challenges.delete(credential.id);
-      res.status(401).json({ error: "challenge_expired" });
-      return;
+      return c.json({ error: "challenge_expired" }, 401);
     }
 
-    const verification = await verifyTempoSignature(
-      credential,
-      challenge.request,
-    );
+    const verification = await verifyTempoSignature(credential, challenge.request);
     if (!verification.valid) {
-      res.status(401).json({ error: "invalid_signature" });
-      return;
+      return c.json({ error: "invalid_signature" }, 401);
     }
 
     challenge.used = true;
@@ -192,12 +186,10 @@ export function paymentAuth(config: PaymentAuthConfig) {
       reference: `tx-${randomBytes(8).toString("hex")}`,
     };
 
-    res.set("Payment-Receipt", base64urlEncode(JSON.stringify(receipt)));
+    c.header("Payment-Receipt", base64urlEncode(JSON.stringify(receipt)));
+    c.header("Cache-Control", "private");
+    c.set("paymentAuth", { signer: verification.signer ?? "unknown" });
 
-    (req as Request & { paymentAuth: { signer: string } }).paymentAuth = {
-      signer: verification.signer ?? "unknown",
-    };
-
-    next();
+    await next();
   };
 }

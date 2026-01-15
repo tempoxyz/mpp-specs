@@ -1,23 +1,25 @@
-import express from "express";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import { paymentAuth } from "./payment-auth.js";
 
-const app = express();
-const PORT = process.env.PORT ?? 3000;
+const app = new Hono();
 
 const DESTINATION = "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00";
 const USDC_TEMPO = "0x20c0000000000000000000000000000000000000";
 const AMOUNT = "1000000"; // 1.00 USDC (6 decimals)
 
-app.get("/api/resource", paymentAuth({
+const paymentMiddleware = paymentAuth({
   realm: "api.example.com",
   method: "tempo",
   destination: DESTINATION,
   asset: USDC_TEMPO,
   amount: AMOUNT,
   challengeTtlMs: 5 * 60 * 1000,
-}), (req, res) => {
-  const authInfo = (req as express.Request & { paymentAuth?: { signer: string } }).paymentAuth;
-  res.json({
+});
+
+app.get("/api/resource", paymentMiddleware, (c) => {
+  const authInfo = c.get("paymentAuth");
+  return c.json({
     message: "Access granted",
     data: {
       timestamp: new Date().toISOString(),
@@ -27,12 +29,12 @@ app.get("/api/resource", paymentAuth({
   });
 });
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
+app.get("/health", (c) => c.json({ status: "ok" }));
 
-app.listen(PORT, () => {
-  console.log(`Payment Auth Example Server running on port ${PORT}`);
-  console.log(`\nProtected endpoint: GET http://localhost:${PORT}/api/resource`);
-  console.log(`\nTry: curl -i http://localhost:${PORT}/api/resource`);
-});
+const PORT = Number(process.env.PORT ?? 3000);
+
+console.log(`Payment Auth Example Server running on port ${PORT}`);
+console.log(`\nProtected endpoint: GET http://localhost:${PORT}/api/resource`);
+console.log(`\nTry: curl -i http://localhost:${PORT}/api/resource`);
+
+serve({ fetch: app.fetch, port: PORT });
