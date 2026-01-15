@@ -1,0 +1,24 @@
+{
+	"name": "payment-auth-tempo-server",
+	"version": "1.0.0",
+	"description": "Cloudflare Worker implementing HTTP Payment Authentication with Tempo",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "echo 'noop'",
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"check": "tsc --noEmit",
+		"gen:types": "wrangler types"
+	},
+	"dependencies": {
+		"hono": "^4.11.4",
+		"ox": "^0.11.3",
+		"viem": "^2.44.2"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260113.0",
+		"typescript": "^5.9.3",
+		"wrangler": "^4.59.1"
+	}
+}
