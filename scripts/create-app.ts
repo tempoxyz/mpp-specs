@@ -20,6 +20,8 @@ import { join } from 'node:path'
 
 const TEMPLATE_DIR = 'apps/_template'
 const APPS_DIR = 'apps'
+const MAIN_WORKFLOW = '.github/workflows/main.yml'
+const PR_WORKFLOW = '.github/workflows/pull-request.yml'
 
 function main() {
 	const appName = process.argv[2]
@@ -65,9 +67,13 @@ function main() {
 	// Replace _template with app name in all files
 	replaceInDir(targetDir, '_template', appName)
 
+	// Update GitHub Actions workflows to include new app
+	updateWorkflows(appName)
+
 	console.log('✓ Created app directory')
 	console.log('✓ Copied template files')
 	console.log('✓ Updated app name in files')
+	console.log('✓ Added app to CI/CD workflows')
 	console.log('')
 	console.log('Next steps:')
 	console.log(`  1. pnpm install`)
@@ -106,6 +112,76 @@ function replaceInDir(dir: string, search: string, replace: string) {
 			}
 		}
 	}
+}
+
+/**
+ * Get all deployable apps from the apps directory (excluding _template)
+ */
+function getDeployableApps(): string[] {
+	if (!existsSync(APPS_DIR)) {
+		return []
+	}
+
+	const apps: string[] = []
+	for (const entry of readdirSync(APPS_DIR)) {
+		const appPath = join(APPS_DIR, entry)
+		// Skip _template and non-directories
+		if (entry.startsWith('_') || !statSync(appPath).isDirectory()) {
+			continue
+		}
+		// Check if it has a wrangler.jsonc file (indicates it's deployable)
+		if (existsSync(join(appPath, 'wrangler.jsonc'))) {
+			apps.push(entry)
+		}
+	}
+	return apps.sort()
+}
+
+/**
+ * Update GitHub Actions workflows to include the new app
+ */
+function updateWorkflows(newApp: string) {
+	const apps = getDeployableApps()
+
+	// Update main.yml (production deployments)
+	if (existsSync(MAIN_WORKFLOW)) {
+		updateWorkflowMatrix(MAIN_WORKFLOW, apps)
+	}
+
+	// Update pull-request.yml (preview deployments)
+	if (existsSync(PR_WORKFLOW)) {
+		updateWorkflowMatrix(PR_WORKFLOW, apps)
+	}
+}
+
+/**
+ * Update the matrix include section in a workflow file
+ */
+function updateWorkflowMatrix(workflowPath: string, apps: string[]) {
+	const content = readFileSync(workflowPath, 'utf-8')
+
+	// Find the matrix include section and replace it
+	const matrixIncludeRegex =
+		/(\s+matrix:\s*\n\s+include:\s*\n)((?:\s+- app: [^\n]+\n)+)/
+
+	if (!matrixIncludeRegex.test(content)) {
+		console.warn(
+			`Warning: Could not find matrix include section in ${workflowPath}`,
+		)
+		return
+	}
+
+	// Generate the new matrix include entries
+	const matrixEntries = apps
+		.map((app) => `          - app: ${app}`)
+		.join('\n')
+
+	const updatedContent = content.replace(
+		matrixIncludeRegex,
+		`$1${matrixEntries}\n`,
+	)
+
+	writeFileSync(workflowPath, updatedContent, 'utf-8')
 }
 
 main()

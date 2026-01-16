@@ -394,6 +394,27 @@ app.post('/webhooks/tempo', async (c) => {
 
 ## Deployment
 
+### CI/CD Deployment
+
+All apps are automatically deployed via GitHub Actions:
+
+- **Preview Deployments** (`.github/workflows/pull-request.yml`):
+  - Triggered on pull requests
+  - Deploys only apps with relevant changes
+  - Posts deployment status as PR comments
+  - Uses `--env preview` configuration
+
+- **Production Deployments** (`.github/workflows/main.yml`):
+  - Triggered on push to `main` branch
+  - Deploys only apps with relevant changes
+  - Uses `--env production` configuration
+
+**App Discovery**: The `create-app` script automatically adds new apps to both workflows. Apps are discovered from the `apps/` directory (excluding `_template`). Each app must have a `wrangler.jsonc` file to be included in deployments.
+
+**Required GitHub Secrets**:
+- `CLOUDFLARE_API_TOKEN` - Cloudflare API token with Workers edit permissions
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+
 ### Preview Deployments
 
 Every branch gets a preview URL:
@@ -757,22 +778,47 @@ tailscale funnel 8787
 
 ## Creating a New App
 
-### 1. Scaffold
+### Using the Create Script (Recommended)
+
+The `create-app` script automatically scaffolds a new app and configures CI/CD:
 
 ```bash
-mkdir -p apps/my-app/src
-cd apps/my-app
+pnpm create-app my-app
 ```
 
-### 2. Copy from existing app
+This will:
+- ✅ Create `apps/my-app/` directory from `apps/_template/`
+- ✅ Update package names and configuration files
+- ✅ **Automatically add the app to CI/CD workflows** (`.github/workflows/main.yml` and `.github/workflows/pull-request.yml`)
+- ✅ Set up deployment scripts (`deploy:preview` and `deploy:prod`)
 
-Use `apps/api` as a template:
-- Copy `package.json`, `tsconfig.json`, `wrangler.jsonc`
-- Update names and bindings
+### Manual Setup
 
-### 3. Install and run
+If you need to create an app manually:
 
-```bash
-pnpm install
-pnpm --filter @tempo/my-app dev
-```
+1. **Scaffold**
+   ```bash
+   mkdir -p apps/my-app/src
+   cd apps/my-app
+   ```
+
+2. **Copy from template**
+   - Copy `package.json`, `tsconfig.json`, `wrangler.jsonc` from `apps/_template/`
+   - Update package name to `@tempo/my-app`
+   - Update wrangler name and bindings
+
+3. **Add to CI/CD workflows**
+   - Edit `.github/workflows/main.yml` - add to the `matrix.include` array:
+     ```yaml
+     - app: my-app
+     ```
+   - Edit `.github/workflows/pull-request.yml` - add to the `matrix.include` array:
+     ```yaml
+     - app: my-app
+     ```
+
+4. **Install and run**
+   ```bash
+   pnpm install
+   pnpm --filter @tempo/my-app dev
+   ```
