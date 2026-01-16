@@ -1,23 +1,41 @@
 # _template
 
-Template app for Tempo AI Payments. Copy this folder to create a new app.
+Template app for Tempo AI Payments. Use `pnpm create-app my-app` to scaffold a new app.
+
+## What It Does
+
+_Describe what your app does here. Include:_
+- _The main purpose/functionality_
+- _Key endpoints and what they do_
+- _Whether endpoints are free or paid_
 
 ## Quick Start
 
 ```bash
-# 1. Copy template
-cp -r apps/_template apps/my-app
-
-# 2. Update names
-# - package.json: change "@tempo/_template" to "@tempo/my-app"
-# - wrangler.jsonc: change "_template" to "my-app"
-
-# 3. Install dependencies
-pnpm install
-
-# 4. Run locally
+# Run locally
 pnpm --filter @tempo/my-app dev
 ```
+
+## Testing with the Client
+
+_Document how to test your app using the sample client:_
+
+```bash
+# Test a free endpoint
+pnpm --filter @tempo/paymentauth-client demo GET http://localhost:8787/your-endpoint
+
+# Test a paid endpoint
+PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo GET http://localhost:8787/your-paid-endpoint
+```
+
+Or using the Bash client:
+
+```bash
+cd packages/paymentauth-client
+PRIVATE_KEY=0x... ./demo.sh GET http://localhost:8787/your-paid-endpoint
+```
+
+---
 
 ## Features
 

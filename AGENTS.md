@@ -787,6 +787,23 @@ This will:
 - ✅ **Automatically add the app to CI/CD workflows** (`.github/workflows/main.yml` and `.github/workflows/pull-request.yml`)
 - ✅ Set up deployment scripts (`deploy:preview` and `deploy:prod`)
 
+### README Requirements
+
+**Every app MUST have a README.md** that includes at minimum:
+
+1. **What It Does** - Describe the app's purpose, key endpoints, and whether they are free or paid
+2. **How to Test** - Show how to call the app using the sample client:
+   ```bash
+   # TypeScript client
+   pnpm --filter @tempo/paymentauth-client demo GET http://localhost:PORT/endpoint
+   
+   # Bash client
+   cd packages/paymentauth-client
+   PRIVATE_KEY=0x... ./demo.sh GET http://localhost:PORT/endpoint
+   ```
+
+See existing apps (`paymentauth-basic`, `payments-proxy`, etc.) for examples.
+
 ### Manual Setup
 
 If you need to create an app manually:
