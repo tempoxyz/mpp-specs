@@ -473,6 +473,376 @@ export default app
 
 ---
 
+### 9. Tempo Blockchain SDK (tempo.ts)
+
+**When to use:** Interacting with the Tempo blockchain, TIP-20 tokens, fee sponsorship.
+
+#### Client Setup
+
+```typescript
+import { createPublicClient, createWalletClient, http } from 'viem'
+import { tempoModerato } from 'tempo.ts/chains'
+import { publicActionsL2, walletActionsL2 } from 'tempo.ts'
+
+// Read-only client
+const publicClient = createPublicClient({
+  chain: tempoModerato,
+  transport: http()
+}).extend(publicActionsL2())
+
+// Wallet client for transactions
+const walletClient = createWalletClient({
+  chain: tempoModerato,
+  transport: http(),
+  account: privateKeyToAccount(privateKey)
+}).extend(walletActionsL2())
+```
+
+#### Common Operations
+
+```typescript
+// Get TIP-20 balance
+const balance = await publicClient.getBalance({
+  address: userAddress,
+  token: '0x20c0000000000000000000000000000000000001' // AlphaUSD
+})
+
+// Transfer TIP-20 tokens
+const hash = await walletClient.sendTransaction({
+  to: recipientAddress,
+  value: 1000000n, // 1 USD (6 decimals)
+  feeToken: '0x20c0000000000000000000000000000000000001'
+})
+
+// Wait for confirmation
+const receipt = await publicClient.waitForTransactionReceipt({ hash })
+```
+
+---
+
+### 10. IDXS Activity Queries
+
+**When to use:** Fetching on-chain history, transaction feeds, analytics.
+
+#### Query Patterns
+
+```typescript
+import { Idxs } from 'idxs'
+
+const idxs = new Idxs()
+
+// Recent transfers for a token
+async function getTokenTransfers(tokenAddress: string) {
+  return idxs.query({
+    chain: 111557750, // Tempo
+    signature: 'event Transfer(address indexed from, address indexed to, uint256 value)',
+    address: tokenAddress,
+    limit: 100
+  })
+}
+
+// Address activity (sent + received)
+async function getAddressActivity(address: string) {
+  const [sent, received] = await Promise.all([
+    idxs.query({
+      chain: 111557750,
+      signature: 'event Transfer(address indexed from, address indexed to, uint256 value)',
+      filter: { from: address.toLowerCase() },
+      limit: 50
+    }),
+    idxs.query({
+      chain: 111557750,
+      signature: 'event Transfer(address indexed from, address indexed to, uint256 value)',
+      filter: { to: address.toLowerCase() },
+      limit: 50
+    })
+  ])
+  
+  return [...sent, ...received].sort((a, b) => b.block_num - a.block_num)
+}
+
+// Custom analytics
+async function getTopSenders(tokenAddress: string) {
+  return idxs.sql(`
+    SELECT "from", count(*) as tx_count, sum(value) as total
+    FROM transfer 
+    WHERE chain = 111557750 AND address = '${tokenAddress}'
+    GROUP BY "from"
+    ORDER BY tx_count DESC
+    LIMIT 10
+  `, { signature: 'event Transfer(address indexed from, address indexed to, uint256 value)' })
+}
+```
+
+---
+
+### 11. Fee Sponsorship
+
+**When to use:** Enabling gas-free transactions for users.
+
+#### Sponsor Service
+
+```typescript
+import { Handler } from 'tempo.ts/server'
+import { privateKeyToAccount } from 'viem/accounts'
+import { tempoModerato } from 'tempo.ts/chains'
+import { http } from 'viem'
+
+const app = new Hono<{ Bindings: Env }>()
+
+// Rate limiting middleware
+app.use('/sponsor/*', async (c, next) => {
+  const clientId = c.req.header('X-Client-Id')
+  if (!clientId) {
+    throw new HTTPException(401, { message: 'Client ID required' })
+  }
+  
+  // Check rate limit via Durable Object
+  const id = c.env.RATE_LIMITER.idFromName(clientId)
+  const limiter = c.env.RATE_LIMITER.get(id)
+  const response = await limiter.fetch(c.req.raw)
+  
+  if (response.status === 429) {
+    throw new HTTPException(429, { message: 'Rate limit exceeded' })
+  }
+  
+  await next()
+})
+
+// Sponsorship handler
+app.all('/sponsor/*', async (c) => {
+  const handler = Handler.feePayer({
+    account: privateKeyToAccount(c.env.SPONSOR_PRIVATE_KEY as `0x${string}`),
+    chain: tempoModerato,
+    transport: http(c.env.TEMPO_RPC_URL),
+    async onRequest(request) {
+      console.log(`Sponsoring: ${request.method}`)
+    }
+  })
+  
+  return handler.fetch(c.req.raw)
+})
+```
+
+---
+
+### 12. Onramp Integration
+
+**When to use:** Allowing users to buy crypto with fiat.
+
+#### Coinbase Onramp
+
+```typescript
+import * as jose from 'jose'
+
+async function generateCoinbaseJWT(env: Env) {
+  const privateKey = await jose.importPKCS8(env.CB_API_KEY_SECRET, 'ES256')
+  
+  return new jose.SignJWT({})
+    .setProtectedHeader({ alg: 'ES256', kid: env.CB_API_KEY_ID })
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .setSubject(env.CB_API_KEY_ID)
+    .setAudience('coinbase')
+    .sign(privateKey)
+}
+
+app.post('/onramp/order', async (c) => {
+  const { address, amount, email } = await c.req.json()
+  
+  const jwt = await generateCoinbaseJWT(c.env)
+  
+  const response = await fetch('https://api.coinbase.com/onramp/v1/orders', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      destination_address: address,
+      destination_network: 'tempo',
+      purchase_amount: { value: amount.toFixed(2), currency: 'USD' },
+      user: { email }
+    })
+  })
+  
+  if (!response.ok) {
+    throw new HTTPException(response.status, { 
+      message: `Onramp error: ${await response.text()}` 
+    })
+  }
+  
+  const order = await response.json()
+  return c.json({ orderId: order.id, redirectUrl: order.redirect_url })
+})
+```
+
+---
+
+### 13. Passkey Authentication
+
+**When to use:** Wallet-less user onboarding with WebAuthn.
+
+#### Registration Flow
+
+```typescript
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+} from '@simplewebauthn/server'
+
+app.post('/auth/passkey/register/options', async (c) => {
+  const { email } = await c.req.json()
+  
+  const options = await generateRegistrationOptions({
+    rpName: 'Tempo Payments',
+    rpID: 'payments.tempo.xyz',
+    userID: crypto.randomUUID(),
+    userName: email,
+    attestationType: 'none',
+    authenticatorSelection: {
+      residentKey: 'preferred',
+      userVerification: 'preferred',
+    }
+  })
+  
+  // Store challenge
+  await c.env.KV.put(`passkey:challenge:${options.challenge}`, JSON.stringify({
+    email,
+    options
+  }), { expirationTtl: 300 })
+  
+  return c.json(options)
+})
+
+app.post('/auth/passkey/register/verify', async (c) => {
+  const { credential, challenge } = await c.req.json()
+  
+  const stored = await c.env.KV.get(`passkey:challenge:${challenge}`, 'json')
+  if (!stored) {
+    throw new HTTPException(400, { message: 'Challenge expired' })
+  }
+  
+  const verification = await verifyRegistrationResponse({
+    response: credential,
+    expectedChallenge: challenge,
+    expectedOrigin: 'https://payments.tempo.xyz',
+    expectedRPID: 'payments.tempo.xyz',
+  })
+  
+  if (!verification.verified) {
+    throw new HTTPException(400, { message: 'Verification failed' })
+  }
+  
+  // Create Tempo smart wallet for user
+  const wallet = await createSmartWallet(c.env, verification.registrationInfo)
+  
+  // Store credential
+  await c.env.DB.prepare(`
+    INSERT INTO passkeys (credential_id, public_key, user_email, wallet_address)
+    VALUES (?, ?, ?, ?)
+  `).bind(
+    verification.registrationInfo.credentialID,
+    Buffer.from(verification.registrationInfo.credentialPublicKey).toString('base64'),
+    stored.email,
+    wallet.address
+  ).run()
+  
+  return c.json({ address: wallet.address })
+})
+```
+
+---
+
+### 14. Subscription Management
+
+**When to use:** Recurring payments with access key charging.
+
+#### Subscription Schema
+
+```sql
+-- migrations/0002_subscriptions.sql
+CREATE TABLE subscriptions (
+  id TEXT PRIMARY KEY,
+  user_address TEXT NOT NULL,
+  plan_id TEXT NOT NULL,
+  plan_price INTEGER NOT NULL,
+  access_key_id TEXT NOT NULL,
+  status TEXT DEFAULT 'active',
+  auto_renew INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_subscriptions_expires ON subscriptions(expires_at);
+CREATE INDEX idx_subscriptions_user ON subscriptions(user_address);
+```
+
+#### Subscription API
+
+```typescript
+// Create subscription
+app.post('/subscriptions', async (c) => {
+  const { planId, accessKeyId } = await c.req.json()
+  
+  const plan = PLANS[planId]
+  if (!plan) {
+    throw new HTTPException(400, { message: 'Invalid plan' })
+  }
+  
+  // Verify access key can be charged
+  const canCharge = await verifyAccessKey(c.env, accessKeyId, plan.price)
+  if (!canCharge) {
+    throw new HTTPException(400, { message: 'Access key cannot cover subscription' })
+  }
+  
+  // Charge initial payment
+  await chargeAccessKey(c.env, accessKeyId, plan.price)
+  
+  const id = `sub_${crypto.randomUUID()}`
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  
+  await c.env.DB.prepare(`
+    INSERT INTO subscriptions (id, user_address, plan_id, plan_price, access_key_id, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(id, c.get('userAddress'), planId, plan.price, accessKeyId, expiresAt).run()
+  
+  return c.json({ id, expiresAt }, 201)
+})
+
+// Cron handler for renewals
+async function processRenewals(env: Env) {
+  const expiring = await env.DB.prepare(`
+    SELECT * FROM subscriptions 
+    WHERE status = 'active' 
+    AND auto_renew = 1
+    AND expires_at <= datetime('now', '+1 day')
+  `).all()
+  
+  for (const sub of expiring.results) {
+    try {
+      await chargeAccessKey(env, sub.access_key_id, sub.plan_price)
+      
+      await env.DB.prepare(`
+        UPDATE subscriptions 
+        SET expires_at = datetime(expires_at, '+30 days')
+        WHERE id = ?
+      `).bind(sub.id).run()
+      
+      console.log(`Renewed subscription ${sub.id}`)
+    } catch (error) {
+      await env.DB.prepare(`
+        UPDATE subscriptions SET status = 'payment_failed' WHERE id = ?
+      `).bind(sub.id).run()
+      
+      console.error(`Failed to renew ${sub.id}:`, error)
+    }
+  }
+}
+```
+
+---
+
 ## Skill Activation
 
 When working on this codebase, agents should:
@@ -482,3 +852,18 @@ When working on this codebase, agents should:
 3. **Use pnpm** for all package management
 4. **Run typecheck before commits**: `pnpm typecheck`
 5. **Test locally first**: `pnpm dev`
+
+---
+
+## Quick Reference: New App Checklist
+
+When creating a new app:
+
+- [ ] Create `apps/my-app/` directory
+- [ ] Copy `package.json`, `tsconfig.json`, `wrangler.jsonc` from `apps/api`
+- [ ] Update package name to `@tempo/my-app`
+- [ ] Update wrangler name and bindings
+- [ ] Create `src/index.ts` with Hono app
+- [ ] Add to `turbo.json` if needed
+- [ ] Test locally: `pnpm --filter @tempo/my-app dev`
+- [ ] Deploy preview: `pnpm --filter @tempo/my-app deploy:preview`

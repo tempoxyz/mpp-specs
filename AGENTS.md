@@ -504,3 +504,275 @@ wrangler tail
 # With filters
 wrangler tail --status error --search "transaction"
 ```
+
+---
+
+## Tempo Blockchain Integration
+
+### Using tempo.ts
+
+```typescript
+import { createPublicClient, http } from 'viem'
+import { tempoModerato } from 'tempo.ts/chains'
+import { publicActionsL2 } from 'tempo.ts'
+
+const client = createPublicClient({
+  chain: tempoModerato,
+  transport: http()
+}).extend(publicActionsL2())
+
+// Get TIP-20 token balance
+const balance = await client.getBalance({
+  address: '0x...',
+  token: '0x20c0000000000000000000000000000000000001' // AlphaUSD
+})
+```
+
+### Fee Sponsorship with Access Keys
+
+```typescript
+import { Handler } from 'tempo.ts/server'
+import { privateKeyToAccount } from 'viem/accounts'
+
+// In your Worker - handle fee sponsorship requests
+const handler = Handler.feePayer({
+  account: privateKeyToAccount(env.SPONSOR_PRIVATE_KEY),
+  chain: tempoModerato,
+  transport: http(env.TEMPO_RPC_URL),
+})
+
+app.all('/sponsor/*', async (c) => handler.fetch(c.req.raw))
+```
+
+### TIP-20 Token Addresses
+
+| Token | Address |
+|-------|---------|
+| AlphaUSD | `0x20c0000000000000000000000000000000000001` |
+| USDC | `0x20c0000000000000000000000000000000000002` |
+| USDT | `0x20c0000000000000000000000000000000000003` |
+| pathUSD | `0x20c0000000000000000000000000000000000000` |
+
+### Tempo Networks
+
+| Network | Chain ID | RPC URL |
+|---------|----------|---------|
+| Moderato (Testnet) | 42431 | `https://rpc.moderato.tempo.xyz` |
+| Testnet | — | `https://rpc.testnet.tempo.xyz` |
+| Mainnet | — | `https://rpc.tempo.xyz` |
+
+---
+
+## IDXS (Index Supply) for Activity History
+
+Query on-chain activity using Index Supply:
+
+```typescript
+import { Idxs } from 'idxs'
+
+const idxs = new Idxs()
+
+// Get recent transfers
+const transfers = await idxs.query({
+  chain: 111557750, // Tempo chain ID
+  signature: 'event Transfer(address indexed from, address indexed to, uint256 value)',
+  address: tokenAddress,
+  limit: 50
+})
+
+// Custom SQL query
+const topSenders = await idxs.sql(`
+  SELECT "from", count(*) as tx_count
+  FROM transfer 
+  WHERE chain = 111557750
+  GROUP BY "from"
+  ORDER BY tx_count DESC
+  LIMIT 10
+`, { signature: 'event Transfer(address indexed from, address indexed to, uint256 value)' })
+```
+
+---
+
+## Onramp Integration
+
+Integrate fiat-to-crypto onramp (Coinbase):
+
+```typescript
+app.post('/onramp/order', async (c) => {
+  const { address, amount, email } = await c.req.json()
+  
+  const response = await fetch('https://api.coinbase.com/onramp/v1/orders', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${await generateCoinbaseJWT(c.env)}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      destination_address: address,
+      destination_network: 'tempo',
+      purchase_amount: { value: amount.toFixed(2), currency: 'USD' },
+      user: { email }
+    })
+  })
+  
+  return c.json(await response.json())
+})
+```
+
+**Required secrets:**
+```bash
+wrangler secret put CB_API_KEY_ID
+wrangler secret put CB_API_KEY_SECRET
+```
+
+---
+
+## Subscription with Cron Jobs
+
+### Wrangler Configuration
+
+```jsonc
+{
+  "triggers": {
+    "crons": ["0 0 * * *"]  // Daily at midnight
+  }
+}
+```
+
+### Subscription Renewal Worker
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return app.fetch(request, env, ctx)
+  },
+  
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    // Find expiring subscriptions
+    const expiring = await env.DB.prepare(`
+      SELECT * FROM subscriptions 
+      WHERE expires_at BETWEEN datetime('now') AND datetime('now', '+1 day')
+      AND auto_renew = 1
+    `).all()
+    
+    for (const sub of expiring.results) {
+      try {
+        // Charge using access key
+        await chargeAccessKey(env, sub.access_key_id, sub.plan_price)
+        
+        // Extend subscription
+        await env.DB.prepare(`
+          UPDATE subscriptions 
+          SET expires_at = datetime(expires_at, '+30 days')
+          WHERE id = ?
+        `).bind(sub.id).run()
+      } catch (error) {
+        console.error(`Failed to renew subscription ${sub.id}:`, error)
+      }
+    }
+  }
+}
+```
+
+---
+
+## UI Development
+
+### Tailwind CSS v4 + CVA
+
+```typescript
+// Component with variants using CVA
+import { cva, type VariantProps } from 'cva'
+
+const button = cva({
+  base: [
+    'inline-flex items-center justify-center gap-2',
+    'rounded-lg font-medium transition-all',
+    'focus:outline-none focus:ring-2 focus:ring-offset-2',
+    'disabled:opacity-50 disabled:cursor-not-allowed',
+  ],
+  variants: {
+    variant: {
+      primary: 'bg-blue-500 text-white hover:bg-blue-600',
+      secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
+      danger: 'bg-red-500 text-white hover:bg-red-600',
+    },
+    size: {
+      sm: 'h-8 px-3 text-sm',
+      md: 'h-10 px-4',
+      lg: 'h-12 px-6 text-lg',
+    },
+  },
+  defaultVariants: { variant: 'primary', size: 'md' },
+})
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof button> {}
+
+export function Button({ variant, size, ...props }: ButtonProps) {
+  return <button className={button({ variant, size })} {...props} />
+}
+```
+
+### Theme Configuration
+
+```css
+/* src/app.css */
+@import 'tailwindcss';
+
+@theme {
+  --color-tempo-bg: #0A0A0B;
+  --color-tempo-surface: #141416;
+  --color-tempo-border: #27272A;
+  --color-tempo-text: #FAFAFA;
+  --color-tempo-muted: #71717A;
+  --color-tempo-accent: #3B82F6;
+}
+```
+
+---
+
+## Local Development
+
+### OrbStack + Custom Domains
+
+For local development with custom domains and HTTPS:
+
+1. Install OrbStack
+2. Add to `/etc/hosts`: `127.0.0.1 app.local.tempo.xyz`
+3. Use `mkcert` for local SSL certificates
+
+### Tailscale for Device Testing
+
+Expose local dev server for testing features like Apple Pay:
+
+```bash
+# Start dev server
+pnpm dev
+
+# Expose via Tailscale
+tailscale funnel 8787
+```
+
+---
+
+## Creating a New App
+
+### 1. Scaffold
+
+```bash
+mkdir -p apps/my-app/src
+cd apps/my-app
+```
+
+### 2. Copy from existing app
+
+Use `apps/api` as a template:
+- Copy `package.json`, `tsconfig.json`, `wrangler.jsonc`
+- Update names and bindings
+
+### 3. Install and run
+
+```bash
+pnpm install
+pnpm --filter @tempo/my-app dev
+```
