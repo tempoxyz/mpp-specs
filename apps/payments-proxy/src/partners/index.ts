@@ -6,6 +6,11 @@ import { twitter } from './twitter.js'
 
 export const partners: PartnerConfig[] = [browserbase, exa, openrouter, twitter]
 
+/**
+ * Get a partner by slug or alias.
+ */
 export function getPartner(slug: string): PartnerConfig | undefined {
-	return partners.find((p) => p.slug === slug)
+	return partners.find(
+		(p) => p.slug === slug || p.aliases?.includes(slug)
+	)
 }

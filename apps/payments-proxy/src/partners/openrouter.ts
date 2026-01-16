@@ -14,6 +14,7 @@ import type { PartnerConfig } from '../config.js'
 export const openrouter: PartnerConfig = {
 	name: 'OpenRouter',
 	slug: 'openrouter',
+	aliases: ['llm'],
 	upstream: 'https://openrouter.ai/api',
 	apiKeyEnvVar: 'OPENROUTER_API_KEY',
 	apiKeyHeader: 'Authorization',

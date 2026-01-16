@@ -221,6 +221,54 @@ describe("payments-proxy", () => {
       expect(data.error).toContain("Invalid request");
     });
 
+    it("should route to partner via alias subdomain (llm -> openrouter)", async () => {
+      const mockProxyResponse = new Response(
+        JSON.stringify({ models: [] }),
+        { status: 200 }
+      );
+
+      vi.mocked(proxyModule.proxyRequest).mockResolvedValueOnce({
+        response: mockProxyResponse,
+        upstreamLatencyMs: 50,
+      });
+
+      const res = await app.request(
+        "/v1/models",
+        {
+          method: "GET",
+          headers: { Host: "llm.payments.tempo.xyz" },
+        },
+        mockEnv
+      );
+
+      expect(res.status).toBe(200);
+      expect(proxyModule.proxyRequest).toHaveBeenCalled();
+    });
+
+    it("should route to partner via alias path prefix (llm -> openrouter)", async () => {
+      const mockProxyResponse = new Response(
+        JSON.stringify({ models: [] }),
+        { status: 200 }
+      );
+
+      vi.mocked(proxyModule.proxyRequest).mockResolvedValueOnce({
+        response: mockProxyResponse,
+        upstreamLatencyMs: 50,
+      });
+
+      const res = await app.request(
+        "/llm/v1/models",
+        {
+          method: "GET",
+          headers: { Host: "localhost:8787" },
+        },
+        mockEnv
+      );
+
+      expect(res.status).toBe(200);
+      expect(proxyModule.proxyRequest).toHaveBeenCalled();
+    });
+
     it("should return 400 when no partner identified", async () => {
       const res = await app.request(
         "/v1/data",

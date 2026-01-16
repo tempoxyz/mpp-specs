@@ -24,6 +24,8 @@ export interface PartnerConfig {
 	name: string
 	/** URL path prefix (e.g., "browserbase", "openai") */
 	slug: string
+	/** Additional slugs that route to this partner (e.g., ["llm"] for generic access) */
+	aliases?: string[]
 	/** Base URL of the upstream API */
 	upstream: string
 	/** Environment variable name containing the API key */

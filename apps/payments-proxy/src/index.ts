@@ -30,7 +30,7 @@ import { tempoModerato } from "viem/chains";
 import { Abis, Transaction as TempoTransaction } from "viem/tempo";
 import type { Env, PartnerConfig } from "./config.js";
 import { getPriceForRequest } from "./config.js";
-import { partners } from "./partners/index.js";
+import { getPartner, partners } from "./partners/index.js";
 import { proxyRequest } from "./proxy.js";
 
 // Challenge store (in production, use KV or Durable Objects)
@@ -69,6 +69,7 @@ function getPartnerFromHost(host: string): string | null {
 /**
  * Extract partner slug from path prefix (for local development).
  * e.g., "/browserbase/v1/sessions" -> { slug: "browserbase", forwardPath: "/v1/sessions" }
+ * Also handles aliases (e.g., "/llm/v1/chat/completions" -> openrouter partner)
  */
 function getPartnerFromPath(
   path: string
@@ -76,14 +77,17 @@ function getPartnerFromPath(
   const match = path.match(/^\/([a-z0-9-]+)(\/.*)?$/i);
   if (!match || !match[1]) return null;
 
-  const slug = match[1].toLowerCase();
+  const slugOrAlias = match[1].toLowerCase();
   const forwardPath = match[2] || "/";
 
-  // Check if this is a known partner slug
-  const partner = partners.find((p) => p.slug === slug);
+  // Check if this is a known partner slug or alias
+  const partner = partners.find(
+    (p) => p.slug === slugOrAlias || p.aliases?.includes(slugOrAlias)
+  );
   if (!partner) return null;
 
-  return { slug, forwardPath };
+  // Return the canonical slug, not the alias
+  return { slug: partner.slug, forwardPath };
 }
 
 /**
@@ -469,7 +473,8 @@ app.all("/*", async (c) => {
     });
   }
 
-  const partner = partners.find((p) => p.slug === partnerSlug);
+  // Look up partner by slug or alias
+  const partner = getPartner(partnerSlug);
 
   if (!partner) {
     throw new HTTPException(404, {
