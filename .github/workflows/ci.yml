@@ -1,0 +1,26 @@
+name: CI
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  NODE_OPTIONS: '--disable-warning=ExperimentalWarning --disable-warning=DeprecationWarning'
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run pnpm check
+        run: pnpm check
+
+      - name: Run pnpm test
+        run: pnpm test
+
