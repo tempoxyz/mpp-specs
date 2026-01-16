@@ -115,8 +115,8 @@ OpenRouter provides access to 100+ LLMs through a unified API.
 # List available models
 curl -s http://localhost:8787/openrouter/v1/models | jq '.data[0:3]'
 
-# Get model details
-curl -s http://localhost:8787/openrouter/v1/models/openai/gpt-4o-mini | jq .
+# Filter models by ID
+curl -s http://localhost:8787/openrouter/v1/models | jq '.data[] | select(.id == "openai/gpt-4o-mini")'
 ```
 
 ### Paid Endpoints (demo.sh)

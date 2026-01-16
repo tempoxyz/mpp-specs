@@ -79,7 +79,14 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
+				"EXA_API_KEY": "exa-placeholder-key",
+				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
+				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
 			}
 		},
 		// Moderato chain-specific - *.payments.moderato.tempo.xyz
@@ -119,8 +126,15 @@
 				}
 			],
 			"vars": {
-				"ENVIRONMENT": "moderato"
-				// TEMPO_RPC_URL inherited from top-level (moderato)
+				"ENVIRONMENT": "moderato",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
+				"EXA_API_KEY": "exa-placeholder-key",
+				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
+				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
 			}
 		},
 		// Mainnet production - *.payments.tempo.xyz

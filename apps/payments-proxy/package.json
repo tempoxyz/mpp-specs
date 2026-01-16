@@ -11,6 +11,7 @@
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage",
 		"deploy:preview": "wrangler deploy --env preview",
+		"deploy:testnet": "wrangler deploy --env testnet",
 		"deploy:moderato": "wrangler deploy --env moderato",
 		"deploy:presto": "wrangler deploy --env presto"
 	},
