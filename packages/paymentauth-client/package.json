@@ -1,0 +1,23 @@
+{
+	"name": "@tempo/paymentauth-client",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"paymentauth-demo": "./demo.ts"
+	},
+	"scripts": {
+		"demo": "npx tsx demo.ts",
+		"demo:bash": "./demo.sh",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@tempo/paymentauth-protocol": "workspace:*",
+		"viem": "^2.21.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.0.0",
+		"tsx": "^4.19.0",
+		"typescript": "^5.7.3"
+	}
+}

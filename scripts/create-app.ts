@@ -140,7 +140,7 @@ function getDeployableApps(): string[] {
 /**
  * Update GitHub Actions workflows to include the new app
  */
-function updateWorkflows(newApp: string) {
+function updateWorkflows(_newApp: string) {
 	const apps = getDeployableApps()
 
 	// Update main.yml (production deployments)
@@ -161,25 +161,17 @@ function updateWorkflowMatrix(workflowPath: string, apps: string[]) {
 	const content = readFileSync(workflowPath, 'utf-8')
 
 	// Find the matrix include section and replace it
-	const matrixIncludeRegex =
-		/(\s+matrix:\s*\n\s+include:\s*\n)((?:\s+- app: [^\n]+\n)+)/
+	const matrixIncludeRegex = /(\s+matrix:\s*\n\s+include:\s*\n)((?:\s+- app: [^\n]+\n)+)/
 
 	if (!matrixIncludeRegex.test(content)) {
-		console.warn(
-			`Warning: Could not find matrix include section in ${workflowPath}`,
-		)
+		console.warn(`Warning: Could not find matrix include section in ${workflowPath}`)
 		return
 	}
 
 	// Generate the new matrix include entries
-	const matrixEntries = apps
-		.map((app) => `          - app: ${app}`)
-		.join('\n')
+	const matrixEntries = apps.map((app) => `          - app: ${app}`).join('\n')
 
-	const updatedContent = content.replace(
-		matrixIncludeRegex,
-		`$1${matrixEntries}\n`,
-	)
+	const updatedContent = content.replace(matrixIncludeRegex, `$1${matrixEntries}\n`)
 
 	writeFileSync(workflowPath, updatedContent, 'utf-8')
 }

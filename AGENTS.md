@@ -822,3 +822,66 @@ If you need to create an app manually:
    pnpm install
    pnpm --filter @tempo/my-app dev
    ```
+
+---
+
+## Payment Auth Client for Verification
+
+The `@tempo/paymentauth-client` package provides CLI tools for testing payment-protected endpoints.
+
+### TypeScript Client (demo.ts)
+
+```bash
+# Test a free endpoint
+pnpm --filter @tempo/paymentauth-client demo GET http://localhost:3001/ping
+
+# Test a paid endpoint (requires PRIVATE_KEY)
+PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo GET http://localhost:3001/ping/paid
+```
+
+### Bash Client (demo.sh)
+
+Requires: Foundry (cast), curl, jq, bc
+
+```bash
+cd packages/paymentauth-client
+PRIVATE_KEY=0x... ./demo.sh GET http://localhost:3001/ping/paid
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PRIVATE_KEY` | Wallet private key (0x-prefixed hex) | Required for paid endpoints |
+| `TEMPO_RPC_URL` | Tempo RPC endpoint | `https://rpc.moderato.tempo.xyz` |
+| `BASE_RPC_URL` | Base Sepolia RPC endpoint | `https://sepolia.base.org` |
+| `VERBOSE` | Enable debug output | `0` |
+
+### Verifying Payment Auth Integration
+
+1. **Start a local server** with payment-protected endpoints:
+   ```bash
+   pnpm --filter @tempo/paymentauth-basic dev
+   ```
+
+2. **Test free endpoint** (should return 200):
+   ```bash
+   pnpm --filter @tempo/paymentauth-client demo GET http://localhost:3001/ping
+   ```
+
+3. **Test paid endpoint without payment** (should return 402):
+   ```bash
+   pnpm --filter @tempo/paymentauth-client demo GET http://localhost:3001/ping/paid
+   ```
+
+4. **Test paid endpoint with payment** (should return 200 after payment):
+   ```bash
+   PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo GET http://localhost:3001/ping/paid
+   ```
+
+The client automatically handles the 402 Payment Required flow:
+1. Receives 402 with WWW-Authenticate challenge
+2. Parses payment request (amount, asset, destination)
+3. Signs a transaction using the provided private key
+4. Submits payment credentials in Authorization header
+5. Receives 200 with Payment-Receipt header on success
