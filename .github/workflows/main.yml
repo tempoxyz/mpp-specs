@@ -30,6 +30,7 @@ jobs:
           - app: paymentauth-basic
           - app: paymentauth-tetris
           - app: paymentauth-x402
+          - app: reth-snapshots
 
     steps:
       - uses: actions/checkout@v6

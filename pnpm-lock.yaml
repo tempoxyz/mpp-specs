@@ -41,9 +41,15 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.0.9)
       wrangler:
         specifier: ^3.99.0
         version: 3.114.17(@cloudflare/workers-types@4.20260116.0)
+      yaml:
+        specifier: ^2.6.1
+        version: 2.8.2
 
   apps/_template:
     dependencies:
@@ -2337,6 +2343,11 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yaml@2.8.2:
+    resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   youch-core@0.3.3:
     resolution: {integrity: sha512-ho7XuGjLaJ2hWHoK8yFnsUGy2Y5uDpqSTq1FkHLK4/oqKtyUU1AFbOOxY4IpC9f0fTLjwYbslUz0Po5BpD1wrA==}
 
@@ -4062,6 +4073,8 @@ snapshots:
   xxhash-wasm@1.1.0: {}
 
   yallist@3.1.1: {}
+
+  yaml@2.8.2: {}
 
   youch-core@0.3.3:
     dependencies:

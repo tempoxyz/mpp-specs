@@ -14,7 +14,9 @@
 		"check:biome": "biome check --write --unsafe",
 		"lint": "turbo lint",
 		"lint:fix": "turbo lint:fix",
-		"test": "turbo test",
+		"test": "vitest run && turbo test",
+		"test:repo": "vitest run",
+		"test:apps": "turbo test",
 		"test:coverage": "turbo test:coverage",
 		"deploy:preview": "turbo deploy:preview",
 		"deploy:prod": "turbo deploy:prod",
@@ -25,6 +27,8 @@
 		"@cloudflare/workers-types": "^4.20250115.0",
 		"turbo": "^2.4.0",
 		"typescript": "^5.7.3",
-		"wrangler": "^3.99.0"
+		"vitest": "^2.1.0",
+		"wrangler": "^3.99.0",
+		"yaml": "^2.6.1"
 	}
 }
