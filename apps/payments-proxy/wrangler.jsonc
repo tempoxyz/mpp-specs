@@ -4,7 +4,20 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": true,
+	"keep_vars": true,
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		}
+	},
 
+	// Default vars inherited by all environments
 	"vars": {
 		"ENVIRONMENT": "development",
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
@@ -20,65 +33,49 @@
 	"env": {
 		"preview": {
 			"name": "payments-proxy-preview",
+			"workers_dev": true,
 			"vars": {
-				"ENVIRONMENT": "preview",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
-				"EXA_API_KEY": "exa-placeholder-key",
-				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
-				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
-				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
+				"ENVIRONMENT": "preview"
 			}
 		},
-		// Testnet deployment - canonical testnet + moderato-specific routes
-		"moderato": {
-			"name": "payments-proxy-moderato",
-			"vars": {
-				"ENVIRONMENT": "moderato",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
-				"EXA_API_KEY": "exa-placeholder-key",
-				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
-				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
-				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
-			}
-		},
-		// Production deployment
-		"presto": {
-			"name": "payments-proxy-presto",
-			"vars": {
-				"ENVIRONMENT": "presto",
-				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
-				"EXA_API_KEY": "exa-placeholder-key",
-				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
-				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
-				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
-			}
-		},
-		"production": {
-			"name": "payments-proxy-production",
+		// Canonical testnet - *.payments.testnet.tempo.xyz
+		"testnet": {
+			"name": "payments-proxy-testnet",
 			"routes": [
-				{ "pattern": "*.payments.tempo.xyz/*", "zone_name": "tempo.xyz" }
+				{ "pattern": "*.payments.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
-				"ENVIRONMENT": "production",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "testnet",
+				"TEMPO_RPC_URL": "https://rpc.testnet.tempo.xyz"
 			}
-			// Note: For production, set API keys via wrangler secret:
-			// wrangler secret put BROWSERBASE_API_KEY --env production
-			// wrangler secret put EXA_API_KEY --env production
-			// wrangler secret put FIRECRAWL_API_KEY --env production
-			// wrangler secret put OPENROUTER_API_KEY --env production
-			// wrangler secret put TWITTER_BEARER_TOKEN --env production
+		},
+		// Moderato chain-specific - *.payments.moderato.tempo.xyz
+		"moderato": {
+			"name": "payments-proxy-moderato",
+			"routes": [
+				{ "pattern": "*.payments.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+			],
+			"vars": {
+				"ENVIRONMENT": "moderato"
+				// TEMPO_RPC_URL inherited from top-level (moderato)
+			}
+		},
+		// Mainnet production - *.payments.tempo.xyz
+		"mainnet": {
+			"name": "payments-proxy-mainnet",
+			"routes": [
+				{ "pattern": "*.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+			],
+			"vars": {
+				"ENVIRONMENT": "mainnet",
+				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
+			}
+			// Note: For mainnet, set API keys via wrangler secret:
+			// wrangler secret put BROWSERBASE_API_KEY --env mainnet
+			// wrangler secret put EXA_API_KEY --env mainnet
+			// wrangler secret put FIRECRAWL_API_KEY --env mainnet
+			// wrangler secret put OPENROUTER_API_KEY --env mainnet
+			// wrangler secret put TWITTER_BEARER_TOKEN --env mainnet
 		}
 	}
 }

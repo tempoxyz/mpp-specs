@@ -3,9 +3,21 @@
 	"name": "paymentauth-basic",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": true,
+	"keep_vars": true,
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		}
+	},
+
+	// Default vars inherited by all environments
 	"vars": {
 		"ENVIRONMENT": "development",
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
@@ -16,38 +28,41 @@
 	"env": {
 		"preview": {
 			"name": "paymentauth-basic-preview",
+			"workers_dev": true,
 			"vars": {
-				"ENVIRONMENT": "preview",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "preview"
 			}
 		},
-		// Testnet deployment - canonical testnet + moderato-specific routes
+		// Canonical testnet - paymentauth-basic.testnet.tempo.xyz
+		"testnet": {
+			"name": "paymentauth-basic-testnet",
+			"routes": [
+				{ "pattern": "paymentauth-basic.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+			],
+			"vars": {
+				"ENVIRONMENT": "testnet",
+				"TEMPO_RPC_URL": "https://rpc.testnet.tempo.xyz"
+			}
+		},
+		// Moderato chain-specific - paymentauth-basic.moderato.tempo.xyz
 		"moderato": {
 			"name": "paymentauth-basic-moderato",
 			"routes": [
-				{"pattern":"paymentauth-basic-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
-				{"pattern":"paymentauth-basic.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+				{ "pattern": "paymentauth-basic.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
-				"ENVIRONMENT": "moderato",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "moderato"
 			}
 		},
-		// Production deployment
-		"presto": {
-			"name": "paymentauth-basic-presto",
+		// Mainnet production - paymentauth-basic.tempo.xyz
+		"mainnet": {
+			"name": "paymentauth-basic-mainnet",
 			"routes": [
-				{"pattern":"paymentauth-basic.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+				{ "pattern": "paymentauth-basic.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
-				"ENVIRONMENT": "presto",
-				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "mainnet",
+				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 			}
 		}
 	}

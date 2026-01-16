@@ -1,65 +1,76 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "reth-snapshots",
-	"compatibility_date": "2025-01-01",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
 	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": true,
 	"keep_vars": true,
-	"workers_dev": true,
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		}
+	},
+
+	// Default vars inherited by all environments
 	"vars": {
+		"ENVIRONMENT": "development",
 		"DESTINATION_ADDRESS": "0x0000000000000000000000000000000000000000",
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
 		"FEE_TOKEN_ADDRESS": "0x20c0000000000000000000000000000000000000",
 		"PRICE_PER_GB_CENTS": "1",
-		"CHALLENGE_VALIDITY_SECONDS": "600",
-		"ENVIRONMENT": "development"
+		"CHALLENGE_VALIDITY_SECONDS": "600"
 	},
+
 	"r2_buckets": [
-		{
-			"binding": "SNAPSHOTS",
-			"bucket_name": "reth-snapshots"
-		}
+		{ "binding": "SNAPSHOTS", "bucket_name": "reth-snapshots" }
 	],
 
 	"env": {
 		"preview": {
 			"name": "reth-snapshots-preview",
+			"workers_dev": true,
 			"vars": {
-				"ENVIRONMENT": "preview",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "preview"
 			}
 		},
-		// Testnet deployment - canonical testnet + moderato-specific routes
+		// Canonical testnet - reth-snapshots.testnet.tempo.xyz
+		"testnet": {
+			"name": "reth-snapshots-testnet",
+			"routes": [
+				{ "pattern": "reth-snapshots.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+			],
+			"vars": {
+				"ENVIRONMENT": "testnet",
+				"TEMPO_RPC_URL": "https://rpc.testnet.tempo.xyz"
+			}
+		},
+		// Moderato chain-specific - reth-snapshots.moderato.tempo.xyz
 		"moderato": {
 			"name": "reth-snapshots-moderato",
 			"routes": [
-				{"pattern":"reth-snapshots-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
-				{"pattern":"reth-snapshots.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+				{ "pattern": "reth-snapshots.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
-				"ENVIRONMENT": "moderato",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "moderato"
 			}
 		},
-		// Production deployment
-		"presto": {
-			"name": "reth-snapshots-presto",
+		// Mainnet production - reth-snapshots.tempo.xyz
+		"mainnet": {
+			"name": "reth-snapshots-mainnet",
 			"routes": [
-				{"pattern":"reth-snapshots.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+				{ "pattern": "reth-snapshots.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
-				"ENVIRONMENT": "presto",
-				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+				"ENVIRONMENT": "mainnet",
+				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 			}
 		}
 	}

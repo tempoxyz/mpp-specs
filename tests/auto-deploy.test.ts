@@ -58,8 +58,8 @@ const AUTO_DEPLOY_ALLOWLIST: string[] = [
   // Example: "experimental-app" - reason for exclusion
 ];
 
-// Required environments for all apps
-const REQUIRED_ENVS = ["moderato", "presto"];
+// Required environments for all apps (matching tempo-apps fee-payer pattern)
+const REQUIRED_ENVS = ["testnet", "moderato", "mainnet"];
 
 // Apps that use TEMPO_RPC_URL and need specific RPC URL validation
 const RPC_DEPENDENT_APPS = [
@@ -71,9 +71,11 @@ const RPC_DEPENDENT_APPS = [
 ];
 
 // Expected RPC URLs for each environment (only for RPC-dependent apps)
+// With keep_vars: true, moderato inherits from top-level, so we check effective value
 const EXPECTED_RPC_URLS: Record<string, string> = {
+  testnet: "https://rpc.testnet.tempo.xyz",
   moderato: "https://rpc.moderato.tempo.xyz",
-  presto: "https://rpc.presto.tempo.xyz",
+  mainnet: "https://rpc.tempo.xyz",
 };
 
 interface WorkflowMatrix {
@@ -200,6 +202,11 @@ interface WranglerEnvConfig {
 }
 
 interface WranglerConfig {
+  keep_vars?: boolean;
+  vars?: {
+    TEMPO_RPC_URL?: string;
+    [key: string]: unknown;
+  };
   env?: Record<string, WranglerEnvConfig>;
   [key: string]: unknown;
 }
@@ -219,6 +226,29 @@ function getWranglerConfig(appPath: string): WranglerConfig | null {
   return parseJsonc(content) as WranglerConfig;
 }
 
+/**
+ * Get the effective RPC URL for an environment, considering keep_vars inheritance
+ */
+function getEffectiveRpcUrl(
+  config: WranglerConfig,
+  env: string
+): string | undefined {
+  const envConfig = config.env?.[env];
+  if (!envConfig) return undefined;
+
+  // If env has explicit TEMPO_RPC_URL, use it
+  if (envConfig.vars?.TEMPO_RPC_URL) {
+    return envConfig.vars.TEMPO_RPC_URL;
+  }
+
+  // If keep_vars is true, inherit from top-level
+  if (config.keep_vars && config.vars?.TEMPO_RPC_URL) {
+    return config.vars.TEMPO_RPC_URL;
+  }
+
+  return undefined;
+}
+
 function getDeployedAppsWithEnv(workflowPath: string): WorkflowMatrixItem[] {
   const workflowContent = fs.readFileSync(workflowPath, "utf8");
   const workflow = yaml.parse(workflowContent) as Workflow;
@@ -236,7 +266,7 @@ describe("Multi-environment configuration", () => {
     "main.yml"
   );
 
-  it("should have all apps deployed to both moderato and presto", () => {
+  it("should have all apps deployed to testnet, moderato, and mainnet", () => {
     const allApps = getAllApps(appsDir);
     const matrixItems = getDeployedAppsWithEnv(mainWorkflowPath);
 
@@ -254,13 +284,13 @@ describe("Multi-environment configuration", () => {
           `App "${app}" is missing deployments for environments: ${missingEnvs.join(
             ", "
           )}. ` +
-            `Add entries to .github/workflows/main.yml matrix with env: moderato and env: presto.`
+            `Add entries to .github/workflows/main.yml matrix with env: testnet, env: moderato, and env: mainnet.`
         );
       }
     }
   });
 
-  it("should have all apps with moderato and presto environments in wrangler.jsonc", () => {
+  it("should have all apps with testnet, moderato, and mainnet environments in wrangler.jsonc", () => {
     const allApps = getAllApps(appsDir);
 
     for (const app of allApps) {
@@ -279,7 +309,7 @@ describe("Multi-environment configuration", () => {
         if (!envConfig) {
           throw new Error(
             `App "${app}" is missing environment "${env}" in wrangler.jsonc. ` +
-              `All apps must have both moderato and presto environments.`
+              `All apps must have testnet, moderato, and mainnet environments.`
           );
         }
       }
@@ -304,7 +334,8 @@ describe("Multi-environment configuration", () => {
           );
         }
 
-        const rpcUrl = envConfig.vars?.TEMPO_RPC_URL;
+        // Use effective RPC URL (considering keep_vars inheritance)
+        const rpcUrl = getEffectiveRpcUrl(config, env);
         const expectedUrl = EXPECTED_RPC_URLS[env];
 
         if (rpcUrl !== expectedUrl) {

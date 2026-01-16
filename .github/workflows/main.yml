@@ -26,31 +26,43 @@ jobs:
     strategy:
       matrix:
         include:
-          # All apps deploy to both moderato (testnet) and presto (production)
+          # All apps deploy to testnet, moderato, and mainnet
+          - app: payments-proxy
+            env: testnet
           - app: payments-proxy
             env: moderato
           - app: payments-proxy
-            env: presto
+            env: mainnet
+          - app: paymentauth-base
+            env: testnet
           - app: paymentauth-base
             env: moderato
           - app: paymentauth-base
-            env: presto
+            env: mainnet
+          - app: paymentauth-basic
+            env: testnet
           - app: paymentauth-basic
             env: moderato
           - app: paymentauth-basic
-            env: presto
+            env: mainnet
+          - app: paymentauth-tetris
+            env: testnet
           - app: paymentauth-tetris
             env: moderato
           - app: paymentauth-tetris
-            env: presto
+            env: mainnet
+          - app: paymentauth-x402
+            env: testnet
           - app: paymentauth-x402
             env: moderato
           - app: paymentauth-x402
-            env: presto
+            env: mainnet
+          - app: reth-snapshots
+            env: testnet
           - app: reth-snapshots
             env: moderato
           - app: reth-snapshots
-            env: presto
+            env: mainnet
 
     steps:
       - uses: actions/checkout@v6
