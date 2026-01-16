@@ -65,6 +65,8 @@ const REQUIRED_ENVS = ["moderato", "presto"];
 const RPC_DEPENDENT_APPS = [
   "payments-proxy",
   "paymentauth-tetris",
+  "paymentauth-basic",
+  "paymentauth-x402",
   "reth-snapshots",
 ];
 

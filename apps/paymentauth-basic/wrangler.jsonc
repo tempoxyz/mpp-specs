@@ -7,14 +7,20 @@
 		"nodejs_compat"
 	],
 	"vars": {
-		"ENVIRONMENT": "development"
+		"ENVIRONMENT": "development",
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 	},
 
 	"env": {
 		"preview": {
 			"name": "paymentauth-basic-preview",
 			"vars": {
-				"ENVIRONMENT": "preview"
+				"ENVIRONMENT": "preview",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		},
 		// Testnet deployment - canonical testnet + moderato-specific routes
@@ -25,7 +31,10 @@
 				{"pattern":"paymentauth-basic.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "moderato"
+				"ENVIRONMENT": "moderato",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		},
 		// Production deployment
@@ -35,7 +44,10 @@
 				{"pattern":"paymentauth-basic.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "presto"
+				"ENVIRONMENT": "presto",
+				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		}
 	}

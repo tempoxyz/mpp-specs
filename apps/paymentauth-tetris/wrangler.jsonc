@@ -34,7 +34,10 @@
 		"preview": {
 			"name": "paymentauth-tetris-preview",
 			"vars": {
-				"ENVIRONMENT": "preview"
+				"ENVIRONMENT": "preview",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		},
 		// Testnet deployment - canonical testnet + moderato-specific routes
@@ -46,7 +49,9 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		},
 		// Production deployment
@@ -57,7 +62,9 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "presto",
-				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 		}
 	}

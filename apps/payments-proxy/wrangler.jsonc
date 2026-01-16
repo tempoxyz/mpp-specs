@@ -69,7 +69,9 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "production",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
 			}
 			// Note: For production, set API keys via wrangler secret:
 			// wrangler secret put BROWSERBASE_API_KEY --env production
