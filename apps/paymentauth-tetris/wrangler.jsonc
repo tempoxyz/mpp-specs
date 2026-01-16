@@ -1,0 +1,45 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "paymentauth-tetris",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-15",
+	"compatibility_flags": ["nodejs_compat"],
+
+	"kv_namespaces": [
+		{
+			"binding": "GAME_STATE",
+			"id": "PLACEHOLDER_KV_ID",
+			"preview_id": "PLACEHOLDER_KV_ID"
+		},
+		{
+			"binding": "KEY_STORE",
+			"id": "PLACEHOLDER_KEY_STORE_ID",
+			"preview_id": "PLACEHOLDER_KEY_STORE_ID"
+		}
+	],
+
+	"vars": {
+		"ENVIRONMENT": "development",
+		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2",
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+		"FEE_TOKEN_ADDRESS": "0x20c0000000000000000000000000000000000001",
+		"PAYMENT_AMOUNT": "10000",
+		"CHALLENGE_VALIDITY_SECONDS": "300",
+		"CYCLES_PER_MOVE": "100"
+	},
+
+	"env": {
+		"preview": {
+			"name": "paymentauth-tetris-preview",
+			"vars": {
+				"ENVIRONMENT": "preview"
+			}
+		},
+		"production": {
+			"name": "paymentauth-tetris-production",
+			"vars": {
+				"ENVIRONMENT": "production"
+			}
+		}
+	}
+}
