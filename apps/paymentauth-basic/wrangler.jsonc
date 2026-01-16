@@ -22,7 +22,8 @@
 		"ENVIRONMENT": "development",
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"
 	},
 
 	"env": {
@@ -35,6 +36,7 @@
 			}
 		},
 		// Canonical testnet - paymentauth-basic.testnet.tempo.xyz
+		// Note: Uses moderato RPC because the demo client uses tempoModerato chain (ID 42431)
 		"testnet": {
 			"name": "paymentauth-basic-testnet",
 			"routes": [
@@ -46,7 +48,10 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.testnet.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
+				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"
 			}
 		},
 		// Moderato chain-specific - paymentauth-basic.moderato.tempo.xyz

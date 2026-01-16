@@ -579,12 +579,15 @@ app.all('/sponsor/*', async (c) => handler.fetch(c.req.raw))
 
 ### Tempo Networks
 
-| Network | Chain ID | RPC URL |
-|---------|----------|---------|
-| Presto (Mainnet) | 4217 | `https://rpc.presto.tempo.xyz` |
-| Moderato (Testnet) | 42431 | `https://rpc.moderato.tempo.xyz` |
-| Testnet | — | `https://rpc.testnet.tempo.xyz` |
-| Mainnet | — | `https://rpc.tempo.xyz` |
+| Network | Chain ID | RPC URL | Notes |
+|---------|----------|---------|-------|
+| Presto (Mainnet) | 4217 | `https://rpc.presto.tempo.xyz` | Chain-specific mainnet |
+| Moderato (Testnet) | 42431 | `https://rpc.moderato.tempo.xyz` | Current testnet (as of Jan 2025) |
+| Testnet (canonical) | 42431 | `https://rpc.moderato.tempo.xyz` | Alias for current testnet chain |
+| Mainnet (canonical) | — | `https://rpc.tempo.xyz` | Alias for current mainnet chain |
+
+> **Note**: The `*-testnet.tempo.xyz` domains use Moderato RPC since Moderato is the current testnet.
+> See [Network Upgrades](https://docs.tempo.xyz/network-upgrades) for migration details.
 
 ---
 

@@ -52,7 +52,7 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.testnet.tempo.xyz"
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
 			}
 		},
 		// Moderato chain-specific - reth-snapshots.moderato.tempo.xyz

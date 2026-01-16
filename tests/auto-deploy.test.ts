@@ -71,8 +71,10 @@ const RPC_DEPENDENT_APPS = [
 
 // Expected RPC URLs for each environment (only for RPC-dependent apps)
 // With keep_vars: true, moderato inherits from top-level, so we check effective value
+// Note: testnet uses moderato RPC because *-testnet.tempo.xyz is the canonical testnet
+// that points to the current testnet chain (currently Moderato, chain ID 42431)
 const EXPECTED_RPC_URLS: Record<string, string> = {
-	testnet: 'https://rpc.testnet.tempo.xyz',
+	testnet: 'https://rpc.moderato.tempo.xyz',
 	moderato: 'https://rpc.moderato.tempo.xyz',
 	mainnet: 'https://rpc.tempo.xyz',
 }
