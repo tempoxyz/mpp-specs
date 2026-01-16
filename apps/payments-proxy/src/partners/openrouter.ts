@@ -1,4 +1,5 @@
 import type { PartnerConfig } from '../config.js'
+import { PRICES, TOKENS, WALLETS } from '../constants.js'
 
 /**
  * OpenRouter - Pay-per-use LLM API access with crypto
@@ -19,16 +20,15 @@ export const openrouter: PartnerConfig = {
 	apiKeyEnvVar: 'OPENROUTER_API_KEY',
 	apiKeyHeader: 'Authorization',
 	apiKeyFormat: 'Bearer {key}',
-	defaultPrice: '10000', // $0.01 per request (6 decimals)
-	defaultRequiresPayment: false, // Unlisted endpoints are free
-	asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
-	destination: '0x0000000000000000000000000000000000000000', // TODO: Set actual destination
+	defaultPrice: PRICES.CENT_1,
+	defaultRequiresPayment: false,
+	asset: TOKENS.ALPHA_USD,
+	destination: WALLETS.TEST_RECEIVER,
 	endpoints: [
-		// POST /v1/chat/completions - Main chat endpoint (paid)
 		{
 			path: '/v1/chat/completions',
 			methods: ['POST'],
-			price: '10000', // $0.01 per request
+			price: PRICES.CENT_1,
 			description: 'Chat completions (GPT-4, Claude, Llama, etc.)',
 		},
 	],

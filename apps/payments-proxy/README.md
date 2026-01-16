@@ -4,15 +4,15 @@ Pay-per-use API proxy for partner services. Just change your base URL.
 
 ## Overview
 
-The payments proxy sits between you and partner APIs (like Browserbase). It enables pay-per-use access:
+The payments proxy sits between you and partner APIs (Browserbase, OpenRouter, Firecrawl, etc.). It enables pay-per-use access:
 
-- **Free endpoints** → Pass through with your own API key
+- **Free endpoints** → Pass through with the proxy's API key
 - **Paid endpoints** → Pay via the protocol, then access using our API key
 
 ```
 ┌────────┐    ┌─────────────────┐    ┌─────────────────┐
 │ Client │───▶│ Payments Proxy  │───▶│ Partner API     │
-│        │    │                 │    │ (Browserbase)   │
+│        │    │                 │    │ (OpenRouter)    │
 │        │◀───│ 402 + Challenge │    │                 │
 │        │    │                 │    │                 │
 │        │───▶│ Payment Auth    │───▶│ Proxied Request │
@@ -25,20 +25,37 @@ The payments proxy sits between you and partner APIs (like Browserbase). It enab
 # Start the proxy
 pnpm dev
 
-# Free endpoint (uses your API key)
-curl http://localhost:8787/browserbase/v1/sessions \
-  -H "X-BB-API-Key: YOUR_API_KEY"
+# Free endpoint - list LLM models
+curl http://localhost:8787/openrouter/v1/models | jq '.data[0:3]'
 
-# Paid endpoint (returns 402, requires payment)
+# Free endpoint - list browser sessions
+curl http://localhost:8787/browserbase/v1/sessions | jq .
+
+# Paid endpoint - chat completion ($0.01)
 PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo \
-  POST http://localhost:8787/browserbase/v1/sessions
+  POST http://localhost:8787/openrouter/v1/chat/completions \
+  -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'
+
+# Paid endpoint - scrape a URL ($0.01)
+PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo \
+  POST http://localhost:8787/firecrawl/v1/scrape \
+  -d '{"url":"https://example.com"}'
+
+# Paid endpoint - create browser session ($0.12)
+PRIVATE_KEY=0x... pnpm --filter @tempo/paymentauth-client demo \
+  POST http://localhost:8787/browserbase/v1/sessions \
+  -d '{"projectId":"0dad8d6f-deea-4d37-8087-c63b4b878b3a"}'
 ```
 
 ## Available Partners
 
-| Partner | Path Prefix | Upstream |
-|---------|-------------|----------|
-| Browserbase | `/browserbase` | `api.browserbase.com` |
+| Partner | Path Prefix | Upstream | Description |
+|---------|-------------|----------|-------------|
+| Browserbase | `/browserbase` | `api.browserbase.com` | Headless browser sessions |
+| OpenRouter | `/openrouter` or `/llm` | `openrouter.ai/api` | 100+ LLMs (GPT-4, Claude, Llama) |
+| Firecrawl | `/firecrawl` | `api.firecrawl.dev` | Web scraping & crawling |
+| Exa | `/exa` | `api.exa.ai` | AI-powered web search |
+| Twitter | `/twitter` | `api.x.com` | X/Twitter API v2 |
 
 ## How It Works
 
@@ -66,12 +83,19 @@ Environment variables for the Worker:
 | `TEMPO_RPC_URL` | Tempo RPC endpoint |
 | `TEMPO_RPC_USERNAME` | Optional RPC auth username |
 | `TEMPO_RPC_PASSWORD` | Optional RPC auth password |
-| `BROWSERBASE_API_KEY` | API key for proxied requests (paid mode) |
+| `BROWSERBASE_API_KEY` | Browserbase API key |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `FIRECRAWL_API_KEY` | Firecrawl API key |
+| `EXA_API_KEY` | Exa API key |
+| `TWITTER_BEARER_TOKEN` | Twitter/X bearer token |
 
 Set secrets:
 ```bash
 wrangler secret put BROWSERBASE_API_KEY
-wrangler secret put TEMPO_RPC_URL
+wrangler secret put OPENROUTER_API_KEY
+wrangler secret put FIRECRAWL_API_KEY
+wrangler secret put EXA_API_KEY
+wrangler secret put TWITTER_BEARER_TOKEN
 ```
 
 ## Adding a New Vendor Integration
