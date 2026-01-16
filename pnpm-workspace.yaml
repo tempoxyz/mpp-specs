@@ -1,3 +1,14 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+catalog:
+  "@cloudflare/vite-plugin": ^1.20.1
+  "@cloudflare/workers-types": ^4.20260111.0
+  "@types/node": ^25.0.6
+  hono: ^4.11.3
+  tempo.ts: ^0.13.0
+  typescript: ^5.9.3
+  viem: ^2.44.2
+  vite: npm:rolldown-vite@latest
+  wrangler: ^4.58.0
