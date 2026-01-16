@@ -2,9 +2,10 @@
 	"name": "@tempo/paymentauth-tetris",
 	"version": "0.0.1",
 	"private": true,
+	"type": "module",
 	"scripts": {
-		"dev": "wrangler dev",
-		"build": "wrangler deploy --dry-run --outdir dist",
+		"dev": "vite dev",
+		"build": "vite build",
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint src",
 		"lint:fix": "eslint src --fix",
@@ -14,22 +15,26 @@
 		"deploy:prod": "wrangler deploy --env production"
 	},
 	"dependencies": {
+		"@tanstack/react-query": "^5.62.0",
 		"@tempo/paymentauth-protocol": "workspace:*",
 		"hono": "^4.6.0",
 		"ox": "^0.11.3",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
 		"tempo.ts": "^0.13.0",
-		"viem": "^2.21.0"
+		"viem": "^2.21.0",
+		"wagmi": "^2.14.0"
 	},
 	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.0.0",
 		"@cloudflare/vitest-pool-workers": "^0.5.0",
 		"@cloudflare/workers-types": "^4.20250115.0",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",
 		"@vitejs/plugin-react": "^4.3.4",
 		"typescript": "^5.7.3",
+		"vite": "^6.0.0",
 		"vitest": "^2.1.0",
-		"wrangler": "^3.99.0"
+		"wrangler": "^4.0.0"
 	}
 }

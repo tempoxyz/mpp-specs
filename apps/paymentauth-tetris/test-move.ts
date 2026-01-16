@@ -18,7 +18,7 @@ const PRIVATE_KEY =
 async function main() {
 	const action = process.argv[2] || 'left'
 
-	console.log(`\n🎮 PAY-TO-PLAY TETRIS TEST`)
+	console.log(`\n🎮 TEMPO TETRIS TEST`)
 	console.log(`Action: ${action}`)
 	console.log(`API: ${API_URL}`)
 

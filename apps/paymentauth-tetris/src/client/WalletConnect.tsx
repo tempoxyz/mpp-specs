@@ -3,8 +3,23 @@ import { formatUnits } from 'viem'
 import { useWebAuthnContext } from './WebAuthnContext'
 
 export function WalletConnect() {
-	const { address, isConnected, isLoading, error, signUp, signIn, disconnect, getBalance } =
-		useWebAuthnContext()
+	const {
+		address,
+		isConnected,
+		isLoading,
+		error,
+		signUp,
+		signIn,
+		disconnect,
+		getBalance,
+		// Access Key
+		hasAccessKey,
+		accessKey,
+		isAuthorizing,
+		accessKeyError,
+		authorizeAccessKey,
+		clearAccessKey,
+	} = useWebAuthnContext()
 
 	const [balance, setBalance] = useState<bigint | null>(null)
 	const [faucetLoading, setFaucetLoading] = useState(false)
@@ -15,6 +30,27 @@ export function WalletConnect() {
 			getBalance().then(setBalance)
 		}
 	}, [isConnected, getBalance])
+
+	const handleAuthorizeAccessKey = async () => {
+		try {
+			const result = await authorizeAccessKey()
+			console.log('✅ Access Key authorized:', result.keyId)
+			// Refresh balance after authorization (gas was spent)
+			const newBalance = await getBalance()
+			setBalance(newBalance)
+		} catch (e) {
+			console.error('Failed to authorize access key:', e)
+		}
+	}
+
+	const formatExpiry = (expiry: number) => {
+		if (expiry === 0) return 'never'
+		const remaining = expiry - Math.floor(Date.now() / 1000)
+		if (remaining <= 0) return 'expired'
+		const hours = Math.floor(remaining / 3600)
+		const minutes = Math.floor((remaining % 3600) / 60)
+		return `${hours}h ${minutes}m`
+	}
 
 	const handleFaucet = async () => {
 		if (!address) return
@@ -93,6 +129,46 @@ export function WalletConnect() {
 							{faucetLoading ? '...' : 'get funds'}
 						</button>
 					</div>
+
+					{/* Access Key Section */}
+					<div className="wallet-info access-key-section">
+						<span className="label">access key</span>
+						{hasAccessKey && accessKey ? (
+							<div className="access-key-status">
+								<span className="value access-key-active">
+									✓ active ({formatExpiry(accessKey.expiry)})
+								</span>
+								<button
+									type="button"
+									className="btn btn-small btn-secondary"
+									onClick={clearAccessKey}
+									title="Clear local access key"
+								>
+									clear
+								</button>
+							</div>
+						) : (
+							<div className="access-key-status">
+								<span className="value access-key-inactive">not authorized</span>
+								<button
+									type="button"
+									className="btn btn-small btn-primary"
+									onClick={handleAuthorizeAccessKey}
+									disabled={isAuthorizing}
+								>
+									{isAuthorizing ? 'authorizing...' : 'authorize'}
+								</button>
+							</div>
+						)}
+					</div>
+					{accessKeyError && <div className="error-message">{accessKeyError}</div>}
+
+					{!hasAccessKey && (
+						<div className="access-key-hint">
+							💡 Authorize an access key to play without passkey prompts
+						</div>
+					)}
+
 					<button type="button" className="btn btn-disconnect" onClick={disconnect}>
 						disconnect
 					</button>

@@ -294,6 +294,54 @@ body {
 	margin-bottom: 0;
 }
 
+/* Access Key Section */
+.access-key-section {
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px dashed var(--border);
+	flex-wrap: wrap;
+}
+
+.access-key-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.access-key-active {
+	color: #080 !important;
+}
+
+.access-key-inactive {
+	color: var(--fg-dim) !important;
+}
+
+.access-key-hint {
+	font-size: 9px;
+	color: var(--fg-dim);
+	margin-top: 8px;
+	text-align: center;
+	font-style: italic;
+}
+
+.btn-small {
+	padding: 4px 8px;
+	font-size: 8px;
+	line-height: 1;
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: white;
+	border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+	background: var(--accent-dim);
+	border-color: var(--accent-dim);
+	color: white;
+}
+
 @media (max-width: 500px) {
 	.display {
 		font-size: 6px;

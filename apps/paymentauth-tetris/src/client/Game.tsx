@@ -75,7 +75,8 @@ function parseWwwAuthenticate(header: string): PaymentChallenge {
 }
 
 export function Game() {
-	const { address, isConnected, signTransaction, getBalance } = useWebAuthnContext()
+	const { address, isConnected, signTransaction, getBalance, hasAccessKey, signWithAccessKey } =
+		useWebAuthnContext()
 
 	const [gameState, setGameState] = useState<GameState | null>(null)
 	const [loading, setLoading] = useState(true)
@@ -131,20 +132,29 @@ export function Game() {
 				const challenge = parseWwwAuthenticate(wwwAuth)
 				console.log('✅ Step 1: Got challenge:', challenge.id)
 
-				// Step 2: Sign the payment transaction using WebAuthn
-				// viem/tempo handles the WebAuthn signature format natively
+				// Step 2: Sign the payment transaction
+				// Use Access Key if available (no passkey prompt), otherwise use passkey
 				console.log('⏳ Step 2: Preparing transaction...')
 				const transferData = encodeFunctionData({
 					abi: Abis.tip20,
 					functionName: 'transfer',
 					args: [challenge.request.destination as `0x${string}`, BigInt(challenge.request.amount)],
 				})
-				console.log('⏳ Step 2: Signing with WebAuthn (you should see a passkey prompt)...')
 
-				const signedTx = await signTransaction({
-					to: challenge.request.asset as `0x${string}`,
-					data: transferData,
-				})
+				let signedTx: `0x${string}`
+				if (hasAccessKey) {
+					console.log('⏳ Step 2: Signing with Access Key (no passkey prompt!)...')
+					signedTx = await signWithAccessKey({
+						to: challenge.request.asset as `0x${string}`,
+						data: transferData,
+					})
+				} else {
+					console.log('⏳ Step 2: Signing with WebAuthn (you should see a passkey prompt)...')
+					signedTx = await signTransaction({
+						to: challenge.request.asset as `0x${string}`,
+						data: transferData,
+					})
+				}
 				console.log('✅ Step 2: Signed transaction:', `${signedTx.slice(0, 50)}...`)
 
 				// Step 3: Submit payment - encode credential as base64url JSON
@@ -189,7 +199,7 @@ export function Game() {
 				setActionLoading(null)
 			}
 		},
-		[isConnected, address, signTransaction, getBalance],
+		[isConnected, address, signTransaction, getBalance, hasAccessKey, signWithAccessKey],
 	)
 
 	// Handle keyboard controls
@@ -229,7 +239,7 @@ export function Game() {
 		<div className="game-container">
 			<div className="frame">
 				<div className="header">
-					<div className="title">pay-to-play</div>
+					<div className="title">Tempo Tetris</div>
 					<div className="stats">
 						moves <span className="stat-value">{gameState?.metadata.moveCount ?? 0}</span> · last{' '}
 						<span className="stat-value">

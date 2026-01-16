@@ -34,8 +34,26 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
 import { Abis, Transaction as TempoTransaction } from 'viem/tempo'
 
-import { Chip8, type Chip8State, DISPLAY_HEIGHT, DISPLAY_WIDTH, type GameMetadata } from './chip8'
-import { getTetrisRom, TETRIS_KEYS, type TetrisAction } from './roms/tetris'
+import {
+	DISPLAY_HEIGHT,
+	DISPLAY_WIDTH,
+	deserializeState,
+	executeMove,
+	initializeGame,
+	renderAscii,
+	renderToDisplay,
+	serializeState,
+	type TetrisAction,
+	type TetrisState,
+} from './tetris'
+
+/** Persistent game metadata */
+export interface GameMetadata {
+	moveCount: number
+	linesCleared: number
+	lastMove: string // ISO timestamp
+	lastMoveBy?: string // wallet address
+}
 
 interface Env {
 	GAME_STATE: KVNamespace
@@ -48,7 +66,6 @@ interface Env {
 	FEE_TOKEN_ADDRESS?: string
 	PAYMENT_AMOUNT?: string
 	CHALLENGE_VALIDITY_SECONDS?: string
-	CYCLES_PER_MOVE?: string
 }
 
 const KV_KEYS = {
@@ -73,10 +90,6 @@ function getChallengeValidityMs(env: Env): number {
 	return seconds * 1000
 }
 
-/** Get cycles per move */
-function getCyclesPerMove(env: Env): number {
-	return Number(env.CYCLES_PER_MOVE ?? '100')
-}
 
 // Challenge store (in-memory, per worker instance)
 const challengeStore = new Map<
@@ -122,25 +135,15 @@ function createChallenge(
 }
 
 /** Initialize a new game */
-async function initializeGame(env: Env): Promise<{ state: Chip8State; metadata: GameMetadata }> {
-	const chip8 = new Chip8()
-	chip8.loadRom(getTetrisRom())
-
-	// Run enough cycles to initialize the game and draw borders
-	// The ROM draws borders in a loop, so we need ~500 cycles
-	for (let i = 0; i < 500; i++) {
-		chip8.cycle()
-		if (i % 10 === 0) chip8.decrementTimers()
-	}
-
-	const state = chip8.serialize()
+async function initGame(env: Env): Promise<{ state: TetrisState; metadata: GameMetadata }> {
+	const state = initializeGame()
 	const metadata: GameMetadata = {
 		moveCount: 0,
 		linesCleared: 0,
 		lastMove: new Date().toISOString(),
 	}
 
-	await env.GAME_STATE.put(KV_KEYS.STATE, JSON.stringify(state))
+	await env.GAME_STATE.put(KV_KEYS.STATE, serializeState(state))
 	await env.GAME_STATE.put(KV_KEYS.METADATA, JSON.stringify(metadata))
 
 	return { state, metadata }
@@ -149,77 +152,41 @@ async function initializeGame(env: Env): Promise<{ state: Chip8State; metadata: 
 /** Get current game state or initialize */
 async function getGameState(
 	env: Env,
-): Promise<{ state: Chip8State; metadata: GameMetadata; ascii: string }> {
+): Promise<{ state: TetrisState; metadata: GameMetadata; ascii: string; display: number[] }> {
 	const [stateJson, metadataJson] = await Promise.all([
 		env.GAME_STATE.get(KV_KEYS.STATE),
 		env.GAME_STATE.get(KV_KEYS.METADATA),
 	])
 
-	let state: Chip8State
+	let state: TetrisState
 	let metadata: GameMetadata
 
 	if (!stateJson || !metadataJson) {
-		const init = await initializeGame(env)
+		const init = await initGame(env)
 		state = init.state
 		metadata = init.metadata
 	} else {
-		state = JSON.parse(stateJson)
+		state = deserializeState(stateJson)
 		metadata = JSON.parse(metadataJson)
 	}
 
-	// Render ASCII from display state
-	const ascii = renderDisplayAsAscii(state.display)
+	// Render display and ASCII
+	const display = renderToDisplay(state)
+	const ascii = renderAscii(display)
 
-	return { state, metadata, ascii }
+	return { state, metadata, ascii, display }
 }
 
-/** Render display buffer as ASCII */
-function renderDisplayAsAscii(display: number[]): string {
-	const lines: string[] = []
-	for (let y = 0; y < DISPLAY_HEIGHT; y++) {
-		let line = ''
-		for (let x = 0; x < DISPLAY_WIDTH; x++) {
-			const pixel = display[y * DISPLAY_WIDTH + x]
-			line += pixel ? '█' : ' '
-		}
-		lines.push(line)
-	}
-	return lines.join('\n')
-}
-
-/** Execute a move and save state */
-async function executeMove(
+/** Execute a Tetris move and save state */
+async function executeTetrisMove(
 	env: Env,
 	action: TetrisAction,
 	walletAddress?: string,
-): Promise<{ state: Chip8State; metadata: GameMetadata; ascii: string }> {
+): Promise<{ state: TetrisState; metadata: GameMetadata; ascii: string; display: number[] }> {
 	const { state } = await getGameState(env)
 
-	const chip8 = new Chip8()
-	chip8.deserialize(state)
-
-	// Press the key for this action
-	const key = TETRIS_KEYS[action]
-	chip8.pressKey(key)
-
-	// Run cycles
-	const cycles = getCyclesPerMove(env)
-	for (let i = 0; i < cycles; i++) {
-		chip8.cycle()
-		if (i % 10 === 0) {
-			chip8.decrementTimers()
-		}
-	}
-
-	// Release key
-	chip8.releaseKey(key)
-
-	// Run a few more cycles after release
-	for (let i = 0; i < 20; i++) {
-		chip8.cycle()
-	}
-
-	const newState = chip8.serialize()
+	// Execute the move using the Tetris engine
+	const newState = executeMove(state, action)
 
 	// Update metadata
 	const metadataJson = await env.GAME_STATE.get(KV_KEYS.METADATA)
@@ -228,18 +195,20 @@ async function executeMove(
 		: { moveCount: 0, linesCleared: 0, lastMove: new Date().toISOString() }
 
 	metadata.moveCount++
+	metadata.linesCleared = newState.linesCleared
 	metadata.lastMove = new Date().toISOString()
 	metadata.lastMoveBy = walletAddress
 
 	// Save state
 	await Promise.all([
-		env.GAME_STATE.put(KV_KEYS.STATE, JSON.stringify(newState)),
+		env.GAME_STATE.put(KV_KEYS.STATE, serializeState(newState)),
 		env.GAME_STATE.put(KV_KEYS.METADATA, JSON.stringify(metadata)),
 	])
 
-	const ascii = renderDisplayAsAscii(newState.display)
+	const display = renderToDisplay(newState)
+	const ascii = renderAscii(display)
 
-	return { state: newState, metadata, ascii }
+	return { state: newState, metadata, ascii, display }
 }
 
 /** Verify transaction matches challenge */
@@ -655,19 +624,20 @@ app.get('/keys/:credentialId', async (c) => {
 
 // Get current game state
 app.get('/state', async (c) => {
-	const { state, metadata, ascii } = await getGameState(c.env)
+	const { metadata, ascii, display } = await getGameState(c.env)
 
 	return c.json({
 		ascii,
 		metadata,
-		display: state.display,
+		display,
 	})
 })
 
 // Reset game (free endpoint for testing)
 app.post('/reset', async (c) => {
-	const { state, metadata } = await initializeGame(c.env)
-	const ascii = renderDisplayAsAscii(state.display)
+	const { state, metadata } = await initGame(c.env)
+	const display = renderToDisplay(state)
+	const ascii = renderAscii(display)
 
 	return c.json({
 		message: 'Game reset',
@@ -799,7 +769,7 @@ app.post('/move/:action', async (c) => {
 	const receiptData = await getTransactionReceipt(txHash, c.env)
 
 	// Execute the move
-	const { metadata, ascii } = await executeMove(c.env, action, walletAddress)
+	const { metadata, ascii } = await executeTetrisMove(c.env, action, walletAddress)
 
 	// Create receipt
 	const receipt: PaymentReceipt & { blockNumber?: string } = {

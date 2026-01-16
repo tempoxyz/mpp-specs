@@ -220,6 +220,7 @@ export function useWebAuthn() {
 		isConnected,
 		isLoading,
 		error,
+		storedCredential, // Expose for access key hook
 		signUp,
 		signIn,
 		disconnect,

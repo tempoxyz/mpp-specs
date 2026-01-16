@@ -8,13 +8,13 @@
 	"kv_namespaces": [
 		{
 			"binding": "GAME_STATE",
-			"id": "PLACEHOLDER_KV_ID",
-			"preview_id": "PLACEHOLDER_KV_ID"
+			"id": "b9103dca72d7441cb08708b4ff688a90",
+			"preview_id": "1e1c89e511c641238b0064a8d11d000a"
 		},
 		{
 			"binding": "KEY_STORE",
-			"id": "PLACEHOLDER_KEY_STORE_ID",
-			"preview_id": "PLACEHOLDER_KEY_STORE_ID"
+			"id": "e85119e27c5c4a0287f94077730423cf",
+			"preview_id": "f5cfe18550b54d178e075340c8a3b9d7"
 		}
 	],
 

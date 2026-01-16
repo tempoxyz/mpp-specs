@@ -1,7 +1,7 @@
 /**
  * CHIP-8 Emulator
  *
- * A minimal CHIP-8 implementation for the pay-to-play Tetris game.
+ * A minimal CHIP-8 implementation for the tempo tetris game.
  * Supports state serialization for persistence across moves.
  */
 
