@@ -1,4 +1,4 @@
-name: Verify
+name: CI
 on:
   workflow_call:
   workflow_dispatch:
@@ -18,5 +18,9 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/install-dependencies
 
-      - name: Check code and types
+      - name: Run pnpm check
         run: pnpm check
+
+      - name: Run pnpm test
+        run: pnpm test
+
