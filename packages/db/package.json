@@ -1,0 +1,14 @@
+{
+  "name": "@tempo/db",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate:local": "wrangler d1 migrations apply tempo-payments --local",
+    "migrate:preview": "wrangler d1 migrations apply tempo-payments-preview --remote",
+    "migrate:prod": "wrangler d1 migrations apply tempo-payments --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^3.99.0"
+  }
+}

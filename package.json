@@ -1,0 +1,26 @@
+{
+  "name": "tempo-ai-payments",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "test": "turbo test",
+    "test:coverage": "turbo test:coverage",
+    "deploy:preview": "turbo deploy:preview",
+    "deploy:prod": "turbo deploy:prod",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250115.0",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^3.99.0"
+  }
+}

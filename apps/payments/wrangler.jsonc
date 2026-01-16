@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tempo-payments",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-15",
+  "compatibility_flags": ["nodejs_compat"],
+  
+  "workers_dev": true,
+  "preview_urls": true,
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tempo-payments",
+      "database_id": "TO_BE_CREATED"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      {
+        "queue": "tempo-webhook-events",
+        "binding": "WEBHOOK_QUEUE"
+      }
+    ]
+  },
+
+  "env": {
+    "preview": {
+      "name": "tempo-payments-preview",
+      "vars": {
+        "ENVIRONMENT": "preview"
+      }
+    },
+    "production": {
+      "name": "tempo-payments",
+      "vars": {
+        "ENVIRONMENT": "production"
+      }
+    }
+  }
+}
