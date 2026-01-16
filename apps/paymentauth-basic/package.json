@@ -1,5 +1,5 @@
 {
-	"name": "@tempo/_template",
+	"name": "@tempo/paymentauth-basic",
 	"private": true,
 	"version": "0.0.1",
 	"scripts": {
@@ -14,11 +14,10 @@
 		"deploy:prod": "wrangler deploy --env production"
 	},
 	"dependencies": {
-		"@tempo/auth": "workspace:*",
-		"@tempo/shared": "workspace:*",
-		"@tempo/transactions": "workspace:*",
+		"@tempo/paymentauth-protocol": "workspace:*",
 		"hono": "^4.6.0",
-		"zod": "^3.24.0"
+		"viem": "^2.21.0",
+		"tempo.ts": "^0.13.0"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.5.0",
