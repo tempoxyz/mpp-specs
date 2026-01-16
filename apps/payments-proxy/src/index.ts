@@ -54,6 +54,12 @@ function getPartnerFromHost(host: string): string | null {
   const hostWithoutPort = host.split(":")[0] ?? "";
   const parts = hostWithoutPort.split(".");
 
+  // Skip workers.dev hostnames - they use path-based routing
+  // e.g., "payments-proxy-moderato.porto.workers.dev" should use path routing
+  if (hostWithoutPort.endsWith(".workers.dev")) {
+    return null;
+  }
+
   // For production/preview: partner.payments.tempo.xyz (4+ parts)
   // For local dev with Host header: partner.localhost (2 parts)
   if (parts.length >= 4 && parts[0]) {
