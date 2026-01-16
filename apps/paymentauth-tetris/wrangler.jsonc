@@ -37,6 +37,13 @@
 		},
 		"production": {
 			"name": "paymentauth-tetris-production",
+			"routes": [
+				{
+					"pattern": "paymentauth-tetris.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
 			"vars": {
 				"ENVIRONMENT": "production"
 			}

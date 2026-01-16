@@ -18,6 +18,13 @@
 		},
 		"production": {
 			"name": "paymentauth-basic-production",
+			"routes": [
+				{
+					"pattern": "paymentauth-basic.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
 			"vars": {
 				"ENVIRONMENT": "production"
 			}

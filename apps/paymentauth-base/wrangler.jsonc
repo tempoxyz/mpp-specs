@@ -37,13 +37,16 @@
 		},
 		"production": {
 			"name": "paymentauth-base-production",
+			"routes": [
+				{
+					"pattern": "paymentauth-base.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
 			"vars": {
 				"ENVIRONMENT": "production"
 			}
-			// Add custom domain routes for production:
-			// "routes": [
-			//   { "pattern": "api.tempo.xyz/*", "zone_name": "tempo.xyz" }
-			// ]
 		}
 	}
 }

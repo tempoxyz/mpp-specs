@@ -18,6 +18,13 @@
 		},
 		"production": {
 			"name": "paymentauth-x402-production",
+			"routes": [
+				{
+					"pattern": "paymentauth-x402.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
 			"vars": {
 				"ENVIRONMENT": "production"
 			}

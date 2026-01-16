@@ -11,12 +11,34 @@
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"FEE_TOKEN_ADDRESS": "0x20c0000000000000000000000000000000000000",
 		"PRICE_PER_GB_CENTS": "1",
-		"CHALLENGE_VALIDITY_SECONDS": "600"
+		"CHALLENGE_VALIDITY_SECONDS": "600",
+		"ENVIRONMENT": "development"
 	},
 	"r2_buckets": [
 		{
 			"binding": "SNAPSHOTS",
 			"bucket_name": "reth-snapshots"
 		}
-	]
+	],
+	"env": {
+		"preview": {
+			"name": "reth-snapshots-preview",
+			"vars": {
+				"ENVIRONMENT": "preview"
+			}
+		},
+		"production": {
+			"name": "reth-snapshots-production",
+			"routes": [
+				{
+					"pattern": "reth-snapshots.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "production"
+			}
+		}
+	}
 }
