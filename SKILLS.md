@@ -864,6 +864,5 @@ When creating a new app:
 - [ ] Update package name to `@tempo/my-app`
 - [ ] Update wrangler name and bindings
 - [ ] Create `src/index.ts` with Hono app
-- [ ] Add to `turbo.json` if needed
 - [ ] Test locally: `pnpm --filter @tempo/my-app dev`
 - [ ] Deploy preview: `pnpm --filter @tempo/my-app deploy:preview`

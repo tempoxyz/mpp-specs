@@ -35,9 +35,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250115.0
         version: 4.20260116.0
-      turbo:
-        specifier: ^2.4.0
-        version: 2.7.4
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -3890,40 +3887,6 @@ packages:
   tsx@4.21.0:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
-    hasBin: true
-
-  turbo-darwin-64@2.7.4:
-    resolution: {integrity: sha512-xDR30ltfkSsRfGzABBckvl1nz1cZ3ssTujvdj+TPwOweeDRvZ0e06t5DS0rmRBvyKpgGs42K/EK6Mn2qLlFY9A==}
-    cpu: [x64]
-    os: [darwin]
-
-  turbo-darwin-arm64@2.7.4:
-    resolution: {integrity: sha512-P7sjqXtOL/+nYWPvcDGWhi8wf8M8mZHHB8XEzw2VX7VJrS8IGHyJHGD1AYfDvhAEcr7pnk3gGifz3/xyhI655w==}
-    cpu: [arm64]
-    os: [darwin]
-
-  turbo-linux-64@2.7.4:
-    resolution: {integrity: sha512-GofFOxRO/IhG8BcPyMSSB3Y2+oKQotsaYbHxL9yD6JPb20/o35eo+zUSyazOtilAwDHnak5dorAJFoFU8MIg2A==}
-    cpu: [x64]
-    os: [linux]
-
-  turbo-linux-arm64@2.7.4:
-    resolution: {integrity: sha512-+RQKgNjksVPxYAyAgmDV7w/1qj++qca+nSNTAOKGOfJiDtSvRKoci89oftJ6anGs00uamLKVEQ712TI/tfNAIw==}
-    cpu: [arm64]
-    os: [linux]
-
-  turbo-windows-64@2.7.4:
-    resolution: {integrity: sha512-rfak1+g+ON3czs1mDYsCS4X74ZmK6gOgRQTXjDICtzvR4o61paqtgAYtNPofcVsMWeF4wvCajSeoAkkeAnQ1kg==}
-    cpu: [x64]
-    os: [win32]
-
-  turbo-windows-arm64@2.7.4:
-    resolution: {integrity: sha512-1ZgBNjNRbDu/fPeqXuX9i26x3CJ/Y1gcwUpQ+Vp7kN9Un6RZ9kzs164f/knrjcu5E+szCRexVjRSJay1k5jApA==}
-    cpu: [arm64]
-    os: [win32]
-
-  turbo@2.7.4:
-    resolution: {integrity: sha512-bkO4AddmDishzJB2ze7aYYPaejMoJVfS0XnaR6RCdXFOY8JGJfQE+l9fKiV7uDPa5Ut44gmOWJL3894CIMeH9g==}
     hasBin: true
 
   typed-array-buffer@1.0.3:
@@ -8660,33 +8623,6 @@ snapshots:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
-
-  turbo-darwin-64@2.7.4:
-    optional: true
-
-  turbo-darwin-arm64@2.7.4:
-    optional: true
-
-  turbo-linux-64@2.7.4:
-    optional: true
-
-  turbo-linux-arm64@2.7.4:
-    optional: true
-
-  turbo-windows-64@2.7.4:
-    optional: true
-
-  turbo-windows-arm64@2.7.4:
-    optional: true
-
-  turbo@2.7.4:
-    optionalDependencies:
-      turbo-darwin-64: 2.7.4
-      turbo-darwin-arm64: 2.7.4
-      turbo-linux-64: 2.7.4
-      turbo-linux-arm64: 2.7.4
-      turbo-windows-64: 2.7.4
-      turbo-windows-arm64: 2.7.4
 
   typed-array-buffer@1.0.3:
     dependencies:

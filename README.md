@@ -98,7 +98,7 @@ pnpm typecheck
 pnpm lint
 
 # Run tests
-pnpm test            # Runs both repo-level tests (vitest) and app tests (turbo)
+pnpm test            # Runs both repo-level tests and app tests
 pnpm test:repo       # Run only repo-level tests
 pnpm test:apps       # Run only app tests
 ```
