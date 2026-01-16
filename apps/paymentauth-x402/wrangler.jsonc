@@ -3,8 +3,9 @@
 	"name": "paymentauth-x402",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": ["nodejs_compat"],
-
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"vars": {
 		"ENVIRONMENT": "development"
 	},
@@ -16,17 +17,25 @@
 				"ENVIRONMENT": "preview"
 			}
 		},
-		"production": {
-			"name": "paymentauth-x402-production",
+		// Testnet deployment - canonical testnet + moderato-specific routes
+		"moderato": {
+			"name": "paymentauth-x402-moderato",
 			"routes": [
-				{
-					"pattern": "paymentauth-x402.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
+				{"pattern":"paymentauth-x402-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
+				{"pattern":"paymentauth-x402.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "production"
+				"ENVIRONMENT": "moderato"
+			}
+		},
+		// Production deployment
+		"presto": {
+			"name": "paymentauth-x402-presto",
+			"routes": [
+				{"pattern":"paymentauth-x402.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+			],
+			"vars": {
+				"ENVIRONMENT": "presto"
 			}
 		}
 	}

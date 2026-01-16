@@ -3,27 +3,9 @@
 	"name": "paymentauth-base",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": ["nodejs_compat"],
-
-	// Bindings - uncomment as needed
-	// "d1_databases": [
-	//   { "binding": "DB", "database_name": "my-db", "database_id": "YOUR_DB_ID" }
-	// ],
-	// "r2_buckets": [
-	//   { "binding": "BUCKET", "bucket_name": "my-bucket" }
-	// ],
-	// "kv_namespaces": [
-	//   { "binding": "KV", "id": "YOUR_KV_ID" }
-	// ],
-	// "durable_objects": {
-	//   "bindings": [
-	//     { "name": "RATE_LIMITER", "class_name": "RateLimiter" }
-	//   ]
-	// },
-	// "services": [
-	//   { "binding": "PAYMENTS_WORKER", "service": "payments" }
-	// ],
-
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"vars": {
 		"ENVIRONMENT": "development"
 	},
@@ -35,17 +17,25 @@
 				"ENVIRONMENT": "preview"
 			}
 		},
-		"production": {
-			"name": "paymentauth-base-production",
+		// Testnet deployment - canonical testnet + moderato-specific routes
+		"moderato": {
+			"name": "paymentauth-base-moderato",
 			"routes": [
-				{
-					"pattern": "paymentauth-base.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
+				{"pattern":"paymentauth-base-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
+				{"pattern":"paymentauth-base.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "production"
+				"ENVIRONMENT": "moderato"
+			}
+		},
+		// Production deployment
+		"presto": {
+			"name": "paymentauth-base-presto",
+			"routes": [
+				{"pattern":"paymentauth-base.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+			],
+			"vars": {
+				"ENVIRONMENT": "presto"
 			}
 		}
 	}

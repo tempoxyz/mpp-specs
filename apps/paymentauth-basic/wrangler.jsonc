@@ -3,8 +3,9 @@
 	"name": "paymentauth-basic",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": ["nodejs_compat"],
-
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"vars": {
 		"ENVIRONMENT": "development"
 	},
@@ -16,17 +17,25 @@
 				"ENVIRONMENT": "preview"
 			}
 		},
-		"production": {
-			"name": "paymentauth-basic-production",
+		// Testnet deployment - canonical testnet + moderato-specific routes
+		"moderato": {
+			"name": "paymentauth-basic-moderato",
 			"routes": [
-				{
-					"pattern": "paymentauth-basic.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
+				{"pattern":"paymentauth-basic-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
+				{"pattern":"paymentauth-basic.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "production"
+				"ENVIRONMENT": "moderato"
+			}
+		},
+		// Production deployment
+		"presto": {
+			"name": "paymentauth-basic-presto",
+			"routes": [
+				{"pattern":"paymentauth-basic.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+			],
+			"vars": {
+				"ENVIRONMENT": "presto"
 			}
 		}
 	}

@@ -19,19 +19,38 @@ jobs:
     secrets: inherit
 
   deploy:
-    name: Deploy (${{ matrix.app }})
+    name: Deploy (${{ matrix.app }}${{ matrix.env && format('-{0}', matrix.env) || '' }})
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       matrix:
         include:
+          # All apps deploy to both moderato (testnet) and presto (production)
           - app: payments-proxy
+            env: moderato
+          - app: payments-proxy
+            env: presto
           - app: paymentauth-base
+            env: moderato
+          - app: paymentauth-base
+            env: presto
           - app: paymentauth-basic
+            env: moderato
+          - app: paymentauth-basic
+            env: presto
           - app: paymentauth-tetris
+            env: moderato
+          - app: paymentauth-tetris
+            env: presto
           - app: paymentauth-x402
+            env: moderato
+          - app: paymentauth-x402
+            env: presto
           - app: reth-snapshots
+            env: moderato
+          - app: reth-snapshots
+            env: presto
 
     steps:
       - uses: actions/checkout@v6
@@ -67,4 +86,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/${{ matrix.app }}
           packageManager: pnpm
-          command: deploy --env production
+          command: deploy ${{ matrix.env && format('--env {0}', matrix.env) || '' }}

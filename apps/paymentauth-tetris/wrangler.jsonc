@@ -3,8 +3,9 @@
 	"name": "paymentauth-tetris",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": ["nodejs_compat"],
-
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"kv_namespaces": [
 		{
 			"binding": "GAME_STATE",
@@ -17,7 +18,6 @@
 			"preview_id": "f5cfe18550b54d178e075340c8a3b9d7"
 		}
 	],
-
 	"vars": {
 		"ENVIRONMENT": "development",
 		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2",
@@ -37,17 +37,27 @@
 				"ENVIRONMENT": "preview"
 			}
 		},
-		"production": {
-			"name": "paymentauth-tetris-production",
+		// Testnet deployment - canonical testnet + moderato-specific routes
+		"moderato": {
+			"name": "paymentauth-tetris-moderato",
 			"routes": [
-				{
-					"pattern": "paymentauth-tetris.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
+				{"pattern":"paymentauth-tetris-testnet.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true},
+				{"pattern":"paymentauth-tetris.moderato.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
 			],
 			"vars": {
-				"ENVIRONMENT": "production"
+				"ENVIRONMENT": "moderato",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
+			}
+		},
+		// Production deployment
+		"presto": {
+			"name": "paymentauth-tetris-presto",
+			"routes": [
+				{"pattern":"paymentauth-tetris.tempo.xyz","zone_name":"tempo.xyz","custom_domain":true}
+			],
+			"vars": {
+				"ENVIRONMENT": "presto",
+				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz"
 			}
 		}
 	}

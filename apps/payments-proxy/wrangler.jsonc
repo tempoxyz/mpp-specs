@@ -3,15 +3,15 @@
 	"name": "payments-proxy",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
-	"compatibility_flags": ["nodejs_compat"],
-
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"vars": {
 		"ENVIRONMENT": "development",
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
 		"EXA_API_KEY": "exa-placeholder-key",
-		"TWITTER_BEARER_TOKEN": "twitter-placeholder-token",
 		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 		"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY"
 	},
@@ -25,23 +25,32 @@
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
 				"EXA_API_KEY": "exa-placeholder-key",
-		"TWITTER_BEARER_TOKEN": "twitter-placeholder-token",
-		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
+				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY"
 			}
 		},
-		"production": {
-			"name": "payments-proxy-production",
+		// Testnet deployment - canonical testnet + moderato-specific routes
+		"moderato": {
+			"name": "payments-proxy-moderato",
 			"routes": [
-				{ "pattern": "*.payments.tempo.xyz/*", "zone_name": "tempo.xyz" }
+				{"pattern":"*.payments-testnet.tempo.xyz/*","zone_name":"tempo.xyz"},
+				{"pattern":"*.payments.moderato.tempo.xyz/*","zone_name":"tempo.xyz"}
 			],
 			"vars": {
-				"ENVIRONMENT": "production",
+				"ENVIRONMENT": "moderato",
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
 			}
-			// Note: For production, set API keys via wrangler secret:
-			// wrangler secret put BROWSERBASE_API_KEY --env production
-			// wrangler secret put OPENROUTER_API_KEY --env production
+		},
+		// Production deployment
+		"presto": {
+			"name": "payments-proxy-presto",
+			"routes": [
+				{"pattern":"*.payments.tempo.xyz/*","zone_name":"tempo.xyz"}
+			],
+			"vars": {
+				"ENVIRONMENT": "presto",
+				"TEMPO_RPC_URL": "https://rpc.presto.tempo.xyz"
+			}
 		}
 	}
 }

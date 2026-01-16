@@ -422,15 +422,27 @@ Every branch gets a preview URL:
 pnpm --filter @tempo/api deploy:preview
 ```
 
-### Production Deployments
+### Multi-Environment Deployments
 
+All apps deploy to both testnet (Moderato) and production (Presto) environments on merge to main:
+
+| Environment | RPC URL | Domain Patterns |
+|-------------|---------|-----------------|
+| `moderato` | `https://rpc.moderato.tempo.xyz` | `*-testnet.tempo.xyz` (canonical), `*.moderato.tempo.xyz` |
+| `presto` | `https://rpc.presto.tempo.xyz` | `*.tempo.xyz` (production) |
+
+The `*-testnet` domain is the **canonical testnet** that always points to the current testnet chain (currently Moderato). The `*.moderato` domain is chain-specific.
+
+Deploy commands:
 ```bash
-# Deploy all apps
-pnpm deploy:prod
-
-# Deploy specific app
-pnpm --filter @tempo/api deploy:prod
+pnpm --filter @tempo/payments-proxy deploy:moderato  # testnet
+pnpm --filter @tempo/payments-proxy deploy:presto    # production
 ```
+
+**RPC-dependent apps** (use TEMPO_RPC_URL for blockchain transactions):
+- `payments-proxy` - Payment proxy service
+- `paymentauth-tetris` - Tetris game with payments
+- `reth-snapshots` - Reth snapshot downloads
 
 ### Environment Variables
 
@@ -573,6 +585,7 @@ app.all('/sponsor/*', async (c) => handler.fetch(c.req.raw))
 
 | Network | Chain ID | RPC URL |
 |---------|----------|---------|
+| Presto (Mainnet) | 4217 | `https://rpc.presto.tempo.xyz` |
 | Moderato (Testnet) | 42431 | `https://rpc.moderato.tempo.xyz` |
 | Testnet | — | `https://rpc.testnet.tempo.xyz` |
 | Mainnet | — | `https://rpc.tempo.xyz` |

@@ -6,7 +6,10 @@
 	"scripts": {
 		"dev": "wrangler dev",
 		"deploy": "wrangler deploy",
-		"check:types": "tsc --noEmit"
+		"check:types": "tsc --noEmit",
+		"deploy:preview": "wrangler deploy --env preview",
+		"deploy:moderato": "wrangler deploy --env moderato",
+		"deploy:presto": "wrangler deploy --env presto"
 	},
 	"dependencies": {
 		"@ai-payments/protocol": "workspace:*",

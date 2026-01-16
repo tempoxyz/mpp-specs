@@ -11,7 +11,8 @@
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage",
 		"deploy:preview": "wrangler deploy --env preview",
-		"deploy:prod": "wrangler deploy --env production"
+		"deploy:moderato": "wrangler deploy --env moderato",
+		"deploy:presto": "wrangler deploy --env presto"
 	},
 	"dependencies": {
 		"@tempo/paymentauth-protocol": "workspace:*",
