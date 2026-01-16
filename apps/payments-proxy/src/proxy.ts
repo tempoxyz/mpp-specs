@@ -80,7 +80,7 @@ export async function proxyRequest(
 	// Build upstream URL - properly join base path with forward path
 	const baseUrl = new URL(partner.upstream)
 	const basePath = baseUrl.pathname.replace(/\/$/, '') // Remove trailing slash
-	const fullPath = basePath + (forwardPath.startsWith('/') ? forwardPath : '/' + forwardPath)
+	const fullPath = basePath + (forwardPath.startsWith('/') ? forwardPath : `/${forwardPath}`)
 	const upstreamUrl = new URL(fullPath, baseUrl.origin)
 
 	// Copy query parameters

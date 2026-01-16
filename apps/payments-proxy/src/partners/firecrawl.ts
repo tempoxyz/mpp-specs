@@ -28,9 +28,19 @@ export const firecrawl: PartnerConfig = {
 	endpoints: [
 		{ path: '/v1/scrape', methods: ['POST'], price: PRICES.CENT_1, description: 'Scrape a URL' },
 		{ path: '/v1/crawl', methods: ['POST'], price: PRICES.CENT_5, description: 'Crawl a website' },
-		{ path: '/v1/crawl/:id', methods: ['GET'], requiresPayment: false, description: 'Get crawl status' },
+		{
+			path: '/v1/crawl/:id',
+			methods: ['GET'],
+			requiresPayment: false,
+			description: 'Get crawl status',
+		},
 		{ path: '/v1/map', methods: ['POST'], price: PRICES.CENT_1, description: 'Map website URLs' },
 		{ path: '/v1/search', methods: ['POST'], price: PRICES.CENT_2, description: 'Search the web' },
-		{ path: '/v1/extract', methods: ['POST'], price: PRICES.CENT_3, description: 'Extract structured data' },
+		{
+			path: '/v1/extract',
+			methods: ['POST'],
+			price: PRICES.CENT_3,
+			description: 'Extract structured data',
+		},
 	],
 }

@@ -25,8 +25,23 @@ export const exa: PartnerConfig = {
 	destination: WALLETS.TEST_RECEIVER,
 	endpoints: [
 		{ path: '/search', methods: ['POST'], price: PRICES.CENT_1, description: 'Search the web' },
-		{ path: '/contents', methods: ['POST'], price: PRICES.CENT_1, description: 'Get page contents' },
-		{ path: '/findSimilar', methods: ['POST'], price: PRICES.CENT_1, description: 'Find similar pages' },
-		{ path: '/answer', methods: ['POST'], price: PRICES.CENT_2, description: 'Get AI-powered answers' },
+		{
+			path: '/contents',
+			methods: ['POST'],
+			price: PRICES.CENT_1,
+			description: 'Get page contents',
+		},
+		{
+			path: '/findSimilar',
+			methods: ['POST'],
+			price: PRICES.CENT_1,
+			description: 'Find similar pages',
+		},
+		{
+			path: '/answer',
+			methods: ['POST'],
+			price: PRICES.CENT_2,
+			description: 'Get AI-powered answers',
+		},
 	],
 }

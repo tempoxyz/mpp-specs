@@ -35,8 +35,6 @@ import { tempoModerato } from 'viem/chains'
 import { Abis, Transaction as TempoTransaction } from 'viem/tempo'
 
 import {
-	DISPLAY_HEIGHT,
-	DISPLAY_WIDTH,
 	deserializeState,
 	executeMove,
 	initializeGame,
@@ -89,7 +87,6 @@ function getChallengeValidityMs(env: Env): number {
 	const seconds = Number(env.CHALLENGE_VALIDITY_SECONDS ?? '300')
 	return seconds * 1000
 }
-
 
 // Challenge store (in-memory, per worker instance)
 const challengeStore = new Map<

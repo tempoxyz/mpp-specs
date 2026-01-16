@@ -7,11 +7,7 @@ This repository contains Cloudflare Workers applications for Tempo's AI payments
 **ALWAYS run tests after making changes:**
 
 ```bash
-# Run tests for the specific app/package you modified
-pnpm --filter @tempo/<app-name> test
-
-# Or run all tests
-pnpm test
+pnpm test && pnpm check
 ```
 
 Tests MUST pass before considering any change complete. If tests fail, fix them before moving on.

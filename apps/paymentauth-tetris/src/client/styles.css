@@ -309,11 +309,11 @@ body {
 }
 
 .access-key-active {
-	color: #080 !important;
+	color: #080;
 }
 
 .access-key-inactive {
-	color: var(--fg-dim) !important;
+	color: var(--fg-dim);
 }
 
 .access-key-hint {

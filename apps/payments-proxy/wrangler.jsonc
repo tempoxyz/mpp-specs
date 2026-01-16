@@ -34,15 +34,48 @@
 		"preview": {
 			"name": "payments-proxy-preview",
 			"workers_dev": true,
+			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
 			"vars": {
 				"ENVIRONMENT": "preview"
 			}
 		},
 		// Canonical testnet - *.payments.testnet.tempo.xyz
+		// HACK: Cloudflare custom_domain doesn't auto-create DNS for wildcard patterns,
+		// so we explicitly list each partner subdomain. When adding a new partner,
+		// add its subdomain here. Ideally we'd use a single wildcard DNS record.
 		"testnet": {
 			"name": "payments-proxy-testnet",
 			"routes": [
-				{ "pattern": "*.payments.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "browserbase.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "exa.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "firecrawl.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "openrouter.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "llm.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "twitter.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
@@ -50,10 +83,40 @@
 			}
 		},
 		// Moderato chain-specific - *.payments.moderato.tempo.xyz
+		// HACK: Same as above - explicit subdomains instead of wildcard
 		"moderato": {
 			"name": "payments-proxy-moderato",
 			"routes": [
-				{ "pattern": "*.payments.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "browserbase.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "exa.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "firecrawl.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "openrouter.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "llm.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "twitter.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato"
@@ -61,10 +124,28 @@
 			}
 		},
 		// Mainnet production - *.payments.tempo.xyz
+		// HACK: Same as above - explicit subdomains instead of wildcard
 		"mainnet": {
 			"name": "payments-proxy-mainnet",
 			"routes": [
-				{ "pattern": "*.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "browserbase.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{ "pattern": "exa.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{
+					"pattern": "firecrawl.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "openrouter.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{ "pattern": "llm.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "twitter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
 				"ENVIRONMENT": "mainnet",

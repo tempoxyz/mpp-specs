@@ -11,11 +11,11 @@ The payments proxy lets you access partner APIs on a pay-per-use basis. Access p
 
 ## Quick Reference
 
-| Partner     | Proxy Base URL (Local)                    | Proxy Base URL (Production)              | Upstream API                    |
-|-------------|-------------------------------------------|------------------------------------------|---------------------------------|
-| Browserbase | `http://localhost:8787/browserbase`       | `https://browserbase.payments.tempo.xyz` | `https://api.browserbase.com`   |
-| OpenRouter  | `http://localhost:8787/openrouter`        | `https://openrouter.payments.tempo.xyz`  | `https://openrouter.ai/api`     |
-| Firecrawl   | `http://localhost:8787/firecrawl`         | `https://firecrawl.payments.tempo.xyz`   | `https://api.firecrawl.dev`     |
+| Partner     | Proxy Base URL (Local)                    | Proxy Base URL (Testnet)                          | Proxy Base URL (Mainnet)                 | Upstream API                    |
+|-------------|-------------------------------------------|---------------------------------------------------|------------------------------------------|---------------------------------|
+| Browserbase | `http://localhost:8787/browserbase`       | `https://browserbase.payments.testnet.tempo.xyz`  | `https://browserbase.payments.tempo.xyz` | `https://api.browserbase.com`   |
+| OpenRouter  | `http://localhost:8787/openrouter`        | `https://openrouter.payments.testnet.tempo.xyz`   | `https://openrouter.payments.tempo.xyz`  | `https://openrouter.ai/api`     |
+| Firecrawl   | `http://localhost:8787/firecrawl`         | `https://firecrawl.payments.testnet.tempo.xyz`    | `https://firecrawl.payments.tempo.xyz`   | `https://api.firecrawl.dev`     |
 
 **Local Development:**
 ```bash
@@ -227,11 +227,57 @@ PRIVATE_KEY=$PRIVATE_KEY pnpm demo POST http://localhost:8787/firecrawl/v1/crawl
 
 ---
 
-## 4. Production Examples
+## 4. Testnet Examples
 
-For production, use the subdomain-based URLs:
+For testnet, use the `*.payments.testnet.tempo.xyz` subdomain URLs:
 
-### Browserbase (Production)
+### Browserbase (Testnet)
+
+```bash
+cd packages/paymentauth-client
+
+# Free: List sessions
+./demo.sh GET https://browserbase.payments.testnet.tempo.xyz/v1/sessions
+
+# Paid: Create session
+PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://browserbase.payments.testnet.tempo.xyz/v1/sessions \
+  -d '{"projectId":"0dad8d6f-deea-4d37-8087-c63b4b878b3a"}'
+```
+
+### OpenRouter (Testnet)
+
+```bash
+cd packages/paymentauth-client
+
+# Free: List models
+./demo.sh GET https://openrouter.payments.testnet.tempo.xyz/v1/models
+
+# Paid: Chat completion
+PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://openrouter.payments.testnet.tempo.xyz/v1/chat/completions \
+  -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+### Firecrawl (Testnet)
+
+```bash
+cd packages/paymentauth-client
+
+# Paid: Scrape a URL
+PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://firecrawl.payments.testnet.tempo.xyz/v1/scrape \
+  -d '{"url":"https://example.com"}'
+
+# Paid: Crawl a website
+PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://firecrawl.payments.testnet.tempo.xyz/v1/crawl \
+  -d '{"url":"https://example.com","limit":10}'
+```
+
+---
+
+## 5. Mainnet Examples
+
+For mainnet/production, use the `*.payments.tempo.xyz` subdomain URLs:
+
+### Browserbase (Mainnet)
 
 ```bash
 cd packages/paymentauth-client
@@ -244,7 +290,7 @@ PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://browserbase.payments.tempo.xyz/v
   -d '{"projectId":"0dad8d6f-deea-4d37-8087-c63b4b878b3a"}'
 ```
 
-### OpenRouter (Production)
+### OpenRouter (Mainnet)
 
 ```bash
 cd packages/paymentauth-client
@@ -257,7 +303,7 @@ PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://openrouter.payments.tempo.xyz/v1
   -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-### Firecrawl (Production)
+### Firecrawl (Mainnet)
 
 ```bash
 cd packages/paymentauth-client
@@ -273,7 +319,7 @@ PRIVATE_KEY=$PRIVATE_KEY ./demo.sh POST https://firecrawl.payments.tempo.xyz/v1/
 
 ---
 
-## 5. Understanding the 402 Flow
+## 6. Understanding the 402 Flow
 
 When you hit a paid endpoint without payment, you'll receive a `402 Payment Required` response:
 
@@ -311,7 +357,7 @@ The demo scripts handle this flow automatically by:
 
 ---
 
-## 6. Using the Demo Scripts
+## 7. Using the Demo Scripts
 
 ### Bash Script (demo.sh)
 

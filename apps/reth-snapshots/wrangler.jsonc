@@ -29,14 +29,13 @@
 		"CHALLENGE_VALIDITY_SECONDS": "600"
 	},
 
-	"r2_buckets": [
-		{ "binding": "SNAPSHOTS", "bucket_name": "reth-snapshots" }
-	],
+	"r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "reth-snapshots" }],
 
 	"env": {
 		"preview": {
 			"name": "reth-snapshots-preview",
 			"workers_dev": true,
+			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
 			"vars": {
 				"ENVIRONMENT": "preview"
 			}
@@ -45,7 +44,11 @@
 		"testnet": {
 			"name": "reth-snapshots-testnet",
 			"routes": [
-				{ "pattern": "reth-snapshots.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "reth-snapshots.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
@@ -56,7 +59,11 @@
 		"moderato": {
 			"name": "reth-snapshots-moderato",
 			"routes": [
-				{ "pattern": "reth-snapshots.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "reth-snapshots.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato"

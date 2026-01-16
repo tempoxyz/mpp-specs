@@ -20,7 +20,7 @@ export const WALLETS = {
 
 /**
  * Common price points in base units (6 decimals).
- * 
+ *
  * Examples:
  * - $0.01 = 10000
  * - $0.10 = 100000

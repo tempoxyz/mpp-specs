@@ -48,6 +48,7 @@
 		"preview": {
 			"name": "_template-preview",
 			"workers_dev": true,
+			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
 			"vars": {
 				"ENVIRONMENT": "preview"
 			}
@@ -56,7 +57,11 @@
 		"testnet": {
 			"name": "_template-testnet",
 			"routes": [
-				{ "pattern": "_template.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "_template.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
@@ -67,7 +72,11 @@
 		"moderato": {
 			"name": "_template-moderato",
 			"routes": [
-				{ "pattern": "_template.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "_template.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato"

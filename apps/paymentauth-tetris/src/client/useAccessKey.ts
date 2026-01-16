@@ -2,17 +2,11 @@ import * as P256 from 'ox/P256'
 import * as PublicKey from 'ox/PublicKey'
 import { useCallback, useEffect, useState } from 'react'
 import type { Address, Hex } from 'viem'
-import {
-	createClient,
-	createPublicClient,
-	encodeFunctionData,
-	http,
-	keccak256,
-} from 'viem'
+import { createClient, createPublicClient, encodeFunctionData, http, keccak256 } from 'viem'
 import { prepareTransactionRequest, signTransaction as viemSignTransaction } from 'viem/actions'
 import { tempoModerato } from 'viem/chains'
 import { Account as TempoAccount } from 'viem/tempo'
-import { ACCOUNT_KEYCHAIN_ADDRESS, SignatureType, accountKeychainAbi } from './accountKeychain'
+import { ACCOUNT_KEYCHAIN_ADDRESS, accountKeychainAbi, SignatureType } from './accountKeychain'
 
 const ALPHA_USD = '0x20c0000000000000000000000000000000000001' as const
 
@@ -101,7 +95,7 @@ export function useAccessKey(
 				}
 
 				setAccessKey(parsed)
-			} catch (e) {
+			} catch (_e) {
 				localStorage.removeItem(ACCESS_KEY_STORAGE_KEY)
 			}
 		}

@@ -26,6 +26,7 @@
 		"preview": {
 			"name": "paymentauth-base-preview",
 			"workers_dev": true,
+			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
 			"vars": {
 				"ENVIRONMENT": "preview"
 			}
@@ -34,7 +35,11 @@
 		"testnet": {
 			"name": "paymentauth-base-testnet",
 			"routes": [
-				{ "pattern": "paymentauth-base.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "paymentauth-base.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet"
@@ -44,7 +49,11 @@
 		"moderato": {
 			"name": "paymentauth-base-moderato",
 			"routes": [
-				{ "pattern": "paymentauth-base.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "paymentauth-base.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato"

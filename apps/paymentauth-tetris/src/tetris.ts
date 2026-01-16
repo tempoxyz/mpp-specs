@@ -590,12 +590,12 @@ export function serializeState(state: TetrisState): string {
 /** Deserialize game state from storage */
 export function deserializeState(json: string): TetrisState {
 	const parsed = JSON.parse(json) as TetrisState
-	
+
 	// Ensure board is properly initialized
 	if (!parsed.board || !Array.isArray(parsed.board)) {
 		console.warn('Invalid state detected, reinitializing board')
 		parsed.board = createEmptyBoard()
 	}
-	
+
 	return parsed
 }

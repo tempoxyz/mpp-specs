@@ -47,6 +47,7 @@
 		"preview": {
 			"name": "paymentauth-tetris-preview",
 			"workers_dev": true,
+			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
 			"vars": {
 				"ENVIRONMENT": "preview"
 			}
@@ -55,7 +56,11 @@
 		"testnet": {
 			"name": "paymentauth-tetris-testnet",
 			"routes": [
-				{ "pattern": "paymentauth-tetris.testnet.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "paymentauth-tetris.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "testnet",
@@ -66,7 +71,11 @@
 		"moderato": {
 			"name": "paymentauth-tetris-moderato",
 			"routes": [
-				{ "pattern": "paymentauth-tetris.moderato.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "paymentauth-tetris.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "moderato"
@@ -76,7 +85,11 @@
 		"mainnet": {
 			"name": "paymentauth-tetris-mainnet",
 			"routes": [
-				{ "pattern": "paymentauth-tetris.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{
+					"pattern": "paymentauth-tetris.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
 			],
 			"vars": {
 				"ENVIRONMENT": "mainnet",
