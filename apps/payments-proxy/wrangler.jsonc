@@ -1,0 +1,39 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "payments-proxy",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-15",
+	"compatibility_flags": ["nodejs_compat"],
+
+	"vars": {
+		"ENVIRONMENT": "development",
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
+		"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY"
+	},
+
+	"env": {
+		"preview": {
+			"name": "payments-proxy-preview",
+			"vars": {
+				"ENVIRONMENT": "preview",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
+				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY"
+			}
+		},
+		"production": {
+			"name": "payments-proxy-production",
+			"routes": [
+				{ "pattern": "*.payments.tempo.xyz/*", "zone_name": "tempo.xyz" }
+			],
+			"vars": {
+				"ENVIRONMENT": "production",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
+			}
+			// Note: For production, set API keys via wrangler secret:
+			// wrangler secret put BROWSERBASE_API_KEY --env production
+			// wrangler secret put OPENROUTER_API_KEY --env production
+		}
+	}
+}

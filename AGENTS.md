@@ -2,6 +2,22 @@
 
 This repository contains Cloudflare Workers applications for Tempo's AI payments infrastructure.
 
+## ⚠️ Critical Rules
+
+**ALWAYS run tests after making changes:**
+
+```bash
+# Run tests for the specific app/package you modified
+pnpm --filter @tempo/<app-name> test
+
+# Or run all tests
+pnpm test
+```
+
+Tests MUST pass before considering any change complete. If tests fail, fix them before moving on.
+
+---
+
 ## Quick Reference
 
 ```bash
@@ -393,27 +409,6 @@ app.post('/webhooks/tempo', async (c) => {
 ---
 
 ## Deployment
-
-### CI/CD Deployment
-
-All apps are automatically deployed via GitHub Actions:
-
-- **Preview Deployments** (`.github/workflows/pull-request.yml`):
-  - Triggered on pull requests
-  - Deploys only apps with relevant changes
-  - Posts deployment status as PR comments
-  - Uses `--env preview` configuration
-
-- **Production Deployments** (`.github/workflows/main.yml`):
-  - Triggered on push to `main` branch
-  - Deploys only apps with relevant changes
-  - Uses `--env production` configuration
-
-**App Discovery**: The `create-app` script automatically adds new apps to both workflows. Apps are discovered from the `apps/` directory (excluding `_template`). Each app must have a `wrangler.jsonc` file to be included in deployments.
-
-**Required GitHub Secrets**:
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token with Workers edit permissions
-- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
 
 ### Preview Deployments
 
@@ -855,7 +850,8 @@ PRIVATE_KEY=0x... ./demo.sh GET http://localhost:3001/ping/paid
 | `PRIVATE_KEY` | Wallet private key (0x-prefixed hex) | Required for paid endpoints |
 | `TEMPO_RPC_URL` | Tempo RPC endpoint | `https://rpc.moderato.tempo.xyz` |
 | `BASE_RPC_URL` | Base Sepolia RPC endpoint | `https://sepolia.base.org` |
-| `VERBOSE` | Enable debug output | `0` |
+
+**Note**: By default, the client outputs only the final result. Use the `--verbose` flag to see debug output and progress messages.
 
 ### Verifying Payment Auth Integration
 

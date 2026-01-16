@@ -239,6 +239,40 @@ importers:
         specifier: ^3.99.0
         version: 3.114.17(@cloudflare/workers-types@4.20260116.0)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
 
+  apps/payments-proxy:
+    dependencies:
+      '@tempo/paymentauth-protocol':
+        specifier: workspace:*
+        version: link:../../packages/paymentauth-protocol
+      '@tempo/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      hono:
+        specifier: ^4.6.0
+        version: 4.11.4
+      viem:
+        specifier: ^2.30.6
+        version: 2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: ^0.5.0
+        version: 0.5.41(@cloudflare/workers-types@4.20260116.0)(@vitest/runner@2.1.9)(@vitest/snapshot@2.1.9)(bufferutil@4.1.0)(utf-8-validate@5.0.10)(vitest@2.1.9(@types/node@25.0.9))
+      '@cloudflare/workers-types':
+        specifier: ^4.20250115.0
+        version: 4.20260116.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.0.9)
+      wrangler:
+        specifier: ^3.99.0
+        version: 3.114.17(@cloudflare/workers-types@4.20260116.0)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+
   apps/reth-snapshots:
     dependencies:
       '@ai-payments/protocol':
@@ -5892,7 +5926,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
@@ -6371,7 +6405,7 @@ snapshots:
   '@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@babel/runtime': 7.28.6
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@solana/buffer-layout': 4.0.1
       '@solana/codecs-numbers': 2.3.0(typescript@5.9.3)
@@ -8118,7 +8152,7 @@ snapshots:
   ox@0.6.7(typescript@5.9.3)(zod@4.3.5):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -8132,7 +8166,7 @@ snapshots:
   ox@0.6.9(typescript@5.9.3)(zod@4.3.5):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0

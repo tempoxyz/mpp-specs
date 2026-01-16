@@ -29,6 +29,7 @@ jobs:
     strategy:
       matrix:
         include:
+          - app: payments-proxy
           - app: paymentauth-base
           - app: paymentauth-basic
           - app: paymentauth-tetris
