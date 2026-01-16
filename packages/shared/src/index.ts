@@ -2,7 +2,7 @@
  * @tempo/shared - Shared utilities and types
  */
 
-export { generateId, parseId, type IdPrefix } from './id'
+export { ApiError, type ApiErrorType, ApiResponse, type ApiResponseType } from './api'
 export { formatCurrency, parseCurrency } from './currency'
-export { ApiResponse, ApiError, type ApiResponseType, type ApiErrorType } from './api'
+export { generateId, type IdPrefix, parseId } from './id'
 export * from './schemas'
