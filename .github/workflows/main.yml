@@ -99,13 +99,15 @@ jobs:
 
       - name: Build presto wheel
         if: steps.changes.outputs.relevant == 'true' && matrix.build_wheel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Install uv
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH="$HOME/.local/bin:$PATH"
           
-          # Clone presto and build wheel
-          git clone --depth 1 https://github.com/tempoxyz/presto.git /tmp/presto
+          # Clone presto (private repo) using GitHub token
+          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/tempoxyz/presto.git /tmp/presto
           cd /tmp/presto
           uv build
           
