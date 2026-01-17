@@ -10,6 +10,22 @@ import type { Env, PartnerConfig } from './config.js'
 import { formatApiKey, getApiKey } from './config.js'
 
 /**
+ * Resolve the upstream URL for a partner.
+ * Supports ENV: prefix to read URL from environment variable.
+ */
+function resolveUpstream(partner: PartnerConfig, env: Env): string {
+	if (partner.upstream.startsWith('ENV:')) {
+		const envVar = partner.upstream.slice(4)
+		const value = (env as unknown as Record<string, string | undefined>)[envVar]
+		if (!value) {
+			throw new Error(`Environment variable ${envVar} not configured for partner: ${partner.slug}`)
+		}
+		return value
+	}
+	return partner.upstream
+}
+
+/**
  * Result of proxying a request to the upstream API.
  */
 export interface ProxyResult {
@@ -95,7 +111,8 @@ export async function proxyRequest(
 		partner.slug === 'anthropic' && isOpenAIChatCompletionsPath(forwardPath)
 
 	// Build upstream URL - properly join base path with forward path
-	const baseUrl = new URL(partner.upstream)
+	const upstreamBase = resolveUpstream(partner, c.env)
+	const baseUrl = new URL(upstreamBase)
 	const basePath = baseUrl.pathname.replace(/\/$/, '') // Remove trailing slash
 	// For Anthropic translation, redirect to /v1/messages
 	const actualForwardPath = needsAnthropicTranslation ? '/v1/messages' : forwardPath
@@ -210,8 +227,11 @@ export async function proxyRequest(
 		}
 	}
 
-	// Add proxy metadata headers
-	responseHeaders.set('X-Proxy-Upstream', partner.upstream)
+	// Add proxy metadata headers (use resolved upstream, hide credentials)
+	const upstreamForHeader = new URL(upstreamBase)
+	upstreamForHeader.username = ''
+	upstreamForHeader.password = ''
+	responseHeaders.set('X-Proxy-Upstream', upstreamForHeader.origin)
 	responseHeaders.set('X-Proxy-Latency-Ms', upstreamLatencyMs.toString())
 
 	// If translating Anthropic -> OpenAI, convert the response body

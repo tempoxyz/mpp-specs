@@ -76,8 +76,26 @@ export interface Env {
 	TEMPO_RPC_PASSWORD?: string
 	/** Escrow contract address for streaming channels */
 	STREAM_ESCROW_CONTRACT?: string
+	/** Durable Object binding for payment channels */
+	PAYMENT_CHANNEL?: DurableObjectNamespace
+	/** D1 database for channel index */
+	CHANNELS_DB?: D1Database
+	/** Queue for settlement jobs */
+	SETTLEMENT_QUEUE?: Queue
 	/** Dynamic API keys - accessed via partner config apiKeyEnvVar */
-	[key: string]: string | undefined
+	BROWSERBASE_API_KEY?: string
+	EXA_API_KEY?: string
+	FIRECRAWL_API_KEY?: string
+	MODAL_API_CREDENTIALS?: string
+	OPENAI_API_KEY?: string
+	OPENROUTER_API_KEY?: string
+	TWITTER_BEARER_TOKEN?: string
+	ANTHROPIC_API_KEY?: string
+	/** Tempo RPC upstream URL and auth (for rpc partner) */
+	TEMPO_RPC_UPSTREAM_URL?: string
+	TEMPO_RPC_AUTH?: string
+	/** Allow additional string keys for tests and future API keys */
+	[key: string]: string | DurableObjectNamespace | D1Database | Queue | undefined
 }
 
 /**
@@ -150,5 +168,7 @@ export function formatApiKey(partner: PartnerConfig, apiKey: string): string {
  * Get the API key for a partner from environment variables.
  */
 export function getApiKey(partner: PartnerConfig, env: Env): string | undefined {
-	return env[partner.apiKeyEnvVar]
+	// Access the env as a record since API keys are dynamic
+	const envRecord = env as unknown as Record<string, string | undefined>
+	return envRecord[partner.apiKeyEnvVar]
 }

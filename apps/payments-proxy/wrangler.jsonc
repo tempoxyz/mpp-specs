@@ -24,6 +24,8 @@
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+		"TEMPO_RPC_UPSTREAM_URL": "https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz",
+		"TEMPO_RPC_AUTH": "REDACTED_AUTH",
 		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 		"EXA_API_KEY": "exa-placeholder-key",
 		"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -118,6 +120,16 @@
 					"pattern": "compute.payments.testnet.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
+				},
+				{
+					"pattern": "rpc.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "chain.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
 				}
 			],
 			"vars": {
@@ -125,6 +137,8 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"TEMPO_RPC_UPSTREAM_URL": "https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_AUTH": "REDACTED_AUTH",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -208,6 +222,16 @@
 					"pattern": "compute.payments.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
+				},
+				{
+					"pattern": "rpc.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "chain.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
 				}
 			],
 			"vars": {
@@ -215,6 +239,8 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"TEMPO_RPC_UPSTREAM_URL": "https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz",
+				"TEMPO_RPC_AUTH": "REDACTED_AUTH",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -262,7 +288,9 @@
 				},
 				{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-				{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "rpc.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "chain.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
 				"ENVIRONMENT": "mainnet",
@@ -277,6 +305,8 @@
 			// wrangler secret put OPENAI_API_KEY --env mainnet
 			// wrangler secret put OPENROUTER_API_KEY --env mainnet
 			// wrangler secret put TWITTER_BEARER_TOKEN --env mainnet
+			// wrangler secret put TEMPO_RPC_UPSTREAM_URL --env mainnet (authenticated Presto RPC URL)
+			// wrangler secret put TEMPO_RPC_AUTH --env mainnet (base64 encoded credentials)
 		}
 	}
 }

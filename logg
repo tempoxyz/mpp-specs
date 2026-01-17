@@ -1,0 +1,2 @@
+curl -fsSL https://presto.tempo.xyz/install.sh | bash
+

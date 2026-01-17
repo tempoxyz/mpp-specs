@@ -481,7 +481,7 @@
     
     // Step management
     function showStep(stepId) {
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); });
       document.getElementById(stepId).classList.add('active');
       
       // Update progress
@@ -504,7 +504,7 @@
     window.goToStep = showStep;
     
     function showLoading(text) {
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); });
       document.getElementById('loading').classList.add('active');
       document.getElementById('loading-text').textContent = text;
     }
@@ -525,7 +525,7 @@
     // Load existing wallet from storage
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      try { wallet = JSON.parse(stored); } catch (e) {}
+      try { wallet = JSON.parse(stored); } catch (_e) {}
     }
     
     // Copy address helper
@@ -785,7 +785,7 @@
             method: 'eth_call',
             params: [{
               to: FEE_TOKEN,
-              data: '0x70a08231000000000000000000000000' + addr.slice(2).toLowerCase(),
+              data: `0x70a08231000000000000000000000000${addr.slice(2).toLowerCase()}`,
             }, 'latest'],
           }),
         });
@@ -874,7 +874,7 @@
             showError('Please sign in with your passkey to create a new CLI key.');
             showStep('step-auth');
           }
-        } catch (e) {
+        } catch (_e) {
           wallet = { address: existingAccount };
           showError('Please sign in with your passkey to create a new CLI key.');
           showStep('step-auth');
