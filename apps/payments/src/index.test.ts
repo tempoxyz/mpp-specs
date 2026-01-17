@@ -507,7 +507,7 @@ describe('payments', () => {
 				'/discover',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
@@ -546,7 +546,7 @@ describe('payments', () => {
 			expect(openrouter).toBeDefined()
 			expect(openrouter?.name).toBe('OpenRouter')
 			expect(openrouter?.aliases).toContain('llm')
-			expect(openrouter?.url).toBe('https://openrouter.payments.testnet.tempo.xyz')
+			expect(openrouter?.url).toBe('https://openrouter.payments.tempo.xyz')
 			expect(openrouter?.pricing.default).toBeDefined()
 			expect(openrouter?.streaming.supported).toBe(true)
 		})
@@ -575,7 +575,7 @@ describe('payments', () => {
 				'/discover/openrouter',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
@@ -610,7 +610,7 @@ describe('payments', () => {
 				'/discover/llm',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
@@ -625,7 +625,7 @@ describe('payments', () => {
 				'/discover/unknown-service',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
@@ -638,7 +638,7 @@ describe('payments', () => {
 				'/directory',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
@@ -657,7 +657,7 @@ describe('payments', () => {
 				'/directory/openrouter',
 				{
 					method: 'GET',
-					headers: { Host: 'payments.testnet.tempo.xyz' },
+					headers: { Host: 'payments.tempo.xyz' },
 				},
 				mockEnv,
 			)

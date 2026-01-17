@@ -85,8 +85,6 @@ function getPartnerFromHost(host: string): string | null {
 	return null
 }
 
-
-
 /**
  * Create a new payment challenge for a partner request.
  */
@@ -501,14 +499,10 @@ app.get('/api/blocks', async (c) => {
  */
 function isDashboardRequest(host: string): boolean {
 	const hostWithoutPort = host.split(':')[0] ?? ''
-	// payments.tempo.xyz, payments.testnet.tempo.xyz, payments.moderato.tempo.xyz
-	// but NOT openrouter.payments.tempo.xyz (4+ parts with partner subdomain)
 	if (hostWithoutPort.endsWith('.workers.dev')) return false
 	const parts = hostWithoutPort.split('.')
-	// payments.tempo.xyz = 3 parts, payments.testnet.tempo.xyz = 4 parts
-	// openrouter.payments.tempo.xyz = 4+ parts where first part is a partner
+	// payments.tempo.xyz = 3 parts, but NOT openrouter.payments.tempo.xyz (4+ parts)
 	if (parts.length === 3 && parts[0] === 'payments') return true
-	if (parts.length === 4 && parts[0] === 'payments') return true
 	// localhost:8787 without subdomain
 	if (parts.length === 1 && parts[0] === 'localhost') return true
 	return false
@@ -529,9 +523,8 @@ const discoverHandler = (c: Context<{ Bindings: Env }>) => {
 	const host = c.req.header('host') || 'payments.tempo.xyz'
 	const protocol = host.includes('localhost') ? 'http' : 'https'
 
-	// Build service URLs using subdomain routing only
+	// Build service URLs using partner subdomain
 	// e.g., payments.tempo.xyz -> openrouter.payments.tempo.xyz
-	// e.g., localhost:8787 -> openrouter.localhost:8787
 	const services = partners.map((partner) => {
 		const serviceUrl = `${protocol}://${partner.slug}.${host}`
 
