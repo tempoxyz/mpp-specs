@@ -51,10 +51,10 @@ function parseJsonc(content: string): unknown {
 	return JSON.parse(withoutComments)
 }
 
-// Apps that are excluded from auto-deployment requirement
+// Apps that are excluded from multi-environment deployment requirement
 const AUTO_DEPLOY_ALLOWLIST: string[] = [
-	// Add apps here that should NOT be auto-deployed
-	// Example: "experimental-app" - reason for exclusion
+	// Add apps here that don't need testnet/moderato/mainnet environments
+	'presto-auth', // Cloudflare Pages static app - single deployment, no multi-env
 ]
 
 // Required environments for all apps (matching tempo-apps fee-payer pattern)
