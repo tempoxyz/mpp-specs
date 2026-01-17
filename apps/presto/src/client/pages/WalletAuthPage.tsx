@@ -26,7 +26,11 @@ export function WalletAuthPage() {
 		try {
 			// Check if ethereum provider exists
 			if (walletId === 'injected' && typeof window !== 'undefined' && 'ethereum' in window) {
-				const ethereum = (window as unknown as { ethereum: { request: (args: { method: string }) => Promise<string[]> } }).ethereum
+				const ethereum = (
+					window as unknown as {
+						ethereum: { request: (args: { method: string }) => Promise<string[]> }
+					}
+				).ethereum
 				const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
 				if (accounts[0]) {
 					setAddress(accounts[0])
@@ -36,7 +40,7 @@ export function WalletAuthPage() {
 			}
 
 			// Fallback / placeholder for other wallets
-			await new Promise(resolve => setTimeout(resolve, 1500))
+			await new Promise((resolve) => setTimeout(resolve, 1500))
 			setError(`${walletId} not available. Install a browser wallet extension.`)
 			setState('disconnected')
 		} catch (err) {
@@ -56,15 +60,20 @@ export function WalletAuthPage() {
 			<div className="container">
 				<header className="install-header">
 					<div className="status mono" style={{ marginBottom: 24 }}>
-						<span className={`status-dot ${state === 'connected' ? 'connected' : 'disconnected'}`} />
-						{state === 'connected' ? 'Connected' : state === 'connecting' ? 'Connecting...' : 'Disconnected'}
+						<span
+							className={`status-dot ${state === 'connected' ? 'connected' : 'disconnected'}`}
+						/>
+						{state === 'connected'
+							? 'Connected'
+							: state === 'connecting'
+								? 'Connecting...'
+								: 'Disconnected'}
 					</div>
 					<h1 className="install-title serif">Presto</h1>
 					<p className="install-subtitle mono">
-						{state === 'connected' 
+						{state === 'connected'
 							? 'Your wallet is connected. You can now use Presto with payment authentication.'
-							: 'Connect your wallet to authenticate and make payments for AI assistance.'
-						}
+							: 'Connect your wallet to authenticate and make payments for AI assistance.'}
 					</p>
 				</header>
 
@@ -88,7 +97,9 @@ export function WalletAuthPage() {
 								<span className="feature-num">✓</span>
 								<p className="feature-text">
 									<strong>Ready to use.</strong> Open a terminal and run{' '}
-									<code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px' }}>presto</code>{' '}
+									<code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px' }}>
+										presto
+									</code>{' '}
 									to start.
 								</p>
 							</div>
@@ -97,13 +108,17 @@ export function WalletAuthPage() {
 				) : (
 					<>
 						{error && (
-							<div style={{ 
-								marginBottom: 24, 
-								padding: '12px 16px', 
-								border: '1px solid var(--border)',
-								background: 'rgba(255,255,255,0.03)'
-							}}>
-								<span className="mono" style={{ fontSize: 12, color: 'var(--muted)' }}>{error}</span>
+							<div
+								style={{
+									marginBottom: 24,
+									padding: '12px 16px',
+									border: '1px solid var(--border)',
+									background: 'rgba(255,255,255,0.03)',
+								}}
+							>
+								<span className="mono" style={{ fontSize: 12, color: 'var(--muted)' }}>
+									{error}
+								</span>
 							</div>
 						)}
 

@@ -14,7 +14,11 @@
 		{ "pattern": "payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "anthropic.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "claude.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "browserbase.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+		{
+			"pattern": "browserbase.payments.tempo.xyz",
+			"zone_name": "tempo.xyz",
+			"custom_domain": true
+		},
 		{ "pattern": "exa.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "firecrawl.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "openai.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
