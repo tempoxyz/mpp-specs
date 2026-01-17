@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
+      fail-fast: false
       matrix:
         include:
           - app: payments
@@ -31,6 +32,7 @@ jobs:
           - app: paymentauth-basic
           - app: paymentauth-tetris
           - app: paymentauth-x402
+          - app: purl
           - app: reth-snapshots
           - app: presto
             build_wheel: true
@@ -67,17 +69,17 @@ jobs:
           # Install uv
           curl -LsSf https://astral.sh/uv/install.sh | sh
           export PATH="$HOME/.local/bin:$PATH"
-          
+
           # Clone presto (private repo) using GitHub token
           git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/tempoxyz/presto.git /tmp/presto
           cd /tmp/presto
           uv build
-          
+
           # Copy wheel to presto public directory
           mkdir -p ${{ github.workspace }}/apps/presto/public
           cp dist/*.whl ${{ github.workspace }}/apps/presto/public/
           cp dist/*.tar.gz ${{ github.workspace }}/apps/presto/public/
-          
+
           # Show what was built
           ls -la ${{ github.workspace }}/apps/presto/public/
 

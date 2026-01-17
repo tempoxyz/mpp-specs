@@ -27,6 +27,7 @@ jobs:
       contents: read
       pull-requests: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - app: payments
@@ -34,6 +35,7 @@ jobs:
           - app: paymentauth-basic
           - app: paymentauth-tetris
           - app: paymentauth-x402
+          - app: purl
           - app: reth-snapshots
           - app: presto
             deploy_cmd: "pages deploy public --project-name=presto --branch=${{ github.head_ref }}"

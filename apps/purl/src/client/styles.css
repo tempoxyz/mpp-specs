@@ -1,0 +1,403 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+	--bg: #ffffff;
+	--fg: #000000;
+	--muted: #666666;
+	--border: #000000;
+	--accent: #000000;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html {
+	font-size: 16px;
+}
+
+body {
+	font-family: "Space Mono", monospace;
+	background: var(--bg);
+	color: var(--fg);
+	min-height: 100vh;
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Dot grid background */
+body::before {
+	content: "";
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-image: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+	background-size: 24px 24px;
+	pointer-events: none;
+	z-index: 0;
+}
+
+/* Noise overlay */
+body::after {
+	content: "";
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+	opacity: 0.03;
+	pointer-events: none;
+	z-index: 1;
+}
+
+#root {
+	position: relative;
+	z-index: 2;
+}
+
+.mono {
+	font-family: "Space Mono", monospace;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: "Space Mono", monospace;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+a {
+	color: var(--fg);
+	text-decoration: underline;
+	text-underline-offset: 4px;
+	transition: opacity 0.15s;
+}
+
+a:hover {
+	opacity: 0.7;
+}
+
+code,
+pre {
+	font-family: "Space Mono", monospace;
+}
+
+/* Brutalist button */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 12px 24px;
+	font-family: "Space Mono", monospace;
+	font-size: 14px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--bg);
+	background: var(--fg);
+	border: 2px solid var(--fg);
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.btn:hover {
+	color: var(--fg);
+	background: transparent;
+}
+
+.btn-outline {
+	color: var(--fg);
+	background: transparent;
+}
+
+.btn-outline:hover {
+	color: var(--bg);
+	background: var(--fg);
+}
+
+/* Code block */
+.code-block {
+	position: relative;
+	padding: 20px 24px;
+	font-family: "Space Mono", monospace;
+	font-size: 14px;
+	background: rgba(0, 0, 0, 0.03);
+	border: 1px solid var(--border);
+	overflow-x: auto;
+}
+
+.code-block code {
+	color: var(--fg);
+}
+
+.copy-btn {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	padding: 6px 12px;
+	font-family: "Space Mono", monospace;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--muted);
+	background: transparent;
+	border: 1px solid var(--muted);
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.copy-btn:hover {
+	color: var(--fg);
+	border-color: var(--fg);
+}
+
+.copy-btn.copied {
+	color: var(--fg);
+	border-color: var(--fg);
+}
+
+/* Container */
+.container {
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 0 24px;
+}
+
+/* Section */
+.section {
+	padding: 80px 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.section:last-child {
+	border-bottom: none;
+}
+
+/* Divider */
+.divider {
+	width: 100%;
+	height: 1px;
+	background: var(--border);
+	margin: 48px 0;
+}
+
+/* Tag */
+.tag {
+	display: inline-block;
+	padding: 4px 10px;
+	font-family: "Space Mono", monospace;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--muted);
+	border: 1px solid var(--muted);
+}
+
+/* Install page specific */
+.install-hero {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 48px 24px;
+}
+
+.install-header {
+	margin-bottom: 48px;
+}
+
+.install-title {
+	font-size: clamp(48px, 12vw, 120px);
+	line-height: 0.9;
+	margin-bottom: 8px;
+	font-weight: 700;
+}
+
+.install-tagline {
+	font-size: 18px;
+	color: var(--muted);
+	margin-bottom: 16px;
+	font-style: italic;
+}
+
+.install-subtitle {
+	font-size: 16px;
+	color: var(--muted);
+	max-width: 540px;
+}
+
+/* Protocols section */
+.install-protocols {
+	margin-bottom: 48px;
+}
+
+.protocol-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: var(--muted);
+	margin-bottom: 12px;
+}
+
+.protocols {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.protocol {
+	display: grid;
+	grid-template-columns: auto auto 1fr;
+	gap: 12px;
+	align-items: baseline;
+	padding: 12px 16px;
+	background: rgba(0, 0, 0, 0.02);
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	text-decoration: none;
+	transition: all 0.15s;
+}
+
+.protocol:hover {
+	background: rgba(0, 0, 0, 0.05);
+	border-color: var(--border);
+	opacity: 1;
+}
+
+.protocol-check {
+	color: var(--fg);
+	font-weight: 700;
+}
+
+.protocol-desc {
+	font-size: 13px;
+	color: var(--muted);
+}
+
+.install-command {
+	margin-bottom: 48px;
+}
+
+.install-command-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: var(--muted);
+	margin-bottom: 12px;
+}
+
+/* Examples section */
+.install-examples {
+	margin-bottom: 48px;
+}
+
+.examples-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.15em;
+	color: var(--muted);
+	margin-bottom: 12px;
+}
+
+.examples-grid {
+	display: grid;
+	gap: 8px;
+}
+
+.example {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 16px;
+	align-items: baseline;
+	padding: 10px 14px;
+	background: rgba(0, 0, 0, 0.02);
+	border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.example-cmd {
+	font-size: 13px;
+	color: var(--fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.example-desc {
+	font-size: 12px;
+	color: var(--muted);
+	text-align: right;
+	white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+	.example {
+		grid-template-columns: 1fr;
+		gap: 4px;
+	}
+
+	.example-desc {
+		text-align: left;
+	}
+
+	.protocol {
+		grid-template-columns: auto 1fr;
+		grid-template-rows: auto auto;
+	}
+
+	.protocol-desc {
+		grid-column: 2;
+	}
+}
+
+.install-features {
+	display: grid;
+	gap: 24px;
+	margin-bottom: 64px;
+}
+
+.feature {
+	display: flex;
+	gap: 16px;
+	align-items: flex-start;
+}
+
+.feature-num {
+	font-family: "Space Mono", monospace;
+	font-size: 24px;
+	font-weight: 700;
+	line-height: 1;
+	min-width: 32px;
+}
+
+.feature-text {
+	font-size: 14px;
+	color: var(--muted);
+}
+
+.feature-text strong {
+	color: var(--fg);
+}
+
+.install-footer {
+	display: flex;
+	gap: 24px;
+	flex-wrap: wrap;
+}
+
+.install-footer a {
+	font-size: 14px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}

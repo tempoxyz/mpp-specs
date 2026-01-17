@@ -1,0 +1,32 @@
+{
+	"name": "@tempo/purl",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check src",
+		"lint:fix": "biome check --write src",
+		"test": "vitest run --passWithNoTests",
+		"deploy:prod": "wrangler deploy"
+	},
+	"dependencies": {
+		"hono": "^4.6.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.0.0",
+		"@cloudflare/vitest-pool-workers": "^0.5.0",
+		"@cloudflare/workers-types": "^4.20250115.0",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"@vitejs/plugin-react": "^4.3.4",
+		"typescript": "^5.7.3",
+		"vite": "^6.0.0",
+		"vitest": "^2.1.0",
+		"wrangler": "^4.59.2"
+	}
+}
