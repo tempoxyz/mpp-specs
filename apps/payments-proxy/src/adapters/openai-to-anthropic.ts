@@ -362,9 +362,14 @@ export function createStreamingTransformer(): TransformStream<Uint8Array, Uint8A
 	let currentToolCallIndex = -1
 	let currentToolCallId = ''
 	let currentToolCallName = ''
+	let hasReceivedData = false
 
 	return new TransformStream({
 		transform(chunk, controller) {
+			if (!hasReceivedData) {
+				console.log('[streaming-transformer] First chunk received, size:', chunk.length)
+			}
+			hasReceivedData = true
 			buffer += decoder.decode(chunk, { stream: true })
 
 			// Process complete lines

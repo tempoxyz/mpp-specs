@@ -237,7 +237,10 @@ export async function proxyRequest(
 	// If translating Anthropic -> OpenAI, convert the response body
 	let responseBody: BodyInit | null = upstreamResponse.body
 	if (needsAnthropicTranslation && upstreamResponse.ok) {
-		if (isStreaming && upstreamResponse.body) {
+		// Check if response is streaming - either we requested it OR Anthropic returned SSE
+		const responseContentType = upstreamResponse.headers.get('content-type') || ''
+		const isStreamingResponse = isStreaming || responseContentType.includes('text/event-stream')
+		if (isStreamingResponse && upstreamResponse.body) {
 			// For streaming responses, pipe through the transformer
 			responseBody = upstreamResponse.body.pipeThrough(createStreamingTransformer())
 			responseHeaders.set('Content-Type', 'text/event-stream')

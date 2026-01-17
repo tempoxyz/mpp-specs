@@ -434,7 +434,7 @@ app.use('*', cors())
 // Request logging middleware
 app.use('*', async (c, next) => {
 	const start = Date.now()
-	console.log(`→ ${c.req.method} ${c.req.path}`)
+	console.log(`→ ${c.req.method} ${c.req.path} [${c.req.header('host')}]`)
 	await next()
 	const ms = Date.now() - start
 	console.log(`← ${c.req.method} ${c.req.path} ${c.res.status} (${ms}ms)`)
@@ -780,10 +780,12 @@ app.all('/*', async (c) => {
 		}
 
 		// Stream payment successful - proxy the request
+		console.log(`[stream-voucher] Proxying request to ${partner.slug}${forwardPath}`)
 		try {
-			const { response: upstreamResponse } = await proxyRequest(c, partner, forwardPath, {
+			const { response: upstreamResponse, upstreamLatencyMs } = await proxyRequest(c, partner, forwardPath, {
 				preReadBody,
 			})
+			console.log(`[stream-voucher] Upstream responded: ${upstreamResponse.status} in ${upstreamLatencyMs}ms, streaming=${upstreamResponse.headers.get('content-type')?.includes('event-stream')}`)
 
 			// Add stream payment receipt
 			const responseHeaders = new Headers(upstreamResponse.headers)
@@ -799,12 +801,14 @@ app.all('/*', async (c) => {
 			responseHeaders.set('X-Payment-ChannelId', streamCred.channelId)
 			responseHeaders.set('X-Payment-Remaining', remaining.toString())
 
+			console.log(`[stream-voucher] Returning streaming response, body type=${upstreamResponse.body?.constructor?.name}`)
 			return new Response(upstreamResponse.body, {
 				status: upstreamResponse.status,
 				statusText: upstreamResponse.statusText,
 				headers: responseHeaders,
 			})
 		} catch (error) {
+			console.error(`[stream-voucher] Proxy error:`, error)
 			return c.json(
 				{
 					error: 'Upstream request failed after payment',
@@ -922,7 +926,7 @@ app.onError((err, c) => {
 		return c.json({ error: err.message }, err.status)
 	}
 
-	console.error('Unhandled error:', err)
+	console.error('Unhandled error:', err, 'Stack:', err instanceof Error ? err.stack : 'N/A')
 	return c.json({ error: 'Internal server error' }, 500)
 })
 
