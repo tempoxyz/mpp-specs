@@ -228,6 +228,13 @@ export function AuthPage() {
 		form.submit()
 	}, [accessKey, urlParams.callback, urlParams.state])
 
+	// Auto-finish setup when access key is created in CLI flow
+	useEffect(() => {
+		if (isCliFlow && hasAccessKey && accessKey && !isFinishing) {
+			finishSetup()
+		}
+	}, [isCliFlow, hasAccessKey, accessKey, isFinishing, finishSetup])
+
 	return (
 		<div className="install-hero">
 			<div className="container">
@@ -378,16 +385,11 @@ export function AuthPage() {
 										</div>
 									</div>
 
-									{/* Show Finish Setup button for CLI flow */}
+									{/* Show status for CLI flow, clear button otherwise */}
 									{isCliFlow ? (
-										<button
-											type="button"
-											className="btn"
-											onClick={finishSetup}
-											disabled={isFinishing}
-										>
-											{isFinishing ? 'Finishing...' : 'Finish Setup'}
-										</button>
+										<div className="success-box">
+											<span>✓ Setup complete! Returning to CLI...</span>
+										</div>
 									) : (
 										<button
 											type="button"
