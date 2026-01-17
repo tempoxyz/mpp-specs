@@ -542,4 +542,137 @@ describe('payments-proxy', () => {
 			// Both should succeed (cleanup doesn't break functionality)
 		})
 	})
+
+	describe('Discovery API', () => {
+		it('should return list of all services', async () => {
+			const res = await app.request(
+				'/discover',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as {
+				version: string
+				environment: string
+				timestamp: string
+				services: Array<{
+					name: string
+					slug: string
+					aliases: string[]
+					url: string
+					pricing: {
+						default: string
+						asset: string
+						destination: string
+					}
+					streaming: { supported: boolean }
+				}>
+			}
+			expect(data.version).toBe('1.0')
+			expect(data.environment).toBe('test')
+			expect(data.services).toBeInstanceOf(Array)
+			expect(data.services.length).toBeGreaterThan(0)
+
+			// Check that known partners are included
+			const slugs = data.services.map((s) => s.slug)
+			expect(slugs).toContain('browserbase')
+			expect(slugs).toContain('openrouter')
+			expect(slugs).toContain('rpc')
+
+			// Check service structure
+			const openrouter = data.services.find((s) => s.slug === 'openrouter')
+			expect(openrouter).toBeDefined()
+			expect(openrouter?.name).toBe('OpenRouter')
+			expect(openrouter?.aliases).toContain('llm')
+			expect(openrouter?.url).toBe('https://openrouter.payments.testnet.tempo.xyz')
+			expect(openrouter?.pricing.default).toBeDefined()
+			expect(openrouter?.streaming.supported).toBe(true)
+		})
+
+		it('should return service URLs with path-based routing for localhost', async () => {
+			const res = await app.request(
+				'/discover',
+				{
+					method: 'GET',
+					headers: { Host: 'localhost:8787' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as {
+				services: Array<{ slug: string; url: string }>
+			}
+
+			const openrouter = data.services.find((s) => s.slug === 'openrouter')
+			expect(openrouter?.url).toBe('http://localhost:8787/openrouter')
+		})
+
+		it('should return specific service info', async () => {
+			const res = await app.request(
+				'/discover/openrouter',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as {
+				name: string
+				slug: string
+				aliases: string[]
+				url: string
+				pricing: {
+					default: string
+					endpoints: Array<{
+						path: string
+						methods: string[]
+						price: string
+						description: string
+					}>
+				}
+				streaming: { supported: boolean; escrowContract?: string }
+			}
+			expect(data.name).toBe('OpenRouter')
+			expect(data.slug).toBe('openrouter')
+			expect(data.aliases).toContain('llm')
+			expect(data.pricing.endpoints).toBeInstanceOf(Array)
+			expect(data.streaming.supported).toBe(true)
+			expect(data.streaming.escrowContract).toBeDefined()
+		})
+
+		it('should resolve service by alias', async () => {
+			const res = await app.request(
+				'/discover/llm',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as { slug: string }
+			expect(data.slug).toBe('openrouter')
+		})
+
+		it('should return 404 for unknown service', async () => {
+			const res = await app.request(
+				'/discover/unknown-service',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(404)
+		})
+	})
 })

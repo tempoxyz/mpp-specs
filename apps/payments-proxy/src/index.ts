@@ -454,6 +454,100 @@ app.get('/', (c) => {
 	return c.text('tm!')
 })
 
+// Discovery API - list all available services
+app.get('/discover', (c) => {
+	const host = c.req.header('host') || 'payments.tempo.xyz'
+	const protocol = host.includes('localhost') ? 'http' : 'https'
+
+	// Build service URLs - replace first subdomain with partner slug
+	// e.g., payments.testnet.tempo.xyz -> openrouter.payments.testnet.tempo.xyz
+	const services = partners.map((partner) => {
+		const serviceUrl = host.includes('localhost')
+			? `${protocol}://${host}/${partner.slug}`
+			: `${protocol}://${partner.slug}.${host}`
+
+		return {
+			name: partner.name,
+			slug: partner.slug,
+			aliases: partner.aliases || [],
+			url: serviceUrl,
+			pricing: {
+				default: partner.defaultPrice,
+				asset: partner.asset,
+				destination: partner.destination,
+				endpoints: partner.endpoints?.map((ep) => ({
+					path: ep.path,
+					methods: ep.methods,
+					price: ep.price,
+					requiresPayment: ep.requiresPayment ?? partner.defaultRequiresPayment,
+					description: ep.description,
+				})),
+			},
+			streaming: partner.streaming
+				? {
+						supported: true,
+						escrowContract: partner.streaming.escrowContract,
+						defaultDeposit: partner.streaming.defaultDeposit,
+						defaultExpirySeconds: partner.streaming.defaultExpirySeconds,
+					}
+				: { supported: false },
+		}
+	})
+
+	return c.json({
+		version: '1.0',
+		environment: c.env.ENVIRONMENT,
+		timestamp: new Date().toISOString(),
+		services,
+	})
+})
+
+// Get specific service info
+app.get('/discover/:slug', (c) => {
+	const slug = c.req.param('slug')
+	const partner = getPartner(slug)
+
+	if (!partner) {
+		throw new HTTPException(404, { message: `Unknown service: ${slug}` })
+	}
+
+	const host = c.req.header('host') || 'payments.tempo.xyz'
+	const protocol = host.includes('localhost') ? 'http' : 'https'
+
+	const serviceUrl = host.includes('localhost')
+		? `${protocol}://${host}/${partner.slug}`
+		: `${protocol}://${partner.slug}.${host}`
+
+	return c.json({
+		name: partner.name,
+		slug: partner.slug,
+		aliases: partner.aliases || [],
+		url: serviceUrl,
+		pricing: {
+			default: partner.defaultPrice,
+			asset: partner.asset,
+			destination: partner.destination,
+			endpoints: partner.endpoints?.map((ep) => ({
+				path: ep.path,
+				methods: ep.methods,
+				price: ep.price,
+				requiresPayment: ep.requiresPayment ?? partner.defaultRequiresPayment,
+				dynamicPricing: ep.dynamicPricing,
+				description: ep.description,
+			})),
+		},
+		streaming: partner.streaming
+			? {
+					supported: true,
+					escrowContract: partner.streaming.escrowContract,
+					defaultDeposit: partner.streaming.defaultDeposit,
+					defaultExpirySeconds: partner.streaming.defaultExpirySeconds,
+					minVoucherDelta: partner.streaming.minVoucherDelta,
+				}
+			: { supported: false },
+	})
+})
+
 // Voucher submission endpoint for streaming channels
 app.post('/:partner/voucher', async (c) => {
 	const partnerSlug = c.req.param('partner')
