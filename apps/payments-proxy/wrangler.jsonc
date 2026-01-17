@@ -23,9 +23,11 @@
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+		"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 		"EXA_API_KEY": "exa-placeholder-key",
 		"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+		"OPENAI_API_KEY": "openai-placeholder-key",
 		"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 		"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
 	},
@@ -47,6 +49,16 @@
 			"name": "payments-proxy-testnet",
 			"routes": [
 				{
+					"pattern": "anthropic.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "claude.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
 					"pattern": "browserbase.payments.testnet.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
@@ -58,6 +70,21 @@
 				},
 				{
 					"pattern": "firecrawl.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "openai.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "gpt.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "codex.payments.testnet.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				},
@@ -82,9 +109,11 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"OPENAI_API_KEY": "openai-placeholder-key",
 				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
 			}
@@ -94,6 +123,16 @@
 		"moderato": {
 			"name": "payments-proxy-moderato",
 			"routes": [
+				{
+					"pattern": "anthropic.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "claude.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
 				{
 					"pattern": "browserbase.payments.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
@@ -106,6 +145,21 @@
 				},
 				{
 					"pattern": "firecrawl.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "openai.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "gpt.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "codex.payments.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				},
@@ -130,9 +184,11 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+				"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"OPENAI_API_KEY": "openai-placeholder-key",
 				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
 			}
@@ -142,6 +198,12 @@
 		"mainnet": {
 			"name": "payments-proxy-mainnet",
 			"routes": [
+				{
+					"pattern": "anthropic.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{ "pattern": "claude.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{
 					"pattern": "browserbase.payments.tempo.xyz",
 					"zone_name": "tempo.xyz",
@@ -153,6 +215,9 @@
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				},
+				{ "pattern": "openai.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "gpt.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "codex.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{
 					"pattern": "openrouter.payments.tempo.xyz",
 					"zone_name": "tempo.xyz",
@@ -166,9 +231,11 @@
 				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 			}
 			// Note: For mainnet, set API keys via wrangler secret:
+			// wrangler secret put ANTHROPIC_API_KEY --env mainnet
 			// wrangler secret put BROWSERBASE_API_KEY --env mainnet
 			// wrangler secret put EXA_API_KEY --env mainnet
 			// wrangler secret put FIRECRAWL_API_KEY --env mainnet
+			// wrangler secret put OPENAI_API_KEY --env mainnet
 			// wrangler secret put OPENROUTER_API_KEY --env mainnet
 			// wrangler secret put TWITTER_BEARER_TOKEN --env mainnet
 		}

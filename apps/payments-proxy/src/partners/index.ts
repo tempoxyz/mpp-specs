@@ -1,11 +1,21 @@
 import type { PartnerConfig } from '../config.js'
+import { anthropic } from './anthropic.js'
 import { browserbase } from './browserbase.js'
 import { exa } from './exa.js'
 import { firecrawl } from './firecrawl.js'
+import { openai } from './openai.js'
 import { openrouter } from './openrouter.js'
 import { twitter } from './twitter.js'
 
-export const partners: PartnerConfig[] = [browserbase, exa, firecrawl, openrouter, twitter]
+export const partners: PartnerConfig[] = [
+	anthropic,
+	browserbase,
+	exa,
+	firecrawl,
+	openai,
+	openrouter,
+	twitter,
+]
 
 /**
  * Get a partner by slug or alias.
