@@ -70,6 +70,7 @@ export function AuthPage() {
 	const [finishError, setFinishError] = useState<string | null>(null)
 	const [isRequestingFaucet, setIsRequestingFaucet] = useState(false)
 	const [faucetSuccess, setFaucetSuccess] = useState(false)
+	const [faucetError, setFaucetError] = useState<string | null>(null)
 
 	// Get CLI callback params
 	const urlParams = getUrlParams()
@@ -89,14 +90,16 @@ export function AuthPage() {
 	// Check if user has enough funds to create access key
 	const hasFunds = balance !== null && balance > 0n
 
-	// Request faucet for testnet and wait for funds to arrive
+	// Request faucet for testnet and wait for tx to confirm
 	const requestFaucet = useCallback(async () => {
 		if (!address || !networkConfig.isTestnet) return
 
 		setIsRequestingFaucet(true)
 		setFaucetSuccess(false)
+		setFaucetError(null)
 
 		try {
+			// Call tempo_fundAddress
 			const res = await fetch(networkConfig.rpcUrl, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -108,44 +111,65 @@ export function AuthPage() {
 				}),
 			})
 
-			const data = (await res.json()) as { error?: { message: string } }
+			const data = (await res.json()) as { result?: string; error?: { message: string } }
 			if (data.error) throw new Error(data.error.message)
 
-			// Poll for balance update (wait for funds to actually arrive)
-			const startBalance = balance
+			const txHash = data.result
+			if (!txHash) throw new Error('No transaction hash returned')
+
+			// Wait for transaction to confirm by polling receipt
 			let attempts = 0
-			const maxAttempts = 10
+			const maxAttempts = 60 // 120 seconds max
 
-			const pollForFunds = async (): Promise<boolean> => {
-				const newBalance = await getBalance()
-				if (newBalance !== null && newBalance > (startBalance ?? 0n)) {
-					setBalance(newBalance)
-					return true
-				}
-				return false
-			}
+			console.log(`[Faucet] Waiting for tx ${txHash} to confirm...`)
 
-			// Poll every 2 seconds for up to 20 seconds
 			while (attempts < maxAttempts) {
 				await new Promise((resolve) => setTimeout(resolve, 2000))
-				const received = await pollForFunds()
-				if (received) {
-					setFaucetSuccess(true)
-					break
+
+				const receiptRes = await fetch(networkConfig.rpcUrl, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						jsonrpc: '2.0',
+						id: 1,
+						method: 'eth_getTransactionReceipt',
+						params: [txHash],
+					}),
+				})
+
+				const receiptData = (await receiptRes.json()) as {
+					result?: { status: string } | null
+					error?: { message: string }
 				}
+
+				if (receiptData.result) {
+					// Transaction confirmed
+					console.log(`[Faucet] Receipt received, status: ${receiptData.result.status}`)
+					if (receiptData.result.status === '0x1') {
+						// Success - refresh balance and unlock next step
+						const newBalance = await getBalance()
+						setBalance(newBalance)
+						setFaucetSuccess(true)
+						return
+					}
+					// Transaction failed
+					throw new Error('Faucet transaction failed')
+				}
+
 				attempts++
+				if (attempts % 10 === 0) {
+					console.log(`[Faucet] Still waiting... (${attempts}/${maxAttempts})`)
+				}
 			}
 
-			if (attempts >= maxAttempts) {
-				// Final refresh attempt
-				refreshBalance()
-			}
+			throw new Error('Transaction confirmation timeout')
 		} catch (e) {
 			console.error('Faucet error:', e)
+			setFaucetError(e instanceof Error ? e.message : 'Failed to get faucet funds')
 		} finally {
 			setIsRequestingFaucet(false)
 		}
-	}, [address, networkConfig, refreshBalance, balance, getBalance])
+	}, [address, networkConfig, getBalance])
 
 	const handleCopyAddress = async () => {
 		if (address) {
@@ -260,7 +284,9 @@ export function AuthPage() {
 							</button>
 						</div>
 
-						<p className="auth-hint mono">Your passkey is stored securely by your browser or device.</p>
+						<p className="auth-hint mono">
+							Your passkey is stored securely by your browser or device.
+						</p>
 					</div>
 				) : (
 					<div className="auth-section">
@@ -281,7 +307,8 @@ export function AuthPage() {
 							<div className="info-block">
 								<div className="info-label mono">Balance</div>
 								<div className="info-value mono">
-									${formatUnits(balance, 6)} <span className="tag">{networkConfig.feeTokenName}</span>
+									${formatUnits(balance, 6)}{' '}
+									<span className="tag">{networkConfig.feeTokenName}</span>
 								</div>
 							</div>
 						)}
@@ -289,6 +316,11 @@ export function AuthPage() {
 						{/* Faucet for testnet - only show if no funds */}
 						{networkConfig.isTestnet && !hasFunds && (
 							<div className="faucet-section">
+								{faucetError && (
+									<div className="error-box">
+										<span className="mono">{faucetError}</span>
+									</div>
+								)}
 								{faucetSuccess && (
 									<div className="success-box">
 										<span>✓ Funds received!</span>
@@ -303,10 +335,10 @@ export function AuthPage() {
 									{faucetSuccess
 										? '✓ Funds received'
 										: isRequestingFaucet
-											? 'Waiting for funds...'
+											? 'Confirming transaction...'
 											: 'Get free testnet credits'}
 								</button>
-								{!faucetSuccess && (
+								{!faucetSuccess && !faucetError && (
 									<p className="auth-hint mono" style={{ marginTop: 12 }}>
 										You need testnet credits to register your CLI key.
 									</p>
