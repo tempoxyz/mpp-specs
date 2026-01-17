@@ -23,15 +23,13 @@ jobs:
     
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
       
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
-      
-      - name: Install Solady
-        working-directory: packages/stream-channels
-        run: forge install Vectorized/solady --no-commit
       
       - name: Build contracts
         working-directory: packages/stream-channels
