@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { AuthPage } from './pages/AuthPage'
 import { InstallPage } from './pages/InstallPage'
-import { WalletAuthPage } from './pages/WalletAuthPage'
+import { WebAuthnProvider } from './WebAuthnContext'
 
 export function App() {
 	const [currentPath, setCurrentPath] = useState(window.location.pathname)
@@ -17,5 +18,9 @@ export function App() {
 		return <InstallPage />
 	}
 
-	return <WalletAuthPage />
+	return (
+		<WebAuthnProvider>
+			<AuthPage />
+		</WebAuthnProvider>
+	)
 }

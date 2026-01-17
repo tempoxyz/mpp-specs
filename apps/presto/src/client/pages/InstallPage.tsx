@@ -29,8 +29,8 @@ export function InstallPage() {
 				<header className="install-header">
 					<h1 className="install-title serif">Presto</h1>
 					<p className="install-subtitle mono">
-						Minimal AI coding agent with Tempo payment authentication. 
-						Pay-per-use AI assistance powered by blockchain micropayments.
+						Minimal AI coding agent with Tempo payment authentication. Pay-per-use AI assistance
+						powered by blockchain micropayments.
 					</p>
 				</header>
 
@@ -38,8 +38,8 @@ export function InstallPage() {
 					<div className="install-command-label mono">Install</div>
 					<div className="code-block">
 						<code>{INSTALL_COMMAND}</code>
-						<button 
-							type="button" 
+						<button
+							type="button"
 							className={`copy-btn ${copied ? 'copied' : ''}`}
 							onClick={handleCopy}
 						>
@@ -52,22 +52,22 @@ export function InstallPage() {
 					<div className="feature">
 						<span className="feature-num">1</span>
 						<p className="feature-text">
-							<strong>Instant setup.</strong> One command installs everything. 
-							Works with uv, pipx, or pip.
+							<strong>Instant setup.</strong> One command installs everything. Works with uv, pipx,
+							or pip.
 						</p>
 					</div>
 					<div className="feature">
 						<span className="feature-num">2</span>
 						<p className="feature-text">
-							<strong>Pay as you go.</strong> Micropayments via Tempo blockchain.
-							No subscriptions, no API keys to manage.
+							<strong>Pay as you go.</strong> Micropayments via Tempo blockchain. No subscriptions,
+							no API keys to manage.
 						</p>
 					</div>
 					<div className="feature">
 						<span className="feature-num">3</span>
 						<p className="feature-text">
-							<strong>Local-first.</strong> Your code stays on your machine.
-							We only process your queries.
+							<strong>Local-first.</strong> Your code stays on your machine. We only process your
+							queries.
 						</p>
 					</div>
 				</div>
@@ -81,7 +81,13 @@ export function InstallPage() {
 					<a href="https://docs.tempo.xyz" target="_blank" rel="noopener noreferrer">
 						Docs
 					</a>
-					<a href="/" onClick={(e) => { e.preventDefault(); window.location.href = '/' }}>
+					<a
+						href="/"
+						onClick={(e) => {
+							e.preventDefault()
+							window.location.href = '/'
+						}}
+					>
 						Connect Wallet
 					</a>
 				</div>

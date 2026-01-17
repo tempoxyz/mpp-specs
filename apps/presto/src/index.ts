@@ -62,9 +62,27 @@ app.get('/health', (c) => {
 	})
 })
 
-// Let Vite/assets handle everything else (React app, wheel files, etc.)
-app.all('*', async (c) => {
-	return c.env.ASSETS.fetch(c.req.raw)
+// Store public key for credential (used during WebAuthn registration)
+app.post('/keys', async (c) => {
+	// For now, just acknowledge - in production this would store in KV
+	return c.json({ success: true })
+})
+
+// Get challenge for WebAuthn
+app.get('/keys/challenge', (_c) => {
+	const challenge = crypto.randomUUID()
+	return new Response(JSON.stringify({ challenge }), {
+		headers: { 'Content-Type': 'application/json' },
+	})
+})
+
+// Get public key for credential
+app.get('/keys/:credentialId', async (_c) => {
+	// For now, return not found - in production this would query KV
+	return new Response(JSON.stringify({ error: 'Not found' }), {
+		status: 404,
+		headers: { 'Content-Type': 'application/json' },
+	})
 })
 
 export default app
