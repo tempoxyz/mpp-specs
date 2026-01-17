@@ -743,7 +743,7 @@ Servers MUST reject credentials containing:
 ### 12.4. Replay Protection
 
 Payment methods MUST define their own replay protection mechanisms
-(e.g., on-chain nonce consumption, preimage revelation, authorization
+(e.g., onchain nonce consumption, preimage revelation, authorization
 expiry). This specification does not mandate a specific approach.
 
 Payment method specifications SHOULD define expiry semantics in the `request`
@@ -1117,10 +1117,9 @@ Decoded credential:
 
 ```jsonc
 {
-  "method": "tempo",
   "id": "qB3wErTyU7iOpAsD9fGhJk",
   "payload": {
-    "txid": "0xabc123...",
+    "type": "transaction",
     "signature": "0x..."
   }
 }
@@ -1245,9 +1244,11 @@ Decoded credential:
 
 ```jsonc
 {
-  "method": "tempo",
   "id": "zL4xCvBnM6kJhGfD8sAaWe",
-  "payload": "0x..." // RLP-encoded Tempo key authorization
+  "payload": {
+    "type": "keyAuthorization",
+    "signature": "0x..." // RLP-encoded Tempo key authorization
+  }
 }
 ```
 
