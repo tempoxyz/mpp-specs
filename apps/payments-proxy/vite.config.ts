@@ -10,15 +10,10 @@ export default defineConfig((config) => {
 			react(),
 			cloudflare({
 				configPath: './wrangler.jsonc',
-				config: (_workerConfig) => {
-					return {
-						workers_dev: true,
-					}
-				},
 			}),
 		],
 		server: {
-			port: Number(env.PORT ?? 5173),
+			port: Number(env.PORT ?? 8787),
 		},
 	}
 })

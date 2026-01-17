@@ -4,75 +4,11 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
-	"workers_dev": false,
-	"preview_urls": true,
-	"keep_vars": true,
-	"observability": {
-		"enabled": true,
-		"logs": {
-			"enabled": true,
-			"head_sampling_rate": 1,
-			"invocation_logs": true,
-			"persist": true
-		}
-	},
-
-	// Default vars inherited by all environments
+	"observability": { "enabled": true },
 	"vars": {
-		"ENVIRONMENT": "development",
-		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+		"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 	},
-
-	"env": {
-		"preview": {
-			"name": "paymentauth-x402-preview",
-			"workers_dev": true,
-			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
-			"vars": {
-				"ENVIRONMENT": "preview"
-			}
-		},
-		// Canonical testnet - paymentauth-x402.testnet.tempo.xyz
-		"testnet": {
-			"name": "paymentauth-x402-testnet",
-			"routes": [
-				{
-					"pattern": "paymentauth-x402.testnet.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
-			}
-		},
-		// Moderato chain-specific - paymentauth-x402.moderato.tempo.xyz
-		"moderato": {
-			"name": "paymentauth-x402-moderato",
-			"routes": [
-				{
-					"pattern": "paymentauth-x402.moderato.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "moderato"
-			}
-		},
-		// Mainnet production - paymentauth-x402.tempo.xyz
-		"mainnet": {
-			"name": "paymentauth-x402-mainnet",
-			"routes": [
-				{ "pattern": "paymentauth-x402.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
-			],
-			"vars": {
-				"ENVIRONMENT": "mainnet",
-				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
-			}
-		}
-	}
+	"routes": [
+		{ "pattern": "paymentauth-x402.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+	]
 }

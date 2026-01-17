@@ -35,34 +35,8 @@
 				"ENVIRONMENT": "preview"
 			}
 		},
-		"testnet": {
-			"name": "presto-testnet",
-			"routes": [
-				{
-					"pattern": "presto.testnet.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "testnet"
-			}
-		},
 		"moderato": {
-			"name": "presto-moderato",
-			"routes": [
-				{
-					"pattern": "presto.moderato.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "moderato"
-			}
-		},
-		"mainnet": {
-			"name": "presto-mainnet",
+			"name": "presto",
 			"routes": [
 				{
 					"pattern": "presto.tempo.xyz",
@@ -71,7 +45,7 @@
 				}
 			],
 			"vars": {
-				"ENVIRONMENT": "mainnet"
+				"ENVIRONMENT": "moderato"
 			}
 		}
 	}

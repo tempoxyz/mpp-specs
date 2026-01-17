@@ -12,9 +12,8 @@
 		"lint:fix": "biome check --write src",
 		"test": "vitest run --passWithNoTests",
 		"deploy:preview": "wrangler deploy --env preview",
-		"deploy:testnet": "wrangler deploy --env testnet",
 		"deploy:moderato": "wrangler deploy --env moderato",
-		"deploy:mainnet": "wrangler deploy --env mainnet"
+		"deploy:prod": "wrangler deploy --env moderato"
 	},
 	"dependencies": {
 		"@tanstack/react-query": "^5.62.0",

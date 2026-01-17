@@ -4,84 +4,12 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
-	"workers_dev": false,
-	"preview_urls": true,
-	"keep_vars": true,
-	"observability": {
-		"enabled": true,
-		"logs": {
-			"enabled": true,
-			"head_sampling_rate": 1,
-			"invocation_logs": true,
-			"persist": true
-		}
-	},
-
-	// Default vars inherited by all environments
+	"observability": { "enabled": true },
 	"vars": {
-		"ENVIRONMENT": "development",
-		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
+		"TEMPO_RPC_URL": "https://rpc.tempo.xyz",
 		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"
 	},
-
-	"env": {
-		"preview": {
-			"name": "paymentauth-basic-preview",
-			"workers_dev": true,
-			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
-			"vars": {
-				"ENVIRONMENT": "preview"
-			}
-		},
-		// Canonical testnet - paymentauth-basic.testnet.tempo.xyz
-		// Note: Uses moderato RPC because the demo client uses tempoModerato chain (ID 42431)
-		"testnet": {
-			"name": "paymentauth-basic-testnet",
-			"routes": [
-				{
-					"pattern": "paymentauth-basic.testnet.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"
-			}
-		},
-		// Moderato chain-specific - paymentauth-basic.moderato.tempo.xyz
-		"moderato": {
-			"name": "paymentauth-basic-moderato",
-			"routes": [
-				{
-					"pattern": "paymentauth-basic.moderato.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "moderato"
-			}
-		},
-		// Mainnet production - paymentauth-basic.tempo.xyz
-		"mainnet": {
-			"name": "paymentauth-basic-mainnet",
-			"routes": [
-				{
-					"pattern": "paymentauth-basic.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "mainnet",
-				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
-			}
-		}
-	}
+	"routes": [
+		{ "pattern": "paymentauth-basic.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+	]
 }

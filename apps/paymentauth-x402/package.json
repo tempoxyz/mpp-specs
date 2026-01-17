@@ -10,8 +10,7 @@
 		"lint:fix": "eslint src --fix",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage",
-		"deploy:preview": "wrangler deploy --env preview",
-		"deploy:moderato": "wrangler deploy --env moderato",
+		"deploy": "wrangler deploy",
 		"deploy:presto": "wrangler deploy --env presto"
 	},
 	"dependencies": {

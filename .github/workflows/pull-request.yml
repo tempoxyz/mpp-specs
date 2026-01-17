@@ -37,7 +37,6 @@ jobs:
           - app: reth-snapshots
           - app: presto
             deploy_cmd: "pages deploy public --project-name=presto --branch=${{ github.head_ref }}"
-          - app: payments-dashboard
     env:
       NODE_ENV: production
     steps:

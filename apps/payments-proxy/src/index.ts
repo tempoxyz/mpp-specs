@@ -449,8 +449,91 @@ app.get('/health', (c) => {
 	})
 })
 
-// Root route - simple healthcheck
-app.get('/', (c) => {
+// === Dashboard API routes (for payments.tempo.xyz root domain) ===
+
+// Dashboard health check
+app.get('/api/health', (c) => {
+	return c.json({ status: 'ok', environment: c.env.ENVIRONMENT })
+})
+
+// Dashboard RPC proxy
+app.post('/api/rpc', async (c) => {
+	const body = await c.req.json()
+	const response = await fetch(c.env.TEMPO_RPC_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body),
+	})
+	return c.json(await response.json())
+})
+
+// Get recent blocks with transactions (for dashboard)
+app.get('/api/blocks', async (c) => {
+	const limit = Number(c.req.query('limit') ?? 10)
+
+	// Get latest block number
+	const blockNumResponse = await fetch(c.env.TEMPO_RPC_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			jsonrpc: '2.0',
+			method: 'eth_blockNumber',
+			params: [],
+			id: 1,
+		}),
+	})
+	const blockNumResult = (await blockNumResponse.json()) as { result: string }
+	const latestBlock = Number.parseInt(blockNumResult.result, 16)
+
+	// Fetch recent blocks
+	const blocks = []
+	for (let i = 0; i < limit; i++) {
+		const blockNumber = latestBlock - i
+		if (blockNumber < 0) break
+
+		const blockResponse = await fetch(c.env.TEMPO_RPC_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				method: 'eth_getBlockByNumber',
+				params: [`0x${blockNumber.toString(16)}`, true],
+				id: i + 2,
+			}),
+		})
+		const blockResult = (await blockResponse.json()) as { result: unknown }
+		if (blockResult.result) {
+			blocks.push(blockResult.result)
+		}
+	}
+
+	return c.json({ blocks, latestBlock })
+})
+
+/**
+ * Check if this request is for the dashboard (root domain, not a partner subdomain)
+ */
+function isDashboardRequest(host: string): boolean {
+	const hostWithoutPort = host.split(':')[0] ?? ''
+	// payments.tempo.xyz, payments.testnet.tempo.xyz, payments.moderato.tempo.xyz
+	// but NOT openrouter.payments.tempo.xyz (4+ parts with partner subdomain)
+	if (hostWithoutPort.endsWith('.workers.dev')) return false
+	const parts = hostWithoutPort.split('.')
+	// payments.tempo.xyz = 3 parts, payments.testnet.tempo.xyz = 4 parts
+	// openrouter.payments.tempo.xyz = 4+ parts where first part is a partner
+	if (parts.length === 3 && parts[0] === 'payments') return true
+	if (parts.length === 4 && parts[0] === 'payments') return true
+	// localhost:8787 without subdomain
+	if (parts.length === 1 && parts[0] === 'localhost') return true
+	return false
+}
+
+// Root route - serve dashboard or simple healthcheck
+app.get('/', async (c) => {
+	const host = c.req.header('host') || ''
+	if (isDashboardRequest(host) && c.env.ASSETS) {
+		return c.env.ASSETS.fetch(c.req.raw)
+	}
 	return c.text('tm!')
 })
 
@@ -930,8 +1013,20 @@ app.onError((err, c) => {
 	return c.json({ error: 'Internal server error' }, 500)
 })
 
-// 404 handler
-app.notFound((c) => {
+// 404 handler - serve dashboard assets for SPA routes, or return JSON 404
+app.notFound(async (c) => {
+	const host = c.req.header('host') || ''
+	// If on dashboard domain and ASSETS binding exists, try to serve static assets
+	if (isDashboardRequest(host) && c.env.ASSETS) {
+		// For SPA routing, serve index.html for HTML requests
+		const accept = c.req.header('accept') || ''
+		if (accept.includes('text/html')) {
+			const indexRequest = new Request(new URL('/', c.req.url), c.req.raw)
+			return c.env.ASSETS.fetch(indexRequest)
+		}
+		// Try to serve the asset directly
+		return c.env.ASSETS.fetch(c.req.raw)
+	}
 	return c.json({ error: 'Not found' }, 404)
 })
 

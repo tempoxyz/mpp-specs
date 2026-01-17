@@ -74,6 +74,8 @@ export interface Env {
 	TEMPO_RPC_URL: string
 	TEMPO_RPC_USERNAME?: string
 	TEMPO_RPC_PASSWORD?: string
+	/** Static assets for dashboard (Vite-built client) */
+	ASSETS?: Fetcher
 	/** Escrow contract address for streaming channels */
 	STREAM_ESCROW_CONTRACT?: string
 	/** Durable Object binding for payment channels */
@@ -95,7 +97,7 @@ export interface Env {
 	TEMPO_RPC_UPSTREAM_URL?: string
 	TEMPO_RPC_AUTH?: string
 	/** Allow additional string keys for tests and future API keys */
-	[key: string]: string | DurableObjectNamespace | D1Database | Queue | undefined
+	[key: string]: string | DurableObjectNamespace | D1Database | Queue | Fetcher | undefined
 }
 
 /**
