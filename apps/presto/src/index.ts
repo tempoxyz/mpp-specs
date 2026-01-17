@@ -85,4 +85,19 @@ app.get('/keys/:credentialId', async (_c) => {
 	})
 })
 
+// Serve static assets for all other routes (React SPA)
+app.get('*', async (c) => {
+	if (!c.env.ASSETS) {
+		return c.text('Assets not configured', 500)
+	}
+	// Try to serve the exact path first
+	const response = await c.env.ASSETS.fetch(c.req.raw)
+	if (response.status !== 404) {
+		return response
+	}
+	// For SPA routes, serve index.html
+	const indexRequest = new Request(new URL('/', c.req.url), c.req.raw)
+	return c.env.ASSETS.fetch(indexRequest)
+})
+
 export default app

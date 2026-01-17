@@ -54,8 +54,6 @@ app.get('/install.sh', (_c) => {
 	})
 })
 
-
-
 // Root - landing page
 app.get('/', (c) => {
 	return c.html(`<!DOCTYPE html>

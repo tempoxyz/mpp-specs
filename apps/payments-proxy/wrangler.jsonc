@@ -10,6 +10,10 @@
 	"vars": {
 		"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 	},
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	},
 	"routes": [
 		{ "pattern": "payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "anthropic.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },

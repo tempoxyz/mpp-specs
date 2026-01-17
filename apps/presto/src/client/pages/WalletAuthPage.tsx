@@ -143,7 +143,7 @@ export function WalletAuthPage() {
 				<div className="divider" />
 
 				<div className="install-footer">
-					<a href="/install">Install CLI</a>
+					<a href="/agent">Install CLI</a>
 					<a href="https://github.com/tempoxyz/presto" target="_blank" rel="noopener noreferrer">
 						GitHub
 					</a>

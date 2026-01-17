@@ -14,7 +14,7 @@ export function App() {
 		return () => window.removeEventListener('popstate', handlePopState)
 	}, [])
 
-	if (currentPath === '/install') {
+	if (currentPath === '/agent') {
 		return <InstallPage />
 	}
 
