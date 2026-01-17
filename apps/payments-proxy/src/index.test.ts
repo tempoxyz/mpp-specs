@@ -179,40 +179,19 @@ describe('payments-proxy', () => {
 			expect(proxyModule.proxyRequest).toHaveBeenCalled()
 		})
 
-		it('should route to partner via path prefix', async () => {
-			const mockProxyResponse = new Response(JSON.stringify({ success: true }), { status: 200 })
-
-			vi.mocked(proxyModule.proxyRequest).mockResolvedValueOnce({
-				response: mockProxyResponse,
-				upstreamLatencyMs: 100,
-			})
-
+		it('should return 400 for unknown partner subdomain', async () => {
 			const res = await app.request(
-				'/browserbase/v1/sessions',
+				'/v1/data',
 				{
 					method: 'GET',
-					headers: { Host: 'localhost:8787' },
+					headers: { Host: 'unknown.payments.tempo.xyz' },
 				},
 				mockEnv,
 			)
 
-			expect(res.status).toBe(200)
-			expect(proxyModule.proxyRequest).toHaveBeenCalled()
-		})
-
-		it('should return 400 for unknown partner', async () => {
-			const res = await app.request(
-				'/unknown/v1/data',
-				{
-					method: 'GET',
-					headers: { Host: 'localhost:8787' },
-				},
-				mockEnv,
-			)
-
-			expect(res.status).toBe(400)
+			expect(res.status).toBe(404)
 			const data = (await res.json()) as { error: string }
-			expect(data.error).toContain('Invalid request')
+			expect(data.error).toContain('Unknown partner')
 		})
 
 		it('should route to partner via alias subdomain (llm -> openrouter)', async () => {
@@ -228,27 +207,6 @@ describe('payments-proxy', () => {
 				{
 					method: 'GET',
 					headers: { Host: 'llm.payments.tempo.xyz' },
-				},
-				mockEnv,
-			)
-
-			expect(res.status).toBe(200)
-			expect(proxyModule.proxyRequest).toHaveBeenCalled()
-		})
-
-		it('should route to partner via alias path prefix (llm -> openrouter)', async () => {
-			const mockProxyResponse = new Response(JSON.stringify({ models: [] }), { status: 200 })
-
-			vi.mocked(proxyModule.proxyRequest).mockResolvedValueOnce({
-				response: mockProxyResponse,
-				upstreamLatencyMs: 50,
-			})
-
-			const res = await app.request(
-				'/llm/v1/models',
-				{
-					method: 'GET',
-					headers: { Host: 'localhost:8787' },
 				},
 				mockEnv,
 			)
@@ -593,7 +551,7 @@ describe('payments-proxy', () => {
 			expect(openrouter?.streaming.supported).toBe(true)
 		})
 
-		it('should return service URLs with path-based routing for localhost', async () => {
+		it('should return service URLs with subdomain routing for localhost', async () => {
 			const res = await app.request(
 				'/discover',
 				{
@@ -609,7 +567,7 @@ describe('payments-proxy', () => {
 			}
 
 			const openrouter = data.services.find((s) => s.slug === 'openrouter')
-			expect(openrouter?.url).toBe('http://localhost:8787/openrouter')
+			expect(openrouter?.url).toBe('http://openrouter.localhost:8787')
 		})
 
 		it('should return specific service info', async () => {

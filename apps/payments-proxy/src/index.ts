@@ -55,30 +55,17 @@ const challengeStore = new Map<
 /**
  * Extract partner slug from hostname subdomain.
  * e.g., "browserbase.payments.tempo.xyz" -> "browserbase"
- * e.g., "browserbase.payments-testnet.tempo.xyz" -> "browserbase"
- * e.g., "browserbase.localhost:8787" -> "browserbase" (for local dev with Host header)
+ * e.g., "browserbase.localhost:8787" -> "browserbase" (for local dev)
  */
 function getPartnerFromHost(host: string): string | null {
-	// Remove port if present
 	const hostWithoutPort = host.split(':')[0] ?? ''
 	const parts = hostWithoutPort.split('.')
 
-	// Skip workers.dev hostnames - they use path-based routing
-	// e.g., "payments-proxy-moderato.porto.workers.dev" should use path routing
-	if (hostWithoutPort.endsWith('.workers.dev')) {
-		return null
-	}
-
-	// Skip IP addresses (e.g., 127.0.0.1, 192.168.1.1) - use path-based routing
-	if (/^\d+\.\d+\.\d+\.\d+$/.test(hostWithoutPort)) {
-		return null
-	}
-
-	// For production/preview: partner.payments.tempo.xyz (4+ parts)
-	// For local dev with Host header: partner.localhost (2 parts)
+	// Production: partner.payments.tempo.xyz (4+ parts)
 	if (parts.length >= 4 && parts[0]) {
 		return parts[0]
 	}
+	// Local dev: partner.localhost (2 parts)
 	if (parts.length === 2 && parts[1] === 'localhost' && parts[0]) {
 		return parts[0]
 	}
@@ -86,25 +73,7 @@ function getPartnerFromHost(host: string): string | null {
 	return null
 }
 
-/**
- * Extract partner slug from path prefix (for local development).
- * e.g., "/browserbase/v1/sessions" -> { slug: "browserbase", forwardPath: "/v1/sessions" }
- * Also handles aliases (e.g., "/llm/v1/chat/completions" -> openrouter partner)
- */
-function getPartnerFromPath(path: string): { slug: string; forwardPath: string } | null {
-	const match = path.match(/^\/([a-z0-9-]+)(\/.*)?$/i)
-	if (!match || !match[1]) return null
 
-	const slugOrAlias = match[1].toLowerCase()
-	const forwardPath = match[2] || '/'
-
-	// Check if this is a known partner slug or alias
-	const partner = partners.find((p) => p.slug === slugOrAlias || p.aliases?.includes(slugOrAlias))
-	if (!partner) return null
-
-	// Return the canonical slug, not the alias
-	return { slug: partner.slug, forwardPath }
-}
 
 /**
  * Create a new payment challenge for a partner request.
@@ -548,12 +517,11 @@ const discoverHandler = (c: Context<{ Bindings: Env }>) => {
 	const host = c.req.header('host') || 'payments.tempo.xyz'
 	const protocol = host.includes('localhost') ? 'http' : 'https'
 
-	// Build service URLs - replace first subdomain with partner slug
-	// e.g., payments.testnet.tempo.xyz -> openrouter.payments.testnet.tempo.xyz
+	// Build service URLs using subdomain routing only
+	// e.g., payments.tempo.xyz -> openrouter.payments.tempo.xyz
+	// e.g., localhost:8787 -> openrouter.localhost:8787
 	const services = partners.map((partner) => {
-		const serviceUrl = host.includes('localhost')
-			? `${protocol}://${host}/${partner.slug}`
-			: `${protocol}://${partner.slug}.${host}`
+		const serviceUrl = `${protocol}://${partner.slug}.${host}`
 
 		return {
 			name: partner.name,
@@ -701,24 +669,15 @@ app.post('/:partner/voucher', async (c) => {
 	throw new HTTPException(400, { message: `Unsupported action: ${credential.action}` })
 })
 
-// Partner proxy routes (subdomain-based or path-based for local dev)
+// Partner proxy routes (subdomain-based only)
 app.all('/*', async (c) => {
 	const host = c.req.header('host') || ''
-	let partnerSlug = getPartnerFromHost(host)
-	let forwardPath = c.req.path || '/'
-
-	// If no subdomain-based partner, try path-based routing (for local dev)
-	if (!partnerSlug) {
-		const pathRoute = getPartnerFromPath(forwardPath)
-		if (pathRoute) {
-			partnerSlug = pathRoute.slug
-			forwardPath = pathRoute.forwardPath
-		}
-	}
+	const partnerSlug = getPartnerFromHost(host)
+	const forwardPath = c.req.path || '/'
 
 	if (!partnerSlug) {
 		throw new HTTPException(400, {
-			message: `Invalid request. Access via partner subdomain (e.g., browserbase.payments.tempo.xyz) or path prefix (e.g., /browserbase/v1/sessions). Available partners: ${partners
+			message: `Invalid request. Access via partner subdomain (e.g., browserbase.payments.tempo.xyz). Available partners: ${partners
 				.map((p) => p.slug)
 				.join(', ')}`,
 		})
