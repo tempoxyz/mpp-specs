@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
 
 interface ITIP20 {
     function transfer(address to, uint256 value) external returns (bool);
@@ -19,7 +19,6 @@ interface ITIP20 {
  *      any remaining funds.
  */
 contract TempoStreamChannel is EIP712, ReentrancyGuard {
-    using ECDSA for bytes32;
 
     // --- Types ---
 
@@ -96,9 +95,17 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
     error TransferFailed();
     error CloseNotRequested();
 
-    // --- Constructor ---
+    // --- EIP-712 Domain ---
 
-    constructor() EIP712("Tempo Stream Channel", "1") {}
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory name, string memory version)
+    {
+        name = "Tempo Stream Channel";
+        version = "1";
+    }
 
     // --- External Functions ---
 
@@ -192,8 +199,8 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             cumulativeAmount,
             validUntil
         ));
-        bytes32 digest = _hashTypedDataV4(structHash);
-        address signer = ECDSA.recover(digest, signature);
+        bytes32 digest = _hashTypedData(structHash);
+        address signer = ECDSA.recoverCalldata(digest, signature);
 
         if (signer != channel.payer) {
             revert InvalidSignature();
@@ -351,7 +358,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
      * @notice Get the EIP-712 domain separator.
      */
     function domainSeparator() external view returns (bytes32) {
-        return _domainSeparatorV4();
+        return _domainSeparator();
     }
 
     /**
@@ -368,6 +375,6 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             cumulativeAmount,
             validUntil
         ));
-        return _hashTypedDataV4(structHash);
+        return _hashTypedData(structHash);
     }
 }
