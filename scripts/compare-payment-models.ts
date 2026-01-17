@@ -14,25 +14,14 @@
  * - Total session cost
  */
 
-import {
-	createPublicClient,
-	createWalletClient,
-	encodeFunctionData,
-	formatUnits,
-	http,
-	parseUnits,
-	type Address,
-	type Hex,
-} from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { tempoModerato } from 'viem/chains'
+import { type Address, formatUnits, parseUnits } from 'viem'
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const RPC_URL = 'https://rpc.moderato.tempo.xyz'
-const ALPHA_USD = '0x20c0000000000000000000000000000000000001' as Address
+const _RPC_URL = 'https://rpc.moderato.tempo.xyz'
+const _ALPHA_USD = '0x20c0000000000000000000000000000000000001' as Address
 
 // Realistic gas costs on Tempo Moderato
 const GAS_PRICE_GWEI = 10n // 10 gwei
@@ -62,22 +51,42 @@ interface APICall {
 const SESSION: APICall[] = [
 	// Phase 2: Initial API calls
 	{ model: 'gpt-5', tokens: 2500, cost: parseUnits('0.50', 6), description: 'Initial context' },
-	{ model: 'claude-sonnet-4', tokens: 5000, cost: parseUnits('1.25', 6), description: 'Code analysis' },
+	{
+		model: 'claude-sonnet-4',
+		tokens: 5000,
+		cost: parseUnits('1.25', 6),
+		description: 'Code analysis',
+	},
 	{ model: 'gpt-5', tokens: 8000, cost: parseUnits('2.00', 6), description: 'Implementation' },
 	{ model: 'gemini-2.5-pro', tokens: 3000, cost: parseUnits('0.75', 6), description: 'Review' },
-	{ model: 'claude-opus-4', tokens: 15000, cost: parseUnits('5.00', 6), description: 'Complex reasoning' },
+	{
+		model: 'claude-opus-4',
+		tokens: 15000,
+		cost: parseUnits('5.00', 6),
+		description: 'Complex reasoning',
+	},
 	// Phase 4: Continued usage
 	{ model: 'gpt-5-mini', tokens: 1000, cost: parseUnits('0.10', 6), description: 'Quick check' },
 	{ model: 'claude-haiku-3', tokens: 2000, cost: parseUnits('0.05', 6), description: 'Formatting' },
 	{ model: 'gpt-5', tokens: 10000, cost: parseUnits('2.50', 6), description: 'Refactoring' },
 	// Phase 6: Heavy usage
-	{ model: 'claude-opus-4', tokens: 50000, cost: parseUnits('15.00', 6), description: 'Major refactor' },
+	{
+		model: 'claude-opus-4',
+		tokens: 50000,
+		cost: parseUnits('15.00', 6),
+		description: 'Major refactor',
+	},
 	{ model: 'gpt-5', tokens: 20000, cost: parseUnits('5.00', 6), description: 'Testing' },
-	{ model: 'claude-sonnet-4', tokens: 30000, cost: parseUnits('7.50', 6), description: 'Documentation' },
+	{
+		model: 'claude-sonnet-4',
+		tokens: 30000,
+		cost: parseUnits('7.50', 6),
+		description: 'Documentation',
+	},
 ]
 
-const INITIAL_DEPOSIT = parseUnits('50', 6)
-const TOPUP_AMOUNT = parseUnits('25', 6)
+const _INITIAL_DEPOSIT = parseUnits('50', 6)
+const _TOPUP_AMOUNT = parseUnits('25', 6)
 
 // ============================================================================
 // Formatting Helpers
@@ -266,7 +275,7 @@ function analyzeThroughput(): ThroughputAnalysis {
 	const signatureTimeMs = 0.1 // 100 microseconds per verification
 	const verificationTimeMs = 0.05 // ecrecover is fast
 	const parallelVerifiers = 64 // Modern server with 64 cores
-	
+
 	// Single core: 1000 / 0.15 = ~6,666 verifications/sec
 	// 64 cores: 6,666 * 64 = ~426,000 verifications/sec
 	// With batching and optimizations: easily 1M+
@@ -406,51 +415,87 @@ ${colors.dim}Network: Tempo Moderato | Gas Price: ${formatGwei(GAS_PRICE_GWEI * 
 	let totalCost = 0n
 	SESSION.forEach((call, i) => {
 		totalCost += call.cost
-		console.log(`  │ ${String(i + 1).padStart(2)}. ${call.model.padEnd(16)} │ ${call.description.padEnd(20)} │ ${formatUSD(call.cost).padStart(7)} │`)
+		console.log(
+			`  │ ${String(i + 1).padStart(2)}. ${call.model.padEnd(16)} │ ${call.description.padEnd(20)} │ ${formatUSD(call.cost).padStart(7)} │`,
+		)
 	})
 	console.log(`  ├─────────────────────────────────────────────────────────────────┤`)
-	console.log(`  │ ${colors.bright}TOTAL${colors.reset}                                                    │ ${colors.bright}${formatUSD(totalCost).padStart(7)}${colors.reset} │`)
+	console.log(
+		`  │ ${colors.bright}TOTAL${colors.reset}                                                    │ ${colors.bright}${formatUSD(totalCost).padStart(7)}${colors.reset} │`,
+	)
 	console.log(`  └─────────────────────────────────────────────────────────────────┘`)
 
 	// Per-request model
 	const perRequest = simulatePerRequestModel()
-	console.log(`\n${colors.bright}${colors.red}━━━ PER-REQUEST MODEL (Traditional) ━━━${colors.reset}`)
-	console.log(`\n  ${colors.dim}Each API call requires an on-chain payment transaction${colors.reset}`)
+	console.log(
+		`\n${colors.bright}${colors.red}━━━ PER-REQUEST MODEL (Traditional) ━━━${colors.reset}`,
+	)
+	console.log(
+		`\n  ${colors.dim}Each API call requires an on-chain payment transaction${colors.reset}`,
+	)
 	console.log(`\n  Operations:`)
-	perRequest.breakdown.forEach(op => {
-		console.log(`    • ${op.operation.padEnd(35)} x${String(op.count).padStart(3)}  │ Gas: ${formatUnits(op.totalGas, 0).padStart(10)}`)
+	perRequest.breakdown.forEach((op) => {
+		console.log(
+			`    • ${op.operation.padEnd(35)} x${String(op.count).padStart(3)}  │ Gas: ${formatUnits(op.totalGas, 0).padStart(10)}`,
+		)
 	})
 	console.log(`  ┌─────────────────────────────────────────────────────────┐`)
-	console.log(`  │ On-Chain Transactions:  ${colors.red}${String(perRequest.onChainTxs).padStart(20)}${colors.reset}      │`)
-	console.log(`  │ Total Gas Used:         ${formatUnits(perRequest.totalGasUsed, 0).padStart(20)}      │`)
-	console.log(`  │ Gas Cost (ETH):         ${formatETH(perRequest.totalGasCost).padStart(20)}      │`)
-	console.log(`  │ Gas Cost (USD):         ${('$' + (Number(formatUnits(perRequest.totalGasCost, 18)) * 3000).toFixed(4)).padStart(20)}      │`)
-	console.log(`  │ Avg Latency per Payment:${(perRequest.avgLatencyMs + 'ms').padStart(20)}      │`)
+	console.log(
+		`  │ On-Chain Transactions:  ${colors.red}${String(perRequest.onChainTxs).padStart(20)}${colors.reset}      │`,
+	)
+	console.log(
+		`  │ Total Gas Used:         ${formatUnits(perRequest.totalGasUsed, 0).padStart(20)}      │`,
+	)
+	console.log(
+		`  │ Gas Cost (ETH):         ${formatETH(perRequest.totalGasCost).padStart(20)}      │`,
+	)
+	console.log(
+		`  │ Gas Cost (USD):         ${(`$${(Number(formatUnits(perRequest.totalGasCost, 18)) * 3000).toFixed(4)}`).padStart(20)}      │`,
+	)
+	console.log(`  │ Avg Latency per Payment:${(`${perRequest.avgLatencyMs}ms`).padStart(20)}      │`)
 	console.log(`  └─────────────────────────────────────────────────────────┘`)
 
 	// Streaming model
 	const streaming = simulateStreamingModel()
-	console.log(`\n${colors.bright}${colors.green}━━━ STREAMING MODEL (Payment Channels) ━━━${colors.reset}`)
-	console.log(`\n  ${colors.dim}Payments via off-chain vouchers, periodic on-chain settlements${colors.reset}`)
+	console.log(
+		`\n${colors.bright}${colors.green}━━━ STREAMING MODEL (Payment Channels) ━━━${colors.reset}`,
+	)
+	console.log(
+		`\n  ${colors.dim}Payments via off-chain vouchers, periodic on-chain settlements${colors.reset}`,
+	)
 	console.log(`\n  Operations:`)
-	streaming.breakdown.forEach(op => {
+	streaming.breakdown.forEach((op) => {
 		const gasStr = op.totalGas === 0n ? '(off-chain)' : formatUnits(op.totalGas, 0).padStart(10)
-		console.log(`    • ${op.operation.padEnd(35)} x${String(op.count).padStart(3)}  │ Gas: ${gasStr}`)
+		console.log(
+			`    • ${op.operation.padEnd(35)} x${String(op.count).padStart(3)}  │ Gas: ${gasStr}`,
+		)
 	})
 	console.log(`  ┌─────────────────────────────────────────────────────────┐`)
-	console.log(`  │ On-Chain Transactions:  ${colors.green}${String(streaming.onChainTxs).padStart(20)}${colors.reset}      │`)
-	console.log(`  │ Off-Chain Vouchers:     ${String(streaming.offChainVouchers).padStart(20)}      │`)
-	console.log(`  │ Total Gas Used:         ${formatUnits(streaming.totalGasUsed, 0).padStart(20)}      │`)
-	console.log(`  │ Gas Cost (ETH):         ${formatETH(streaming.totalGasCost).padStart(20)}      │`)
-	console.log(`  │ Gas Cost (USD):         ${('$' + (Number(formatUnits(streaming.totalGasCost, 18)) * 3000).toFixed(4)).padStart(20)}      │`)
-	console.log(`  │ Avg Latency per Payment:${(streaming.avgLatencyMs + 'ms').padStart(20)}      │`)
+	console.log(
+		`  │ On-Chain Transactions:  ${colors.green}${String(streaming.onChainTxs).padStart(20)}${colors.reset}      │`,
+	)
+	console.log(
+		`  │ Off-Chain Vouchers:     ${String(streaming.offChainVouchers).padStart(20)}      │`,
+	)
+	console.log(
+		`  │ Total Gas Used:         ${formatUnits(streaming.totalGasUsed, 0).padStart(20)}      │`,
+	)
+	console.log(
+		`  │ Gas Cost (ETH):         ${formatETH(streaming.totalGasCost).padStart(20)}      │`,
+	)
+	console.log(
+		`  │ Gas Cost (USD):         ${(`$${(Number(formatUnits(streaming.totalGasCost, 18)) * 3000).toFixed(4)}`).padStart(20)}      │`,
+	)
+	console.log(`  │ Avg Latency per Payment:${(`${streaming.avgLatencyMs}ms`).padStart(20)}      │`)
 	console.log(`  └─────────────────────────────────────────────────────────┘`)
 
 	// Comparison
 	const txReduction = perRequest.onChainTxs - streaming.onChainTxs
 	const txReductionPct = ((txReduction / perRequest.onChainTxs) * 100).toFixed(1)
 	const gasReduction = perRequest.totalGasUsed - streaming.totalGasUsed
-	const gasReductionPct = ((Number(gasReduction) / Number(perRequest.totalGasUsed)) * 100).toFixed(1)
+	const gasReductionPct = ((Number(gasReduction) / Number(perRequest.totalGasUsed)) * 100).toFixed(
+		1,
+	)
 	const costSavingEth = perRequest.totalGasCost - streaming.totalGasCost
 	const costSavingUsd = Number(formatUnits(costSavingEth, 18)) * 3000
 	const latencyImprovement = perRequest.avgLatencyMs / streaming.avgLatencyMs
@@ -463,16 +508,20 @@ ${colors.dim}Network: Tempo Moderato | Gas Price: ${formatGwei(GAS_PRICE_GWEI * 
   │ On-Chain Transactions      │ ${String(perRequest.onChainTxs).padStart(16)} │ ${String(streaming.onChainTxs).padStart(16)} │ ${colors.green}-${txReductionPct}%${colors.reset}     │
   │ Total Gas Used             │ ${formatUnits(perRequest.totalGasUsed, 0).padStart(16)} │ ${formatUnits(streaming.totalGasUsed, 0).padStart(16)} │ ${colors.green}-${gasReductionPct}%${colors.reset}     │
   │ Gas Cost (USD)             │ $${(Number(formatUnits(perRequest.totalGasCost, 18)) * 3000).toFixed(4).padStart(14)} │ $${(Number(formatUnits(streaming.totalGasCost, 18)) * 3000).toFixed(4).padStart(14)} │ ${colors.green}-$${costSavingUsd.toFixed(4)}${colors.reset}  │
-  │ Latency per Payment        │ ${(perRequest.avgLatencyMs + 'ms').padStart(16)} │ ${(streaming.avgLatencyMs + 'ms').padStart(16)} │ ${colors.green}${latencyImprovement.toFixed(0)}x faster${colors.reset}  │
+  │ Latency per Payment        │ ${(`${perRequest.avgLatencyMs}ms`).padStart(16)} │ ${(`${streaming.avgLatencyMs}ms`).padStart(16)} │ ${colors.green}${latencyImprovement.toFixed(0)}x faster${colors.reset}  │
   └────────────────────────────┴──────────────────┴──────────────────┴────────────┘
 `)
 
 	// Throughput analysis
 	const throughput = analyzeThroughput()
-	const streamingTpsFormatted = (throughput.streaming.maxPaymentsPerSecond / 1000).toFixed(0) + 'K'
-	const multiplier = Math.round(throughput.streaming.maxPaymentsPerSecond / throughput.perRequest.maxPaymentsPerSecond)
-	
-	console.log(`\n${colors.bright}${colors.cyan}━━━ THROUGHPUT ANALYSIS (The "1M TPS" Question) ━━━${colors.reset}`)
+	const streamingTpsFormatted = `${(throughput.streaming.maxPaymentsPerSecond / 1000).toFixed(0)}K`
+	const multiplier = Math.round(
+		throughput.streaming.maxPaymentsPerSecond / throughput.perRequest.maxPaymentsPerSecond,
+	)
+
+	console.log(
+		`\n${colors.bright}${colors.cyan}━━━ THROUGHPUT ANALYSIS (The "1M TPS" Question) ━━━${colors.reset}`,
+	)
 	console.log(`
   ${colors.dim}The blockchain industry debates: "Do we need 1M TPS for micropayments?"${colors.reset}
   ${colors.dim}Answer: Not if payments are off-chain. Here's the math:${colors.reset}
@@ -513,44 +562,64 @@ ${colors.dim}Network: Tempo Moderato | Gas Price: ${formatGwei(GAS_PRICE_GWEI * 
 
 	// Extrapolation
 	console.log(`\n${colors.bright}${colors.yellow}━━━ MONTHLY COST EXTRAPOLATION ━━━${colors.reset}`)
-	console.log(`\n  ${colors.dim}Assuming 100 API calls per session, settle once every 2 hours${colors.reset}\n`)
+	console.log(
+		`\n  ${colors.dim}Assuming 100 API calls per session, settle once every 2 hours${colors.reset}\n`,
+	)
 
-	console.log(`  ┌───────────────────────────┬─────────────┬────────────┬────────────┬───────────────┬──────────────┐`)
-	console.log(`  │ Scenario                  │ Calls/Month │ On-Chain   │ On-Chain   │ Gas Cost      │ Savings      │`)
-	console.log(`  │                           │             │ Per-Req    │ Streaming  │ Streaming     │              │`)
-	console.log(`  ├───────────────────────────┼─────────────┼────────────┼────────────┼───────────────┼──────────────┤`)
+	console.log(
+		`  ┌───────────────────────────┬─────────────┬────────────┬────────────┬───────────────┬──────────────┐`,
+	)
+	console.log(
+		`  │ Scenario                  │ Calls/Month │ On-Chain   │ On-Chain   │ Gas Cost      │ Savings      │`,
+	)
+	console.log(
+		`  │                           │             │ Per-Req    │ Streaming  │ Streaming     │              │`,
+	)
+	console.log(
+		`  ├───────────────────────────┼─────────────┼────────────┼────────────┼───────────────┼──────────────┤`,
+	)
 
-	SCENARIOS.forEach(scenario => {
+	SCENARIOS.forEach((scenario) => {
 		const result = extrapolateCosts(scenario)
-		const txRatio = (result.streaming.onChainTxs / result.perRequest.onChainTxs * 100).toFixed(2)
-		console.log(`  │ ${scenario.name.padEnd(25)} │ ${String(result.totalCallsPerMonth).padStart(11)} │ ${String(result.perRequest.onChainTxs).padStart(10)} │ ${String(result.streaming.onChainTxs).padStart(10)} │ $${result.streaming.gasCostUsd.toFixed(2).padStart(12)} │ ${colors.green}${result.savings.percentSaved.toFixed(1)}%${colors.reset}        │`)
+		const _txRatio = ((result.streaming.onChainTxs / result.perRequest.onChainTxs) * 100).toFixed(2)
+		console.log(
+			`  │ ${scenario.name.padEnd(25)} │ ${String(result.totalCallsPerMonth).padStart(11)} │ ${String(result.perRequest.onChainTxs).padStart(10)} │ ${String(result.streaming.onChainTxs).padStart(10)} │ $${result.streaming.gasCostUsd.toFixed(2).padStart(12)} │ ${colors.green}${result.savings.percentSaved.toFixed(1)}%${colors.reset}        │`,
+		)
 	})
 
-	console.log(`  └───────────────────────────┴─────────────┴────────────┴────────────┴───────────────┴──────────────┘`)
-	
+	console.log(
+		`  └───────────────────────────┴─────────────┴────────────┴────────────┴───────────────┴──────────────┘`,
+	)
+
 	// Add high-scale scenarios
 	console.log(`\n  ${colors.bright}At Scale (settle every 2 hours):${colors.reset}`)
-	console.log(`  ┌─────────────────────────────────────────────────────────────────────────────────────┐`)
-	
+	console.log(
+		`  ┌─────────────────────────────────────────────────────────────────────────────────────┐`,
+	)
+
 	const scaleScenarios = [
 		{ name: '1M payments/day', payments: 1_000_000, settleIntervalHours: 2 },
 		{ name: '10M payments/day', payments: 10_000_000, settleIntervalHours: 2 },
 		{ name: '100M payments/day', payments: 100_000_000, settleIntervalHours: 2 },
 		{ name: '1B payments/day', payments: 1_000_000_000, settleIntervalHours: 2 },
 	]
-	
-	scaleScenarios.forEach(s => {
-		const settlementsPerDay = 24 / s.settleIntervalHours
+
+	scaleScenarios.forEach((s) => {
+		const _settlementsPerDay = 24 / s.settleIntervalHours
 		const sessionsPerDay = s.payments / 100 // 100 payments per session avg
 		const onChainTxsPerDay = sessionsPerDay * 2 // open + settle per session
 		const onChainTxsStreaming = Math.ceil(onChainTxsPerDay)
 		const perRequestTxs = s.payments
-		const reduction = ((perRequestTxs - onChainTxsStreaming) / perRequestTxs * 100).toFixed(4)
-		
-		console.log(`  │ ${s.name.padEnd(20)} │ Per-Request: ${String(perRequestTxs.toLocaleString()).padStart(15)} txs │ Streaming: ${String(onChainTxsStreaming.toLocaleString()).padStart(12)} txs │ ${colors.green}-${reduction}%${colors.reset} │`)
+		const reduction = (((perRequestTxs - onChainTxsStreaming) / perRequestTxs) * 100).toFixed(4)
+
+		console.log(
+			`  │ ${s.name.padEnd(20)} │ Per-Request: ${String(perRequestTxs.toLocaleString()).padStart(15)} txs │ Streaming: ${String(onChainTxsStreaming.toLocaleString()).padStart(12)} txs │ ${colors.green}-${reduction}%${colors.reset} │`,
+		)
 	})
-	
-	console.log(`  └─────────────────────────────────────────────────────────────────────────────────────┘`)
+
+	console.log(
+		`  └─────────────────────────────────────────────────────────────────────────────────────┘`,
+	)
 
 	// Latency comparison for real-time use
 	console.log(`\n${colors.bright}${colors.blue}━━━ API RESPONSE LATENCY IMPACT ━━━${colors.reset}`)

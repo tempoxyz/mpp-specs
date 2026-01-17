@@ -18,13 +18,13 @@
  */
 
 import {
+	type Address,
 	createPublicClient,
 	createWalletClient,
 	formatUnits,
+	type Hex,
 	http,
 	parseUnits,
-	type Address,
-	type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
@@ -54,17 +54,24 @@ if (!PRIVATE_KEY) {
 // ============================================================================
 
 const log = {
-	step: (n: number, msg: string) => console.log(`\n${'═'.repeat(60)}\n  Step ${n}: ${msg}\n${'═'.repeat(60)}`),
+	step: (n: number, msg: string) =>
+		console.log(`\n${'═'.repeat(60)}\n  Step ${n}: ${msg}\n${'═'.repeat(60)}`),
 	ietf: (msg: string) => console.log(`  📋 IETF Spec: ${msg}`),
 	code: (label: string, value: unknown) => {
 		if (typeof value === 'object') {
 			console.log(`  💻 ${label}:`)
-			console.log(JSON.stringify(value, null, 4).split('\n').map(l => `      ${l}`).join('\n'))
+			console.log(
+				JSON.stringify(value, null, 4)
+					.split('\n')
+					.map((l) => `      ${l}`)
+					.join('\n'),
+			)
 		} else {
 			console.log(`  💻 ${label}: ${value}`)
 		}
 	},
-	tx: (hash: string) => console.log(`  🔗 Transaction: https://explorer.moderato.tempo.xyz/tx/${hash}`),
+	tx: (hash: string) =>
+		console.log(`  🔗 Transaction: https://explorer.moderato.tempo.xyz/tx/${hash}`),
 	success: (msg: string) => console.log(`  ✅ ${msg}`),
 	info: (msg: string) => console.log(`  ℹ️  ${msg}`),
 }
@@ -74,7 +81,7 @@ const log = {
 // ============================================================================
 
 async function main() {
-	console.log('\n' + '═'.repeat(60))
+	console.log(`\n${'═'.repeat(60)}`)
 	console.log('  IETF Payment Auth - Streaming Channel Demo')
 	console.log('  Network: Tempo Moderato (testnet)')
 	console.log('═'.repeat(60))
@@ -110,7 +117,7 @@ async function main() {
 				id: 1,
 			}),
 		})
-		await new Promise(r => setTimeout(r, 2000))
+		await new Promise((r) => setTimeout(r, 2000))
 		const newBalance = await publicClient.getBalance({ address: account.address })
 		log.success(`Funded! New balance: ${formatUnits(newBalance, 18)} ETH`)
 	}
@@ -129,7 +136,7 @@ async function main() {
 		null,
 		serverAddress,
 		tempoModerato.id,
-		tempoModerato
+		tempoModerato,
 	)
 
 	const deposit = parseUnits('10', 6) // $10 deposit
@@ -158,7 +165,10 @@ async function main() {
 	log.code('  - escrowContract', streamRequest.escrowContract)
 	log.code('  - asset', `${streamRequest.asset} (AlphaUSD TIP-20 token)`)
 	log.code('  - destination', streamRequest.destination)
-	log.code('  - deposit', `${streamRequest.deposit} base units ($${formatUnits(BigInt(streamRequest.deposit), 6)})`)
+	log.code(
+		'  - deposit',
+		`${streamRequest.deposit} base units ($${formatUnits(BigInt(streamRequest.deposit), 6)})`,
+	)
 	log.code('  - expires', streamRequest.expires)
 	log.code('  - salt', streamRequest.salt)
 
@@ -169,12 +179,7 @@ async function main() {
 	log.ietf('Client deposits funds into escrow smart contract')
 	log.ietf('Channel is identified by hash of (payer, payee, token, deposit, expiry, salt)')
 
-	const client = new StreamChannelClient(
-		publicClient,
-		walletClient,
-		account,
-		tempoModerato
-	)
+	const _client = new StreamChannelClient(publicClient, walletClient, account, tempoModerato)
 
 	const openParams = {
 		payee: serverAddress,
@@ -196,10 +201,10 @@ async function main() {
 	// Note: In a real scenario, we'd call client.openChannel() here
 	// For demo purposes, we'll simulate the channel ID computation
 	log.info('Computing channel ID...')
-	
+
 	// Simulate channel ID (would be computed by contract)
-	const simulatedChannelId = `0x${Array.from({ length: 64 }, () => 
-		Math.floor(Math.random() * 16).toString(16)
+	const simulatedChannelId = `0x${Array.from({ length: 64 }, () =>
+		Math.floor(Math.random() * 16).toString(16),
 	).join('')}` as Hex
 
 	log.code('Channel opened', {
@@ -250,7 +255,7 @@ async function main() {
 		message: voucherPayload.message,
 	})
 
-	log.code('Voucher signature', signature.slice(0, 66) + '...')
+	log.code('Voucher signature', `${signature.slice(0, 66)}...`)
 	log.success(`Signed voucher for $${formatUnits(paymentAmount, 6)}`)
 
 	// =========================================================================
@@ -336,7 +341,7 @@ async function main() {
 	// =========================================================================
 	// Summary
 	// =========================================================================
-	console.log('\n' + '═'.repeat(60))
+	console.log(`\n${'═'.repeat(60)}`)
 	console.log('  IETF Payment Auth Flow Complete')
 	console.log('═'.repeat(60))
 	console.log(`

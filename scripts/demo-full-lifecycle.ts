@@ -18,20 +18,20 @@
  */
 
 import {
+	type Address,
 	createPublicClient,
 	createWalletClient,
 	encodeFunctionData,
 	formatUnits,
+	type Hex,
 	http,
 	parseUnits,
-	type Address,
-	type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
-import { createStreamChannelClient, StreamChannelClient } from '../packages/stream-channels/src/client.js'
-import { createStreamChannelServer, StreamChannelServer } from '../packages/stream-channels/src/server.js'
 import { TempoStreamChannelABI } from '../packages/stream-channels/src/abi.js'
+import { createStreamChannelClient } from '../packages/stream-channels/src/client.js'
+import { createStreamChannelServer } from '../packages/stream-channels/src/server.js'
 
 // ============================================================================
 // Configuration
@@ -69,12 +69,24 @@ const colors = {
 const formatUSD = (amount: bigint) => `$${formatUnits(amount, 6)}`
 
 const log = {
-	title: (msg: string) => console.log(`\n${colors.bright}${colors.cyan}${'═'.repeat(70)}${colors.reset}\n${colors.bright}  ${msg}${colors.reset}\n${colors.cyan}${'═'.repeat(70)}${colors.reset}`),
-	phase: (n: number, msg: string) => console.log(`\n${colors.bright}${colors.magenta}┌─ Phase ${n}: ${msg} ${'─'.repeat(50 - msg.length)}┐${colors.reset}`),
+	title: (msg: string) =>
+		console.log(
+			`\n${colors.bright}${colors.cyan}${'═'.repeat(70)}${colors.reset}\n${colors.bright}  ${msg}${colors.reset}\n${colors.cyan}${'═'.repeat(70)}${colors.reset}`,
+		),
+	phase: (n: number, msg: string) =>
+		console.log(
+			`\n${colors.bright}${colors.magenta}┌─ Phase ${n}: ${msg} ${'─'.repeat(50 - msg.length)}┐${colors.reset}`,
+		),
 	phaseEnd: () => console.log(`${colors.magenta}└${'─'.repeat(68)}┘${colors.reset}`),
 	step: (msg: string) => console.log(`${colors.blue}  ▸${colors.reset} ${msg}`),
-	tx: (label: string, hash: string) => console.log(`${colors.green}  ✓${colors.reset} ${label}: ${colors.dim}${hash.slice(0, 18)}...${colors.reset}`),
-	balance: (label: string, amount: bigint) => console.log(`${colors.yellow}  💰${colors.reset} ${label}: ${colors.bright}${formatUSD(amount)}${colors.reset}`),
+	tx: (label: string, hash: string) =>
+		console.log(
+			`${colors.green}  ✓${colors.reset} ${label}: ${colors.dim}${hash.slice(0, 18)}...${colors.reset}`,
+		),
+	balance: (label: string, amount: bigint) =>
+		console.log(
+			`${colors.yellow}  💰${colors.reset} ${label}: ${colors.bright}${formatUSD(amount)}${colors.reset}`,
+		),
 	voucher: (n: number, cumulative: bigint, delta: bigint, remaining: bigint) => {
 		console.log(`${colors.cyan}  📝 Voucher #${n}${colors.reset}`)
 		console.log(`      Cumulative: ${formatUSD(cumulative)} (+${formatUSD(delta)})`)
@@ -92,8 +104,14 @@ const log = {
 	info: (msg: string) => console.log(`${colors.dim}  ℹ ${msg}${colors.reset}`),
 	json: (label: string, obj: unknown) => {
 		console.log(`  ${label}:`)
-		const lines = JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2).split('\n')
-		lines.forEach(l => console.log(`    ${colors.dim}${l}${colors.reset}`))
+		const lines = JSON.stringify(
+			obj,
+			(_, v) => (typeof v === 'bigint' ? v.toString() : v),
+			2,
+		).split('\n')
+		for (const l of lines) {
+			console.log(`    ${colors.dim}${l}${colors.reset}`)
+		}
 	},
 }
 
@@ -107,8 +125,8 @@ async function deployContract(
 ): Promise<Address> {
 	log.step('Deploying TempoStreamChannel contract via forge script...')
 
-	const { execSync } = await import('child_process')
-	const path = await import('path')
+	const { execSync } = await import('node:child_process')
+	const path = await import('node:path')
 	const contractsDir = path.join(process.cwd(), 'packages/stream-channels')
 
 	// Get deployer address and fund it
@@ -127,7 +145,7 @@ async function deployContract(
 			id: 1,
 		}),
 	})
-	await new Promise(r => setTimeout(r, 3000))
+	await new Promise((r) => setTimeout(r, 3000))
 
 	const balance = await publicClient.getBalance({ address: deployerAddress })
 	log.step(`Deployer balance: ${formatUnits(balance, 18)} ETH`)
@@ -139,7 +157,7 @@ async function deployContract(
 			cwd: contractsDir,
 			env: { ...process.env, DEPLOYER_PRIVATE_KEY: deployerKey },
 			encoding: 'utf-8',
-		}
+		},
 	)
 
 	// Extract address from output
@@ -170,7 +188,7 @@ async function fundAccount(address: Address): Promise<void> {
 			id: 1,
 		}),
 	})
-	await new Promise(r => setTimeout(r, 2000))
+	await new Promise((r) => setTimeout(r, 2000))
 }
 
 // ============================================================================
@@ -192,7 +210,9 @@ async function main() {
 	log.step(`Payer (AI Agent): ${payerAccount.address}`)
 
 	// Server account (simulates the payment proxy server)
-	const serverKey = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('')}` as Hex
+	const serverKey = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('')}` as Hex
 	const serverAccount = privateKeyToAccount(serverKey)
 	log.step(`Server (Proxy): ${serverAccount.address}`)
 
@@ -220,7 +240,7 @@ async function main() {
 	if (payerBalance < parseUnits('0.01', 18)) {
 		await fundAccount(payerAccount.address)
 		// Wait for funding to be confirmed
-		await new Promise(r => setTimeout(r, 3000))
+		await new Promise((r) => setTimeout(r, 3000))
 		const newBalance = await publicClient.getBalance({ address: payerAccount.address })
 		log.step(`Payer funded: ${formatUnits(newBalance, 18)} ETH`)
 	}
@@ -233,7 +253,7 @@ async function main() {
 		if (deployerBalance < parseUnits('0.02', 18)) {
 			log.step('Funding deployer for contract deployment...')
 			await fundAccount(payerAccount.address)
-			await new Promise(r => setTimeout(r, 3000))
+			await new Promise((r) => setTimeout(r, 3000))
 		}
 		ESCROW_CONTRACT = await deployContract(publicClient, DEPLOYER_KEY)
 	} else {
@@ -241,9 +261,20 @@ async function main() {
 	}
 
 	// Create SDK clients
-	const clientSDK = createStreamChannelClient(publicClient, payerWallet, payerAccount, tempoModerato)
+	const clientSDK = createStreamChannelClient(
+		publicClient,
+		payerWallet,
+		payerAccount,
+		tempoModerato,
+	)
 	// For server, we need to pass the account object to enable transaction signing
-	const serverSDK = createStreamChannelServer(publicClient, serverWallet, serverAccount.address, tempoModerato.id, tempoModerato)
+	const serverSDK = createStreamChannelServer(
+		publicClient,
+		serverWallet,
+		serverAccount.address,
+		tempoModerato.id,
+		tempoModerato,
+	)
 	// Monkey-patch the settle method to use the proper account
 	serverSDK.settle = async (escrowContract: Address, channelId: Hex) => {
 		const state = serverSDK.getChannelState(channelId)
@@ -282,7 +313,9 @@ async function main() {
 
 	const initialDeposit = parseUnits('50', 6) // $50
 	const expiryTime = BigInt(Math.floor(Date.now() / 1000) + 7200) // 2 hours
-	const salt = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('')}` as Hex
+	const salt = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('')}` as Hex
 
 	log.step('Creating channel with parameters:')
 	log.json('Channel params', {
@@ -307,7 +340,12 @@ async function main() {
 
 	// Server acknowledges channel
 	const initialVoucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, 0n, expiryTime)
-	const openResult = await serverSDK.verifyChannelOpen(ESCROW_CONTRACT, channelId, openTxHash, initialVoucher)
+	const openResult = await serverSDK.verifyChannelOpen(
+		ESCROW_CONTRACT,
+		channelId,
+		openTxHash,
+		initialVoucher,
+	)
 	if (!openResult.valid) throw new Error(openResult.error)
 	log.step('Server acknowledged channel open ✓')
 
@@ -320,9 +358,9 @@ async function main() {
 	log.info('AI agent makes multiple LLM API calls, each with a new voucher')
 
 	const apiCalls = [
-		{ model: 'gpt-5', tokens: 2500, cost: parseUnits('0.50', 6) },      // $0.50
+		{ model: 'gpt-5', tokens: 2500, cost: parseUnits('0.50', 6) }, // $0.50
 		{ model: 'claude-sonnet-4', tokens: 5000, cost: parseUnits('1.25', 6) }, // $1.25
-		{ model: 'gpt-5', tokens: 8000, cost: parseUnits('2.00', 6) },      // $2.00
+		{ model: 'gpt-5', tokens: 8000, cost: parseUnits('2.00', 6) }, // $2.00
 		{ model: 'gemini-2.5-pro', tokens: 3000, cost: parseUnits('0.75', 6) }, // $0.75
 		{ model: 'claude-opus-4', tokens: 15000, cost: parseUnits('5.00', 6) }, // $5.00
 	]
@@ -332,7 +370,7 @@ async function main() {
 
 	for (const call of apiCalls) {
 		voucherCount++
-		const previousAmount = cumulativeAmount
+		const _previousAmount = cumulativeAmount
 		cumulativeAmount += call.cost
 
 		log.api(call.model, call.tokens, call.cost)
@@ -342,7 +380,7 @@ async function main() {
 			ESCROW_CONTRACT,
 			channelId,
 			cumulativeAmount,
-			expiryTime
+			expiryTime,
 		)
 
 		// Server verifies voucher
@@ -353,7 +391,7 @@ async function main() {
 		log.voucher(voucherCount, cumulativeAmount, call.cost, remaining)
 
 		// Simulate API response delay
-		await new Promise(r => setTimeout(r, 500))
+		await new Promise((r) => setTimeout(r, 500))
 	}
 
 	log.balance('Total spent so far', cumulativeAmount)
@@ -366,7 +404,7 @@ async function main() {
 	log.phase(3, 'Partial Settlement')
 	log.info('Server claims accumulated payments without closing channel')
 
-	const stateBeforeSettle = serverSDK.getChannelState(channelId)!
+	const _stateBeforeSettle = serverSDK.getChannelState(channelId)!
 	log.step(`Unsettled amount: ${formatUSD(serverSDK.getUnsettledAmount(channelId))}`)
 
 	const settleResult = await serverSDK.settle(ESCROW_CONTRACT, channelId)
@@ -395,13 +433,18 @@ async function main() {
 
 		log.api(call.model, call.tokens, call.cost)
 
-		const voucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, cumulativeAmount, expiryTime)
+		const voucher = await clientSDK.signVoucher(
+			ESCROW_CONTRACT,
+			channelId,
+			cumulativeAmount,
+			expiryTime,
+		)
 		const result = await serverSDK.verifyVoucher(ESCROW_CONTRACT, voucher)
 		if (!result.valid) throw new Error(result.error)
 
 		const remaining = result.state.deposit - result.state.highestVoucherAmount
 		log.voucher(voucherCount, cumulativeAmount, call.cost, remaining)
-		await new Promise(r => setTimeout(r, 300))
+		await new Promise((r) => setTimeout(r, 300))
 	}
 
 	log.phaseEnd()
@@ -448,13 +491,18 @@ async function main() {
 
 		log.api(call.model, call.tokens, call.cost)
 
-		const voucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, cumulativeAmount, expiryTime)
+		const voucher = await clientSDK.signVoucher(
+			ESCROW_CONTRACT,
+			channelId,
+			cumulativeAmount,
+			expiryTime,
+		)
 		const result = await serverSDK.verifyVoucher(ESCROW_CONTRACT, voucher)
 		if (!result.valid) throw new Error(result.error)
 
 		const remaining = result.state.deposit - result.state.highestVoucherAmount
 		log.voucher(voucherCount, cumulativeAmount, call.cost, remaining)
-		await new Promise(r => setTimeout(r, 400))
+		await new Promise((r) => setTimeout(r, 400))
 	}
 
 	log.phaseEnd()
@@ -508,7 +556,7 @@ async function main() {
 `)
 }
 
-main().catch(err => {
+main().catch((err) => {
 	log.error(err.message)
 	console.error(err)
 	process.exit(1)
