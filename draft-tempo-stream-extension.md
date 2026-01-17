@@ -287,7 +287,36 @@ Behavior:
 The server SHOULD monitor for this event and settle before the grace period
 ends if it has outstanding vouchers.
 
-#### 4.2.4. withdraw
+#### 4.2.4. topUp
+
+User adds more funds and/or extends expiry.
+
+```solidity
+function topUp(
+    bytes32 channelId,
+    uint128 additionalDeposit,
+    uint64 newExpiry
+) external;
+```
+
+Behavior:
+1. Verify `msg.sender == channel.payer`
+2. Verify channel is not finalized
+3. If `additionalDeposit > 0`:
+   - Transfer `additionalDeposit` tokens from payer to contract
+   - Add to `channel.deposit`
+4. If `newExpiry > channel.expiry`:
+   - Update `channel.expiry = newExpiry`
+5. Emit `TopUp` event
+
+**Rationale for expiry extension:**
+
+The server can settle at any time before expiry—they bear no risk from a longer
+expiry. Expiry only protects the user's right to withdraw unspent funds if the
+server disappears. Extending expiry is purely the user's choice to wait longer
+for their potential refund.
+
+#### 4.2.5. withdraw
 
 User withdraws remaining funds after expiry or close grace period.
 
@@ -341,6 +370,13 @@ event CloseRequested(
     uint256 closeGraceEnd
 );
 
+event TopUp(
+    bytes32 indexed channelId,
+    uint256 additionalDeposit,
+    uint256 newDeposit,
+    uint256 newExpiry
+);
+
 event Withdrawn(
     bytes32 indexed channelId,
     uint256 refunded
@@ -358,6 +394,7 @@ service delivery.
 **Characteristics:**
 
 - Payer deposits funds into escrow contract at channel open
+- Payer can top up deposit and/or extend expiry at any time
 - Payer signs cumulative EIP-712 vouchers authorizing withdrawals
 - Server can settle (withdraw) at any time using valid vouchers
 - Partial settlement is supported; channel remains usable
