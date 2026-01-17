@@ -481,7 +481,7 @@
     
     // Step management
     function showStep(stepId) {
-      document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); });
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
       document.getElementById(stepId).classList.add('active');
       
       // Update progress
@@ -504,7 +504,7 @@
     window.goToStep = showStep;
     
     function showLoading(text) {
-      document.querySelectorAll('.step').forEach(s => { s.classList.remove('active'); });
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
       document.getElementById('loading').classList.add('active');
       document.getElementById('loading-text').textContent = text;
     }
@@ -525,7 +525,7 @@
     // Load existing wallet from storage
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      try { wallet = JSON.parse(stored); } catch (_e) {}
+      try { wallet = JSON.parse(stored); } catch (e) {}
     }
     
     // Copy address helper
@@ -726,9 +726,10 @@
     };
     
     // Request faucet
+    // Faucet function - calls RPC directly (no localhost proxy needed)
     window.requestFaucet = async () => {
-      if (!wallet || !callbackUrl) {
-        showError('Run "presto" from your terminal first.');
+      if (!wallet) {
+        showError('Please create a wallet first.');
         return;
       }
       
@@ -738,11 +739,16 @@
       btn.innerHTML = '<span class="spinner"></span> Requesting...';
       
       try {
-        const faucetUrl = callbackUrl.replace('/callback', '/faucet');
-        const res = await fetch(faucetUrl, {
+        const address = rootAccount?.address || wallet.address;
+        const res = await fetch(RPC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: rootAccount?.address || wallet.address }),
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tempo_fundAddress',
+            params: [address],
+          }),
         });
         
         const data = await res.json();
@@ -764,35 +770,41 @@
       }
     };
     
+    // Balance check - calls RPC directly
     async function updateBalance() {
       const addr = rootAccount?.address || wallet?.address;
       if (!addr) return;
       
       try {
-        // Call the Moderato RPC directly using viem
-        const client = createClient({
-          chain: tempoChain,
-          transport: http(RPC_URL),
-        }).extend(publicActions);
-        
-        const balance = await client.readContract({
-          address: FEE_TOKEN,
-          abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-          functionName: 'balanceOf',
-          args: [addr],
+        const res = await fetch(RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_call',
+            params: [{
+              to: FEE_TOKEN,
+              data: '0x70a08231000000000000000000000000' + addr.slice(2).toLowerCase(),
+            }, 'latest'],
+          }),
         });
         
-        currentBalance = Number(balance) / 1e6;
-        document.getElementById('balance').textContent = `${currentBalance.toFixed(2)} ${FEE_TOKEN_NAME}`;
-        document.getElementById('balance').classList.remove('loading');
+        const data = await res.json();
+        if (data.result) {
+          const balance = parseInt(data.result, 16);
+          currentBalance = balance / 1e6;
+          document.getElementById('balance').textContent = `${currentBalance.toFixed(2)} ${FEE_TOKEN_NAME}`;
+          document.getElementById('balance').classList.remove('loading');
+        }
       } catch (e) {
         console.error('Balance fetch error:', e);
-        document.getElementById('balance').textContent = 'Error loading';
+        document.getElementById('balance').textContent = '--';
       }
     }
     
-    // Finish and send to CLI
-    window.finish = async () => {
+    // Finish and send to CLI via form POST (avoids Private Network Access warnings)
+    window.finish = () => {
       if (!accessKeyData || !callbackUrl) {
         if (!callbackUrl) {
           showError('No callback URL. Run "presto" from your terminal.');
@@ -802,43 +814,41 @@
         return;
       }
       
+      if (!state) {
+        showError('Missing state parameter. Please restart wallet setup.');
+        return;
+      }
+      
       const btn = document.getElementById('btn-finish');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Finishing...';
       
-      const payload = {
+      // Use form POST navigation instead of fetch() to avoid CORS/Private Network Access issues
+      // This is the RFC 8252 recommended approach for native app OAuth callbacks
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = callbackUrl;
+      form.style.display = 'none';
+      
+      const fields = {
         access_key: accessKeyData.privateKey,
         account_address: accessKeyData.accountAddress,
         key_id: accessKeyData.keyId,
-        expiry: accessKeyData.expiry,
-        tx_hash: accessKeyData.txHash,
+        expiry: accessKeyData.expiry.toString(),
+        tx_hash: accessKeyData.txHash || '',
+        state: state,
       };
       
-      try {
-        const res = await fetch(callbackUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        
-        if (res.ok) {
-          showStep('step-success');
-          setTimeout(() => window.close(), 2000);
-          return;
-        }
-      } catch (_e) {
-        // POST failed, try GET fallback
+      for (const [name, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
       }
       
-      // Fallback to GET
-      const url = new URL(callbackUrl);
-      url.searchParams.set('access_key', accessKeyData.privateKey);
-      url.searchParams.set('account_address', accessKeyData.accountAddress);
-      url.searchParams.set('key_id', accessKeyData.keyId);
-      url.searchParams.set('expiry', accessKeyData.expiry.toString());
-      if (state) url.searchParams.set('state', state);
-      
-      window.location.href = url.toString();
+      document.body.appendChild(form);
+      form.submit();
     };
     
     // Initial state
@@ -864,7 +874,7 @@
             showError('Please sign in with your passkey to create a new CLI key.');
             showStep('step-auth');
           }
-        } catch (_e) {
+        } catch (e) {
           wallet = { address: existingAccount };
           showError('Please sign in with your passkey to create a new CLI key.');
           showStep('step-auth');
@@ -876,13 +886,8 @@
       }
     }
     
-    // Notify on close
-    window.addEventListener('beforeunload', () => {
-      if (callbackUrl) {
-        const abortUrl = callbackUrl.replace('/callback', '/abort');
-        navigator.sendBeacon(abortUrl, '');
-      }
-    });
+    // Note: beforeunload abort removed - sendBeacon to localhost triggers
+    // Private Network Access errors from HTTPS pages
   </script>
 </body>
 </html>
