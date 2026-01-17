@@ -27,6 +27,7 @@
 		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 		"EXA_API_KEY": "exa-placeholder-key",
 		"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+		"MODAL_API_CREDENTIALS": "modal-key-placeholder:modal-secret-placeholder",
 		"OPENAI_API_KEY": "openai-placeholder-key",
 		"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 		"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
@@ -102,6 +103,21 @@
 					"pattern": "twitter.payments.testnet.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
+				},
+				{
+					"pattern": "modal.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "gpu.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "compute.payments.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
 				}
 			],
 			"vars": {
@@ -113,6 +129,7 @@
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"MODAL_API_CREDENTIALS": "modal-key-placeholder:modal-secret-placeholder",
 				"OPENAI_API_KEY": "openai-placeholder-key",
 				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
@@ -177,6 +194,21 @@
 					"pattern": "twitter.payments.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
+				},
+				{
+					"pattern": "modal.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "gpu.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
+				{
+					"pattern": "compute.payments.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
 				}
 			],
 			"vars": {
@@ -188,6 +220,7 @@
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
+				"MODAL_API_CREDENTIALS": "modal-key-placeholder:modal-secret-placeholder",
 				"OPENAI_API_KEY": "openai-placeholder-key",
 				"OPENROUTER_API_KEY": "REDACTED_OPENROUTER_KEY",
 				"TWITTER_BEARER_TOKEN": "twitter-placeholder-token"
@@ -224,7 +257,10 @@
 					"custom_domain": true
 				},
 				{ "pattern": "llm.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-				{ "pattern": "twitter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+				{ "pattern": "twitter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
 			"vars": {
 				"ENVIRONMENT": "mainnet",
@@ -235,6 +271,7 @@
 			// wrangler secret put BROWSERBASE_API_KEY --env mainnet
 			// wrangler secret put EXA_API_KEY --env mainnet
 			// wrangler secret put FIRECRAWL_API_KEY --env mainnet
+			// wrangler secret put MODAL_API_CREDENTIALS --env mainnet (format: "key:secret")
 			// wrangler secret put OPENAI_API_KEY --env mainnet
 			// wrangler secret put OPENROUTER_API_KEY --env mainnet
 			// wrangler secret put TWITTER_BEARER_TOKEN --env mainnet

@@ -109,7 +109,19 @@ export async function proxyRequest(
 		if (!apiKey) {
 			throw new Error(`API key not configured for partner: ${partner.slug}`)
 		}
-		headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
+
+		// Modal uses dual-header auth: Modal-Key and Modal-Secret
+		// Credentials are stored as "key:secret" format
+		if (partner.slug === 'modal') {
+			const [modalKey, modalSecret] = apiKey.split(':')
+			if (!modalKey || !modalSecret) {
+				throw new Error('Modal credentials must be in "key:secret" format')
+			}
+			headers.set('Modal-Key', modalKey)
+			headers.set('Modal-Secret', modalSecret)
+		} else {
+			headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
+		}
 	}
 
 	// Get request body if present
