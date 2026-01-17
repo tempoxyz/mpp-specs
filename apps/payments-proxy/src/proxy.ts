@@ -20,6 +20,12 @@ export interface ProxyOptions {
 	 * Useful for passthrough mode where the client authenticates directly.
 	 */
 	preserveClientAuth?: boolean
+	/**
+	 * Pre-read request body. If provided, this will be used instead of reading
+	 * from the request. This is useful when the body needs to be preserved across
+	 * async operations that might invalidate the original request body stream.
+	 */
+	preReadBody?: ArrayBuffer | null
 }
 
 /**
@@ -98,7 +104,13 @@ export async function proxyRequest(
 	// Copy allowed headers from original request
 	for (const [key, value] of c.req.raw.headers.entries()) {
 		if (!blockedHeaders.has(key.toLowerCase())) {
-			headers.set(key, value)
+			// Handle potentially duplicated Content-Type headers (e.g., "application/json, application/json")
+			// by using only the first value
+			if (key.toLowerCase() === 'content-type' && value.includes(',')) {
+				headers.set(key, value.split(',')[0]!.trim())
+			} else {
+				headers.set(key, value)
+			}
 		}
 	}
 
@@ -127,7 +139,12 @@ export async function proxyRequest(
 	// Get request body if present
 	let body: BodyInit | null = null
 	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
-		body = await c.req.raw.clone().arrayBuffer()
+		// Use pre-read body if provided, otherwise read from request
+		if (options.preReadBody !== undefined) {
+			body = options.preReadBody
+		} else {
+			body = await c.req.raw.clone().arrayBuffer()
+		}
 	}
 
 	// Make the upstream request

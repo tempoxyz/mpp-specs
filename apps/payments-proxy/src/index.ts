@@ -504,6 +504,13 @@ app.all('/*', async (c) => {
 	// Check for payment authorization
 	const authHeader = c.req.header('Authorization')
 
+	// Read the body early - it may become unavailable after async operations
+	// (transaction broadcast, receipt waiting, etc.)
+	let preReadBody: ArrayBuffer | null = null
+	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+		preReadBody = await c.req.raw.clone().arrayBuffer()
+	}
+
 	if (!authHeader || !authHeader.startsWith('Payment ')) {
 		// No payment - issue challenge
 		const challenge = createChallenge(
@@ -614,7 +621,9 @@ app.all('/*', async (c) => {
 
 	// Now proxy the request to the upstream API
 	try {
-		const { response: upstreamResponse } = await proxyRequest(c, partner, forwardPath)
+		const { response: upstreamResponse } = await proxyRequest(c, partner, forwardPath, {
+			preReadBody,
+		})
 
 		// Add payment receipt header to the response
 		const responseHeaders = new Headers(upstreamResponse.headers)

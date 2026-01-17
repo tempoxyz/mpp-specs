@@ -23,7 +23,6 @@
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-		"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 		"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 		"EXA_API_KEY": "exa-placeholder-key",
 		"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -125,7 +124,6 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -216,7 +214,6 @@
 				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 				"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
 				"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD",
-				"ANTHROPIC_API_KEY": "anthropic-placeholder-key",
 				"BROWSERBASE_API_KEY": "REDACTED_BROWSERBASE_KEY",
 				"EXA_API_KEY": "exa-placeholder-key",
 				"FIRECRAWL_API_KEY": "REDACTED_FIRECRAWL_KEY",
@@ -257,7 +254,11 @@
 					"custom_domain": true
 				},
 				{ "pattern": "llm.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-				{ "pattern": "twitter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{
+					"pattern": "twitter.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
 				{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
