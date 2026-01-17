@@ -186,6 +186,17 @@ signed transaction any time before the `expires` timestamp.
 A payment authorization. The payer grants the server permission
 to charge up to the specified amount before the expiry timestamp.
 
+**Backwards Compatibility**: The intent name `authorize` replaces the
+previously used `approve`. For backwards compatibility:
+
+- Servers MUST accept both `intent="authorize"` and `intent="approve"`
+- Clients SHOULD use `intent="authorize"` for new implementations
+- The `approve` intent is DEPRECATED and will be removed in a future version
+- Servers SHOULD log deprecation warnings when `approve` is used
+
+The transition period for `approve` deprecation is 12 months from the
+publication of this specification.
+
 **Required parameters:**
 
 - Expiry timestamp (MUST be a reasonable future time)
@@ -428,6 +439,40 @@ Key Authorization per [TEMPO-TX-SPEC].
 Servers SHOULD additionally verify that the transaction or authorization
 parameters match the original request (asset, amount, destination, expiry).
 
+### 8.3. Fee Payment Field Validation
+
+When verifying credentials for requests with `feePayer: true`:
+
+1. **Placeholder verification**: Servers MUST verify that the credential's
+   transaction contains:
+   - `fee_payer_signature` field set to exactly `0x00` (single zero byte,
+     hex-encoded)
+   - `fee_token` field is either:
+     - Missing/absent from the RLP encoding, OR
+     - Set to RLP null (`0x80`), OR
+     - Set to the zero address (`0x0000000000000000000000000000000000000000`)
+
+2. **Rejection criteria**: Servers MUST reject credentials where:
+   - `fee_payer_signature` contains any value other than `0x00`
+   - `fee_token` contains a non-zero address when `feePayer: true`
+   - The signature domain used is not `0x76`
+
+3. **Signature tampering detection**: If `fee_payer_signature` contains a
+   valid signature (not `0x00`), servers MUST reject the credential as
+   potentially tampered. This prevents attackers from substituting their
+   own fee payer signature.
+
+When verifying credentials for requests with `feePayer: false` or omitted:
+
+1. **Fee token presence**: Servers MUST verify that `fee_token` is set to
+   a valid 20-byte Ethereum address (not zero, not null).
+
+2. **Whitelist check**: The `fee_token` SHOULD be validated against the
+   server's approved token list.
+
+3. **Balance verification**: Servers MAY verify the client has sufficient
+   fee token balance before broadcasting.
+
 ---
 
 ## 9. Settlement Procedure
@@ -456,6 +501,17 @@ When `feePayer: true`:
    signature domain `0x78`. This signature commits to the transaction
    including the `fee_token` and client's address.
 
+   The `fee_token` MUST be included in the signature domain `0x78` hash,
+   cryptographically binding the server's fee token selection to the
+   transaction. Specifically, the domain `0x78` signature covers:
+   
+   - The complete client-signed transaction (including client's `0x76` signature)
+   - The selected `fee_token` address
+   - The server's fee payer address
+
+   This binding ensures the fee token selection cannot be modified after
+   the server signs without invalidating the `0x78` signature.
+
 4. **Server broadcasts**: The final transaction contains both signatures:
    - Client's signature (authorizing the payment)
    - Server's `fee_payer_signature` (committing to pay fees)
@@ -482,6 +538,116 @@ When acting as fee payer, servers:
   to `0x00` and `fee_token` empty or `0x80` (RLP null)
 - When `feePayer: false` or omitted: Clients MUST set `fee_token` to a
   valid USD TIP-20 token and have sufficient balance to pay fees
+
+#### 9.1.5. Fee Token Commitment
+
+To ensure clients can audit fee token selection:
+
+1. **Pre-broadcast verification**: Servers MUST select and commit to
+   `fee_token` at credential verification time, before returning any
+   success response.
+
+2. **Receipt inclusion**: The `Payment-Receipt` header MUST include the
+   selected `fee_token` address when `feePayer: true` was used. Add to
+   the receipt payload:
+   
+   | Field | Type | Description |
+   |-------|------|-------------|
+   | `feeToken` | string | TIP-20 token used for fees (only if server-paid) |
+   | `feePayer` | string | Server's fee payer address (only if server-paid) |
+
+3. **Deterministic selection**: Servers SHOULD use deterministic fee token
+   selection (e.g., prefer token with highest AMM TVL) to ensure consistent
+   behavior across requests.
+
+#### 9.1.6. Fee Token Validation
+
+Servers acting as fee payers MUST validate the selected fee token:
+
+1. **Whitelist**: Servers MUST maintain a whitelist of approved USD
+   stablecoins for fee payment. The whitelist SHOULD include only tokens
+   with:
+   - Verified USD denomination (1:1 peg)
+   - Sufficient AMM liquidity (recommended: >$100,000 TVL)
+   - Stable price history (no >1% deviation in 24h)
+
+2. **Fee caps**: Servers MUST enforce maximum fee limits:
+   - Maximum fee MUST NOT exceed 1% of the payment amount
+   - Maximum absolute fee MUST NOT exceed a configured threshold
+     (recommended: $1.00 USD equivalent)
+
+3. **Slippage protection**: When converting fees through AMM, servers
+   MUST reject transactions where slippage would exceed 0.5%.
+
+4. **Approved tokens**: The following TIP-20 tokens are RECOMMENDED
+   for fee payment on Tempo Moderato (testnet):
+   
+   | Token | Address | Notes |
+   |-------|---------|-------|
+   | alphaUSD | `0x20c0000000000000000000000000000000000001` | Primary testnet stablecoin |
+   
+   Production deployments SHOULD maintain their own whitelist based on
+   current market conditions.
+
+5. **Rejection**: Servers MUST reject credentials if:
+   - No whitelisted fee token has sufficient server balance
+   - Fee would exceed configured caps
+   - AMM slippage exceeds threshold
+
+#### 9.1.7. Error Responses
+
+When verification or settlement fails, servers MUST return appropriate
+HTTP status codes with error details in the response body.
+
+##### 9.1.7.1. Fee Payment Errors
+
+The following error codes are specific to fee-sponsored payments:
+
+| Error Code | HTTP Status | Description |
+|------------|-------------|-------------|
+| `fee_unavailable` | 503 | Server cannot sponsor fees (insufficient balance) |
+| `fee_token_rejected` | 400 | Selected fee token is not whitelisted |
+| `fee_limit_exceeded` | 400 | Fee would exceed configured caps |
+| `fee_slippage_exceeded` | 400 | AMM slippage exceeds threshold |
+| `fee_payer_overloaded` | 429 | Rate limit exceeded for fee sponsorship |
+
+**Error response format:**
+
+```json
+{
+  "error": "fee_unavailable",
+  "message": "Server fee balance insufficient. Retry with feePayer=false.",
+  "retry_after": 300
+}
+```
+
+##### 9.1.7.2. Fallback Behavior
+
+When fee sponsorship fails, servers SHOULD:
+
+1. **Retry suggestion**: Include `Retry-After` header if temporary
+2. **Fallback challenge**: Return new 402 with `feePayer: false` if client
+   can pay fees themselves
+3. **Clear messaging**: Explain why fee sponsorship failed
+
+**Example fallback:**
+
+```http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="newChallenge123",
+  realm="api.example.com",
+  method="tempo",
+  intent="charge",
+  request="<base64url with feePayer=false>"
+Retry-After: 300
+Content-Type: application/json
+
+{
+  "error": "fee_unavailable",
+  "message": "Fee sponsorship temporarily unavailable. Please pay fees directly.",
+  "original_challenge_id": "kM9xPqWvT2nJrHsY4aDfEb"
+}
+```
 
 ### 9.2. Charge Settlement (Transaction)
 
@@ -704,6 +870,32 @@ Tempo Transactions include chain ID, nonce, and optional `validBefore`/
 - Nonce consumption prevents same-chain replay
 - Validity windows limit temporal replay windows
 
+#### 11.1.1. Signature Domain Nonce Isolation
+
+Tempo's 2D nonce system provides independent nonce lanes (`nonce_key`).
+For fee-sponsored transactions:
+
+1. **Single nonce consumption**: A transaction with both client signature
+   (domain `0x76`) and fee payer signature (domain `0x78`) consumes only
+   ONE nonce from the client's nonce lane. The fee payer does not consume
+   a separate nonce.
+
+2. **Atomic binding**: The client's nonce is bound to both signatures.
+   Replaying with a different `fee_token` is impossible because it would
+   invalidate the `0x78` signature without affecting the consumed nonce.
+
+3. **Fee payer isolation**: The fee payer's signature does not consume
+   any nonce, preventing attackers from exhausting fee payer nonces.
+
+4. **Replay prevention**: Once a transaction is included on-chain:
+   - The client's nonce is consumed
+   - Resubmitting the same transaction (even with different fee_token)
+     fails due to nonce already consumed
+   - Extracting signatures and reusing them fails because nonce is bound
+
+Implementations MUST verify that the client's nonce has not been consumed
+before broadcasting fee-sponsored transactions.
+
 ### 11.2. Access Key Security
 
 Access keys present additional security considerations:
@@ -767,6 +959,69 @@ client authentication before accepting payment credentials.
 and reject new payment requests when balance is insufficient. Servers
 SHOULD alert operators when fee token balance falls below a threshold.
 
+### 11.6. Fee Payer Key Management
+
+Servers acting as fee payers maintain signing keys with direct access to
+funds. Compromise of these keys enables immediate theft of fee token
+balances.
+
+#### 11.6.1. Key Protection
+
+Servers SHOULD implement the following protections:
+
+1. **Hardware Security Modules**: Fee payer signing keys SHOULD be stored
+   in HSMs or secure enclaves. Keys SHOULD NOT be stored in environment
+   variables or configuration files.
+
+2. **Key rotation**: Fee payer keys SHOULD be rotated regularly
+   (recommended: weekly). Old keys should be revoked promptly.
+
+3. **Minimal balance**: Fee payer accounts SHOULD maintain only the
+   minimum balance needed for expected transaction volume. Excess funds
+   SHOULD be held in separate cold storage.
+
+#### 11.6.2. Rate Limiting
+
+Servers MUST implement rate limiting for fee-sponsored transactions:
+
+1. **Per-client limits**: Maximum fee-sponsored transactions per client
+   per time window (recommended: 10 per minute, 100 per hour).
+
+2. **Global limits**: Maximum total fee-sponsored transactions per time
+   window (recommended: 1000 per minute).
+
+3. **Value limits**: Maximum total fee value per time window
+   (recommended: $100 per hour per client, $10,000 per hour global).
+
+#### 11.6.3. Monitoring and Alerting
+
+Servers SHOULD implement monitoring for:
+
+1. **Anomaly detection**: Alert on unusual patterns:
+   - Sudden increase in fee payment requests
+   - Requests from new/unknown clients
+   - Requests with unusual fee token selections
+
+2. **Balance monitoring**: Alert when fee token balance falls below
+   threshold or drains faster than expected.
+
+3. **Audit logging**: Log all fee payment signatures with:
+   - Timestamp
+   - Client identifier (recovered address)
+   - Transaction hash
+   - Fee token and estimated fee amount
+   - Request ID for correlation
+
+#### 11.6.4. Incident Response
+
+In case of suspected key compromise:
+
+1. **Immediate key rotation**: Revoke compromised key and rotate to backup
+2. **Transaction review**: Audit recent fee payments for unauthorized use
+3. **Balance protection**: Transfer remaining balance to secure address
+4. **Client notification**: If client credentials were exposed, notify
+   affected clients
+
 ---
 
 ## 12. IANA Considerations
@@ -795,6 +1050,14 @@ Intents" registry established by [I-D.ietf-httpauth-payment]:
 Note: `charge` is already registered as a base intent by
 [I-D.ietf-httpauth-payment]. This document extends its definition for
 the `tempo` method.
+
+**Deprecated Intents**:
+
+| Intent | Status | Replacement | Removal Date |
+|--------|--------|-------------|--------------|
+| `approve` | DEPRECATED | `authorize` | 12 months after publication |
+
+Servers MUST accept deprecated intents during the transition period.
 
 ---
 
