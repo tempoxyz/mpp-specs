@@ -762,7 +762,7 @@ _payment.api.example.com. TXT "v=payment1; methods=tempo,evm"
       </section>
       <section anchor="replay-protection">
         <name>Replay Protection</name>
-        <t>Payment methods <bcp14>MUST</bcp14> define their own replay protection mechanisms (e.g., on-chain nonce consumption, preimage revelation, authorization expiry). This specification does not mandate a specific approach.</t>
+        <t>Payment methods <bcp14>MUST</bcp14> define their own replay protection mechanisms (e.g., onchain nonce consumption, preimage revelation, authorization expiry). This specification does not mandate a specific approach.</t>
         <t>Payment method specifications <bcp14>SHOULD</bcp14> define expiry semantics in the <tt>request</tt> payload. Servers <bcp14>SHOULD</bcp14> reject credentials for expired challenges.</t>
       </section>
       <section anchor="amount-verification">
@@ -1120,10 +1120,9 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAxIiwicGF5b
         <t>Decoded credential:</t>
         <sourcecode type="jsonc"><![CDATA[
 {
-  "method": "tempo",
   "id": "qB3wErTyU7iOpAsD9fGhJk",
   "payload": {
-    "txid": "0xabc123...",
+    "type": "transaction",
     "signature": "0x..."
   }
 }
@@ -1231,9 +1230,11 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAyIiwicGF5b
         <t>Decoded credential:</t>
         <sourcecode type="jsonc"><![CDATA[
 {
-  "method": "tempo",
   "id": "zL4xCvBnM6kJhGfD8sAaWe",
-  "payload": "0x..." // RLP-encoded Tempo key authorization
+  "payload": {
+    "type": "keyAuthorization",
+    "signature": "0x..." // RLP-encoded Tempo key authorization
+  }
 }
 ]]></sourcecode>
         <t>Success:</t>

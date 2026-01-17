@@ -3,9 +3,9 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                           13 January 2026
+Internet-Draft                                           17 January 2026
 Intended status: Standards Track                                        
-Expires: 17 July 2026
+Expires: 21 July 2026
 
 
           Tempo Payment Method for HTTP Payment Authentication
@@ -34,7 +34,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 17 July 2026.
+   This Internet-Draft will expire on 21 July 2026.
 
 Copyright Notice
 
@@ -71,9 +71,11 @@ Table of Contents
      7.2.  Payload Structure
      7.3.  Transaction Payload
      7.4.  Key Authorization Payload
+     7.5.  Hash Payload
    8.  Verification Procedure
      8.1.  Credential Verification
      8.2.  Payload Verification
+     8.3.  Hash Verification
    9.  Settlement Procedure
      9.1.  Fee Payment
        9.1.1.  Server-Paid Fees
@@ -84,7 +86,8 @@ Table of Contents
      9.3.  Subscription Settlement (Key Authorization)
      9.4.  Authorize Settlement (Transaction)
      9.5.  Authorize Settlement (Key Authorization)
-     9.6.  Receipt Generation
+     9.6.  Hash Settlement
+     9.7.  Receipt Generation
    10. Internationalization Considerations
      10.1.  Address Encoding
    11. Security Considerations
@@ -147,14 +150,15 @@ Table of Contents
          │<────────────────────────────────────────────────┤
          │                                                 │
          │  (3) Client signs Tempo Transaction or          │
-         │      Key Authorization                          │
+         │      Key Authorization, or broadcasts tx        │
+         │      and obtains hash                           │
          │                                                 │
          │  (4) GET /resource                              │
          │      Authorization: Payment <credential>        │
          ├────────────────────────────────────────────────>│
          │                                                 │
-         │  (5) Server broadcasts transaction via          │
-         │      eth_sendRawTransactionSync                 │
+         │  (5) Server broadcasts transaction or verifies  │
+         │      client-broadcast                           │
          │                                                 │
          │  (6) 200 OK                                     │
          │      Payment-Receipt: <receipt with txHash>     │
@@ -442,10 +446,10 @@ Table of Contents
     | id      | string | REQUIRED | Challenge ID from the server's   |
     |         |        |          | WWW-Authenticate header          |
     +---------+--------+----------+----------------------------------+
+    | payload | object | REQUIRED | Tempo-specific payload object    |
+    +---------+--------+----------+----------------------------------+
     | source  | string | OPTIONAL | Payer identifier as a DID (e.g., |
     |         |        |          | did:pkh:eip155:42431:0x...)      |
-    +---------+--------+----------+----------------------------------+
-    | payload | object | REQUIRED | Tempo-specific payload object    |
     +---------+--------+----------+----------------------------------+
 
                                  Table 4
@@ -458,17 +462,26 @@ Table of Contents
 
    The payload object contains:
 
-    +===========+========+==========+=================================+
-    | Field     | Type   | Required | Description                     |
-    +===========+========+==========+=================================+
-    | type      | string | REQUIRED | Fulfillment type: "transaction" |
-    |           |        |          | or "keyAuthorization"           |
-    +-----------+--------+----------+---------------------------------+
-    | signature | string | REQUIRED | Hex-encoded RLP-serialized      |
-    |           |        |          | signed data                     |
-    +-----------+--------+----------+---------------------------------+
+     +===========+========+=============+===========================+
+     | Field     | Type   | Required    | Description               |
+     +===========+========+=============+===========================+
+     | hash      | string | CONDITIONAL | Transaction hash          |
+     |           |        |             | (required for hash type)  |
+     +-----------+--------+-------------+---------------------------+
+     | signature | string | CONDITIONAL | Hex-encoded RLP-          |
+     |           |        |             | serialized signed data    |
+     |           |        |             | (required for transaction |
+     |           |        |             | and keyAuthorization)     |
+     +-----------+--------+-------------+---------------------------+
+     | type      | string | REQUIRED    | Fulfillment type:         |
+     |           |        |             | "transaction",            |
+     |           |        |             | "keyAuthorization", or    |
+     |           |        |             | "hash"                    |
+     +-----------+--------+-------------+---------------------------+
 
-                                  Table 5
+                                 Table 5
+
+   Either signature or hash MUST be present, depending on the type.
 
 7.3.  Transaction Payload
 
@@ -508,6 +521,44 @@ Table of Contents
      }
    }
 
+7.5.  Hash Payload
+
+   When type is "hash", the client has already broadcast the transaction
+   to the Tempo network.  The hash field contains the transaction hash
+   for the server to verify onchain.  This allows clients who prefer to
+   manage their own transaction submission (e.g., for gas management or
+   privacy reasons) to still use the Payment scheme.
+
+      +=======+========+==========+=================================+
+      | Field | Type   | Required | Description                     |
+      +=======+========+==========+=================================+
+      | hash  | string | REQUIRED | Transaction hash with 0x prefix |
+      +-------+--------+----------+---------------------------------+
+      | type  | string | REQUIRED | "hash"                          |
+      +-------+--------+----------+---------------------------------+
+
+                                  Table 6
+
+   Applicable intents:
+
+   *  charge: The hash references a transfer transaction
+
+   *  authorize: The hash references an approve transaction
+
+   Note: subscription intent cannot use hash payloads because it
+   requires a key authorization, not a transaction.
+
+   Example:
+
+   {
+     "id": "kM9xPqWvT2nJrHsY4aDfEb",
+     "payload": {
+       "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+       "type": "hash"
+     },
+     "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+   }
+
 8.  Verification Procedure
 
    Servers MUST verify credentials before granting access or initiating
@@ -521,9 +572,13 @@ Table of Contents
 
    2.  Verify id matches a valid, unexpired, unused challenge
 
-   3.  Verify type is "transaction" or "keyAuthorization"
+   3.  Verify type is "transaction", "keyAuthorization", or "hash"
 
-   4.  Decode the hex-encoded payload field
+   4.  For transaction and keyAuthorization: decode the hex-encoded
+       signature field
+
+   5.  For hash: validate the hash field format (66 hex characters with
+       0x prefix)
 
 8.2.  Payload Verification
 
@@ -533,9 +588,47 @@ Table of Contents
    For type="keyAuthorization", servers MUST deserialize and verify the
    Key Authorization per [TEMPO-TX-SPEC].
 
+   For type="hash", servers MUST verify the transaction onchain per
+   Section 8.3.
+
    Servers SHOULD additionally verify that the transaction or
    authorization parameters match the original request (asset, amount,
    destination, expiry).
+
+8.3.  Hash Verification
+
+   For type="hash", servers MUST verify the transaction onchain:
+
+   1.  Call eth_getTransactionReceipt(hash) to retrieve the transaction
+       receipt
+
+   2.  Verify the transaction status is 1 (success)
+
+   3.  Verify the transaction chainId matches the expected chain ID
+
+   4.  Parse the transaction receipt logs to verify the operation
+       matches the intent:
+
+   - For charge: verify a Transfer(from, to, amount) event on the
+   correct asset with the expected to (destination) and amount - For
+   authorize: verify an Approval(owner, spender, amount) event on the
+   correct asset with the expected spender and amount
+
+   1.  Verify the from address matches the expected payer (if source is
+       provided)
+
+   2.  Verify the transaction block timestamp is within the challenge
+       validity window
+
+   3.  For authorize intent, servers SHOULD verify the payer's token
+       balance is
+
+   sufficient for expected future charges
+
+   If the transaction is not yet confirmed (receipt not available),
+   servers SHOULD return 202 Accepted with a Retry-After header.
+   Servers MAY poll up to a reasonable timeout (e.g., 30 seconds) before
+   responding.
 
 9.  Settlement Procedure
 
@@ -743,7 +836,7 @@ Table of Contents
    2.  If feePayer: true, server adds fee sponsorship (signs with 0x78
        domain)
 
-   3.  Server broadcasts transaction; approval registered on-chain
+   3.  Server broadcasts transaction; approval registered onchain
 
    4.  Server returns receipt (approval is now active)
 
@@ -797,7 +890,71 @@ Table of Contents
 
    1.  Charges can occur up to the authorized limit before expiry
 
-9.6.  Receipt Generation
+9.6.  Hash Settlement
+
+   For credentials with type="hash", the client has already broadcast
+   the transaction.  The server verifies the transaction onchain rather
+   than broadcasting it:
+
+   Client                        Server                     Tempo Network
+      │                             │                             │
+      │  (1) Broadcast tx           │                             │
+      ├──────────────────────────────────────────────────────────>│
+      │                             │                             │
+      │  (2) Transaction confirmed  │                             │
+      │<──────────────────────────────────────────────────────────┤
+      │                             │                             │
+      │  (3) Authorization:         │                             │
+      │      Payment <credential>   │                             │
+      │      (with txHash)          │                             │
+      ├────────────────────────────>│                             │
+      │                             │                             │
+      │                             │  (4) eth_getTransactionReceipt
+      │                             ├────────────────────────────>│
+      │                             │                             │
+      │                             │  (5) Receipt returned       │
+      │                             │<────────────────────────────┤
+      │                             │                             │
+      │                             │  (6) Verify receipt         │
+      │                             │                             │
+      │  (7) 200 OK                 │                             │
+      │      Payment-Receipt:       │                             │
+      │      <txHash>               │                             │
+      │<────────────────────────────┤                             │
+      │                             │                             │
+
+   1.  Client constructs and broadcasts transaction directly to Tempo
+
+   2.  Client waits for transaction confirmation (optional but
+       recommended)
+
+   3.  Client submits credential with the transaction hash
+
+   4.  Server queries the transaction receipt from Tempo
+
+   5.  Server verifies the receipt confirms successful execution
+
+   6.  Server verifies receipt matches the original request
+
+   7.  Server returns receipt (payment confirmed)
+
+   This flow is useful when:
+
+   *  The client wants to control transaction timing or gas settings
+
+   *  The client is using a wallet that handles broadcasting internally
+
+   Limitations:
+
+   *  Cannot be used with feePayer: true (client must pay their own
+      fees)
+
+   *  Cannot be used for subscription intent (requires key
+      authorization)
+
+   *  Server cannot modify or enhance the transaction
+
+9.7.  Receipt Generation
 
    Upon successful settlement, servers MUST return a Payment-Receipt
    header per Section 5.3 of [I-D.ietf-httpauth-payment].
@@ -818,7 +975,7 @@ Table of Contents
              |           |        | time                    |
              +-----------+--------+-------------------------+
 
-                                 Table 6
+                                 Table 7
 
    Example receipt payload:
 
@@ -865,7 +1022,7 @@ Table of Contents
    enabling transfers to attacker-controlled addresses.
 
    *Spending Limits*: Access key spending limits are enforced by the
-   AccountKeychain precompile on-chain.  Servers cannot exceed the
+   AccountKeychain precompile onchain.  Servers cannot exceed the
    authorized limits even if compromised.
 
    *Key Revocation*: Users can revoke access keys at any time via the
@@ -904,11 +1061,15 @@ Table of Contents
 
    field in the key authorization
 
-   If source is present, servers SHOULD verify that the recovered
-   address matches the address in the DID (e.g., for
-   did:pkh:eip155:42431:0xABC..., verify the recovered address equals
-   0xABC...).  Servers MUST reject credentials where the source does not
-   match the recovered signer.
+   *  For type="hash": Retrieving the from address from the transaction
+
+   receipt onchain
+
+   If source is present, servers SHOULD verify that the recovered/
+   retrieved address matches the address in the DID (e.g., for
+   did:pkh:eip155:42431:0xABC..., verify the address equals 0xABC...).
+   Servers MUST reject credentials where the source does not match the
+   payer address.
 
 11.5.  Server-Paid Fees
 
@@ -916,10 +1077,9 @@ Table of Contents
    providing a seamless payment experience.
 
    *Denial of Service*: Malicious clients could submit valid-looking
-   credentials that fail on-chain, causing the server to pay fees
-   without receiving payment.  Servers SHOULD implement rate limiting
-   and MAY require client authentication before accepting payment
-   credentials.
+   credentials that fail onchain, causing the server to pay fees without
+   receiving payment.  Servers SHOULD implement rate limiting and MAY
+   require client authentication before accepting payment credentials.
 
    *Fee Token Exhaustion*: Servers MUST monitor their fee token balance
    and reject new payment requests when balance is insufficient.
@@ -960,7 +1120,7 @@ Table of Contents
     |              |            | authorization     | Section 5.3    |
     +--------------+------------+-------------------+----------------+
 
-                                 Table 7
+                                 Table 8
 
    Note: charge is already registered as a base intent by [I-D.ietf-
    httpauth-payment].  This document extends its definition for the
@@ -1034,12 +1194,21 @@ Appendix A.  ABNF Collected
 
    ; Payload object structure
    payload-object = "{" payload-members "}"
-   payload-members = payload-signature "," payload-type
+   payload-members = ( signature-payload / hash-payload )
+
+   ; Signature-based payload (transaction or keyAuthorization)
+   signature-payload = payload-type-sig "," payload-signature
+   payload-type-sig = %s"type" ":" ( %s"\"transaction\"" / %s"\"keyAuthorization\"" )
    payload-signature = %s"signature" ":" hex-string
-   payload-type = %s"type" ":" ( %s"\"transaction\"" / %s"\"keyAuthorization\"" )
+
+   ; Hash-based payload (client-broadcast)
+   hash-payload = payload-type-hash "," payload-hash
+   payload-type-hash = %s"type" ":" %s"\"hash\""
+   payload-hash = %s"hash" ":" tx-hash
 
    ; Primitives
    eth-address = DQUOTE "0x" 40HEXDIG DQUOTE
+   tx-hash = DQUOTE "0x" 64HEXDIG DQUOTE
    hex-string = DQUOTE "0x" *HEXDIG DQUOTE
    number-string = DQUOTE 1*DIGIT DQUOTE
    quoted-string = DQUOTE *VCHAR DQUOTE
@@ -1093,7 +1262,7 @@ B.1.  Charge
 
    This requests a transfer of 1.00 alphaUSD (1000000 base units).
 
-   Credential (via Transaction):
+   Credential (Signed Transaction):
 
    GET /api/resource HTTP/1.1
    Host: api.example.com
@@ -1113,6 +1282,25 @@ B.1.  Charge
    The client constructs a Tempo Transaction calling
    transfer(destination, amount) on the asset, fills in nonce, nonceKey,
    and signature, then RLP-serializes.
+
+   Credential (Transaction Hash):
+
+   Alternatively, the client can broadcast the transaction themselves
+   and submit the hash:
+
+   {
+     "id": "kM9xPqWvT2nJrHsY4aDfEb",
+     "payload": {
+       "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+       "type": "hash"
+     },
+     "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+   }
+
+   The client constructs and broadcasts the transfer transaction to
+   Tempo, waits for confirmation, then submits the transaction hash.
+   The server verifies the transaction onchain matches the request
+   parameters.
 
    Response with receipt:
 
@@ -1196,7 +1384,24 @@ B.2.  Authorize
 
    The transaction contains approve(destination, limit) on the TIP-20
    asset.  The server broadcasts this transaction to register the
-   allowance on-chain, then later calls transferFrom to collect payment.
+   allowance onchain, then later calls transferFrom to collect payment.
+
+   Credential (via Transaction Hash):
+
+   The client can also broadcast an approve transaction themselves:
+
+   {
+     "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+     "payload": {
+       "hash": "0x9f8e7d6c5b4a3210fedcba0987654321fedcba0987654321fedcba0987654321",
+       "type": "hash"
+     },
+     "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+   }
+
+   The client constructs and broadcasts an approve(destination, limit)
+   transaction to Tempo, then submits the hash.  The server verifies the
+   approval was registered onchain before granting access.
 
 B.3.  Subscription
 

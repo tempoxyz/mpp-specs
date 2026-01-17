@@ -1221,7 +1221,7 @@ li > p:last-of-type:only-child {
 </tr></thead>
 <tfoot><tr>
 <td class="left">Moxey</td>
-<td class="center">Expires 17 July 2026</td>
+<td class="center">Expires 21 July 2026</td>
 <td class="right">[Page]</td>
 </tr></tfoot>
 </table>
@@ -1234,12 +1234,12 @@ li > p:last-of-type:only-child {
 <dd class="internet-draft">draft-tempo-payment-method-00</dd>
 <dt class="label-published">Published:</dt>
 <dd class="published">
-<time datetime="2026-01-13" class="published">13 January 2026</time>
+<time datetime="2026-01-17" class="published">17 January 2026</time>
     </dd>
 <dt class="label-intended-status">Intended Status:</dt>
 <dd class="intended-status">Standards Track</dd>
 <dt class="label-expires">Expires:</dt>
-<dd class="expires"><time datetime="2026-07-17">17 July 2026</time></dd>
+<dd class="expires"><time datetime="2026-07-21">21 July 2026</time></dd>
 <dt class="label-authors">Author:</dt>
 <dd class="authors">
 <div class="author">
@@ -1275,7 +1275,7 @@ supporting one-time charges, payment authorizations, and recurring subscriptions
         time. It is inappropriate to use Internet-Drafts as reference
         material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
 <p id="section-boilerplate.1-4">
-        This Internet-Draft will expire on 17 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+        This Internet-Draft will expire on 21 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="copyright">
@@ -1367,6 +1367,9 @@ supporting one-time charges, payment authorizations, and recurring subscriptions
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.4">
                 <p id="section-toc.1-1.7.2.4.1"><a href="#section-7.4" class="auto internal xref">7.4</a>.  <a href="#name-key-authorization-payload" class="internal xref">Key Authorization Payload</a></p>
 </li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.5">
+                <p id="section-toc.1-1.7.2.5.1"><a href="#section-7.5" class="auto internal xref">7.5</a>.  <a href="#name-hash-payload" class="internal xref">Hash Payload</a></p>
+</li>
             </ul>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
@@ -1377,6 +1380,9 @@ supporting one-time charges, payment authorizations, and recurring subscriptions
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2">
                 <p id="section-toc.1-1.8.2.2.1"><a href="#section-8.2" class="auto internal xref">8.2</a>.  <a href="#name-payload-verification" class="internal xref">Payload Verification</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.3">
+                <p id="section-toc.1-1.8.2.3.1"><a href="#section-8.3" class="auto internal xref">8.3</a>.  <a href="#name-hash-verification" class="internal xref">Hash Verification</a></p>
 </li>
             </ul>
 </li>
@@ -1413,7 +1419,10 @@ supporting one-time charges, payment authorizations, and recurring subscriptions
                 <p id="section-toc.1-1.9.2.5.1"><a href="#section-9.5" class="auto internal xref">9.5</a>.  <a href="#name-authorize-settlement-key-au" class="internal xref">Authorize Settlement (Key Authorization)</a></p>
 </li>
               <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.6">
-                <p id="section-toc.1-1.9.2.6.1"><a href="#section-9.6" class="auto internal xref">9.6</a>.  <a href="#name-receipt-generation" class="internal xref">Receipt Generation</a></p>
+                <p id="section-toc.1-1.9.2.6.1"><a href="#section-9.6" class="auto internal xref">9.6</a>.  <a href="#name-hash-settlement" class="internal xref">Hash Settlement</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.7">
+                <p id="section-toc.1-1.9.2.7.1"><a href="#section-9.7" class="auto internal xref">9.7</a>.  <a href="#name-receipt-generation" class="internal xref">Receipt Generation</a></p>
 </li>
             </ul>
 </li>
@@ -1540,14 +1549,15 @@ supporting one-time charges, payment authorizations, and recurring subscriptions
       │&lt;────────────────────────────────────────────────┤
       │                                                 │
       │  (3) Client signs Tempo Transaction or          │
-      │      Key Authorization                          │
+      │      Key Authorization, or broadcasts tx        │
+      │      and obtains hash                           │
       │                                                 │
       │  (4) GET /resource                              │
       │      Authorization: Payment &lt;credential&gt;        │
       ├────────────────────────────────────────────────&gt;│
       │                                                 │
-      │  (5) Server broadcasts transaction via          │
-      │      eth_sendRawTransactionSync                 │
+      │  (5) Server broadcasts transaction or verifies  │
+      │      client-broadcast                           │
       │                                                 │
       │  (6) 200 OK                                     │
       │      Payment-Receipt: &lt;receipt with txHash&gt;     │
@@ -2020,16 +2030,6 @@ tempo
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
-                <code>source</code>
-</td>
-              <td class="text-left" rowspan="1" colspan="1">string</td>
-              <td class="text-left" rowspan="1" colspan="1">
-                <span class="bcp14">OPTIONAL</span>
-</td>
-              <td class="text-left" rowspan="1" colspan="1">Payer identifier as a DID (e.g., <code>did:pkh:eip155:42431:0x...</code>)</td>
-            </tr>
-            <tr>
-              <td class="text-left" rowspan="1" colspan="1">
                 <code>payload</code>
 </td>
               <td class="text-left" rowspan="1" colspan="1">object</td>
@@ -2037,6 +2037,16 @@ tempo
                 <span class="bcp14">REQUIRED</span>
 </td>
               <td class="text-left" rowspan="1" colspan="1">Tempo-specific payload object</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>source</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">OPTIONAL</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Payer identifier as a DID (e.g., <code>did:pkh:eip155:42431:0x...</code>)</td>
             </tr>
           </tbody>
         </table>
@@ -2062,27 +2072,34 @@ tempo
           <tbody>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
-                <code>type</code>
+                <code>hash</code>
 </td>
               <td class="text-left" rowspan="1" colspan="1">string</td>
-              <td class="text-left" rowspan="1" colspan="1">
-                <span class="bcp14">REQUIRED</span>
-</td>
-              <td class="text-left" rowspan="1" colspan="1">Fulfillment type: <code>"transaction"</code> or <code>"keyAuthorization"</code>
-</td>
+              <td class="text-left" rowspan="1" colspan="1">CONDITIONAL</td>
+              <td class="text-left" rowspan="1" colspan="1">Transaction hash (required for <code>hash</code> type)</td>
             </tr>
             <tr>
               <td class="text-left" rowspan="1" colspan="1">
                 <code>signature</code>
 </td>
               <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">CONDITIONAL</td>
+              <td class="text-left" rowspan="1" colspan="1">Hex-encoded RLP-serialized signed data (required for <code>transaction</code> and <code>keyAuthorization</code>)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>type</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
               <td class="text-left" rowspan="1" colspan="1">
                 <span class="bcp14">REQUIRED</span>
 </td>
-              <td class="text-left" rowspan="1" colspan="1">Hex-encoded RLP-serialized signed data</td>
+              <td class="text-left" rowspan="1" colspan="1">Fulfillment type: <code>"transaction"</code>, <code>"keyAuthorization"</code>, or <code>"hash"</code>
+</td>
             </tr>
           </tbody>
         </table>
+<p id="section-7.2-3">Either <code>signature</code> or <code>hash</code> <span class="bcp14">MUST</span> be present, depending on the <code>type</code>.<a href="#section-7.2-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="transaction-payload">
@@ -2132,6 +2149,72 @@ tempo
 </div>
 </section>
 </div>
+<div id="hash-payload">
+<section id="section-7.5">
+        <h3 id="name-hash-payload">
+<a href="#section-7.5" class="section-number selfRef">7.5. </a><a href="#name-hash-payload" class="section-name selfRef">Hash Payload</a>
+        </h3>
+<p id="section-7.5-1">When <code>type</code> is <code>"hash"</code>, the client has already broadcast the transaction to the Tempo network. The <code>hash</code> field contains the transaction hash for the server to verify onchain. This allows clients who prefer to manage their own transaction submission (e.g., for gas management or privacy reasons) to still use the Payment scheme.<a href="#section-7.5-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-6">
+          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>hash</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Transaction hash with <code>0x</code> prefix</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>type</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>"hash"</code>
+</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-7.5-3">Applicable intents:<a href="#section-7.5-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7.5-4.1">
+            <code>charge</code>: The hash references a <code>transfer</code> transaction<a href="#section-7.5-4.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-7.5-4.2">
+            <code>authorize</code>: The hash references an <code>approve</code> transaction<a href="#section-7.5-4.2" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-7.5-5">Note: <code>subscription</code> intent cannot use hash payloads because it requires a key authorization, not a transaction.<a href="#section-7.5-5" class="pilcrow">¶</a></p>
+<p id="section-7.5-6">Example:<a href="#section-7.5-6" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-7.5-7">
+<pre>
+{
+  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "type": "hash"
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+</pre><a href="#section-7.5-7" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
 </section>
 </div>
 <div id="verification-procedure">
@@ -2151,9 +2234,11 @@ tempo
 </li>
           <li id="section-8.1-2.2">Verify <code>id</code> matches a valid, unexpired, unused challenge<a href="#section-8.1-2.2" class="pilcrow">¶</a>
 </li>
-          <li id="section-8.1-2.3">Verify <code>type</code> is <code>"transaction"</code> or <code>"keyAuthorization"</code><a href="#section-8.1-2.3" class="pilcrow">¶</a>
+          <li id="section-8.1-2.3">Verify <code>type</code> is <code>"transaction"</code>, <code>"keyAuthorization"</code>, or <code>"hash"</code><a href="#section-8.1-2.3" class="pilcrow">¶</a>
 </li>
-          <li id="section-8.1-2.4">Decode the hex-encoded <code>payload</code> field<a href="#section-8.1-2.4" class="pilcrow">¶</a>
+          <li id="section-8.1-2.4">For <code>transaction</code> and <code>keyAuthorization</code>: decode the hex-encoded <code>signature</code> field<a href="#section-8.1-2.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.1-2.5">For <code>hash</code>: validate the <code>hash</code> field format (66 hex characters with <code>0x</code> prefix)<a href="#section-8.1-2.5" class="pilcrow">¶</a>
 </li>
         </ol>
 </section>
@@ -2165,7 +2250,37 @@ tempo
         </h3>
 <p id="section-8.2-1">For <code>type="transaction"</code>, servers <span class="bcp14">MUST</span> deserialize and verify the Tempo Transaction per [TEMPO-TX-SPEC].<a href="#section-8.2-1" class="pilcrow">¶</a></p>
 <p id="section-8.2-2">For <code>type="keyAuthorization"</code>, servers <span class="bcp14">MUST</span> deserialize and verify the Key Authorization per [TEMPO-TX-SPEC].<a href="#section-8.2-2" class="pilcrow">¶</a></p>
-<p id="section-8.2-3">Servers <span class="bcp14">SHOULD</span> additionally verify that the transaction or authorization parameters match the original request (asset, amount, destination, expiry).<a href="#section-8.2-3" class="pilcrow">¶</a></p>
+<p id="section-8.2-3">For <code>type="hash"</code>, servers <span class="bcp14">MUST</span> verify the transaction onchain per Section 8.3.<a href="#section-8.2-3" class="pilcrow">¶</a></p>
+<p id="section-8.2-4">Servers <span class="bcp14">SHOULD</span> additionally verify that the transaction or authorization parameters match the original request (asset, amount, destination, expiry).<a href="#section-8.2-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="hash-verification">
+<section id="section-8.3">
+        <h3 id="name-hash-verification">
+<a href="#section-8.3" class="section-number selfRef">8.3. </a><a href="#name-hash-verification" class="section-name selfRef">Hash Verification</a>
+        </h3>
+<p id="section-8.3-1">For <code>type="hash"</code>, servers <span class="bcp14">MUST</span> verify the transaction onchain:<a href="#section-8.3-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.3-2">
+          <li id="section-8.3-2.1">Call <code>eth_getTransactionReceipt(hash)</code> to retrieve the transaction receipt<a href="#section-8.3-2.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.3-2.2">Verify the transaction status is <code>1</code> (success)<a href="#section-8.3-2.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.3-2.3">Verify the transaction <code>chainId</code> matches the expected chain ID<a href="#section-8.3-2.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.3-2.4">Parse the transaction receipt logs to verify the operation matches the intent:<a href="#section-8.3-2.4" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-8.3-3">- For <code>charge</code>: verify a <code>Transfer(from, to, amount)</code> event on the correct      asset with the expected <code>to</code> (destination) and <code>amount</code>    - For <code>authorize</code>: verify an <code>Approval(owner, spender, amount)</code> event on      the correct asset with the expected <code>spender</code> and <code>amount</code><a href="#section-8.3-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.3-4">
+          <li id="section-8.3-4.1">Verify the <code>from</code> address matches the expected payer (if <code>source</code> is provided)<a href="#section-8.3-4.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.3-4.2">Verify the transaction block timestamp is within the challenge validity window<a href="#section-8.3-4.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-8.3-4.3">For <code>authorize</code> intent, servers <span class="bcp14">SHOULD</span> verify the payer's token balance is<a href="#section-8.3-4.3" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-8.3-5">sufficient for expected future charges<a href="#section-8.3-5" class="pilcrow">¶</a></p>
+<p id="section-8.3-6">If the transaction is not yet confirmed (receipt not available), servers  <span class="bcp14">SHOULD</span> return <code>202 Accepted</code> with a <code>Retry-After</code> header.  Servers <span class="bcp14">MAY</span> poll up to a reasonable timeout (e.g., 30 seconds) before responding.<a href="#section-8.3-6" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2416,7 +2531,7 @@ tempo
 </li>
           <li id="section-9.4-3.2">If <code>feePayer: true</code>, server adds fee sponsorship (signs with <code>0x78</code> domain)<a href="#section-9.4-3.2" class="pilcrow">¶</a>
 </li>
-          <li id="section-9.4-3.3">Server broadcasts transaction; approval registered on-chain<a href="#section-9.4-3.3" class="pilcrow">¶</a>
+          <li id="section-9.4-3.3">Server broadcasts transaction; approval registered onchain<a href="#section-9.4-3.3" class="pilcrow">¶</a>
 </li>
           <li id="section-9.4-3.4">Server returns receipt (approval is now active)<a href="#section-9.4-3.4" class="pilcrow">¶</a>
 </li>
@@ -2480,15 +2595,85 @@ tempo
         </ol>
 </section>
 </div>
-<div id="receipt-generation">
+<div id="hash-settlement">
 <section id="section-9.6">
-        <h3 id="name-receipt-generation">
-<a href="#section-9.6" class="section-number selfRef">9.6. </a><a href="#name-receipt-generation" class="section-name selfRef">Receipt Generation</a>
+        <h3 id="name-hash-settlement">
+<a href="#section-9.6" class="section-number selfRef">9.6. </a><a href="#name-hash-settlement" class="section-name selfRef">Hash Settlement</a>
         </h3>
-<p id="section-9.6-1">Upon successful settlement, servers <span class="bcp14">MUST</span> return a <code>Payment-Receipt</code> header per Section 5.3 of [I-D.ietf-httpauth-payment].<a href="#section-9.6-1" class="pilcrow">¶</a></p>
-<p id="section-9.6-2">The receipt payload for Tempo:<a href="#section-9.6-2" class="pilcrow">¶</a></p>
-<table class="center" id="table-6">
-          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
+<p id="section-9.6-1">For credentials with <code>type="hash"</code>, the client has already broadcast the transaction. The server verifies the transaction onchain rather than broadcasting it:<a href="#section-9.6-1" class="pilcrow">¶</a></p>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-9.6-2">
+<pre>
+   Client                        Server                     Tempo Network
+      │                             │                             │
+      │  (1) Broadcast tx           │                             │
+      ├──────────────────────────────────────────────────────────&gt;│
+      │                             │                             │
+      │  (2) Transaction confirmed  │                             │
+      │&lt;──────────────────────────────────────────────────────────┤
+      │                             │                             │
+      │  (3) Authorization:         │                             │
+      │      Payment &lt;credential&gt;   │                             │
+      │      (with txHash)          │                             │
+      ├────────────────────────────&gt;│                             │
+      │                             │                             │
+      │                             │  (4) eth_getTransactionReceipt
+      │                             ├────────────────────────────&gt;│
+      │                             │                             │
+      │                             │  (5) Receipt returned       │
+      │                             │&lt;────────────────────────────┤
+      │                             │                             │
+      │                             │  (6) Verify receipt         │
+      │                             │                             │
+      │  (7) 200 OK                 │                             │
+      │      Payment-Receipt:       │                             │
+      │      &lt;txHash&gt;               │                             │
+      │&lt;────────────────────────────┤                             │
+      │                             │                             │
+</pre><a href="#section-9.6-2" class="pilcrow">¶</a>
+</div>
+<ol start="1" type="1" class="normal type-1" id="section-9.6-3">
+          <li id="section-9.6-3.1">Client constructs and broadcasts transaction directly to Tempo<a href="#section-9.6-3.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.2">Client waits for transaction confirmation (optional but recommended)<a href="#section-9.6-3.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.3">Client submits credential with the transaction hash<a href="#section-9.6-3.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.4">Server queries the transaction receipt from Tempo<a href="#section-9.6-3.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.5">Server verifies the receipt confirms successful execution<a href="#section-9.6-3.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.6">Server verifies receipt matches the original request<a href="#section-9.6-3.6" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.6-3.7">Server returns receipt (payment confirmed)<a href="#section-9.6-3.7" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-9.6-4">This flow is useful when:<a href="#section-9.6-4" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.6-5.1">The client wants to control transaction timing or gas settings<a href="#section-9.6-5.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-9.6-5.2">The client is using a wallet that handles broadcasting internally<a href="#section-9.6-5.2" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-9.6-6">Limitations:<a href="#section-9.6-6" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9.6-7.1">Cannot be used with <code>feePayer: true</code> (client must pay their own fees)<a href="#section-9.6-7.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-9.6-7.2">Cannot be used for <code>subscription</code> intent (requires key authorization)<a href="#section-9.6-7.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-9.6-7.3">Server cannot modify or enhance the transaction<a href="#section-9.6-7.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+</section>
+</div>
+<div id="receipt-generation">
+<section id="section-9.7">
+        <h3 id="name-receipt-generation">
+<a href="#section-9.7" class="section-number selfRef">9.7. </a><a href="#name-receipt-generation" class="section-name selfRef">Receipt Generation</a>
+        </h3>
+<p id="section-9.7-1">Upon successful settlement, servers <span class="bcp14">MUST</span> return a <code>Payment-Receipt</code> header per Section 5.3 of [I-D.ietf-httpauth-payment].<a href="#section-9.7-1" class="pilcrow">¶</a></p>
+<p id="section-9.7-2">The receipt payload for Tempo:<a href="#section-9.7-2" class="pilcrow">¶</a></p>
+<table class="center" id="table-7">
+          <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Field</th>
@@ -2531,8 +2716,8 @@ tempo
             </tr>
           </tbody>
         </table>
-<p id="section-9.6-4">Example receipt payload:<a href="#section-9.6-4" class="pilcrow">¶</a></p>
-<div class="lang-json sourcecode" id="section-9.6-5">
+<p id="section-9.7-4">Example receipt payload:<a href="#section-9.7-4" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-9.7-5">
 <pre>
 {
   "method": "tempo",
@@ -2540,7 +2725,7 @@ tempo
   "status": "success",
   "timestamp": "2026-01-06T12:00:00Z"
 }
-</pre><a href="#section-9.6-5" class="pilcrow">¶</a>
+</pre><a href="#section-9.7-5" class="pilcrow">¶</a>
 </div>
 </section>
 </div>
@@ -2590,7 +2775,7 @@ tempo
 <p id="section-11.2-1">Access keys present additional security considerations:<a href="#section-11.2-1" class="pilcrow">¶</a></p>
 <p id="section-11.2-2"><strong>Short Expiry for Charges</strong>: Access keys used for <code>charge</code> intent <span class="bcp14">MUST</span> have expiry within 5 minutes to minimize exposure window. Servers <span class="bcp14">MUST</span> reject access keys with longer expiry for charge intents.<a href="#section-11.2-2" class="pilcrow">¶</a></p>
 <p id="section-11.2-3"><strong>Destination Scoping</strong>: For <code>authorize</code> and <code>subscription</code> intents, clients <span class="bcp14">SHOULD</span> include destination restrictions to limit the addresses the key can transfer to. This prevents key compromise from enabling transfers to attacker-controlled addresses.<a href="#section-11.2-3" class="pilcrow">¶</a></p>
-<p id="section-11.2-4"><strong>Spending Limits</strong>: Access key spending limits are enforced by the AccountKeychain precompile on-chain. Servers cannot exceed the authorized limits even if compromised.<a href="#section-11.2-4" class="pilcrow">¶</a></p>
+<p id="section-11.2-4"><strong>Spending Limits</strong>: Access key spending limits are enforced by the AccountKeychain precompile onchain. Servers cannot exceed the authorized limits even if compromised.<a href="#section-11.2-4" class="pilcrow">¶</a></p>
 <p id="section-11.2-5"><strong>Key Revocation</strong>: Users can revoke access keys at any time via the AccountKeychain precompile. Servers <span class="bcp14">SHOULD</span> handle revocation gracefully by requesting new authorization.<a href="#section-11.2-5" class="pilcrow">¶</a></p>
 </section>
 </div>
@@ -2631,7 +2816,12 @@ tempo
 </li>
         </ul>
 <p id="section-11.4-6">field in the key authorization<a href="#section-11.4-6" class="pilcrow">¶</a></p>
-<p id="section-11.4-7">If <code>source</code> is present, servers <span class="bcp14">SHOULD</span> verify that the recovered address matches the address in the DID (e.g., for <code>did:pkh:eip155:42431:0xABC...</code>, verify the recovered address equals <code>0xABC...</code>). Servers <span class="bcp14">MUST</span> reject credentials where the <code>source</code> does not match the recovered signer.<a href="#section-11.4-7" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.4-7.1">For <code>type="hash"</code>: Retrieving the <code>from</code> address from the transaction<a href="#section-11.4-7.1" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.4-8">receipt onchain<a href="#section-11.4-8" class="pilcrow">¶</a></p>
+<p id="section-11.4-9">If <code>source</code> is present, servers <span class="bcp14">SHOULD</span> verify that the recovered/retrieved address matches the address in the DID (e.g., for <code>did:pkh:eip155:42431:0xABC...</code>, verify the address equals <code>0xABC...</code>). Servers <span class="bcp14">MUST</span> reject credentials where the <code>source</code> does not match the payer address.<a href="#section-11.4-9" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="server-paid-fees-2">
@@ -2640,7 +2830,7 @@ tempo
 <a href="#section-11.5" class="section-number selfRef">11.5. </a><a href="#name-server-paid-fees-2" class="section-name selfRef">Server-Paid Fees</a>
         </h3>
 <p id="section-11.5-1">Servers acting as fee payers accept financial risk in exchange for providing a seamless payment experience.<a href="#section-11.5-1" class="pilcrow">¶</a></p>
-<p id="section-11.5-2"><strong>Denial of Service</strong>: Malicious clients could submit valid-looking credentials that fail on-chain, causing the server to pay fees without receiving payment. Servers <span class="bcp14">SHOULD</span> implement rate limiting and <span class="bcp14">MAY</span> require client authentication before accepting payment credentials.<a href="#section-11.5-2" class="pilcrow">¶</a></p>
+<p id="section-11.5-2"><strong>Denial of Service</strong>: Malicious clients could submit valid-looking credentials that fail onchain, causing the server to pay fees without receiving payment. Servers <span class="bcp14">SHOULD</span> implement rate limiting and <span class="bcp14">MAY</span> require client authentication before accepting payment credentials.<a href="#section-11.5-2" class="pilcrow">¶</a></p>
 <p id="section-11.5-3"><strong>Fee Token Exhaustion</strong>: Servers <span class="bcp14">MUST</span> monitor their fee token balance and reject new payment requests when balance is insufficient. Servers <span class="bcp14">SHOULD</span> alert operators when fee token balance falls below a threshold.<a href="#section-11.5-3" class="pilcrow">¶</a></p>
 </section>
 </div>
@@ -2679,8 +2869,8 @@ tempo
 <a href="#section-12.2" class="section-number selfRef">12.2. </a><a href="#name-payment-intent-registration" class="section-name selfRef">Payment Intent Registrations</a>
         </h3>
 <p id="section-12.2-1">This document registers the following payment intents in the "HTTP Payment Intents" registry established by [I-D.ietf-httpauth-payment]:<a href="#section-12.2-1" class="pilcrow">¶</a></p>
-<table class="center" id="table-7">
-          <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
+<table class="center" id="table-8">
+          <caption><a href="#table-8" class="selfRef">Table 8</a></caption>
 <thead>
             <tr>
               <th class="text-left" rowspan="1" colspan="1">Intent</th>
@@ -2804,12 +2994,21 @@ credential-source = %s"source" ":" quoted-string
 
 ; Payload object structure
 payload-object = "{" payload-members "}"
-payload-members = payload-signature "," payload-type
+payload-members = ( signature-payload / hash-payload )
+
+; Signature-based payload (transaction or keyAuthorization)
+signature-payload = payload-type-sig "," payload-signature
+payload-type-sig = %s"type" ":" ( %s"\"transaction\"" / %s"\"keyAuthorization\"" )
 payload-signature = %s"signature" ":" hex-string
-payload-type = %s"type" ":" ( %s"\"transaction\"" / %s"\"keyAuthorization\"" )
+
+; Hash-based payload (client-broadcast)
+hash-payload = payload-type-hash "," payload-hash
+payload-type-hash = %s"type" ":" %s"\"hash\""
+payload-hash = %s"hash" ":" tx-hash
 
 ; Primitives
 eth-address = DQUOTE "0x" 40HEXDIG DQUOTE
+tx-hash = DQUOTE "0x" 64HEXDIG DQUOTE
 hex-string = DQUOTE "0x" *HEXDIG DQUOTE
 number-string = DQUOTE 1*DIGIT DQUOTE
 quoted-string = DQUOTE *VCHAR DQUOTE
@@ -2875,7 +3074,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
 </pre><a href="#appendix-B.1-5" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.1-6">This requests a transfer of 1.00 alphaUSD (1000000 base units).<a href="#appendix-B.1-6" class="pilcrow">¶</a></p>
-<p id="appendix-B.1-7">Credential (via Transaction):<a href="#appendix-B.1-7" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-7">Credential (Signed Transaction):<a href="#appendix-B.1-7" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-8">
 <pre>
 GET /api/resource HTTP/1.1
@@ -2897,15 +3096,30 @@ Authorization: Payment eyJpZCI6ImtNOXhQcVd2VDJuSnJIc1k0YURmRWIiLCJ0eXBlIjoidHJhb
 </pre><a href="#appendix-B.1-10" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.1-11">The client constructs a Tempo Transaction calling <code>transfer(destination, amount)</code> on the asset, fills in <code>nonce</code>, <code>nonceKey</code>, and <code>signature</code>, then RLP-serializes.<a href="#appendix-B.1-11" class="pilcrow">¶</a></p>
-<p id="appendix-B.1-12">Response with receipt:<a href="#appendix-B.1-12" class="pilcrow">¶</a></p>
-<div class="lang-http sourcecode" id="appendix-B.1-13">
+<p id="appendix-B.1-12">Credential (Transaction Hash):<a href="#appendix-B.1-12" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-13">Alternatively, the client can broadcast the transaction themselves and submit the hash:<a href="#appendix-B.1-13" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="appendix-B.1-14">
+<pre>
+{
+  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "type": "hash"
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+</pre><a href="#appendix-B.1-14" class="pilcrow">¶</a>
+</div>
+<p id="appendix-B.1-15">The client constructs and broadcasts the <code>transfer</code> transaction to Tempo, waits for confirmation, then submits the transaction hash. The server verifies the transaction onchain matches the request parameters.<a href="#appendix-B.1-15" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-16">Response with receipt:<a href="#appendix-B.1-16" class="pilcrow">¶</a></p>
+<div class="lang-http sourcecode" id="appendix-B.1-17">
 <pre>
 HTTP/1.1 200 OK
 Payment-Receipt: eyJtZXRob2QiOiJ0ZW1wbyIsInR4SGFzaCI6IjB4MTIzNDU2Nzg5MGFiY2RlZi4uLiIsImJsb2NrTnVtYmVyIjoxMjM0NTY3OCwiYW1vdW50IjoiMTAwMDAwMCJ9
 Content-Type: application/json
 
 { "data": "..." }
-</pre><a href="#appendix-B.1-13" class="pilcrow">¶</a>
+</pre><a href="#appendix-B.1-17" class="pilcrow">¶</a>
 </div>
 </section>
 </div>
@@ -2990,7 +3204,22 @@ WWW-Authenticate: Payment id="nR5tYuLpS8mWvXzQ1eCgHj",
 }
 </pre><a href="#appendix-B.2-11" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.2-12">The transaction contains <code>approve(destination, limit)</code> on the TIP-20 asset. The server broadcasts this transaction to register the allowance on-chain, then later calls <code>transferFrom</code> to collect payment.<a href="#appendix-B.2-12" class="pilcrow">¶</a></p>
+<p id="appendix-B.2-12">The transaction contains <code>approve(destination, limit)</code> on the TIP-20 asset. The server broadcasts this transaction to register the allowance onchain, then later calls <code>transferFrom</code> to collect payment.<a href="#appendix-B.2-12" class="pilcrow">¶</a></p>
+<p id="appendix-B.2-13">Credential (via Transaction Hash):<a href="#appendix-B.2-13" class="pilcrow">¶</a></p>
+<p id="appendix-B.2-14">The client can also broadcast an <code>approve</code> transaction themselves:<a href="#appendix-B.2-14" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="appendix-B.2-15">
+<pre>
+{
+  "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+  "payload": {
+    "hash": "0x9f8e7d6c5b4a3210fedcba0987654321fedcba0987654321fedcba0987654321",
+    "type": "hash"
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+</pre><a href="#appendix-B.2-15" class="pilcrow">¶</a>
+</div>
+<p id="appendix-B.2-16">The client constructs and broadcasts an <code>approve(destination, limit)</code> transaction to Tempo, then submits the hash. The server verifies the approval was registered onchain before granting access.<a href="#appendix-B.2-16" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="subscription">
