@@ -15,7 +15,7 @@ import { CONTRACTS, PRICES, STREAMING_DEFAULTS, TOKENS, WALLETS } from '../const
 export const temporpc: PartnerConfig = {
 	name: 'Tempo RPC',
 	slug: 'rpc',
-	aliases: ['tempo-rpc', 'chain'],
+	aliases: ['chain'],
 	upstream: 'ENV:TEMPO_RPC_UPSTREAM_URL',
 	apiKeyEnvVar: 'TEMPO_RPC_AUTH',
 	apiKeyHeader: 'Authorization',

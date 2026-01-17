@@ -369,7 +369,9 @@ function getPartnerSlugsFromSource(appPath: string): string[] {
 	const content = fs.readFileSync(partnersIndexPath, 'utf8')
 
 	// Extract partner file imports (e.g., import { browserbase } from './browserbase.js')
-	const importMatches = content.matchAll(/import\s*{\s*(\w+)\s*}\s*from\s*['"]\.\/(\w+)\.js['"]/g)
+	const importMatches = content.matchAll(
+		/import\s*{\s*(\w+)\s*}\s*from\s*['"]\.\/([\w-]+)\.js['"]/g,
+	)
 	const partnerFiles = Array.from(importMatches).map((m) => m[2])
 
 	const slugs: string[] = []
@@ -390,7 +392,7 @@ function getPartnerSlugsFromSource(appPath: string): string[] {
 		const aliasesMatch = partnerContent.match(/aliases:\s*\[([^\]]+)\]/)
 		if (aliasesMatch) {
 			const aliasesStr = aliasesMatch[1]
-			const aliases = aliasesStr.match(/['"](\w+)['"]/g)
+			const aliases = aliasesStr.match(/['"]([\w-]+)['"]/g)
 			if (aliases) {
 				for (const alias of aliases) {
 					slugs.push(alias.replace(/['"]/g, ''))

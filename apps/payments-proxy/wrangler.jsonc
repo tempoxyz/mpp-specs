@@ -288,7 +288,11 @@
 				},
 				{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-				{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
+				{
+					"pattern": "compute.payments.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				},
 				{ "pattern": "rpc.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 				{ "pattern": "chain.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 			],
