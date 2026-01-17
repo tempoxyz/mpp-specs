@@ -7,9 +7,9 @@ import {
 	type WalletClient,
 } from 'viem'
 import { TempoStreamChannelABI } from './abi.js'
+import { isAuthorizedSigner } from './tempo-access-keys.js'
 import type { Channel, ServerChannelState, SignedVoucher, StreamRequest } from './types.js'
 import { recoverVoucherSigner } from './voucher.js'
-import { isAuthorizedSigner } from './tempo-access-keys.js'
 
 /**
  * Server-side handler for streaming payment channels.

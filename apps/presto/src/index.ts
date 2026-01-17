@@ -54,30 +54,6 @@ app.get('/install.sh', (_c) => {
 	})
 })
 
-// Root - landing page
-app.get('/', (c) => {
-	return c.html(`<!DOCTYPE html>
-<html>
-<head>
-  <title>Presto</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #0a0a0b; color: #fafafa; }
-    code { background: #1a1a1c; padding: 10px 15px; display: block; border-radius: 4px; color: #3b82f6; }
-    h1 { margin-bottom: 30px; }
-    a { color: #3b82f6; }
-  </style>
-</head>
-<body>
-  <h1>Presto</h1>
-  <p>Minimal AI coding agent with Tempo payment authentication.</p>
-  <h2>Install</h2>
-  <code>curl -fsSL https://presto.tempo.xyz/install.sh | bash</code>
-  <h2>Learn More</h2>
-  <p><a href="https://github.com/tempoxyz/presto">GitHub</a></p>
-</body>
-</html>`)
-})
-
 // Health check
 app.get('/health', (c) => {
 	return c.json({
@@ -86,7 +62,7 @@ app.get('/health', (c) => {
 	})
 })
 
-// Let assets handle everything else (wheel files, etc.)
+// Let Vite/assets handle everything else (React app, wheel files, etc.)
 app.all('*', async (c) => {
 	return c.env.ASSETS.fetch(c.req.raw)
 })

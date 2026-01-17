@@ -63,15 +63,21 @@ jobs:
             env: moderato
           - app: reth-snapshots
             env: mainnet
-          - app: presto-auth
+          - app: presto
             env: testnet
             build_wheel: true
-          - app: presto-auth
+          - app: presto
             env: moderato
             build_wheel: true
-          - app: presto-auth
+          - app: presto
             env: mainnet
             build_wheel: true
+          - app: payments-dashboard
+            env: testnet
+          - app: payments-dashboard
+            env: moderato
+          - app: payments-dashboard
+            env: mainnet
 
     steps:
       - uses: actions/checkout@v6
@@ -111,13 +117,13 @@ jobs:
           cd /tmp/presto
           uv build
           
-          # Copy wheel to presto-auth public directory
-          mkdir -p ${{ github.workspace }}/apps/presto-auth/public
-          cp dist/*.whl ${{ github.workspace }}/apps/presto-auth/public/
-          cp dist/*.tar.gz ${{ github.workspace }}/apps/presto-auth/public/
+          # Copy wheel to presto public directory
+          mkdir -p ${{ github.workspace }}/apps/presto/public
+          cp dist/*.whl ${{ github.workspace }}/apps/presto/public/
+          cp dist/*.tar.gz ${{ github.workspace }}/apps/presto/public/
           
           # Show what was built
-          ls -la ${{ github.workspace }}/apps/presto-auth/public/
+          ls -la ${{ github.workspace }}/apps/presto/public/
 
       - name: Deploy Workers
         if: steps.changes.outputs.relevant == 'true'

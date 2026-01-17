@@ -35,8 +35,9 @@ jobs:
           - app: paymentauth-tetris
           - app: paymentauth-x402
           - app: reth-snapshots
-          - app: presto-auth
-            deploy_cmd: "pages deploy public --project-name=presto-auth --branch=${{ github.head_ref }}"
+          - app: presto
+            deploy_cmd: "pages deploy public --project-name=presto --branch=${{ github.head_ref }}"
+          - app: payments-dashboard
     env:
       NODE_ENV: production
     steps:

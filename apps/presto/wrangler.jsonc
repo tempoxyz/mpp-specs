@@ -1,0 +1,78 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "presto",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-15",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": true,
+	"keep_vars": true,
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		}
+	},
+
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS"
+	},
+
+	"vars": {
+		"ENVIRONMENT": "development"
+	},
+
+	"env": {
+		"preview": {
+			"name": "presto-preview",
+			"workers_dev": true,
+			"routes": [],
+			"vars": {
+				"ENVIRONMENT": "preview"
+			}
+		},
+		"testnet": {
+			"name": "presto-testnet",
+			"routes": [
+				{
+					"pattern": "presto.testnet.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "testnet"
+			}
+		},
+		"moderato": {
+			"name": "presto-moderato",
+			"routes": [
+				{
+					"pattern": "presto.moderato.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "moderato"
+			}
+		},
+		"mainnet": {
+			"name": "presto-mainnet",
+			"routes": [
+				{
+					"pattern": "presto.tempo.xyz",
+					"zone_name": "tempo.xyz",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "mainnet"
+			}
+		}
+	}
+}

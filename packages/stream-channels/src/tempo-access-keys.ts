@@ -21,9 +21,9 @@ import type { Address, PublicClient } from 'viem'
  * in the credential, and we verify the signature matches that key.
  */
 export async function isAccessKeyFor(
-	publicClient: PublicClient,
-	rootAccount: Address,
-	potentialAccessKey: Address,
+	_publicClient: PublicClient,
+	_rootAccount: Address,
+	_potentialAccessKey: Address,
 ): Promise<boolean> {
 	// For MVP, we trust the client's claim and just verify signature consistency.
 	// In production, this would query the access key registry on-chain.
@@ -31,7 +31,7 @@ export async function isAccessKeyFor(
 	// Try to get the nonce for the potential access key on the root account
 	// If successful, it's a valid access key
 	try {
-		const noncePrecompile = '0x4E4F4E4345000000000000000000000000000000' as Address
+		const _noncePrecompile = '0x4E4F4E4345000000000000000000000000000000' as Address
 
 		// The nonceKey for access keys is derived from the access key address
 		// nonceKey = uint256(keccak256(accessKeyAddress))

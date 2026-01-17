@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "presto-auth",
+	"name": "payments-dashboard",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
@@ -17,18 +17,14 @@
 		}
 	},
 
-	"assets": {
-		"directory": "./public",
-		"binding": "ASSETS"
-	},
-
 	"vars": {
-		"ENVIRONMENT": "development"
+		"ENVIRONMENT": "development",
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
 	},
 
 	"env": {
 		"preview": {
-			"name": "presto-auth-preview",
+			"name": "payments-dashboard-preview",
 			"workers_dev": true,
 			"routes": [],
 			"vars": {
@@ -36,23 +32,24 @@
 			}
 		},
 		"testnet": {
-			"name": "presto-auth-testnet",
+			"name": "payments-dashboard-testnet",
 			"routes": [
 				{
-					"pattern": "presto.testnet.tempo.xyz",
+					"pattern": "payments.testnet.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				}
 			],
 			"vars": {
-				"ENVIRONMENT": "testnet"
+				"ENVIRONMENT": "testnet",
+				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
 			}
 		},
 		"moderato": {
-			"name": "presto-auth-moderato",
+			"name": "payments-dashboard-moderato",
 			"routes": [
 				{
-					"pattern": "presto.moderato.tempo.xyz",
+					"pattern": "payments.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				}
@@ -62,16 +59,17 @@
 			}
 		},
 		"mainnet": {
-			"name": "presto-auth-mainnet",
+			"name": "payments-dashboard-mainnet",
 			"routes": [
 				{
-					"pattern": "presto.tempo.xyz",
+					"pattern": "payments.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
 				}
 			],
 			"vars": {
-				"ENVIRONMENT": "mainnet"
+				"ENVIRONMENT": "mainnet",
+				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 			}
 		}
 	}

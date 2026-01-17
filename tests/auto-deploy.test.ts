@@ -54,7 +54,7 @@ function parseJsonc(content: string): unknown {
 // Apps that are excluded from multi-environment deployment requirement
 const AUTO_DEPLOY_ALLOWLIST: string[] = [
 	// Add apps here that don't need testnet/moderato/mainnet environments
-	'presto-auth', // Cloudflare Pages static app - single deployment, no multi-env
+	'presto', // Cloudflare Pages static app - single deployment, no multi-env
 ]
 
 // Required environments for all apps (matching tempo-apps fee-payer pattern)
@@ -62,6 +62,7 @@ const REQUIRED_ENVS = ['testnet', 'moderato', 'mainnet']
 
 // Apps that use TEMPO_RPC_URL and need specific RPC URL validation
 const RPC_DEPENDENT_APPS = [
+	'payments-dashboard',
 	'payments-proxy',
 	'paymentauth-tetris',
 	'paymentauth-basic',
