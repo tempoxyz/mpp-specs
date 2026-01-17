@@ -62,7 +62,7 @@ jobs:
       - name: Build presto wheel
         if: steps.changes.outputs.relevant == 'true' && matrix.build_wheel
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PRESTO_CLONE_TOKEN }}
         run: |
           # Install uv
           curl -LsSf https://astral.sh/uv/install.sh | sh
