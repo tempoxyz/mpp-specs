@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "payments-proxy",
+	"name": "payments",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
@@ -34,7 +34,6 @@
 		{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
 		{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "rpc.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "chain.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+		{ "pattern": "rpc.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 	]
 }

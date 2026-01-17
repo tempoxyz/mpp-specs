@@ -66,7 +66,7 @@ vi.mock('viem/tempo', () => ({
 }))
 
 // Mock proxy module
-vi.mock('../apps/payments-proxy/src/proxy.js', () => ({
+vi.mock('../apps/payments/src/proxy.js', () => ({
 	proxyRequest: vi.fn().mockResolvedValue({
 		response: new Response(JSON.stringify({ success: true }), { status: 200 }),
 		upstreamLatencyMs: 100,
@@ -77,7 +77,7 @@ vi.mock('../apps/payments-proxy/src/proxy.js', () => ({
 const fetchMock = vi.fn()
 global.fetch = fetchMock
 
-import app from '../apps/payments-proxy/src/index.js'
+import app from '../apps/payments/src/index.js'
 
 describe('Streaming Payment Integration', () => {
 	const STREAM_ESCROW = '0x5555555555555555555555555555555555555555' as Address
@@ -371,7 +371,7 @@ describe('Streaming Payment Integration', () => {
 		})
 
 		it('should work with free endpoints regardless of streaming support', async () => {
-			const { proxyRequest } = await import('../apps/payments-proxy/src/proxy.js')
+			const { proxyRequest } = await import('../apps/payments/src/proxy.js')
 			vi.mocked(proxyRequest).mockResolvedValueOnce({
 				response: new Response(JSON.stringify({ models: [] }), { status: 200 }),
 				upstreamLatencyMs: 50,

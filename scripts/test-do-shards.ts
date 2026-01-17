@@ -8,7 +8,7 @@
  * - Verification that state is isolated per DO instance
  *
  * Usage:
- *   1. Start the worker: pnpm --filter @tempo/payments-proxy dev
+ *   1. Start the worker: pnpm --filter @tempo/payments dev
  *   2. Run this test: npx tsx scripts/test-do-shards.ts
  */
 
@@ -245,14 +245,14 @@ async function main() {
 		const healthRes = await fetch(`${WORKER_URL}/health`)
 		if (!healthRes.ok) {
 			console.error(
-				`${colors.red}Worker not healthy. Start with: pnpm --filter @tempo/payments-proxy dev${colors.reset}`,
+				`${colors.red}Worker not healthy. Start with: pnpm --filter @tempo/payments dev${colors.reset}`,
 			)
 			process.exit(1)
 		}
 		console.log(`${colors.green}✓ Worker is healthy${colors.reset}\n`)
 	} catch {
 		console.error(`${colors.red}Cannot connect to worker at ${WORKER_URL}${colors.reset}`)
-		console.error(`Start with: pnpm --filter @tempo/payments-proxy dev`)
+		console.error(`Start with: pnpm --filter @tempo/payments dev`)
 		process.exit(1)
 	}
 

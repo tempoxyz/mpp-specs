@@ -1,4 +1,4 @@
-// Test setup file for payments-proxy
+// Test setup file for payments
 // This file can be used for global test configuration, mocks, etc.
 
 import { beforeEach } from 'vitest'

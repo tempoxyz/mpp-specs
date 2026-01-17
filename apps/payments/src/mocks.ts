@@ -1,5 +1,5 @@
 /**
- * Centralized mock definitions for payments-proxy tests
+ * Centralized mock definitions for payments tests
  * This file provides type-safe mock factories and utilities
  */
 

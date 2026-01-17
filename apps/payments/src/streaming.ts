@@ -252,7 +252,7 @@ export function parseStreamCredential(credential: unknown): StreamCredentialPayl
  */
 export function formatStreamChallenge(request: StreamRequest): string {
 	const params = [
-		`realm="payments-proxy/stream"`,
+		`realm="payments/stream"`,
 		`method="tempo"`,
 		`intent="stream"`,
 		`escrowContract="${request.escrowContract}"`,

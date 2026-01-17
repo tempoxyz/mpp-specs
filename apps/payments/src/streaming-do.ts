@@ -2,7 +2,7 @@
  * Cloudflare-native streaming payments using Durable Objects.
  *
  * This module integrates the PaymentChannel Durable Object with the
- * payments-proxy Worker for production-ready streaming channels.
+ * payments Worker for production-ready streaming channels.
  *
  * Architecture:
  * - Each channelId maps to exactly one DO instance
@@ -233,7 +233,7 @@ export function parseStreamCredential(credential: unknown): StreamCredentialPayl
  */
 export function formatStreamChallenge(request: StreamRequest): string {
 	const params = [
-		`realm="payments-proxy/stream"`,
+		`realm="payments/stream"`,
 		`method="tempo"`,
 		`intent="stream"`,
 		`escrowContract="${request.escrowContract}"`,

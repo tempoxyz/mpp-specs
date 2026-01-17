@@ -332,7 +332,7 @@ curl -i -X POST http://localhost:8787/openrouter/v1/chat/completions \
 Response:
 ```http
 HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="abc123", realm="payments-proxy/openrouter", method="tempo", 
+WWW-Authenticate: Payment id="abc123", realm="payments/openrouter", method="tempo", 
   intent="charge", request="eyJhbW91bnQiOiIxMDAwMCIsImFzc2V0Ijoi..."
 Content-Type: application/json
 

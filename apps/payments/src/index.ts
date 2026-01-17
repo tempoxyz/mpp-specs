@@ -61,7 +61,19 @@ function getPartnerFromHost(host: string): string | null {
 	const hostWithoutPort = host.split(':')[0] ?? ''
 	const parts = hostWithoutPort.split('.')
 
-	// Production: partner.payments.tempo.xyz (4+ parts)
+	// Skip workers.dev hostnames - they use path-based routing
+	// e.g., "payments-moderato.porto.workers.dev" should use path routing
+	if (hostWithoutPort.endsWith('.workers.dev')) {
+		return null
+	}
+
+	// Skip IP addresses (e.g., 127.0.0.1, 192.168.1.1) - use path-based routing
+	if (/^\d+\.\d+\.\d+\.\d+$/.test(hostWithoutPort)) {
+		return null
+	}
+
+	// For production/preview: partner.payments.tempo.xyz (4+ parts)
+	// For local dev with Host header: partner.localhost (2 parts)
 	if (parts.length >= 4 && parts[0]) {
 		return parts[0]
 	}
@@ -96,7 +108,7 @@ function createChallenge(
 
 	const challenge: PaymentChallenge<ChargeRequest> = {
 		id: generateChallengeId(),
-		realm: `payments-proxy/${partner.slug}`,
+		realm: `payments/${partner.slug}`,
 		method: 'tempo',
 		intent: 'charge',
 		request,

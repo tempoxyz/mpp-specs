@@ -71,7 +71,7 @@ import * as viem from 'viem'
 // Import app and viem after mocks are set up
 import app from './index.js'
 
-describe('payments-proxy', () => {
+describe('payments', () => {
 	const mockEnv = createMockEnv()
 
 	beforeEach(() => {

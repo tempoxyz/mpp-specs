@@ -431,12 +431,12 @@ The `*-testnet` domain is the **canonical testnet** that always points to the cu
 
 Deploy commands:
 ```bash
-pnpm --filter @tempo/payments-proxy deploy:moderato  # testnet
-pnpm --filter @tempo/payments-proxy deploy:presto    # production
+pnpm --filter @tempo/payments deploy:moderato  # testnet
+pnpm --filter @tempo/payments deploy:presto    # production
 ```
 
 **RPC-dependent apps** (use TEMPO_RPC_URL for blockchain transactions):
-- `payments-proxy` - Payment proxy service
+- `payments` - Payment proxy service
 - `paymentauth-tetris` - Tetris game with payments
 - `reth-snapshots` - Reth snapshot downloads
 
@@ -814,7 +814,7 @@ This will:
    PRIVATE_KEY=0x... ./demo.sh GET http://localhost:PORT/endpoint
    ```
 
-See existing apps (`paymentauth-basic`, `payments-proxy`, etc.) for examples.
+See existing apps (`paymentauth-basic`, `payments`, etc.) for examples.
 
 ### Manual Setup
 

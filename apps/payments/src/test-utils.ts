@@ -1,5 +1,5 @@
 /**
- * Shared test utilities and mock factories for payments-proxy tests
+ * Shared test utilities and mock factories for payments tests
  */
 
 import type { Context } from 'hono'

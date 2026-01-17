@@ -155,7 +155,7 @@ async function main() {
 		status: 402,
 		statusText: 'Payment Required',
 		headers: {
-			'WWW-Authenticate': `Payment realm="payments-proxy/stream", method="tempo", intent="stream", escrowContract="${streamRequest.escrowContract}", asset="${streamRequest.asset}", destination="${streamRequest.destination}", deposit="${streamRequest.deposit}", expires="${streamRequest.expires}", voucherEndpoint="${streamRequest.voucherEndpoint}", salt="${streamRequest.salt}", minVoucherDelta="${streamRequest.minVoucherDelta}"`,
+			'WWW-Authenticate': `Payment realm="payments/stream", method="tempo", intent="stream", escrowContract="${streamRequest.escrowContract}", asset="${streamRequest.asset}", destination="${streamRequest.destination}", deposit="${streamRequest.deposit}", expires="${streamRequest.expires}", voucherEndpoint="${streamRequest.voucherEndpoint}", salt="${streamRequest.salt}", minVoucherDelta="${streamRequest.minVoucherDelta}"`,
 			'Cache-Control': 'no-store',
 		},
 	})
