@@ -507,32 +507,14 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
 }
 
 /**
- * Get pricing for a specific model.
- * Matches exact model names first, then tries prefix matching for versioned models.
- * E.g., "claude-sonnet-4-20250514" matches "claude-sonnet-4"
- * Handles provider prefixes like "anthropic/claude-opus-4" or "openai/gpt-5"
+ * Get pricing for a specific model
  */
 export function getModelPricing(model: string): ModelPricing | undefined {
-	let normalizedModel = model.toLowerCase()
-
-	// Strip provider prefix if present (e.g., "anthropic/claude-opus-4" -> "claude-opus-4")
-	const providerPrefixes = ['anthropic/', 'openai/', 'google/', 'meta-llama/', 'mistralai/']
-	for (const prefix of providerPrefixes) {
-		if (normalizedModel.startsWith(prefix)) {
-			normalizedModel = normalizedModel.slice(prefix.length)
-			break
-		}
-	}
-
-	// Try exact match first
-	const exact = ALL_PRICING.find((p) => p.model.toLowerCase() === normalizedModel)
-	if (exact) return exact
-
-	// Try prefix match (input model starts with pricing model)
-	// Sort by model name length descending to prefer more specific matches
-	// E.g., "gpt-4o-mini" should match before "gpt-4o"
-	const sortedPricing = [...ALL_PRICING].sort((a, b) => b.model.length - a.model.length)
-	return sortedPricing.find((p) => normalizedModel.startsWith(p.model.toLowerCase()))
+	const normalizedModel = model.toLowerCase()
+	return ALL_PRICING.find(
+		(p) =>
+			p.model.toLowerCase() === normalizedModel || normalizedModel.includes(p.model.toLowerCase()),
+	)
 }
 
 /**
