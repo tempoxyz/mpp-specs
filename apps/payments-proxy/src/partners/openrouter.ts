@@ -7,7 +7,7 @@ import { CONTRACTS, PRICES, STREAMING_DEFAULTS, TOKENS, WALLETS } from '../const
  *
  * Access 100+ LLMs through a unified API. No accounts needed—just pay and use.
  *
- * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
+ * Pricing: Dynamic based on model and estimated tokens (1.5x provider cost)
  * Popular models accessible via /v1/chat/completions
  *
  * Supports both charge (per-request) and stream (payment channel) payments.

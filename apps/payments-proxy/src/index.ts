@@ -699,16 +699,17 @@ app.all('/*', async (c) => {
 				`Pay ${formatPrice(price)} to access ${partner.name} ${c.req.method} ${forwardPath}`,
 		)
 
-		// Add charge challenge
-		c.header('WWW-Authenticate', formatWwwAuthenticate(challenge))
-
-		// If partner supports streaming, add stream challenge as alternative
+		// If partner supports streaming, put stream challenge FIRST so Python's urllib sees it
+		// (Python's headers.get() only returns the first value for multi-value headers)
 		if (partner.streaming) {
 			const host = c.req.header('host') || 'payments.tempo.xyz'
 			const protocol = host.includes('localhost') ? 'http' : 'https'
 			const voucherBase = `${protocol}://${host}`
 			const streamChallenge = createStreamChallenge(c.env, partner, partner.streaming, voucherBase)
-			c.header('WWW-Authenticate', formatStreamChallenge(streamChallenge), { append: true })
+			c.header('WWW-Authenticate', formatStreamChallenge(streamChallenge))
+			c.header('WWW-Authenticate', formatWwwAuthenticate(challenge), { append: true })
+		} else {
+			c.header('WWW-Authenticate', formatWwwAuthenticate(challenge))
 		}
 
 		c.header('Cache-Control', 'no-store')

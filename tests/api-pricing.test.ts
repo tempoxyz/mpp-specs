@@ -55,16 +55,16 @@ describe('api-pricing', () => {
 	})
 
 	describe('calculateCostUSD', () => {
-		it('calculates cost with default 10x premium', () => {
+		it('calculates cost with default 1.5x premium', () => {
 			const pricing = getModelPricing('gpt-5')!
 			const usage: TokenUsage = {
 				inputTokens: 1_000_000,
 				outputTokens: 1_000_000,
 			}
 			// Base: $1.25 input + $10 output = $11.25
-			// With 10x premium: $112.50
+			// With 1.5x premium: $16.875
 			const cost = calculateCostUSD(pricing, usage)
-			expect(cost).toBe(112.5)
+			expect(cost).toBe(16.875)
 		})
 
 		it('calculates cost with custom premium', () => {

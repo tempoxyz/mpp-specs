@@ -8,7 +8,7 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  * Access GPT-4o, GPT-4, o1, Codex (gpt-5.2-codex), and other models.
  * No accounts needed—just pay and use.
  *
- * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
+ * Pricing: Dynamic based on model and estimated tokens (1.5x provider cost)
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
  */

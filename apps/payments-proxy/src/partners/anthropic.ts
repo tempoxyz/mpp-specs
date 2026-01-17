@@ -8,7 +8,7 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  * Access Claude models (Sonnet, Opus, Haiku) through Claude's API.
  * No accounts needed—just pay and use.
  *
- * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
+ * Pricing: Dynamic based on model and estimated tokens (1.5x provider cost)
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
  */

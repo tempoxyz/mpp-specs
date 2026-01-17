@@ -9,6 +9,7 @@ import {
 import { TempoStreamChannelABI } from './abi.js'
 import type { Channel, ServerChannelState, SignedVoucher, StreamRequest } from './types.js'
 import { recoverVoucherSigner } from './voucher.js'
+import { isAuthorizedSigner } from './tempo-access-keys.js'
 
 /**
  * Server-side handler for streaming payment channels.
@@ -118,8 +119,10 @@ export class StreamChannelServer {
 
 		try {
 			const signer = await recoverVoucherSigner(escrowContract, this.chainId, initialVoucher)
-			if (signer.toLowerCase() !== channel.payer.toLowerCase()) {
-				return { valid: false, error: 'Voucher signer does not match channel payer' }
+			// Check if signer is authorized (either payer directly or access key)
+			const isAuthorized = await isAuthorizedSigner(this.publicClient, channel.payer, signer)
+			if (!isAuthorized) {
+				return { valid: false, error: 'Voucher signer not authorized for channel payer' }
 			}
 		} catch {
 			return { valid: false, error: 'Invalid voucher signature' }
@@ -176,11 +179,12 @@ export class StreamChannelServer {
 			return { valid: false, error: 'Voucher has expired' }
 		}
 
-		// Verify signature
+		// Verify signature (supports access keys on Tempo)
 		try {
 			const signer = await recoverVoucherSigner(escrowContract, this.chainId, voucher)
-			if (signer.toLowerCase() !== state.payer.toLowerCase()) {
-				return { valid: false, error: 'Voucher signer does not match payer' }
+			const isAuthorized = await isAuthorizedSigner(this.publicClient, state.payer, signer)
+			if (!isAuthorized) {
+				return { valid: false, error: 'Voucher signer not authorized for payer' }
 			}
 		} catch {
 			return { valid: false, error: 'Invalid voucher signature' }

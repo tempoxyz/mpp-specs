@@ -16,3 +16,5 @@ export {
 	verifyVoucher,
 	voucherTypes,
 } from './voucher.js'
+// Tempo access key support
+export { isAccessKeyFor, isAuthorizedSigner } from './tempo-access-keys.js'

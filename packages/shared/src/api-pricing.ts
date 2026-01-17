@@ -4,7 +4,7 @@
  * Accurate API pricing based on official provider documentation (as of January 2026).
  * All prices are in USD per million tokens unless otherwise noted.
  *
- * Premium multiplier: Configurable service markup (default 10x provider cost).
+ * Premium multiplier: Configurable service markup (default 1.5x provider cost).
  *
  * Sources:
  * - OpenAI: https://platform.openai.com/docs/pricing
@@ -492,7 +492,7 @@ export const ALL_PRICING: ModelPricing[] = [
  * Pricing configuration with service premium
  */
 export interface PricingConfig {
-	/** Premium multiplier applied to base costs (default: 10x) */
+	/** Premium multiplier applied to base costs (default: 1.5x) */
 	premiumMultiplier: number
 	/** Base unit for price representation (6 decimals for USD stablecoins) */
 	decimals: number
@@ -502,7 +502,7 @@ export interface PricingConfig {
  * Default pricing configuration
  */
 export const DEFAULT_PRICING_CONFIG: PricingConfig = {
-	premiumMultiplier: 10,
+	premiumMultiplier: 1.5,
 	decimals: 6,
 }
 
@@ -566,7 +566,7 @@ export interface FlatPriceOptions {
 	avgInputTokens?: number
 	/** Average output tokens per request */
 	avgOutputTokens?: number
-	/** Premium multiplier (default: 10x) */
+	/** Premium multiplier (default: 1.5x) */
 	premiumMultiplier?: number
 	/** Minimum price in base units */
 	minPrice?: bigint
@@ -575,7 +575,7 @@ export interface FlatPriceOptions {
 const DEFAULT_FLAT_PRICE_OPTIONS: Required<FlatPriceOptions> = {
 	avgInputTokens: 500,
 	avgOutputTokens: 1000,
-	premiumMultiplier: 10,
+	premiumMultiplier: 1.5,
 	minPrice: BigInt(10000), // $0.01 minimum
 }
 
