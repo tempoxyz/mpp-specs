@@ -1,14 +1,28 @@
 {
 	"name": "@tempo/presto-auth",
-	"version": "0.0.1",
 	"private": true,
+	"version": "0.0.1",
 	"scripts": {
-		"dev": "wrangler pages dev public --port 8788",
-		"deploy:preview": "wrangler pages deploy public --project-name=presto-auth --branch=preview",
-		"deploy:prod": "wrangler pages deploy public --project-name=presto-auth --branch=main",
-		"typecheck": "echo 'No TypeScript in static site'"
+		"dev": "wrangler dev",
+		"build": "wrangler deploy --dry-run --outdir dist",
+		"build:wheel": "./scripts/build-wheel.sh",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check src",
+		"lint:fix": "biome check --write src",
+		"test": "vitest run --passWithNoTests",
+		"deploy:preview": "wrangler deploy --env preview",
+		"deploy:testnet": "wrangler deploy --env testnet",
+		"deploy:moderato": "wrangler deploy --env moderato",
+		"deploy:mainnet": "wrangler deploy --env mainnet"
+	},
+	"dependencies": {
+		"hono": "^4.6.0"
 	},
 	"devDependencies": {
-		"wrangler": "catalog:"
+		"@cloudflare/vitest-pool-workers": "^0.5.0",
+		"@cloudflare/workers-types": "^4.20250115.0",
+		"typescript": "^5.7.3",
+		"vitest": "^2.1.0",
+		"wrangler": "^3.99.0"
 	}
 }

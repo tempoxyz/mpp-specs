@@ -63,9 +63,15 @@ jobs:
             env: moderato
           - app: reth-snapshots
             env: mainnet
-          # Presto auth - static wallet connect page
           - app: presto-auth
-            deploy_cmd: "pages deploy public --project-name=presto-auth --branch=main"
+            env: testnet
+            build_wheel: true
+          - app: presto-auth
+            env: moderato
+            build_wheel: true
+          - app: presto-auth
+            env: mainnet
+            build_wheel: true
 
     steps:
       - uses: actions/checkout@v6
@@ -91,6 +97,26 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: pnpm build
 
+      - name: Build presto wheel
+        if: steps.changes.outputs.relevant == 'true' && matrix.build_wheel
+        run: |
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          # Clone presto and build wheel
+          git clone --depth 1 https://github.com/tempoxyz/presto.git /tmp/presto
+          cd /tmp/presto
+          uv build
+          
+          # Copy wheel to presto-auth public directory
+          mkdir -p ${{ github.workspace }}/apps/presto-auth/public
+          cp dist/*.whl ${{ github.workspace }}/apps/presto-auth/public/
+          cp dist/*.tar.gz ${{ github.workspace }}/apps/presto-auth/public/
+          
+          # Show what was built
+          ls -la ${{ github.workspace }}/apps/presto-auth/public/
+
       - name: Deploy Workers
         if: steps.changes.outputs.relevant == 'true'
         uses: cloudflare/wrangler-action@v3
@@ -101,4 +127,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/${{ matrix.app }}
           packageManager: pnpm
-          command: ${{ matrix.deploy_cmd || format('deploy {0}', matrix.env && format('--env {0}', matrix.env) || '') }}
+          command: deploy ${{ matrix.env && format('--env {0}', matrix.env) || '' }}

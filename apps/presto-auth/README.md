@@ -1,44 +1,52 @@
 # Presto Auth
 
-Static wallet connect page for Presto AI agent.
+Hosts the presto installer at `presto.tempo.xyz`.
 
 ## What It Does
 
-Browser-based wallet setup flow for Presto CLI:
+- **`/install.sh`** - Bash installer that downloads and installs presto via uv/pipx
+- **`/presto_tempo-*.whl`** - Python wheel file served as static asset
+- **`/`** - Landing page with install instructions
+- **`/health`** - Health check endpoint
 
-1. User runs `presto` CLI
-2. CLI opens browser to `https://auth.tempo.xyz/?callback=http://localhost:PORT/callback&network=moderato`
-3. User creates/signs in with passkey wallet (WebAuthn)
-4. User creates time-limited access key (24h expiry)
-5. Credentials POST back to localhost callback
-6. CLI saves credentials and starts working
+All endpoints are free (no payment required).
 
-## Local Development
+## Install Presto
 
 ```bash
-# Start local server
-pnpm --filter @tempo/presto-auth dev
-# Opens http://localhost:8788
-
-# Test with Presto CLI (in presto repo)
-PRESTO_AUTH_URL=http://localhost:8788 presto --dev
+curl -fsSL https://presto.tempo.xyz/install.sh | bash
 ```
+
+Or install directly with uv/pipx:
+```bash
+uv tool install https://presto.tempo.xyz/presto_tempo-0.1.0-py3-none-any.whl
+```
+
+## Development
+
+```bash
+# Build wheel from local presto repo
+./scripts/build-wheel.sh ../../../presto
+
+# Start dev server
+pnpm --filter @tempo/presto-auth dev
+```
+
+## How It Works
+
+1. CI clones the `tempoxyz/presto` repo on each deploy
+2. Builds the Python wheel using `uv build`
+3. Deploys the wheel as a static asset alongside the Worker
+4. The install script downloads the wheel directly from `presto.tempo.xyz`
 
 ## Deployment
 
-Deployed to Cloudflare Pages at `auth.tempo.xyz`.
+Automatic on merge to main. Manual deploy:
 
 ```bash
-# Preview
-pnpm --filter @tempo/presto-auth deploy:preview
+# Build wheel first
+./scripts/build-wheel.sh
 
-# Production  
-pnpm --filter @tempo/presto-auth deploy:prod
+# Deploy
+pnpm --filter @tempo/presto-auth deploy:mainnet
 ```
-
-## Technical Details
-
-- **No backend** - Pure client-side JavaScript
-- **Dependencies** - viem from esm.sh CDN (no build step)
-- **Auth** - WebAuthn passkeys (device-native biometrics)
-- **Blockchain** - Tempo access keys (24h expiry, scoped signing)
