@@ -1,6 +1,20 @@
 import type { Address } from 'viem'
 
 /**
+ * Configuration for streaming payment channels.
+ */
+export interface StreamingConfig {
+	/** Escrow contract address */
+	escrowContract: Address
+	/** Default deposit amount in base units */
+	defaultDeposit: string
+	/** Default channel expiry in seconds from now */
+	defaultExpirySeconds: number
+	/** Minimum voucher delta (minimum payment increment) */
+	minVoucherDelta: string
+}
+
+/**
  * Configuration for a specific endpoint with custom pricing.
  */
 export interface PartnerEndpoint {
@@ -48,6 +62,8 @@ export interface PartnerConfig {
 	destination: Address
 	/** Partner-specific project ID (e.g., for Browserbase) */
 	projectId?: string
+	/** Streaming channel configuration (if streaming payments are supported) */
+	streaming?: StreamingConfig
 }
 
 /**
@@ -58,6 +74,8 @@ export interface Env {
 	TEMPO_RPC_URL: string
 	TEMPO_RPC_USERNAME?: string
 	TEMPO_RPC_PASSWORD?: string
+	/** Escrow contract address for streaming channels */
+	STREAM_ESCROW_CONTRACT?: string
 	/** Dynamic API keys - accessed via partner config apiKeyEnvVar */
 	[key: string]: string | undefined
 }

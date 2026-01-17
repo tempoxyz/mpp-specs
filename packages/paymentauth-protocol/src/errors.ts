@@ -88,3 +88,78 @@ export class MalformedProofError extends PaymentAuthError {
 		super(message)
 	}
 }
+
+/**
+ * 503 Service Unavailable - Server cannot sponsor fees.
+ */
+export class FeeUnavailableError extends PaymentAuthError {
+	readonly code = 'fee_unavailable' as const
+	readonly retryAfter?: number
+
+	constructor(message = 'Server fee balance insufficient', retryAfter?: number) {
+		super(message)
+		this.retryAfter = retryAfter
+	}
+
+	override toJSON(): PaymentError {
+		return {
+			error: this.code,
+			message: this.message,
+			...(this.retryAfter !== undefined && { retry_after: this.retryAfter }),
+		}
+	}
+}
+
+/**
+ * 400 Bad Request - Fee token not whitelisted.
+ */
+export class FeeTokenRejectedError extends PaymentAuthError {
+	readonly code = 'fee_token_rejected' as const
+
+	constructor(message = 'Fee token is not whitelisted') {
+		super(message)
+	}
+}
+
+/**
+ * 400 Bad Request - Fee would exceed configured caps.
+ */
+export class FeeLimitExceededError extends PaymentAuthError {
+	readonly code = 'fee_limit_exceeded' as const
+
+	constructor(message = 'Fee would exceed configured limits') {
+		super(message)
+	}
+}
+
+/**
+ * 400 Bad Request - AMM slippage exceeds threshold.
+ */
+export class FeeSlippageExceededError extends PaymentAuthError {
+	readonly code = 'fee_slippage_exceeded' as const
+
+	constructor(message = 'AMM slippage exceeds threshold') {
+		super(message)
+	}
+}
+
+/**
+ * 429 Too Many Requests - Rate limit exceeded for fee sponsorship.
+ */
+export class FeePayerOverloadedError extends PaymentAuthError {
+	readonly code = 'fee_payer_overloaded' as const
+	readonly retryAfter?: number
+
+	constructor(message = 'Fee sponsorship rate limit exceeded', retryAfter?: number) {
+		super(message)
+		this.retryAfter = retryAfter
+	}
+
+	override toJSON(): PaymentError {
+		return {
+			error: this.code,
+			message: this.message,
+			...(this.retryAfter !== undefined && { retry_after: this.retryAfter }),
+		}
+	}
+}

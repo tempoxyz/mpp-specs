@@ -1,0 +1,104 @@
+name: Deploy Escrow Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to deploy to'
+        required: true
+        default: 'moderato'
+        type: choice
+        options:
+          - moderato
+
+concurrency:
+  group: deploy-escrow-${{ github.event.inputs.network }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy TempoStreamChannel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      
+      - name: Install Solady
+        working-directory: packages/stream-channels
+        run: forge install Vectorized/solady --no-commit
+      
+      - name: Build contracts
+        working-directory: packages/stream-channels
+        run: forge build
+      
+      - name: Deploy contract
+        id: deploy
+        working-directory: packages/stream-channels
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.ESCROW_DEPLOYER_PRIVATE_KEY }}
+        run: |
+          RPC_URL="https://rpc.${{ github.event.inputs.network }}.tempo.xyz"
+          
+          # Get deployer address
+          DEPLOYER_ADDRESS=$(cast wallet address "$DEPLOYER_PRIVATE_KEY")
+          echo "Deployer: $DEPLOYER_ADDRESS"
+          
+          # Fund if needed
+          BALANCE=$(cast balance "$DEPLOYER_ADDRESS" --rpc-url "$RPC_URL" || echo "0")
+          echo "Balance: $BALANCE"
+          
+          if [ "$BALANCE" = "0" ] || [ $(echo "$BALANCE < 100000000000000000" | bc) -eq 1 ]; then
+            echo "Funding deployer..."
+            cast rpc tempo_fundAddress "$DEPLOYER_ADDRESS" --rpc-url "$RPC_URL"
+            sleep 3
+          fi
+          
+          # Deploy
+          OUTPUT=$(forge script script/Deploy.s.sol:DeployScript \
+            --rpc-url "$RPC_URL" \
+            --broadcast \
+            --legacy \
+            -vvv 2>&1)
+          
+          echo "$OUTPUT"
+          
+          # Extract address
+          CONTRACT_ADDRESS=$(echo "$OUTPUT" | grep -oE "TempoStreamChannel deployed at: 0x[a-fA-F0-9]{40}" | grep -oE "0x[a-fA-F0-9]{40}" | head -1)
+          
+          if [ -z "$CONTRACT_ADDRESS" ]; then
+            echo "Failed to extract contract address"
+            exit 1
+          fi
+          
+          echo "contract_address=$CONTRACT_ADDRESS" >> $GITHUB_OUTPUT
+          echo ""
+          echo "============================================"
+          echo "Deployed to: $CONTRACT_ADDRESS"
+          echo "Network: ${{ github.event.inputs.network }}"
+          echo "============================================"
+      
+      - name: Update Wrangler secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Update the secret for payments-proxy
+          echo "${{ steps.deploy.outputs.contract_address }}" | npx wrangler secret put STREAM_ESCROW_CONTRACT --env ${{ github.event.inputs.network }} --name payments-proxy
+          
+          echo "Updated STREAM_ESCROW_CONTRACT secret for payments-proxy"
+      
+      - name: Summary
+        run: |
+          echo "## Escrow Contract Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | ${{ github.event.inputs.network }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract | \`${{ steps.deploy.outputs.contract_address }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Explorer | [View on Explorer](https://explorer.${{ github.event.inputs.network }}.tempo.xyz/address/${{ steps.deploy.outputs.contract_address }}) |" >> $GITHUB_STEP_SUMMARY

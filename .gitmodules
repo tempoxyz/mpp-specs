@@ -1,0 +1,6 @@
+[submodule "packages/stream-channels/lib/solady"]
+	path = packages/stream-channels/lib/solady
+	url = https://github.com/Vectorized/solady
+[submodule "packages/stream-channels/lib/forge-std"]
+	path = packages/stream-channels/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

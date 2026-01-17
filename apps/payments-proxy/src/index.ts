@@ -33,6 +33,14 @@ import type { Env, PartnerConfig } from './config.js'
 import { getPriceForRequest } from './config.js'
 import { getPartner, partners } from './partners/index.js'
 import { proxyRequest } from './proxy.js'
+import {
+	createStreamChallenge,
+	formatStreamChallenge,
+	formatStreamReceipt,
+	parseStreamCredential,
+	verifyChannelOpen,
+	verifyVoucher,
+} from './streaming.js'
 
 // Challenge store (in production, use KV or Durable Objects)
 const challengeStore = new Map<
@@ -446,6 +454,64 @@ app.get('/', (c) => {
 	return c.text('tm!')
 })
 
+// Voucher submission endpoint for streaming channels
+app.post('/:partner/voucher', async (c) => {
+	const partnerSlug = c.req.param('partner')
+	const partner = getPartner(partnerSlug)
+
+	if (!partner) {
+		throw new HTTPException(404, { message: `Unknown partner: ${partnerSlug}` })
+	}
+
+	if (!partner.streaming) {
+		throw new HTTPException(400, {
+			message: `Partner ${partnerSlug} does not support streaming channels`,
+		})
+	}
+
+	const body = await c.req.json()
+	const credential = parseStreamCredential(body)
+
+	if (!credential) {
+		throw new HTTPException(400, { message: 'Invalid stream credential' })
+	}
+
+	// Handle channel opening
+	if (credential.action === 'open') {
+		const result = await verifyChannelOpen(c.env, partner, credential, partner.streaming)
+		if (!result.valid) {
+			throw new HTTPException(400, { message: result.error })
+		}
+
+		return c.json({
+			status: 'ok',
+			channelId: result.channelId,
+			deposit: result.state.deposit.toString(),
+			remaining: result.state.deposit.toString(),
+		})
+	}
+
+	// Handle voucher submission
+	if (credential.action === 'voucher') {
+		const result = await verifyVoucher(c.env, partner, credential, partner.streaming, 0n)
+		if (!result.valid) {
+			throw new HTTPException(400, { message: result.error })
+		}
+
+		const remaining = result.state.deposit - result.state.highestVoucherAmount
+
+		return c.json({
+			status: 'ok',
+			channelId: credential.channelId,
+			cumulativeAmount: result.state.highestVoucherAmount.toString(),
+			remaining: remaining.toString(),
+			newPayment: result.newPayment.toString(),
+		})
+	}
+
+	throw new HTTPException(400, { message: `Unsupported action: ${credential.action}` })
+})
+
 // Partner proxy routes (subdomain-based or path-based for local dev)
 app.all('/*', async (c) => {
 	const host = c.req.header('host') || ''
@@ -530,7 +596,7 @@ app.all('/*', async (c) => {
 	}
 
 	if (!authHeader || !authHeader.startsWith('Payment ')) {
-		// No payment - issue challenge
+		// No payment - issue challenge(s)
 		const challenge = createChallenge(
 			c.env,
 			partner,
@@ -539,7 +605,18 @@ app.all('/*', async (c) => {
 				`Pay ${formatPrice(price)} to access ${partner.name} ${c.req.method} ${forwardPath}`,
 		)
 
+		// Add charge challenge
 		c.header('WWW-Authenticate', formatWwwAuthenticate(challenge))
+
+		// If partner supports streaming, add stream challenge as alternative
+		if (partner.streaming) {
+			const host = c.req.header('host') || 'payments.tempo.xyz'
+			const protocol = host.includes('localhost') ? 'http' : 'https'
+			const voucherBase = `${protocol}://${host}`
+			const streamChallenge = createStreamChallenge(c.env, partner, partner.streaming, voucherBase)
+			c.header('WWW-Authenticate', formatStreamChallenge(streamChallenge), { append: true })
+		}
+
 		c.header('Cache-Control', 'no-store')
 
 		return c.json(
@@ -586,10 +663,70 @@ app.all('/*', async (c) => {
 	}
 
 	// Validate payload type
-	if (
-		!credential.payload ||
-		!['transaction', 'keyAuthorization'].includes(credential.payload.type)
-	) {
+	if (!credential.payload) {
+		return c.json(new MalformedProofError('Missing payload').toJSON(), 400)
+	}
+
+	// Handle stream voucher payments
+	const streamCred = parseStreamCredential(credential.payload)
+	if (streamCred && partner.streaming) {
+		// Verify the voucher covers the required payment
+		const requiredAmount = BigInt(price)
+		const voucherResult = await verifyVoucher(
+			c.env,
+			partner,
+			streamCred,
+			partner.streaming,
+			requiredAmount,
+		)
+
+		if (!voucherResult.valid) {
+			return c.json(new PaymentVerificationFailedError(voucherResult.error).toJSON(), 400)
+		}
+
+		// Stream payment successful - proxy the request
+		try {
+			const { response: upstreamResponse } = await proxyRequest(c, partner, forwardPath, {
+				preReadBody,
+			})
+
+			// Add stream payment receipt
+			const responseHeaders = new Headers(upstreamResponse.headers)
+			const remaining = voucherResult.state.deposit - voucherResult.state.highestVoucherAmount
+			responseHeaders.set(
+				'Payment-Receipt',
+				formatStreamReceipt(
+					streamCred.channelId,
+					voucherResult.state.highestVoucherAmount,
+					remaining,
+				),
+			)
+			responseHeaders.set('X-Payment-ChannelId', streamCred.channelId)
+			responseHeaders.set('X-Payment-Remaining', remaining.toString())
+
+			return new Response(upstreamResponse.body, {
+				status: upstreamResponse.status,
+				statusText: upstreamResponse.statusText,
+				headers: responseHeaders,
+			})
+		} catch (error) {
+			return c.json(
+				{
+					error: 'Upstream request failed after payment',
+					message: error instanceof Error ? error.message : 'Unknown error',
+					payment: {
+						status: 'success',
+						channelId: streamCred.channelId,
+						cumulativeAmount: voucherResult.state.highestVoucherAmount.toString(),
+					},
+				},
+				502,
+			)
+		}
+	}
+
+	// Handle transaction-based payments
+	if (!['transaction', 'keyAuthorization'].includes(credential.payload.type)) {
 		return c.json(new MalformedProofError('Invalid payload type').toJSON(), 400)
 	}
 

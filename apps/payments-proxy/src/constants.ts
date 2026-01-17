@@ -40,3 +40,23 @@ export const PRICES = {
 	/** $0.12 */
 	CENT_12: '120000',
 } as const
+
+/**
+ * Contract addresses for streaming payment channels.
+ */
+export const CONTRACTS = {
+	/** TempoStreamChannel escrow contract on Moderato (testnet) */
+	STREAM_ESCROW_MODERATO: '0x0000000000000000000000000000000000000000' as Address, // TODO: Deploy and update
+} as const
+
+/**
+ * Default streaming channel configuration.
+ */
+export const STREAMING_DEFAULTS = {
+	/** Default deposit: $10 */
+	DEFAULT_DEPOSIT: '10000000',
+	/** Default expiry: 1 hour */
+	DEFAULT_EXPIRY_SECONDS: 3600,
+	/** Minimum voucher delta: $0.001 */
+	MIN_VOUCHER_DELTA: '1000',
+} as const

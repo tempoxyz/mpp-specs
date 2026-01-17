@@ -18,6 +18,7 @@
 	"dependencies": {
 		"@tempo/paymentauth-protocol": "workspace:*",
 		"@tempo/shared": "workspace:*",
+		"@tempo/stream-channels": "workspace:*",
 		"hono": "^4.6.0",
 		"viem": "^2.30.6",
 		"zod": "^3.24.0"

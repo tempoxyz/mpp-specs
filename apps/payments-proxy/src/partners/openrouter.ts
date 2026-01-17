@@ -1,5 +1,5 @@
 import type { PartnerConfig } from '../config.js'
-import { PRICES, TOKENS, WALLETS } from '../constants.js'
+import { CONTRACTS, PRICES, STREAMING_DEFAULTS, TOKENS, WALLETS } from '../constants.js'
 
 /**
  * OpenRouter - Pay-per-use LLM API access with crypto
@@ -9,6 +9,8 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  *
  * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
  * Popular models accessible via /v1/chat/completions
+ *
+ * Supports both charge (per-request) and stream (payment channel) payments.
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
  */
@@ -32,4 +34,11 @@ export const openrouter: PartnerConfig = {
 			description: 'Chat completions (GPT-4, Claude, Llama, etc.) - price varies by model',
 		},
 	],
+	// Enable streaming payment channels
+	streaming: {
+		escrowContract: CONTRACTS.STREAM_ESCROW_MODERATO,
+		defaultDeposit: STREAMING_DEFAULTS.DEFAULT_DEPOSIT,
+		defaultExpirySeconds: STREAMING_DEFAULTS.DEFAULT_EXPIRY_SECONDS,
+		minVoucherDelta: STREAMING_DEFAULTS.MIN_VOUCHER_DELTA,
+	},
 }

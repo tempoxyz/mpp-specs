@@ -1,0 +1,7 @@
+# Foundry artifacts
+out/
+cache/
+lib/
+
+# Node
+node_modules/
