@@ -111,11 +111,16 @@ export function AuthPage() {
 				}),
 			})
 
-			const data = (await res.json()) as { result?: string; error?: { message: string } }
+			const data = (await res.json()) as { result?: string | string[]; error?: { message: string } }
 			if (data.error) throw new Error(data.error.message)
 
-			const txHash = data.result
+			// tempo_fundAddress returns an array of tx hashes (one per token)
+			const result = data.result
+			if (!result) throw new Error('No transaction hash returned')
+			const txHash = Array.isArray(result) ? result[0] : result
 			if (!txHash) throw new Error('No transaction hash returned')
+
+			console.log(`[Faucet] Got tx hash: ${txHash}`)
 
 			// Wait for transaction to confirm by polling receipt
 			let attempts = 0
@@ -124,8 +129,6 @@ export function AuthPage() {
 			console.log(`[Faucet] Waiting for tx ${txHash} to confirm...`)
 
 			while (attempts < maxAttempts) {
-				await new Promise((resolve) => setTimeout(resolve, 2000))
-
 				const receiptRes = await fetch(networkConfig.rpcUrl, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -141,6 +144,8 @@ export function AuthPage() {
 					result?: { status: string } | null
 					error?: { message: string }
 				}
+
+				console.log(`[Faucet] Poll ${attempts + 1}: receiptData =`, receiptData)
 
 				if (receiptData.result) {
 					// Transaction confirmed
@@ -160,6 +165,9 @@ export function AuthPage() {
 				if (attempts % 10 === 0) {
 					console.log(`[Faucet] Still waiting... (${attempts}/${maxAttempts})`)
 				}
+
+				// Wait before next poll
+				await new Promise((resolve) => setTimeout(resolve, 2000))
 			}
 
 			throw new Error('Transaction confirmation timeout')
