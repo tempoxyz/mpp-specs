@@ -1,9 +1,50 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
 import { useWebAuthnContext } from '../WebAuthnContext'
 
 function formatAddress(address: string): string {
 	return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
+// Network configuration
+interface NetworkConfig {
+	rpcUrl: string
+	feeTokenName: string
+	isTestnet: boolean
+}
+
+const NETWORKS: { [key: string]: NetworkConfig } = {
+	mainnet: {
+		rpcUrl: 'https://rpc.mainnet.tempo.xyz',
+		feeTokenName: 'USD',
+		isTestnet: false,
+	},
+	moderato: {
+		rpcUrl: 'https://rpc.moderato.tempo.xyz',
+		feeTokenName: 'Credits',
+		isTestnet: true,
+	},
+}
+
+const DEFAULT_NETWORK: NetworkConfig = {
+	rpcUrl: 'https://rpc.moderato.tempo.xyz',
+	feeTokenName: 'Credits',
+	isTestnet: true,
+}
+
+function getNetworkConfig(network: string): NetworkConfig {
+	return NETWORKS[network] || DEFAULT_NETWORK
+}
+
+// Parse URL params for CLI callback flow
+function getUrlParams() {
+	const params = new URLSearchParams(window.location.search)
+	return {
+		callback: params.get('callback'),
+		state: params.get('state'),
+		network: params.get('network') || 'moderato',
+		account: params.get('account'),
+	}
 }
 
 export function AuthPage() {
@@ -25,19 +66,86 @@ export function AuthPage() {
 	} = useWebAuthnContext()
 
 	const [balance, setBalance] = useState<bigint | null>(null)
-	const [hasStoredCredential, setHasStoredCredential] = useState(false)
+	const [isFinishing, setIsFinishing] = useState(false)
+	const [finishError, setFinishError] = useState<string | null>(null)
+	const [isRequestingFaucet, setIsRequestingFaucet] = useState(false)
+	const [faucetSuccess, setFaucetSuccess] = useState(false)
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally refresh on connect state change
-	useEffect(() => {
-		const stored = localStorage.getItem('presto_webauthn_credential')
-		setHasStoredCredential(!!stored)
-	}, [isConnected])
+	// Get CLI callback params
+	const urlParams = getUrlParams()
+	const isCliFlow = !!urlParams.callback
+	const networkConfig = getNetworkConfig(urlParams.network)
 
-	useEffect(() => {
+	const refreshBalance = useCallback(() => {
 		if (isConnected) {
 			getBalance().then(setBalance)
 		}
 	}, [isConnected, getBalance])
+
+	useEffect(() => {
+		refreshBalance()
+	}, [refreshBalance])
+
+	// Check if user has enough funds to create access key
+	const hasFunds = balance !== null && balance > 0n
+
+	// Request faucet for testnet and wait for funds to arrive
+	const requestFaucet = useCallback(async () => {
+		if (!address || !networkConfig.isTestnet) return
+
+		setIsRequestingFaucet(true)
+		setFaucetSuccess(false)
+
+		try {
+			const res = await fetch(networkConfig.rpcUrl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'tempo_fundAddress',
+					params: [address],
+				}),
+			})
+
+			const data = (await res.json()) as { error?: { message: string } }
+			if (data.error) throw new Error(data.error.message)
+
+			// Poll for balance update (wait for funds to actually arrive)
+			const startBalance = balance
+			let attempts = 0
+			const maxAttempts = 10
+
+			const pollForFunds = async (): Promise<boolean> => {
+				const newBalance = await getBalance()
+				if (newBalance !== null && newBalance > (startBalance ?? 0n)) {
+					setBalance(newBalance)
+					return true
+				}
+				return false
+			}
+
+			// Poll every 2 seconds for up to 20 seconds
+			while (attempts < maxAttempts) {
+				await new Promise((resolve) => setTimeout(resolve, 2000))
+				const received = await pollForFunds()
+				if (received) {
+					setFaucetSuccess(true)
+					break
+				}
+				attempts++
+			}
+
+			if (attempts >= maxAttempts) {
+				// Final refresh attempt
+				refreshBalance()
+			}
+		} catch (e) {
+			console.error('Faucet error:', e)
+		} finally {
+			setIsRequestingFaucet(false)
+		}
+	}, [address, networkConfig, refreshBalance, balance, getBalance])
 
 	const handleCopyAddress = async () => {
 		if (address) {
@@ -45,15 +153,65 @@ export function AuthPage() {
 		}
 	}
 
+	// Send credentials back to CLI via form POST
+	// Uses form POST instead of fetch() to avoid CORS/Private Network Access issues
+	const finishSetup = useCallback(() => {
+		if (!accessKey || !urlParams.callback) {
+			setFinishError('Missing access key or callback URL')
+			return
+		}
+
+		if (!urlParams.state) {
+			setFinishError('Missing state parameter. Please restart wallet setup.')
+			return
+		}
+
+		setIsFinishing(true)
+		setFinishError(null)
+
+		// Use form POST navigation (RFC 8252 approach for native app OAuth callbacks)
+		const form = document.createElement('form')
+		form.method = 'POST'
+		form.action = urlParams.callback
+		form.style.display = 'none'
+
+		const fields: Record<string, string> = {
+			access_key: accessKey.privateKey,
+			account_address: accessKey.accountAddress,
+			key_id: accessKey.keyId,
+			expiry: accessKey.expiry.toString(),
+			tx_hash: '', // TODO: capture from authorizeAccessKey
+			state: urlParams.state,
+		}
+
+		for (const [name, value] of Object.entries(fields)) {
+			const input = document.createElement('input')
+			input.type = 'hidden'
+			input.name = name
+			input.value = value
+			form.appendChild(input)
+		}
+
+		document.body.appendChild(form)
+		form.submit()
+	}, [accessKey, urlParams.callback, urlParams.state])
+
 	return (
 		<div className="install-hero">
 			<div className="container">
 				<header className="install-header">
 					<h1 className="install-title serif">Presto</h1>
+					{isCliFlow && (
+						<div className="network-badge mono">
+							{urlParams.network === 'mainnet' ? 'Mainnet' : 'Testnet'}
+						</div>
+					)}
 					<p className="install-subtitle mono">
-						{isConnected
-							? 'Manage your passkey and access key for AI payments.'
-							: 'Create or sign in with your passkey to get started.'}
+						{isCliFlow
+							? 'Set up your wallet to pay for AI with crypto'
+							: isConnected
+								? 'Manage your passkey and access key for AI payments.'
+								: 'Create or sign in with your passkey to get started.'}
 					</p>
 				</header>
 
@@ -69,26 +227,40 @@ export function AuthPage() {
 					</div>
 				)}
 
+				{finishError && (
+					<div className="error-box">
+						<span className="mono">{finishError}</span>
+					</div>
+				)}
+
+				{!urlParams.callback && !isConnected && (
+					<div className="error-box">
+						<span className="mono">Run "presto" from your terminal to start setup.</span>
+					</div>
+				)}
+
 				{!isConnected ? (
 					<div className="auth-section">
+						<p className="section-desc mono">
+							Use Face ID, Touch ID, or your device password. No seed phrases or extensions needed.
+						</p>
+
 						<div className="auth-buttons">
 							<button type="button" className="btn" onClick={signUp} disabled={isLoading}>
-								{isLoading ? 'Creating...' : 'Create Passkey'}
+								{isLoading ? 'Creating...' : 'Create new wallet'}
 							</button>
 
-							{hasStoredCredential && (
-								<button
-									type="button"
-									className="btn btn-outline"
-									onClick={signIn}
-									disabled={isLoading}
-								>
-									{isLoading ? 'Signing in...' : 'Sign In'}
-								</button>
-							)}
+							<button
+								type="button"
+								className="btn btn-outline"
+								onClick={signIn}
+								disabled={isLoading}
+							>
+								{isLoading ? 'Signing in...' : 'Use existing passkey'}
+							</button>
 						</div>
 
-						<p className="auth-hint mono">Your passkey is stored securely on this device.</p>
+						<p className="auth-hint mono">Your passkey is stored securely by your browser or device.</p>
 					</div>
 				) : (
 					<div className="auth-section">
@@ -109,8 +281,36 @@ export function AuthPage() {
 							<div className="info-block">
 								<div className="info-label mono">Balance</div>
 								<div className="info-value mono">
-									${formatUnits(balance, 6)} <span className="tag">AlphaUSD</span>
+									${formatUnits(balance, 6)} <span className="tag">{networkConfig.feeTokenName}</span>
 								</div>
+							</div>
+						)}
+
+						{/* Faucet for testnet - only show if no funds */}
+						{networkConfig.isTestnet && !hasFunds && (
+							<div className="faucet-section">
+								{faucetSuccess && (
+									<div className="success-box">
+										<span>✓ Funds received!</span>
+									</div>
+								)}
+								<button
+									type="button"
+									className={`btn ${faucetSuccess ? 'btn-success' : ''}`}
+									onClick={requestFaucet}
+									disabled={isRequestingFaucet || faucetSuccess}
+								>
+									{faucetSuccess
+										? '✓ Funds received'
+										: isRequestingFaucet
+											? 'Waiting for funds...'
+											: 'Get free testnet credits'}
+								</button>
+								{!faucetSuccess && (
+									<p className="auth-hint mono" style={{ marginTop: 12 }}>
+										You need testnet credits to register your CLI key.
+									</p>
+								)}
 							</div>
 						)}
 
@@ -118,11 +318,11 @@ export function AuthPage() {
 
 						{/* Access Key Section */}
 						<div className="access-key-section">
-							<h2 className="section-title serif">Access Key</h2>
+							<h2 className="section-title serif">CLI Key</h2>
 							<p className="section-desc mono">
 								{hasAccessKey
-									? 'Your access key allows transactions without passkey prompts.'
-									: 'Authorize an access key to enable seamless payments from the CLI.'}
+									? 'Your CLI key allows transactions without passkey prompts.'
+									: 'Create a CLI key to enable seamless payments from the terminal.'}
 							</p>
 
 							{hasAccessKey && accessKey ? (
@@ -137,38 +337,60 @@ export function AuthPage() {
 											{new Date(accessKey.expiry * 1000).toLocaleString()}
 										</div>
 									</div>
-									<button
-										type="button"
-										className="btn btn-outline btn-danger"
-										onClick={clearAccessKey}
-									>
-										Clear Key
-									</button>
+
+									{/* Show Finish Setup button for CLI flow */}
+									{isCliFlow ? (
+										<button
+											type="button"
+											className="btn"
+											onClick={finishSetup}
+											disabled={isFinishing}
+										>
+											{isFinishing ? 'Finishing...' : 'Finish Setup'}
+										</button>
+									) : (
+										<button
+											type="button"
+											className="btn btn-outline btn-danger"
+											onClick={clearAccessKey}
+										>
+											Clear Key
+										</button>
+									)}
 								</div>
 							) : (
-								<button
-									type="button"
-									className="btn"
-									onClick={authorizeAccessKey}
-									disabled={isAuthorizing}
-								>
-									{isAuthorizing ? 'Authorizing...' : 'Authorize Access Key'}
-								</button>
+								<>
+									<button
+										type="button"
+										className="btn"
+										onClick={authorizeAccessKey}
+										disabled={isAuthorizing || !hasFunds}
+									>
+										{isAuthorizing ? 'Creating...' : 'Create CLI Key'}
+									</button>
+									{!hasFunds && (
+										<p className="auth-hint mono" style={{ marginTop: 12 }}>
+											Get testnet credits above before creating your CLI key.
+										</p>
+									)}
+								</>
 							)}
 						</div>
 
-						<div className="divider" />
-
-						<button type="button" className="btn btn-outline" onClick={disconnect}>
-							Disconnect
-						</button>
+						{!isCliFlow && (
+							<>
+								<div className="divider" />
+								<button type="button" className="btn btn-outline" onClick={disconnect}>
+									Disconnect
+								</button>
+							</>
+						)}
 					</div>
 				)}
 
 				<div className="divider" />
 
 				<div className="install-footer">
-					<a href="/agent">Install CLI</a>
 					<a href="https://github.com/tempoxyz/presto" target="_blank" rel="noopener noreferrer">
 						GitHub
 					</a>

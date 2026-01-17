@@ -1,4 +1,4 @@
-import * as P256 from 'ox/P256'
+import * as Secp256k1 from 'ox/Secp256k1'
 import * as PublicKey from 'ox/PublicKey'
 import { useCallback, useEffect, useState } from 'react'
 import type { Address, Hex } from 'viem'
@@ -15,18 +15,18 @@ const ACCESS_KEY_STORAGE_KEY = 'presto_access_key'
 
 interface StoredAccessKey {
 	keyId: Address
-	privateKey: Hex // P256 private key
-	publicKey: Hex // P256 public key
+	privateKey: Hex // Secp256k1 private key
+	publicKey: Hex // Secp256k1 public key
 	expiry: number // Unix timestamp
 	accountAddress: Address // The account this key belongs to
 }
 
 /**
- * Derive a keyId (address) from a P256 public key
+ * Derive a keyId (address) from a Secp256k1 public key
  * keyId = last 20 bytes of keccak256(publicKeyWithoutPrefix)
  */
 function deriveKeyId(publicKeyHex: Hex): Address {
-	// Remove 0x04 prefix if present (uncompressed P256 public key is 65 bytes)
+	// Remove 0x04 prefix if present (uncompressed Secp256k1 public key is 65 bytes)
 	const keyWithoutPrefix = publicKeyHex.startsWith('0x04')
 		? (`0x${publicKeyHex.slice(4)}` as Hex)
 		: publicKeyHex.slice(2).length === 128
@@ -117,9 +117,9 @@ export function useAccessKey(
 			setError(null)
 
 			try {
-				// Generate new P256 key pair using ox
-				const privateKey = P256.randomPrivateKey()
-				const publicKey = P256.getPublicKey({ privateKey })
+				// Generate new Secp256k1 key pair using ox (compatible with cast --access-key)
+				const privateKey = Secp256k1.randomPrivateKey()
+				const publicKey = Secp256k1.getPublicKey({ privateKey })
 				const publicKeyHex = PublicKey.toHex(publicKey)
 
 				// Derive keyId from public key
@@ -137,7 +137,7 @@ export function useAccessKey(
 					functionName: 'authorizeKey',
 					args: [
 						keyId,
-						SignatureType.P256, // Using P256 for the access key
+						SignatureType.Secp256k1, // Using Secp256k1 for CLI compatibility
 						expiry,
 						true, // enforceLimits
 						[{ token: ALPHA_USD, amount: BigInt(10 * 1e6) }], // $10 spending limit
@@ -209,11 +209,11 @@ export function useAccessKey(
 				throw new Error('Access key not available')
 			}
 
-			// Create a Tempo account using P256 with our access key's private key
+			// Create a Tempo account using Secp256k1 with our access key's private key
 			// The `access` option tells Tempo this is an access key for the parent account,
 			// so transactions will be FROM the parent account (which has funds),
-			// but SIGNED BY this P256 key (which is authorized in the keychain)
-			const account = TempoAccount.fromP256(accessKey.privateKey, {
+			// but SIGNED BY this Secp256k1 key (which is authorized in the keychain)
+			const account = TempoAccount.fromSecp256k1(accessKey.privateKey, {
 				access: accountAddress,
 			})
 

@@ -82,10 +82,10 @@ export function InstallPage() {
 						Docs
 					</a>
 					<a
-						href="/"
+						href="/wallet"
 						onClick={(e) => {
 							e.preventDefault()
-							window.location.href = '/'
+							window.location.href = '/wallet'
 						}}
 					>
 						Connect Wallet

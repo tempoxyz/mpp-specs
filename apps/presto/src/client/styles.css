@@ -474,3 +474,41 @@ pre {
 	background: #ff4444;
 	color: var(--bg);
 }
+
+.btn-success {
+	border-color: #00ff6a;
+	color: #00ff6a;
+}
+
+.btn-success:hover {
+	background: #00ff6a;
+	color: var(--bg);
+}
+
+/* Success box */
+.success-box {
+	margin-bottom: 16px;
+	padding: 12px 16px;
+	border: 1px solid #00ff6a;
+	color: #00ff6a;
+	font-size: 14px;
+}
+
+/* Faucet section */
+.faucet-section {
+	margin-top: 16px;
+}
+
+/* Network badge */
+.network-badge {
+	display: inline-block;
+	margin-left: 12px;
+	padding: 4px 10px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--muted);
+	border: 1px solid var(--muted);
+	vertical-align: middle;
+}

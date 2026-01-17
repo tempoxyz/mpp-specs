@@ -69,6 +69,11 @@ function getPartnerFromHost(host: string): string | null {
 		return null
 	}
 
+	// Skip IP addresses (e.g., 127.0.0.1, 192.168.1.1) - use path-based routing
+	if (/^\d+\.\d+\.\d+\.\d+$/.test(hostWithoutPort)) {
+		return null
+	}
+
 	// For production/preview: partner.payments.tempo.xyz (4+ parts)
 	// For local dev with Host header: partner.localhost (2 parts)
 	if (parts.length >= 4 && parts[0]) {
