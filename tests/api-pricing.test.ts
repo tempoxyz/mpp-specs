@@ -52,6 +52,24 @@ describe('api-pricing', () => {
 			expect(getModelPricing('GPT-5')).toBeDefined()
 			expect(getModelPricing('CLAUDE-SONNET-4.5')).toBeDefined()
 		})
+
+		it('strips provider prefixes from model names', () => {
+			// OpenRouter/Presto style prefixed models
+			const anthropicClaude = getModelPricing('anthropic/claude-opus-4.5')
+			expect(anthropicClaude).toBeDefined()
+			expect(anthropicClaude?.model).toBe('claude-opus-4.5')
+			expect(anthropicClaude?.provider).toBe('anthropic')
+
+			const openaiGpt = getModelPricing('openai/gpt-5')
+			expect(openaiGpt).toBeDefined()
+			expect(openaiGpt?.model).toBe('gpt-5')
+			expect(openaiGpt?.provider).toBe('openai')
+
+			const googleGemini = getModelPricing('google/gemini-2.5-pro')
+			expect(googleGemini).toBeDefined()
+			expect(googleGemini?.model).toBe('gemini-2.5-pro')
+			expect(googleGemini?.provider).toBe('google')
+		})
 	})
 
 	describe('calculateCostUSD', () => {

@@ -510,9 +510,19 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
  * Get pricing for a specific model.
  * Matches exact model names first, then tries prefix matching for versioned models.
  * E.g., "claude-sonnet-4-20250514" matches "claude-sonnet-4"
+ * Handles provider prefixes like "anthropic/claude-opus-4" or "openai/gpt-5"
  */
 export function getModelPricing(model: string): ModelPricing | undefined {
-	const normalizedModel = model.toLowerCase()
+	let normalizedModel = model.toLowerCase()
+
+	// Strip provider prefix if present (e.g., "anthropic/claude-opus-4" -> "claude-opus-4")
+	const providerPrefixes = ['anthropic/', 'openai/', 'google/', 'meta-llama/', 'mistralai/']
+	for (const prefix of providerPrefixes) {
+		if (normalizedModel.startsWith(prefix)) {
+			normalizedModel = normalizedModel.slice(prefix.length)
+			break
+		}
+	}
 
 	// Try exact match first
 	const exact = ALL_PRICING.find((p) => p.model.toLowerCase() === normalizedModel)

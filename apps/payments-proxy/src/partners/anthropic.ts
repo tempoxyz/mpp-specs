@@ -30,5 +30,11 @@ export const anthropic: PartnerConfig = {
 			dynamicPricing: true,
 			description: 'Create messages with Claude (Sonnet, Opus, Haiku) - price varies by model',
 		},
+		{
+			path: '/v1/chat/completions',
+			methods: ['POST'],
+			dynamicPricing: true,
+			description: 'OpenAI-compatible chat completions (auto-converted to Anthropic format)',
+		},
 	],
 }

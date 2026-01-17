@@ -1,6 +1,13 @@
 import type { Context } from 'hono'
 import type { Env, PartnerConfig } from './config.js'
 import { formatApiKey, getApiKey } from './config.js'
+import {
+	convertRequestToAnthropic,
+	convertResponseToOpenAI,
+	createStreamingTransformer,
+	isOpenAIChatCompletionsPath,
+	isStreamingRequest,
+} from './adapters/openai-to-anthropic.js'
 
 /**
  * Result of proxying a request to the upstream API.
@@ -83,10 +90,16 @@ export async function proxyRequest(
 ): Promise<ProxyResult> {
 	const { preserveClientAuth = false } = options
 
+	// Check if this is an OpenAI-to-Anthropic translation request
+	const needsAnthropicTranslation =
+		partner.slug === 'anthropic' && isOpenAIChatCompletionsPath(forwardPath)
+
 	// Build upstream URL - properly join base path with forward path
 	const baseUrl = new URL(partner.upstream)
 	const basePath = baseUrl.pathname.replace(/\/$/, '') // Remove trailing slash
-	const fullPath = basePath + (forwardPath.startsWith('/') ? forwardPath : `/${forwardPath}`)
+	// For Anthropic translation, redirect to /v1/messages
+	const actualForwardPath = needsAnthropicTranslation ? '/v1/messages' : forwardPath
+	const fullPath = basePath + (actualForwardPath.startsWith('/') ? actualForwardPath : `/${actualForwardPath}`)
 	const upstreamUrl = new URL(fullPath, baseUrl.origin)
 
 	// Copy query parameters
@@ -138,22 +151,54 @@ export async function proxyRequest(
 
 	// Get request body if present
 	let body: BodyInit | null = null
+	let isStreaming = false
 	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
 		// Use pre-read body if provided, otherwise read from request
-		if (options.preReadBody !== undefined) {
-			body = options.preReadBody
+		let rawBody: ArrayBuffer
+		if (options.preReadBody !== undefined && options.preReadBody !== null) {
+			rawBody = options.preReadBody
 		} else {
-			body = await c.req.raw.clone().arrayBuffer()
+			rawBody = await c.req.raw.clone().arrayBuffer()
+		}
+
+		// Check if this is a streaming request
+		if (needsAnthropicTranslation) {
+			isStreaming = isStreamingRequest(rawBody)
+		}
+
+		// If translating OpenAI -> Anthropic, convert the request body
+		if (needsAnthropicTranslation && rawBody.byteLength > 0) {
+			try {
+				const openaiRequest = JSON.parse(new TextDecoder().decode(rawBody))
+				const anthropicRequest = convertRequestToAnthropic(openaiRequest)
+				body = JSON.stringify(anthropicRequest)
+				// Anthropic requires anthropic-version header
+				headers.set('anthropic-version', '2023-06-01')
+			} catch {
+				// If conversion fails, pass through original body
+				body = rawBody
+			}
+		} else {
+			body = rawBody
 		}
 	}
 
-	// Make the upstream request
+	// Make the upstream request with a generous timeout for LLM responses
 	const start = Date.now()
-	const upstreamResponse = await fetch(upstreamUrl.toString(), {
-		method: c.req.method,
-		headers,
-		body,
-	})
+	const controller = new AbortController()
+	const timeoutId = setTimeout(() => controller.abort(), 300_000) // 5 minutes for LLM responses
+
+	let upstreamResponse: Response
+	try {
+		upstreamResponse = await fetch(upstreamUrl.toString(), {
+			method: c.req.method,
+			headers,
+			body,
+			signal: controller.signal,
+		})
+	} finally {
+		clearTimeout(timeoutId)
+	}
 	const upstreamLatencyMs = Date.now() - start
 
 	// Build response headers
@@ -168,8 +213,33 @@ export async function proxyRequest(
 	responseHeaders.set('X-Proxy-Upstream', partner.upstream)
 	responseHeaders.set('X-Proxy-Latency-Ms', upstreamLatencyMs.toString())
 
+	// If translating Anthropic -> OpenAI, convert the response body
+	let responseBody: BodyInit | null = upstreamResponse.body
+	if (needsAnthropicTranslation && upstreamResponse.ok) {
+		if (isStreaming && upstreamResponse.body) {
+			// For streaming responses, pipe through the transformer
+			responseBody = upstreamResponse.body.pipeThrough(createStreamingTransformer())
+			responseHeaders.set('Content-Type', 'text/event-stream')
+			responseHeaders.set('Cache-Control', 'no-cache')
+			responseHeaders.set('Connection', 'keep-alive')
+		} else {
+			// For non-streaming responses, convert the entire response
+			try {
+				const anthropicResponse = (await upstreamResponse.json()) as Parameters<
+					typeof convertResponseToOpenAI
+				>[0]
+				const openaiResponse = convertResponseToOpenAI(anthropicResponse)
+				responseBody = JSON.stringify(openaiResponse)
+				responseHeaders.set('Content-Type', 'application/json')
+			} catch {
+				// If conversion fails, we already consumed the body, return error
+				responseBody = JSON.stringify({ error: 'Failed to convert Anthropic response' })
+			}
+		}
+	}
+
 	// Create response with upstream body
-	const response = new Response(upstreamResponse.body, {
+	const response = new Response(responseBody, {
 		status: upstreamResponse.status,
 		statusText: upstreamResponse.statusText,
 		headers: responseHeaders,
