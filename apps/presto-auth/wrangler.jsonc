@@ -55,11 +55,6 @@
 					"pattern": "presto.moderato.tempo.xyz",
 					"zone_name": "tempo.xyz",
 					"custom_domain": true
-				},
-				{
-					"pattern": "presto.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
 				}
 			],
 			"vars": {
