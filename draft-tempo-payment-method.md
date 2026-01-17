@@ -345,8 +345,8 @@ JSON object per Section 5.2 of [I-D.ietf-httpauth-payment].
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | REQUIRED | Challenge ID from the server's `WWW-Authenticate` header |
-| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
 | `payload` | object | REQUIRED | Tempo-specific payload object |
+| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
 
 The `source` field, if present, SHOULD use the `did:pkh` method with the
 Tempo chain ID (42431 for Moderato testnet) and the payer's
@@ -358,9 +358,9 @@ The `payload` object contains:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | Fulfillment type: `"transaction"`, `"keyAuthorization"`, or `"hash"` |
-| `signature` | string | CONDITIONAL | Hex-encoded RLP-serialized signed data (required for `transaction` and `keyAuthorization`) |
 | `hash` | string | CONDITIONAL | Transaction hash (required for `hash` type) |
+| `signature` | string | CONDITIONAL | Hex-encoded RLP-serialized signed data (required for `transaction` and `keyAuthorization`) |
+| `type` | string | REQUIRED | Fulfillment type: `"transaction"`, `"keyAuthorization"`, or `"hash"` |
 
 Either `signature` or `hash` MUST be present, depending on the `type`.
 
@@ -415,8 +415,8 @@ reasons) to still use the Payment scheme.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"hash"` |
 | `hash` | string | REQUIRED | Transaction hash with `0x` prefix |
+| `type` | string | REQUIRED | `"hash"` |
 
 **Applicable intents:**
 
