@@ -542,7 +542,7 @@ export function createStreamingTransformer(): TransformStream<Uint8Array, Uint8A
 			}
 		},
 
-		flush(controller) {
+		flush(_controller) {
 			// Process any remaining buffer
 			if (buffer.trim()) {
 				// Ignore incomplete data

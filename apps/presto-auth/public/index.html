@@ -766,22 +766,25 @@
     
     async function updateBalance() {
       const addr = rootAccount?.address || wallet?.address;
-      if (!addr || !callbackUrl) return;
+      if (!addr) return;
       
       try {
-        const balanceUrl = callbackUrl.replace('/callback', '/balance');
-        const res = await fetch(balanceUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: addr, token: FEE_TOKEN }),
+        // Call the Moderato RPC directly using viem
+        const client = createClient({
+          chain: tempoChain,
+          transport: http(RPC_URL),
+        }).extend(publicActions);
+        
+        const balance = await client.readContract({
+          address: FEE_TOKEN,
+          abi: [{ name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+          functionName: 'balanceOf',
+          args: [addr],
         });
         
-        const data = await res.json();
-        if (data.balance !== undefined) {
-          currentBalance = data.balance / 1e6;
-          document.getElementById('balance').textContent = `${currentBalance.toFixed(2)} ${FEE_TOKEN_NAME}`;
-          document.getElementById('balance').classList.remove('loading');
-        }
+        currentBalance = Number(balance) / 1e6;
+        document.getElementById('balance').textContent = `${currentBalance.toFixed(2)} ${FEE_TOKEN_NAME}`;
+        document.getElementById('balance').classList.remove('loading');
       } catch (e) {
         console.error('Balance fetch error:', e);
         document.getElementById('balance').textContent = 'Error loading';

@@ -1,6 +1,4 @@
 import type { Context } from 'hono'
-import type { Env, PartnerConfig } from './config.js'
-import { formatApiKey, getApiKey } from './config.js'
 import {
 	convertRequestToAnthropic,
 	convertResponseToOpenAI,
@@ -8,6 +6,8 @@ import {
 	isOpenAIChatCompletionsPath,
 	isStreamingRequest,
 } from './adapters/openai-to-anthropic.js'
+import type { Env, PartnerConfig } from './config.js'
+import { formatApiKey, getApiKey } from './config.js'
 
 /**
  * Result of proxying a request to the upstream API.
@@ -99,7 +99,8 @@ export async function proxyRequest(
 	const basePath = baseUrl.pathname.replace(/\/$/, '') // Remove trailing slash
 	// For Anthropic translation, redirect to /v1/messages
 	const actualForwardPath = needsAnthropicTranslation ? '/v1/messages' : forwardPath
-	const fullPath = basePath + (actualForwardPath.startsWith('/') ? actualForwardPath : `/${actualForwardPath}`)
+	const fullPath =
+		basePath + (actualForwardPath.startsWith('/') ? actualForwardPath : `/${actualForwardPath}`)
 	const upstreamUrl = new URL(fullPath, baseUrl.origin)
 
 	// Copy query parameters
