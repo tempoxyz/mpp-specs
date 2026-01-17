@@ -82,7 +82,50 @@ Consider an AI API that charges per output token:
 
 The client pays exactly for tokens received, with no worst-case reservation.
 
-### 1.2. Relationship to Base Specification
+### 1.2. Trust Model and Fund Commitment
+
+Streaming payment channels use a **pull-based metering model** where:
+
+1. **No funds are locked at channel open.** The Access Key grants authorization
+   to transfer, but does not escrow or reserve funds on-chain.
+
+2. **Funds are committed only at settlement.** When the server submits an
+   on-chain transfer using the Access Key, funds move from the payer's wallet.
+
+3. **Server bears counterparty risk between settlements.** The user could
+   drain their wallet after streaming begins but before settlement.
+
+**Risk mitigation:**
+
+- **Frequent settlement**: Servers SHOULD settle often (e.g., every $0.10-$1.00
+  or every N tokens) to minimize exposure.
+- **Maximum unsettled cap**: Servers SHOULD stop streaming if accrued-unsettled
+  amount exceeds a threshold until settlement succeeds.
+- **Balance verification**: Servers MAY check user balance at open and
+  periodically, but this is not a guarantee.
+
+This model avoids worst-case reservation while keeping server risk bounded
+to the maximum unsettled amount between settlements.
+
+```
+Trust Timeline:
+                                                             
+  OPEN          STREAMING           SETTLE         STREAMING
+    │               │                  │               │
+    ▼               ▼                  ▼               ▼
+┌───────┐     ┌───────────┐      ┌──────────┐    ┌──────────┐
+│Access │     │ Vouchers  │      │ On-chain │    │ Vouchers │
+│Key    │────▶│ accrue    │─────▶│ transfer │───▶│ accrue   │──▶ ...
+│given  │     │ (no lock) │      │ (commit) │    │ (no lock)│
+└───────┘     └───────────┘      └──────────┘    └──────────┘
+                  │                   │
+                  └───────────────────┘
+                   Server risk window
+                   (keep small via
+                    frequent settlement)
+```
+
+### 1.3. Relationship to Base Specification
 
 This document extends [draft-tempo-payment-method] with:
 
@@ -162,6 +205,8 @@ For `intent="stream"`, the `request` parameter contains:
 | `channelId` | string | REQUIRED | Unique channel ID (0x-prefixed 32-byte hex) |
 | `voucherEndpoint` | string | REQUIRED | HTTPS URL for voucher submission |
 | `minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
+| `maxUnsettled` | string | OPTIONAL | Maximum unsettled amount before server pauses streaming (base units). Server's risk tolerance. |
+| `settlementInterval` | string | OPTIONAL | Suggested settlement frequency in seconds (informational) |
 | `feePayer` | boolean | OPTIONAL | Server pays settlement fees (default: `false`) |
 
 Servers MUST generate cryptographically random `channelId` values (at least
@@ -178,6 +223,8 @@ Servers MUST generate cryptographically random `channelId` values (at least
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "voucherEndpoint": "https://api.example.com/payments/voucher",
   "minVoucherDelta": "1000",
+  "maxUnsettled": "100000",
+  "settlementInterval": "30",
   "feePayer": true
 }
 ```
@@ -491,6 +538,40 @@ by concurrent usage.
 Streaming vouchers authorize payment but do not guarantee service delivery.
 Clients SHOULD stop sending vouchers if service quality degrades. Servers
 SHOULD stop delivering service if vouchers are not received in a timely manner.
+
+### 11.7. Counterparty Risk (Server-Side)
+
+Unlike escrow-based payment channels, streaming channels with Access Keys
+do NOT lock funds at open. The server bears counterparty risk:
+
+- User may drain their wallet after streaming begins
+- Access Key may be revoked (if revocation is supported)
+- Settlement may fail due to insufficient funds
+
+**Mitigations:**
+
+1. **Frequent settlement**: Settle every `settlementInterval` seconds or
+   every `maxUnsettled` base units, whichever comes first
+2. **Pause on failure**: If settlement fails, pause streaming until user
+   tops up or provides a new Access Key
+3. **Balance checks**: Optionally verify balance >= accrued amount before
+   continuing to stream
+4. **Reputation/history**: Track user payment history for risk scoring
+
+Servers MUST define their risk tolerance via `maxUnsettled` and MUST NOT
+stream beyond that threshold without successful settlement.
+
+### 11.8. User Protections
+
+Users are protected by:
+
+- **Access Key limits**: The Access Key's spending limit caps total exposure
+- **Access Key expiry**: Keys expire, limiting long-term authorization
+- **Voucher transparency**: Users sign each voucher, maintaining awareness
+- **No lock-up**: Funds remain in user's wallet until settlement
+
+Users SHOULD provision dedicated Access Keys per channel with tight limits
+matching expected usage.
 
 ---
 
