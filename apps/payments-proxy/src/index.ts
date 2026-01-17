@@ -13,7 +13,7 @@ import {
 	parseAuthorization,
 } from '@tempo/paymentauth-protocol'
 import { calculateRequestPrice } from '@tempo/shared'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 import {
@@ -543,7 +543,8 @@ app.get('/', async (c) => {
 })
 
 // Discovery API - list all available services
-app.get('/discover', (c) => {
+// Support both /discover and /directory paths
+const discoverHandler = (c: Context<{ Bindings: Env }>) => {
 	const host = c.req.header('host') || 'payments.tempo.xyz'
 	const protocol = host.includes('localhost') ? 'http' : 'https'
 
@@ -588,10 +589,13 @@ app.get('/discover', (c) => {
 		timestamp: new Date().toISOString(),
 		services,
 	})
-})
+}
+
+app.get('/discover', discoverHandler)
+app.get('/directory', discoverHandler)
 
 // Get specific service info
-app.get('/discover/:slug', (c) => {
+const discoverSlugHandler = (c: Context<{ Bindings: Env }>) => {
 	const slug = c.req.param('slug')
 	const partner = getPartner(slug)
 
@@ -634,7 +638,10 @@ app.get('/discover/:slug', (c) => {
 				}
 			: { supported: false },
 	})
-})
+}
+
+app.get('/discover/:slug', discoverSlugHandler)
+app.get('/directory/:slug', discoverSlugHandler)
 
 // Voucher submission endpoint for streaming channels
 app.post('/:partner/voucher', async (c) => {

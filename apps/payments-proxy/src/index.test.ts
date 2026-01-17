@@ -674,5 +674,39 @@ describe('payments-proxy', () => {
 
 			expect(res.status).toBe(404)
 		})
+
+		it('should support /directory as alias for /discover', async () => {
+			const res = await app.request(
+				'/directory',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as {
+				version: string
+				services: Array<{ slug: string }>
+			}
+			expect(data.version).toBe('1.0')
+			expect(data.services.map((s) => s.slug)).toContain('openrouter')
+		})
+
+		it('should support /directory/:slug as alias for /discover/:slug', async () => {
+			const res = await app.request(
+				'/directory/openrouter',
+				{
+					method: 'GET',
+					headers: { Host: 'payments.testnet.tempo.xyz' },
+				},
+				mockEnv,
+			)
+
+			expect(res.status).toBe(200)
+			const data = (await res.json()) as { slug: string }
+			expect(data.slug).toBe('openrouter')
+		})
 	})
 })
