@@ -2,37 +2,32 @@
 	"name": "@tempo/payments-proxy",
 	"private": true,
 	"version": "0.0.1",
-	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
+		"dev": "wrangler dev --port 8787",
+		"build": "wrangler deploy --dry-run --outdir dist",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src",
 		"lint:fix": "biome check --write src",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage",
-		"deploy": "wrangler deploy"
+		"deploy:preview": "wrangler deploy --env preview",
+		"deploy:testnet": "wrangler deploy --env testnet",
+		"deploy:moderato": "wrangler deploy --env moderato",
+		"deploy:presto": "wrangler deploy --env presto"
 	},
 	"dependencies": {
 		"@tempo/paymentauth-protocol": "workspace:*",
 		"@tempo/shared": "workspace:*",
 		"@tempo/stream-channels": "workspace:*",
 		"hono": "^4.6.0",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0",
 		"viem": "^2.30.6",
 		"zod": "^3.24.0"
 	},
 	"devDependencies": {
-		"@cloudflare/vite-plugin": "^1.0.0",
 		"@cloudflare/vitest-pool-workers": "^0.5.0",
 		"@cloudflare/workers-types": "^4.20250115.0",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
-		"@vitejs/plugin-react": "^4.3.4",
 		"typescript": "^5.7.3",
-		"vite": "^6.0.0",
 		"vitest": "^2.1.0",
-		"wrangler": "^4.0.0"
+		"wrangler": "^4.59.2"
 	}
 }

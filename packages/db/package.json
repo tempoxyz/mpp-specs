@@ -9,6 +9,6 @@
 		"migrate:prod": "wrangler d1 migrations apply tempo-payments --remote"
 	},
 	"devDependencies": {
-		"wrangler": "^3.99.0"
+		"wrangler": "^3.114.17"
 	}
 }
