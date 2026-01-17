@@ -7,7 +7,7 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  *
  * Access 100+ LLMs through a unified API. No accounts needed—just pay and use.
  *
- * Pricing: Variable based on model, default $0.01 per request
+ * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
  * Popular models accessible via /v1/chat/completions
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
@@ -28,8 +28,8 @@ export const openrouter: PartnerConfig = {
 		{
 			path: '/v1/chat/completions',
 			methods: ['POST'],
-			price: PRICES.CENT_1,
-			description: 'Chat completions (GPT-4, Claude, Llama, etc.)',
+			dynamicPricing: true,
+			description: 'Chat completions (GPT-4, Claude, Llama, etc.) - price varies by model',
 		},
 	],
 }

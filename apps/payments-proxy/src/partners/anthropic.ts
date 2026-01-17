@@ -8,7 +8,7 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  * Access Claude models (Sonnet, Opus, Haiku) through Claude's API.
  * No accounts needed—just pay and use.
  *
- * Pricing: Variable based on model, default $0.01 per request
+ * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
  */
@@ -27,8 +27,8 @@ export const anthropic: PartnerConfig = {
 		{
 			path: '/v1/messages',
 			methods: ['POST'],
-			price: PRICES.CENT_1,
-			description: 'Create messages with Claude (Sonnet, Opus, Haiku)',
+			dynamicPricing: true,
+			description: 'Create messages with Claude (Sonnet, Opus, Haiku) - price varies by model',
 		},
 	],
 }

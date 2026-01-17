@@ -12,6 +12,7 @@ import {
 	PaymentVerificationFailedError,
 	parseAuthorization,
 } from '@tempo/paymentauth-protocol'
+import { calculateRequestPrice } from '@tempo/shared'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
@@ -498,17 +499,34 @@ app.all('/*', async (c) => {
 		}
 	}
 
-	// Endpoint requires payment - extract price info
-	const { price, description } = priceInfo
-
 	// Check for payment authorization
 	const authHeader = c.req.header('Authorization')
 
 	// Read the body early - it may become unavailable after async operations
 	// (transaction broadcast, receipt waiting, etc.)
 	let preReadBody: ArrayBuffer | null = null
+	let requestBody: unknown = null
 	if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
 		preReadBody = await c.req.raw.clone().arrayBuffer()
+		// Try to parse as JSON for dynamic pricing
+		try {
+			const textDecoder = new TextDecoder()
+			requestBody = JSON.parse(textDecoder.decode(preReadBody))
+		} catch {
+			// Not JSON - that's fine, we'll use default pricing
+		}
+	}
+
+	// Calculate price - use dynamic pricing if configured, otherwise use static price
+	let price: string
+	const { description } = priceInfo
+	if (priceInfo.dynamicPricing) {
+		// Dynamic pricing based on model and token estimation
+		const dynamicPrice = calculateRequestPrice(requestBody)
+		price = dynamicPrice.toString()
+	} else {
+		// Static pricing from endpoint config
+		price = priceInfo.price ?? partner.defaultPrice
 	}
 
 	if (!authHeader || !authHeader.startsWith('Payment ')) {

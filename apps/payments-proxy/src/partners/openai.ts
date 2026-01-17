@@ -8,7 +8,7 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  * Access GPT-4o, GPT-4, o1, Codex (gpt-5.2-codex), and other models.
  * No accounts needed—just pay and use.
  *
- * Pricing: Variable based on model, default $0.01 per request
+ * Pricing: Dynamic based on model and estimated tokens (10x provider cost)
  *
  * Only paid endpoints are listed below. All other endpoints pass through freely.
  */
@@ -28,8 +28,9 @@ export const openai: PartnerConfig = {
 		{
 			path: '/v1/responses',
 			methods: ['POST'],
-			price: PRICES.CENT_1,
-			description: 'Responses API (Codex: gpt-5.2-codex, gpt-5.1-codex-max, etc.)',
+			dynamicPricing: true,
+			description:
+				'Responses API (Codex: gpt-5.2-codex, gpt-5.1-codex-max, etc.) - price varies by model',
 		},
 		{
 			path: '/v1/responses/:id',
@@ -46,14 +47,14 @@ export const openai: PartnerConfig = {
 		{
 			path: '/v1/chat/completions',
 			methods: ['POST'],
-			price: PRICES.CENT_1,
-			description: 'Chat completions (GPT-4o, GPT-4, o1, etc.)',
+			dynamicPricing: true,
+			description: 'Chat completions (GPT-4o, GPT-4, o1, etc.) - price varies by model',
 		},
 		{
 			path: '/v1/embeddings',
 			methods: ['POST'],
-			price: PRICES.CENT_1,
-			description: 'Create embeddings',
+			dynamicPricing: true,
+			description: 'Create embeddings - price varies by model',
 		},
 		{
 			path: '/v1/images/generations',

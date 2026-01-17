@@ -8,12 +8,14 @@ export interface PartnerEndpoint {
 	path: string
 	/** HTTP methods this pricing applies to */
 	methods: string[]
-	/** Price in base units (e.g., "10000" = $0.01 with 6 decimals). Ignored if requiresPayment is false. */
+	/** Price in base units (e.g., "10000" = $0.01 with 6 decimals). Ignored if requiresPayment is false or dynamicPricing is true. */
 	price?: string
 	/** Whether this endpoint requires payment. Defaults to true. */
 	requiresPayment?: boolean
 	/** Human-readable description */
 	description?: string
+	/** Use dynamic pricing based on model and token estimation. When true, price is calculated from request body. */
+	dynamicPricing?: boolean
 }
 
 /**
@@ -66,10 +68,12 @@ export interface Env {
 export interface PriceInfo {
 	/** Whether this endpoint requires payment */
 	requiresPayment: boolean
-	/** Price in base units (only relevant if requiresPayment is true) */
-	price: string
+	/** Price in base units (only relevant if requiresPayment is true). Null if dynamicPricing is true. */
+	price: string | null
 	/** Human-readable description */
 	description?: string
+	/** Whether this endpoint uses dynamic pricing based on request body */
+	dynamicPricing?: boolean
 }
 
 /**
@@ -98,10 +102,12 @@ export function getPriceForRequest(
 			if (regex.test(normalizedPath)) {
 				// Endpoint matched - check if it requires payment
 				const requiresPayment = endpoint.requiresPayment !== false
+				const dynamicPricing = endpoint.dynamicPricing === true
 				return {
 					requiresPayment,
-					price: endpoint.price ?? partner.defaultPrice,
+					price: dynamicPricing ? null : (endpoint.price ?? partner.defaultPrice),
 					description: endpoint.description,
+					dynamicPricing,
 				}
 			}
 		}
