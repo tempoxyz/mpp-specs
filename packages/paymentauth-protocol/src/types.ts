@@ -9,30 +9,8 @@ export type PaymentMethod = 'tempo' | 'x402' | (string & {})
 /**
  * Payment intent type.
  * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-7
- *
- * Note: 'approve' is DEPRECATED and will be removed in a future version.
- * Use 'authorize' instead. Servers MUST accept both during the transition period.
  */
-export type PaymentIntent =
-	| 'charge'
-	| 'authorize'
-	| 'approve' // DEPRECATED: use 'authorize'
-	| 'subscription'
-	| 'stream'
-	| (string & {})
-
-/**
- * Normalize payment intent, converting deprecated names to current ones.
- * @param intent - The intent from client request
- * @returns The normalized intent name
- */
-export function normalizeIntent(intent: PaymentIntent): PaymentIntent {
-	if (intent === 'approve') {
-		console.warn('[DEPRECATED] intent="approve" is deprecated, use "authorize" instead')
-		return 'authorize'
-	}
-	return intent
-}
+export type PaymentIntent = 'charge' | 'authorize' | 'subscription' | 'stream' | (string & {})
 
 /**
  * Payment challenge sent in WWW-Authenticate header.
@@ -203,10 +181,6 @@ export interface PaymentReceipt {
 	timestamp: string
 	/** Method-specific reference (e.g., transaction hash) */
 	reference: string
-	/** TIP-20 token used for fees (only if server sponsored fees) */
-	feeToken?: Address
-	/** Server's fee payer address (only if server sponsored fees) */
-	feePayer?: Address
 }
 
 /**
@@ -221,12 +195,5 @@ export interface PaymentError {
 		| 'payment_verification_failed'
 		| 'payment_method_unsupported'
 		| 'malformed_proof'
-		| 'fee_unavailable'
-		| 'fee_token_rejected'
-		| 'fee_limit_exceeded'
-		| 'fee_slippage_exceeded'
-		| 'fee_payer_overloaded'
 	message: string
-	/** Seconds to wait before retry (for 429/503 errors) */
-	retry_after?: number
 }
