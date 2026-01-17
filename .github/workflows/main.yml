@@ -63,6 +63,9 @@ jobs:
             env: moderato
           - app: reth-snapshots
             env: mainnet
+          # Presto auth - static wallet connect page
+          - app: presto-auth
+            deploy_cmd: "pages deploy public --project-name=presto-auth --branch=main"
 
     steps:
       - uses: actions/checkout@v6
@@ -98,4 +101,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/${{ matrix.app }}
           packageManager: pnpm
-          command: deploy ${{ matrix.env && format('--env {0}', matrix.env) || '' }}
+          command: ${{ matrix.deploy_cmd || format('deploy {0}', matrix.env && format('--env {0}', matrix.env) || '') }}

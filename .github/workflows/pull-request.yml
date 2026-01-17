@@ -35,6 +35,8 @@ jobs:
           - app: paymentauth-tetris
           - app: paymentauth-x402
           - app: reth-snapshots
+          - app: presto-auth
+            deploy_cmd: "pages deploy public --project-name=presto-auth --branch=${{ github.head_ref }}"
     env:
       NODE_ENV: production
     steps:
@@ -69,7 +71,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/${{ matrix.app }}
           packageManager: pnpm
-          command: deploy --env preview
+          command: ${{ matrix.deploy_cmd || 'deploy --env preview' }}
 
       - name: Save Deployment Info
         if: always()

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presto - Wallet Setup</title>
+  <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-surface: #111111;
+      --bg-elevated: #1a1a1a;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --accent-dim: rgba(59, 130, 246, 0.1);
+      --success: #22c55e;
+      --success-dim: rgba(34, 197, 94, 0.1);
+      --error: #ef4444;
+      --error-dim: rgba(239, 68, 68, 0.1);
+      --border: #27272a;
+      --border-light: #3f3f46;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+    
+    .container { max-width: 420px; width: 100%; }
+    
+    /* Header */
+    .header { margin-bottom: 32px; text-align: center; }
+    .logo { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .network-badge {
+      display: inline-block; margin-left: 8px; padding: 2px 8px;
+      background: var(--accent-dim); border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 4px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; color: var(--accent); vertical-align: middle;
+    }
+    .tagline { color: var(--text-muted); font-size: 14px; margin-top: 8px; line-height: 1.5; }
+    
+    /* Progress steps */
+    .progress {
+      display: flex; justify-content: center; gap: 8px;
+      margin-bottom: 24px; padding: 0 20px;
+    }
+    .progress-step {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      flex: 1; max-width: 80px;
+    }
+    .progress-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border); transition: all 0.2s;
+    }
+    .progress-dot.active { background: var(--accent); transform: scale(1.2); }
+    .progress-dot.completed { background: var(--success); }
+    .progress-label {
+      font-size: 11px; color: var(--text-muted); text-align: center;
+      white-space: nowrap;
+    }
+    .progress-step.active .progress-label { color: var(--text-secondary); }
+    .progress-step.completed .progress-label { color: var(--success); }
+    
+    /* Card */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .step-number {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent-dim); color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .step-number.completed { background: var(--success-dim); color: var(--success); }
+    .card-title { font-size: 16px; font-weight: 600; }
+    .card-body { padding: 20px; }
+    
+    .step { display: none; }
+    .step.active { display: block; }
+    
+    /* Typography */
+    .description {
+      color: var(--text-secondary); font-size: 14px; line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .hint {
+      color: var(--text-muted); font-size: 12px; line-height: 1.5;
+      margin-top: 16px; text-align: center;
+    }
+    
+    /* Buttons */
+    .btn {
+      width: 100%; height: 48px; padding: 0 20px;
+      font-size: 15px; font-weight: 500;
+      border: none; border-radius: 12px; cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn + .btn { margin-top: 10px; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    
+    .btn-primary {
+      background: var(--accent); color: white;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    
+    .btn-secondary {
+      background: var(--bg-elevated); color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #252525; border-color: var(--border-light); }
+    
+    .btn-success {
+      background: var(--success-dim); color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .btn-back {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 13px; cursor: pointer; padding: 8px 0;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .btn-back:hover { color: var(--text-secondary); }
+    
+    /* Data display */
+    .data-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .data-label {
+      color: var(--text-muted); font-size: 11px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+    .data-value {
+      font-family: 'SF Mono', ui-monospace, monospace;
+      font-size: 13px; word-break: break-all;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .data-value a { color: var(--accent); text-decoration: none; }
+    .data-value a:hover { text-decoration: underline; }
+    
+    .copy-btn {
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 8px; font-size: 11px;
+      color: var(--text-muted); cursor: pointer; white-space: nowrap;
+    }
+    .copy-btn:hover { color: var(--text-secondary); border-color: var(--border-light); }
+    .copy-btn.copied { color: var(--success); border-color: rgba(34, 197, 94, 0.3); }
+    
+    /* Status messages */
+    .error-box {
+      background: var(--error-dim);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-box[role="alert"] { display: block; }
+    
+    .info-box {
+      background: var(--accent-dim);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: var(--accent);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .success-box {
+      background: var(--success-dim);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: var(--success);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    
+    /* Loading */
+    .spinner {
+      display: inline-block; width: 18px; height: 18px;
+      border: 2px solid transparent; border-top-color: currentColor;
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .loading-state { text-align: center; padding: 48px 20px; }
+    .loading-state .spinner { width: 32px; height: 32px; border-width: 3px; margin-bottom: 16px; }
+    .loading-state p { color: var(--text-secondary); font-size: 14px; }
+    
+    /* Success state */
+    .success-state { text-align: center; padding: 32px 20px; }
+    .success-icon { font-size: 56px; margin-bottom: 16px; }
+    .success-state h2 { font-size: 20px; margin-bottom: 8px; }
+    .success-state p { color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; }
+    
+    /* Balance display */
+    .balance-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .balance-row:last-child { border-bottom: none; }
+    .balance-label { color: var(--text-secondary); font-size: 14px; }
+    .balance-value { font-size: 16px; font-weight: 600; }
+    .balance-value.loading { color: var(--text-muted); }
+    
+    /* Responsive */
+    @media (max-width: 480px) {
+      .container { padding: 16px; }
+      .card-body { padding: 16px; }
+      .progress-label { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <span>Presto</span>
+        <span class="network-badge" id="network-badge">Testnet</span>
+      </div>
+      <p class="tagline">Set up your wallet to pay for AI with crypto</p>
+    </div>
+    
+    <div class="progress">
+      <div class="progress-step active" id="progress-1">
+        <div class="progress-dot active" id="dot-1"></div>
+        <span class="progress-label">Sign in</span>
+      </div>
+      <div class="progress-step" id="progress-2">
+        <div class="progress-dot" id="dot-2"></div>
+        <span class="progress-label">Add funds</span>
+      </div>
+      <div class="progress-step" id="progress-3">
+        <div class="progress-dot" id="dot-3"></div>
+        <span class="progress-label">CLI key</span>
+      </div>
+      <div class="progress-step" id="progress-4">
+        <div class="progress-dot" id="dot-4"></div>
+        <span class="progress-label">Done</span>
+      </div>
+    </div>
+    
+    <div id="error" class="error-box"></div>
+    
+    <div class="card">
+      <!-- Loading state -->
+      <div id="loading" class="step card-body loading-state">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading...</p>
+      </div>
+      
+      <!-- Step 1: Passkey sign-in -->
+      <div id="step-auth" class="step active">
+        <div class="card-header">
+          <div class="step-number">1</div>
+          <h2 class="card-title">Sign in with passkey</h2>
+        </div>
+        <div class="card-body">
+          <p class="description">
+            Use Face ID, Touch ID, or your device password. No seed phrases or extensions needed.
+          </p>
+          <p id="js-status" style="color: var(--text-muted); font-size: 12px; margin-bottom: 16px; text-align: center;">Loading...</p>
+          <button class="btn btn-primary" id="btn-create" onclick="createWallet()">
+            Create new wallet
+          </button>
+          <button class="btn btn-secondary" id="btn-signin" onclick="signInWallet()">
+            Use existing passkey
+          </button>
+          <p class="hint">Your passkey is stored securely by your browser or device.</p>
+        </div>
+      </div>
+      
+      <!-- Step 2: Add funds -->
+      <div id="step-funds" class="step">
+        <div class="card-header">
+          <div class="step-number">2</div>
+          <h2 class="card-title">Add funds</h2>
+        </div>
+        <div class="card-body">
+          <p class="description">
+            You need a small amount of testnet credits to register your CLI key. This is free and takes a few seconds.
+          </p>
+          
+          <div class="data-card">
+            <div class="data-label">Your wallet</div>
+            <div class="data-value">
+              <a id="wallet-link" href="#" target="_blank"></a>
+              <button class="copy-btn" onclick="copyAddress()">Copy</button>
+            </div>
+          </div>
+          
+          <div class="data-card">
+            <div class="balance-row">
+              <span class="balance-label">Balance</span>
+              <span class="balance-value" id="balance">Loading...</span>
+            </div>
+          </div>
+          
+          <div id="faucet-success" class="success-box" style="display: none; margin-bottom: 12px;">
+            <span>✓</span>
+            <span>Funds received! Balance updating...</span>
+          </div>
+          
+          <button class="btn btn-secondary" id="btn-faucet" onclick="requestFaucet()">
+            Get free testnet credits
+          </button>
+          <button class="btn btn-primary" id="btn-continue-funds" onclick="goToAccessKey()">
+            Continue
+          </button>
+          
+          <button class="btn-back" onclick="goToStep('step-auth')">← Back to sign in</button>
+        </div>
+      </div>
+      
+      <!-- Step 3: Create CLI key -->
+      <div id="step-access-key" class="step">
+        <div class="card-header">
+          <div class="step-number">3</div>
+          <h2 class="card-title">Create CLI key</h2>
+        </div>
+        <div class="card-body">
+          <p class="description">
+            Generate a temporary key for Presto to sign transactions. It expires in 24 hours and you can create a new one anytime.
+          </p>
+          
+          <div class="data-card">
+            <div class="data-label">Wallet</div>
+            <div class="data-value" id="wallet-address-display"></div>
+          </div>
+          
+          <div id="key-created-info" style="display: none;">
+            <div class="success-box" style="margin-bottom: 12px;">
+              <span>✓</span>
+              <span>CLI key registered on-chain</span>
+            </div>
+            <div class="data-card">
+              <div class="data-label">Key ID</div>
+              <div class="data-value">
+                <a id="access-key-link" href="#" target="_blank"></a>
+              </div>
+            </div>
+            <div class="data-card">
+              <div class="data-label">Expires</div>
+              <div class="data-value" id="key-expiry">24 hours</div>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary" id="btn-create-key" onclick="createAccessKey()">
+            Create CLI key
+          </button>
+          <button class="btn btn-primary" id="btn-finish" style="display: none;" onclick="finish()">
+            Finish setup
+          </button>
+          
+          <button class="btn-back" onclick="goToStep('step-funds')">← Back to funds</button>
+        </div>
+      </div>
+      
+      <!-- Step 4: Success -->
+      <div id="step-success" class="step">
+        <div class="card-body success-state">
+          <div class="success-icon">✓</div>
+          <h2>You're all set!</h2>
+          <p>Return to your terminal to start using Presto.</p>
+          <div class="info-box">
+            This window will close automatically. If not, you can safely close it.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module">
+    // Import viem with Tempo support
+    let createClient, http, publicActions, walletActions, Account, tempoActions, WebAuthnP256, Secp256k1;
+    
+    try {
+      const viem = await import('https://esm.sh/viem@2.43.5');
+      createClient = viem.createClient;
+      http = viem.http;
+      publicActions = viem.publicActions;
+      walletActions = viem.walletActions;
+      
+      const viemTempo = await import('https://esm.sh/viem@2.43.5/tempo');
+      Account = viemTempo.Account;
+      tempoActions = viemTempo.tempoActions;
+      WebAuthnP256 = viemTempo.WebAuthnP256;
+      Secp256k1 = viemTempo.Secp256k1;
+      
+      document.getElementById('js-status').textContent = '✓ Ready';
+      document.getElementById('js-status').style.color = 'var(--success)';
+    } catch (e) {
+      console.error('[Presto] Failed to load modules:', e);
+      document.getElementById('js-status').textContent = 'Failed to load. Please refresh.';
+      document.getElementById('js-status').style.color = 'var(--error)';
+      showError('Failed to load required modules. Please refresh the page.');
+    }
+    
+    // Constants
+    const STORAGE_KEY = 'presto_wallet';
+    
+    // Network configuration
+    const NETWORKS = {
+      mainnet: { 
+        explorer: 'https://explore.tempo.xyz', 
+        feeToken: '0x20c00000000000000000000016c6514b53947fdc',
+        feeTokenName: 'USD',
+        chainId: 4217,
+        rpcUrl: 'https://rpc.mainnet.tempo.xyz',
+        isTestnet: false,
+      },
+      moderato: { 
+        explorer: 'https://explore.moderato.tempo.xyz', 
+        feeToken: '0x20c0000000000000000000000000000000000001',
+        feeTokenName: 'Credits',
+        chainId: 42431,
+        rpcUrl: 'https://rpc.moderato.tempo.xyz',
+        isTestnet: true,
+      },
+    };
+    
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const callbackUrl = params.get('callback');
+    const state = params.get('state');
+    const networkParam = params.get('network') || 'moderato';
+    const existingAccount = params.get('account');
+    
+    // Set network config
+    const network = NETWORKS[networkParam] || NETWORKS.moderato;
+    const EXPLORER_URL = network.explorer;
+    const FEE_TOKEN = network.feeToken;
+    const FEE_TOKEN_NAME = network.feeTokenName;
+    const RPC_URL = network.rpcUrl;
+    const tempoChain = { id: network.chainId, name: networkParam };
+    
+    // Update network badge
+    const badge = document.getElementById('network-badge');
+    badge.textContent = network.isTestnet ? 'Testnet' : 'Mainnet';
+    if (!network.isTestnet) {
+      badge.style.background = 'var(--success-dim)';
+      badge.style.color = 'var(--success)';
+      badge.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+    }
+    
+    // State
+    let wallet = null;
+    let rootAccount = null;
+    let accessKeyData = null;
+    let currentBalance = 0;
+    
+    // Step management
+    function showStep(stepId) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById(stepId).classList.add('active');
+      
+      // Update progress
+      const stepNum = { 'step-auth': 1, 'step-funds': 2, 'step-access-key': 3, 'step-success': 4 }[stepId] || 1;
+      for (let i = 1; i <= 4; i++) {
+        const step = document.getElementById(`progress-${i}`);
+        const dot = document.getElementById(`dot-${i}`);
+        step.classList.remove('active', 'completed');
+        dot.classList.remove('active', 'completed');
+        
+        if (i < stepNum) {
+          step.classList.add('completed');
+          dot.classList.add('completed');
+        } else if (i === stepNum) {
+          step.classList.add('active');
+          dot.classList.add('active');
+        }
+      }
+    }
+    window.goToStep = showStep;
+    
+    function showLoading(text) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById('loading').classList.add('active');
+      document.getElementById('loading-text').textContent = text;
+    }
+    
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.setAttribute('role', 'alert');
+      el.style.display = 'block';
+    }
+    
+    function hideError() {
+      const el = document.getElementById('error');
+      el.removeAttribute('role');
+      el.style.display = 'none';
+    }
+    
+    // Load existing wallet from storage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try { wallet = JSON.parse(stored); } catch (_e) {}
+    }
+    
+    // Copy address helper
+    window.copyAddress = async () => {
+      const addr = rootAccount?.address || wallet?.address;
+      if (!addr) return;
+      
+      await navigator.clipboard.writeText(addr);
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    };
+    
+    // Create new wallet
+    window.createWallet = async () => {
+      const btn = document.getElementById('btn-create');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      document.getElementById('btn-signin').disabled = true;
+      
+      hideError();
+      showLoading('Creating wallet with passkey...');
+      
+      try {
+        const credential = await WebAuthnP256.createCredential({ label: 'Presto Wallet' });
+        
+        rootAccount = Account.fromWebAuthnP256({
+          id: credential.id,
+          publicKey: credential.publicKey,
+        });
+        
+        wallet = {
+          credentialId: credential.id,
+          publicKey: credential.publicKey,
+          address: rootAccount.address,
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(wallet));
+        
+        setupWalletUI();
+        showStep('step-funds');
+        await updateBalance();
+        
+      } catch (e) {
+        document.getElementById('btn-create').disabled = false;
+        document.getElementById('btn-signin').disabled = false;
+        showStep('step-auth');
+        
+        if (e.name === 'NotAllowedError') {
+          showError('Passkey creation was cancelled. Please try again.');
+        } else {
+          showError(e.message || 'Failed to create wallet');
+        }
+      }
+    };
+    
+    // Sign in with existing wallet
+    window.signInWallet = async () => {
+      const btn = document.getElementById('btn-signin');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      document.getElementById('btn-create').disabled = true;
+      
+      hideError();
+      
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+        document.getElementById('btn-create').disabled = false;
+        document.getElementById('btn-signin').disabled = false;
+        showError('No existing wallet found. Please create a new one.');
+        return;
+      }
+      
+      showLoading('Signing in with passkey...');
+      
+      try {
+        wallet = JSON.parse(stored);
+        
+        rootAccount = Account.fromWebAuthnP256({
+          id: wallet.credentialId,
+          publicKey: wallet.publicKey,
+        });
+        
+        setupWalletUI();
+        showStep('step-funds');
+        await updateBalance();
+        
+      } catch (e) {
+        document.getElementById('btn-create').disabled = false;
+        document.getElementById('btn-signin').disabled = false;
+        showStep('step-auth');
+        
+        if (e.name === 'NotAllowedError') {
+          showError('Passkey verification was cancelled. Please try again.');
+        } else {
+          showError(e.message || 'Failed to sign in');
+        }
+      }
+    };
+    
+    function setupWalletUI() {
+      const addr = rootAccount?.address || wallet?.address;
+      const shortAddr = addr ? `${addr.slice(0, 8)}...${addr.slice(-6)}` : '';
+      
+      document.getElementById('wallet-link').href = `${EXPLORER_URL}/address/${addr}`;
+      document.getElementById('wallet-link').textContent = shortAddr;
+      document.getElementById('wallet-address-display').textContent = shortAddr;
+    }
+    
+    window.goToAccessKey = () => {
+      hideError();
+      showStep('step-access-key');
+    };
+    
+    // Create access key
+    window.createAccessKey = async () => {
+      if (!wallet || !rootAccount) return;
+      
+      const btn = document.getElementById('btn-create-key');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      
+      hideError();
+      showLoading('Generating CLI key...');
+      
+      try {
+        const accessKeyPrivate = Secp256k1.randomPrivateKey();
+        const accessKeyAccount = Account.fromSecp256k1(accessKeyPrivate, {
+          access: rootAccount,
+        });
+        
+        const expiry = BigInt(Math.floor(Date.now() / 1000) + 24 * 60 * 60);
+        
+        showLoading('Authorizing with passkey...');
+        
+        const keyAuthorization = await rootAccount.signKeyAuthorization(accessKeyAccount, { expiry });
+        
+        showLoading('Registering on blockchain...');
+        
+        const client = createClient({
+          account: accessKeyAccount,
+          chain: tempoChain,
+          transport: http(RPC_URL),
+        }).extend(publicActions).extend(walletActions).extend(tempoActions());
+        
+        const receipt = await client.sendTransactionSync({
+          keyAuthorization,
+          to: rootAccount.address,
+          value: 0n,
+          feeToken: FEE_TOKEN,
+          gas: 100000n,
+        });
+        
+        const accessKeyAddress = accessKeyAccount.accessKeyAddress;
+        const shortKeyId = `${accessKeyAddress.slice(0, 10)}...${accessKeyAddress.slice(-8)}`;
+        
+        accessKeyData = {
+          privateKey: accessKeyPrivate,
+          keyId: accessKeyAddress,
+          accountAddress: rootAccount.address,
+          expiry: Number(expiry),
+          txHash: receipt.transactionHash,
+        };
+        
+        localStorage.setItem('presto_access_key', JSON.stringify({
+          keyId: accessKeyAddress,
+          accountAddress: rootAccount.address,
+          expiry: Number(expiry),
+          txHash: receipt.transactionHash,
+          createdAt: Date.now(),
+        }));
+        
+        // Update UI
+        document.getElementById('access-key-link').href = `${EXPLORER_URL}/tx/${receipt.transactionHash}`;
+        document.getElementById('access-key-link').textContent = shortKeyId;
+        document.getElementById('key-created-info').style.display = 'block';
+        document.getElementById('btn-create-key').style.display = 'none';
+        document.getElementById('btn-finish').style.display = 'flex';
+        
+        showStep('step-access-key');
+        
+      } catch (e) {
+        document.getElementById('btn-create-key').disabled = false;
+        showStep('step-access-key');
+        
+        if (e.name === 'NotAllowedError') {
+          showError('Passkey authorization was cancelled.');
+        } else if (e.message?.includes('insufficient funds')) {
+          showError('Not enough funds. Go back and get testnet credits first.');
+        } else {
+          showError(e.message || 'Failed to create CLI key');
+        }
+      }
+    };
+    
+    // Request faucet
+    window.requestFaucet = async () => {
+      if (!wallet || !callbackUrl) {
+        showError('Run "presto" from your terminal first.');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-faucet');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Requesting...';
+      
+      try {
+        const faucetUrl = callbackUrl.replace('/callback', '/faucet');
+        const res = await fetch(faucetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: rootAccount?.address || wallet.address }),
+        });
+        
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        
+        document.getElementById('faucet-success').style.display = 'flex';
+        btn.textContent = '✓ Funds received';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-success');
+        
+        // Poll for balance update
+        setTimeout(updateBalance, 2000);
+        setTimeout(updateBalance, 5000);
+        
+      } catch (e) {
+        btn.innerHTML = 'Get free testnet credits';
+        btn.disabled = false;
+        showError(e.message || 'Failed to request funds');
+      }
+    };
+    
+    async function updateBalance() {
+      const addr = rootAccount?.address || wallet?.address;
+      if (!addr || !callbackUrl) return;
+      
+      try {
+        const balanceUrl = callbackUrl.replace('/callback', '/balance');
+        const res = await fetch(balanceUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: addr, token: FEE_TOKEN }),
+        });
+        
+        const data = await res.json();
+        if (data.balance !== undefined) {
+          currentBalance = data.balance / 1e6;
+          document.getElementById('balance').textContent = `${currentBalance.toFixed(2)} ${FEE_TOKEN_NAME}`;
+          document.getElementById('balance').classList.remove('loading');
+        }
+      } catch (e) {
+        console.error('Balance fetch error:', e);
+        document.getElementById('balance').textContent = 'Error loading';
+      }
+    }
+    
+    // Finish and send to CLI
+    window.finish = async () => {
+      if (!accessKeyData || !callbackUrl) {
+        if (!callbackUrl) {
+          showError('No callback URL. Run "presto" from your terminal.');
+        } else {
+          showError('Please create a CLI key first.');
+        }
+        return;
+      }
+      
+      const btn = document.getElementById('btn-finish');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Finishing...';
+      
+      const payload = {
+        access_key: accessKeyData.privateKey,
+        account_address: accessKeyData.accountAddress,
+        key_id: accessKeyData.keyId,
+        expiry: accessKeyData.expiry,
+        tx_hash: accessKeyData.txHash,
+      };
+      
+      try {
+        const res = await fetch(callbackUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        if (res.ok) {
+          showStep('step-success');
+          setTimeout(() => window.close(), 2000);
+          return;
+        }
+      } catch (_e) {
+        // POST failed, try GET fallback
+      }
+      
+      // Fallback to GET
+      const url = new URL(callbackUrl);
+      url.searchParams.set('access_key', accessKeyData.privateKey);
+      url.searchParams.set('account_address', accessKeyData.accountAddress);
+      url.searchParams.set('key_id', accessKeyData.keyId);
+      url.searchParams.set('expiry', accessKeyData.expiry.toString());
+      if (state) url.searchParams.set('state', state);
+      
+      window.location.href = url.toString();
+    };
+    
+    // Initial state
+    if (!callbackUrl) {
+      showError('Run "presto" from your terminal to start setup.');
+    }
+    
+    // Handle existing account (for /newkey flow)
+    if (existingAccount && callbackUrl) {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          wallet = JSON.parse(stored);
+          if (wallet.address === existingAccount) {
+            rootAccount = Account.fromWebAuthnP256({
+              id: wallet.credentialId,
+              publicKey: wallet.publicKey,
+            });
+            setupWalletUI();
+            showStep('step-access-key');
+          } else {
+            wallet = { address: existingAccount };
+            showError('Please sign in with your passkey to create a new CLI key.');
+            showStep('step-auth');
+          }
+        } catch (_e) {
+          wallet = { address: existingAccount };
+          showError('Please sign in with your passkey to create a new CLI key.');
+          showStep('step-auth');
+        }
+      } else {
+        wallet = { address: existingAccount };
+        showError('Please sign in with your passkey to create a new CLI key.');
+        showStep('step-auth');
+      }
+    }
+    
+    // Notify on close
+    window.addEventListener('beforeunload', () => {
+      if (callbackUrl) {
+        const abortUrl = callbackUrl.replace('/callback', '/abort');
+        navigator.sendBeacon(abortUrl, '');
+      }
+    });
+  </script>
+</body>
+</html>

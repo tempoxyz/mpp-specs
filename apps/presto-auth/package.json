@@ -1,0 +1,14 @@
+{
+	"name": "@tempo/presto-auth",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "wrangler pages dev public --port 8788",
+		"deploy:preview": "wrangler pages deploy public --project-name=presto-auth --branch=preview",
+		"deploy:prod": "wrangler pages deploy public --project-name=presto-auth --branch=main",
+		"typecheck": "echo 'No TypeScript in static site'"
+	},
+	"devDependencies": {
+		"wrangler": "catalog:"
+	}
+}

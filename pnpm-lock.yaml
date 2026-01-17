@@ -276,6 +276,12 @@ importers:
         specifier: ^3.99.0
         version: 3.114.17(@cloudflare/workers-types@4.20260116.0)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
 
+  apps/presto-auth:
+    devDependencies:
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.59.2(@cloudflare/workers-types@4.20260116.0)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+
   apps/reth-snapshots:
     dependencies:
       '@ai-payments/protocol':
