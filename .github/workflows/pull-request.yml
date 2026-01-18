@@ -64,7 +64,7 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: pnpm build
 
-      - name: Deploy Preview
+      - name: Upload Preview Version
         if: steps.changes.outputs.relevant == 'true'
         id: deploy
         uses: cloudflare/wrangler-action@v3
@@ -73,7 +73,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/${{ matrix.app }}
           packageManager: pnpm
-          command: ${{ matrix.deploy_cmd || 'deploy --env preview' }}
+          # versions upload creates a preview without affecting production
+          # deploy would activate the version and update production
+          command: ${{ matrix.deploy_cmd || 'versions upload' }}
 
       - name: Save Deployment Info
         if: always()
@@ -84,15 +86,17 @@ jobs:
           if [[ "${{ steps.changes.outputs.relevant }}" != "true" ]]; then
             STATUS="skipped"
             DEPLOYMENT_URL=""
-            ALIAS_URL=""
           elif [[ "${{ steps.deploy.outcome }}" == "success" ]]; then
             STATUS="success"
+            # Use wrangler's deployment-url output (includes version preview URL)
             DEPLOYMENT_URL="${{ steps.deploy.outputs.deployment-url }}"
-            ALIAS_URL="${{ steps.deploy.outputs.pages-deployment-alias-url }}"
+            # Fallback to pages alias URL for Pages deployments
+            if [[ -z "$DEPLOYMENT_URL" && -n "${{ steps.deploy.outputs.pages-deployment-alias-url }}" ]]; then
+              DEPLOYMENT_URL="${{ steps.deploy.outputs.pages-deployment-alias-url }}"
+            fi
           else
             STATUS="failed"
             DEPLOYMENT_URL=""
-            ALIAS_URL=""
           fi
 
           FILENAME="deployment-info/${{ matrix.app }}.json"
@@ -100,8 +104,7 @@ jobs:
           {
             "app": "${{ matrix.app }}",
             "status": "$STATUS",
-            "deployment_url": "$DEPLOYMENT_URL",
-            "deployment_alias_url": "$ALIAS_URL"
+            "deployment_url": "$DEPLOYMENT_URL"
           }
           EOF
 

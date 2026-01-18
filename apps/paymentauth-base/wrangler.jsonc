@@ -5,6 +5,8 @@
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": { "enabled": true },
+	"workers_dev": true,
+	"preview_urls": true,
 	"routes": [
 		{ "pattern": "paymentauth-base.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
 	]

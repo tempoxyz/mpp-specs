@@ -67,7 +67,7 @@ runs:
 
             let preview = '-'
             if (deployment.status === 'success') {
-              const url = deployment.deployment_alias_url || deployment.deployment_url
+              const url = deployment.deployment_url
               if (url) {
                 preview = `[View Preview](${url})`
               }

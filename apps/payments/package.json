@@ -6,12 +6,13 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check src",
 		"lint:fix": "biome check --write src",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage",
-		"deploy:prod": "wrangler deploy"
+		"deploy": "wrangler deploy"
 	},
 	"dependencies": {
 		"@tempo/paymentauth-protocol": "workspace:*",

@@ -4,18 +4,9 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
-	"workers_dev": false,
+	"observability": { "enabled": true },
+	"workers_dev": true,
 	"preview_urls": true,
-	"keep_vars": true,
-	"observability": {
-		"enabled": true,
-		"logs": {
-			"enabled": true,
-			"head_sampling_rate": 1,
-			"invocation_logs": true,
-			"persist": true
-		}
-	},
 
 	// Bindings - uncomment as needed
 	// "d1_databases": [
@@ -36,62 +27,8 @@
 	//   { "binding": "PAYMENTS_WORKER", "service": "payments" }
 	// ],
 
-	// Default vars inherited by all environments
 	"vars": {
-		"ENVIRONMENT": "development",
-		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
-		"TEMPO_RPC_USERNAME": "REDACTED_USERNAME",
-		"TEMPO_RPC_PASSWORD": "REDACTED_PASSWORD"
+		"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 	},
-
-	"env": {
-		"preview": {
-			"name": "_template-preview",
-			"workers_dev": true,
-			"routes": [], // Explicitly no custom domain routes - preview only accessible via workers.dev
-			"vars": {
-				"ENVIRONMENT": "preview"
-			}
-		},
-		// Canonical testnet - _template.testnet.tempo.xyz
-		"testnet": {
-			"name": "_template-testnet",
-			"routes": [
-				{
-					"pattern": "_template.testnet.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "testnet",
-				"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz"
-			}
-		},
-		// Moderato chain-specific - _template.moderato.tempo.xyz
-		"moderato": {
-			"name": "_template-moderato",
-			"routes": [
-				{
-					"pattern": "_template.moderato.tempo.xyz",
-					"zone_name": "tempo.xyz",
-					"custom_domain": true
-				}
-			],
-			"vars": {
-				"ENVIRONMENT": "moderato"
-			}
-		},
-		// Mainnet production - _template.tempo.xyz
-		"mainnet": {
-			"name": "_template-mainnet",
-			"routes": [
-				{ "pattern": "_template.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
-			],
-			"vars": {
-				"ENVIRONMENT": "mainnet",
-				"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
-			}
-		}
-	}
+	"routes": [{ "pattern": "_template.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
 }

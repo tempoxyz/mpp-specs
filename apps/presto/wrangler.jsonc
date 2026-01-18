@@ -4,18 +4,12 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
-	"observability": {
-		"enabled": true
-	},
+	"observability": { "enabled": true },
+	"workers_dev": true,
+	"preview_urls": true,
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS"
 	},
-	"routes": [
-		{
-			"pattern": "presto.tempo.xyz",
-			"zone_name": "tempo.xyz",
-			"custom_domain": true
-		}
-	]
+	"routes": [{ "pattern": "presto.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
 }

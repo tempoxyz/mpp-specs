@@ -406,49 +406,38 @@ app.post('/webhooks/tempo', async (c) => {
 
 ## Deployment
 
+Each app has two deployment targets:
+- **Production**: Custom domain (e.g., `payments.tempo.xyz`) - deployed on merge to main
+- **Preview**: Workers.dev URL (e.g., `payments-preview.<account>.workers.dev`) - deployed on PRs
+
+### Production Deployments
+
+On merge to main, each app deploys to its custom domain:
+
+```bash
+# Manual production deploy
+pnpm --filter @tempo/payments deploy
+```
+
+All apps use `https://rpc.tempo.xyz` as the RPC endpoint.
+
 ### Preview Deployments
 
-Every branch gets a preview URL:
-- Pattern: `https://<branch>-<app>.tempo-preview.workers.dev`
-- Automatic on push to non-main branches
-- Uses preview environment bindings
+PRs automatically get preview deployments:
+- Pattern: `https://<app>-preview.<account>.workers.dev`
+- Triggered by the PR workflow running `wrangler deploy --env preview`
+- Uses same bindings as production (KV namespaces use `preview_id` where configured)
 
 ```bash
 # Manual preview deploy
-pnpm --filter @tempo/api deploy:preview
+pnpm --filter @tempo/payments deploy:preview
 ```
-
-### Multi-Environment Deployments
-
-All apps deploy to both testnet (Moderato) and production (Presto) environments on merge to main:
-
-| Environment | RPC URL | Domain Patterns |
-|-------------|---------|-----------------|
-| `moderato` | `https://rpc.moderato.tempo.xyz` | `*-testnet.tempo.xyz` (canonical), `*.moderato.tempo.xyz` |
-| `presto` | `https://rpc.presto.tempo.xyz` | `*.tempo.xyz` (production) |
-
-The `*-testnet` domain is the **canonical testnet** that always points to the current testnet chain (currently Moderato). The `*.moderato` domain is chain-specific.
-
-Deploy commands:
-```bash
-pnpm --filter @tempo/payments deploy:moderato  # testnet
-pnpm --filter @tempo/payments deploy:presto    # production
-```
-
-**RPC-dependent apps** (use TEMPO_RPC_URL for blockchain transactions):
-- `payments` - Payment proxy service
-- `paymentauth-tetris` - Tetris game with payments
-- `reth-snapshots` - Reth snapshot downloads
 
 ### Environment Variables
 
 Set secrets via Wrangler:
 ```bash
-# Set for all environments
 wrangler secret put TEMPO_SIGNING_KEY
-
-# Set for specific environment
-wrangler secret put TEMPO_SIGNING_KEY --env production
 ```
 
 ---

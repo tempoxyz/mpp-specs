@@ -33,7 +33,8 @@ export function InstallPage() {
 					A command-line tool for making HTTP requests with automatic payment support.
 				</p>
 				<p className="description">
-					Works with IETF Web Payment Auth and x402 protocols across Tempo, Solana, and other EVM chains.
+					Works with IETF Web Payment Auth and x402 protocols across Tempo, Solana, and other EVM
+					chains.
 				</p>
 
 				<div className="install">

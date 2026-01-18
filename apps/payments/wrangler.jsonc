@@ -4,9 +4,9 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
-	"observability": {
-		"enabled": true
-	},
+	"observability": { "enabled": true },
+	"workers_dev": true,
+	"preview_urls": true,
 	"vars": {
 		"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
 	},
