@@ -38,7 +38,6 @@ jobs:
           - app: purl
           - app: reth-snapshots
           - app: presto
-            deploy_cmd: "pages deploy public --project-name=presto --branch=${{ github.head_ref }}"
     env:
       NODE_ENV: production
     steps:
