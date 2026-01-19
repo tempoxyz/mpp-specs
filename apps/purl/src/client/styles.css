@@ -10,8 +10,7 @@ body {
 }
 
 body {
-	font-family:
-		ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+	font-family: "IBM Plex Mono", monospace;
 	background: #fff;
 	color: #000;
 	font-size: 15px;
@@ -110,7 +109,7 @@ h1 {
 
 .links a {
 	color: #888;
-	text-decoration: none;
+	text-decoration: underline;
 	font-size: 13px;
 }
 

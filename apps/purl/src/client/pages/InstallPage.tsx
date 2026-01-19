@@ -33,8 +33,7 @@ export function InstallPage() {
 					A command-line tool for making HTTP requests with automatic payment support.
 				</p>
 				<p className="description">
-					Works with IETF Web Payment Auth and x402 protocols across Tempo, Solana, and other EVM
-					chains.
+					Works with IETF Web Payment Auth across Tempo, Solana, and other EVM chains.
 				</p>
 
 				<div className="install">
@@ -56,9 +55,19 @@ purl method new my-wallet --generate`}</pre>
 				</div>
 
 				<div className="links">
-					<a href="https://github.com/tempoxyz/purl">github</a>
-					<a href="https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/">ietf</a>
-					<a href="https://www.x402.org/">x402</a>
+					<a href="https://github.com/tempoxyz/purl" target="_blank" rel="noopener noreferrer">
+						github
+					</a>
+					<a
+						href="https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						protocol
+					</a>
+					<a href="https://tempo.xyz" target="_blank" rel="noopener noreferrer">
+						tempo labs
+					</a>
 				</div>
 			</main>
 		</div>
