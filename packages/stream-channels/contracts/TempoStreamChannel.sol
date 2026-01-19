@@ -26,6 +26,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
         address payer;           // User who deposited funds
         address payee;           // Server authorized to withdraw
         address token;           // TIP-20 token address
+        address authorizedSigner; // Address authorized to sign vouchers (0 = payer)
         uint128 deposit;         // Total amount deposited
         uint128 settled;         // Cumulative amount already withdrawn
         uint64 expiry;           // UNIX timestamp after which user can withdraw
@@ -52,6 +53,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
         address indexed payer,
         address indexed payee,
         address token,
+        address authorizedSigner,
         uint256 deposit,
         uint256 expiry
     );
@@ -94,6 +96,15 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
     error NotPayer();
     error TransferFailed();
     error CloseNotRequested();
+    error ArrayLengthMismatch();
+    error BatchEmpty();
+    error BatchTooLarge();
+    error InvalidPayee();
+    error InvalidToken();
+
+    // --- Constants ---
+
+    uint256 public constant MAX_BATCH_SIZE = 100;
 
     // --- EIP-712 Domain ---
 
@@ -116,6 +127,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
      * @param deposit Amount to deposit
      * @param expiry Channel expiry timestamp
      * @param salt Random salt for channel ID generation
+     * @param authorizedSigner Address authorized to sign vouchers (0 = use msg.sender)
      * @return channelId The unique channel identifier
      */
     function open(
@@ -123,7 +135,8 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
         address token,
         uint128 deposit,
         uint64 expiry,
-        bytes32 salt
+        bytes32 salt,
+        address authorizedSigner
     ) external nonReentrant returns (bytes32 channelId) {
         channelId = computeChannelId(
             msg.sender,
@@ -131,7 +144,8 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             token,
             deposit,
             expiry,
-            salt
+            salt,
+            authorizedSigner
         );
 
         if (channels[channelId].payer != address(0)) {
@@ -148,6 +162,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             payer: msg.sender,
             payee: payee,
             token: token,
+            authorizedSigner: authorizedSigner,
             deposit: deposit,
             settled: 0,
             expiry: expiry,
@@ -155,7 +170,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             finalized: false
         });
 
-        emit ChannelOpened(channelId, msg.sender, payee, token, deposit, expiry);
+        emit ChannelOpened(channelId, msg.sender, payee, token, authorizedSigner, deposit, expiry);
     }
 
     /**
@@ -202,7 +217,12 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
         bytes32 digest = _hashTypedData(structHash);
         address signer = ECDSA.recoverCalldata(digest, signature);
 
-        if (signer != channel.payer) {
+        // Check against authorizedSigner if set, otherwise payer
+        address expectedSigner = channel.authorizedSigner != address(0) 
+            ? channel.authorizedSigner 
+            : channel.payer;
+
+        if (signer != expectedSigner) {
             revert InvalidSignature();
         }
 
@@ -333,6 +353,13 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
 
     /**
      * @notice Compute the channel ID for given parameters.
+     * @param payer Address that deposited funds
+     * @param payee Address authorized to withdraw
+     * @param token TIP-20 token address
+     * @param deposit Amount deposited
+     * @param expiry Channel expiry timestamp
+     * @param salt Random salt
+     * @param authorizedSigner Address authorized to sign vouchers
      */
     function computeChannelId(
         address payer,
@@ -340,7 +367,8 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
         address token,
         uint128 deposit,
         uint64 expiry,
-        bytes32 salt
+        bytes32 salt,
+        address authorizedSigner
     ) public view returns (bytes32) {
         return keccak256(abi.encode(
             payer,
@@ -349,6 +377,7 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             deposit,
             expiry,
             salt,
+            authorizedSigner,
             address(this),
             block.chainid
         ));
@@ -376,5 +405,188 @@ contract TempoStreamChannel is EIP712, ReentrancyGuard {
             validUntil
         ));
         return _hashTypedData(structHash);
+    }
+
+    /**
+     * @notice Read multiple channel states in a single call.
+     * @param channelIds Array of channel IDs to query
+     * @return channelStates Array of Channel structs
+     */
+    function getChannelsBatch(bytes32[] calldata channelIds) external view returns (Channel[] memory channelStates) {
+        uint256 length = channelIds.length;
+        channelStates = new Channel[](length);
+
+        for (uint256 i = 0; i < length; ++i) {
+            channelStates[i] = channels[channelIds[i]];
+        }
+    }
+
+    // --- Batch Operations ---
+
+    /**
+     * @notice Parameters for opening a channel in batch.
+     */
+    struct OpenParams {
+        address payee;
+        address token;
+        uint128 deposit;
+        uint64 expiry;
+        bytes32 salt;
+        address authorizedSigner;
+    }
+
+    /**
+     * @notice Open multiple payment channels in a single transaction.
+     * @dev Caller must approve total deposit amount for each token beforehand.
+     * @param params Array of OpenParams structs
+     * @return channelIds Array of created channel IDs
+     */
+    function openBatch(OpenParams[] calldata params) external nonReentrant returns (bytes32[] memory channelIds) {
+        uint256 length = params.length;
+        if (length == 0) revert BatchEmpty();
+        if (length > MAX_BATCH_SIZE) revert BatchTooLarge();
+
+        channelIds = new bytes32[](length);
+
+        for (uint256 i = 0; i < length; ++i) {
+            OpenParams calldata p = params[i];
+
+            if (p.payee == address(0)) revert InvalidPayee();
+            if (p.token == address(0)) revert InvalidToken();
+
+            bytes32 channelId = computeChannelId(
+                msg.sender,
+                p.payee,
+                p.token,
+                p.deposit,
+                p.expiry,
+                p.salt,
+                p.authorizedSigner
+            );
+
+            if (channels[channelId].payer != address(0)) {
+                revert ChannelAlreadyExists();
+            }
+
+            bool success = ITIP20(p.token).transferFrom(msg.sender, address(this), p.deposit);
+            if (!success) {
+                revert TransferFailed();
+            }
+
+            channels[channelId] = Channel({
+                payer: msg.sender,
+                payee: p.payee,
+                token: p.token,
+                authorizedSigner: p.authorizedSigner,
+                deposit: p.deposit,
+                settled: 0,
+                expiry: p.expiry,
+                closeRequestedAt: 0,
+                finalized: false
+            });
+
+            emit ChannelOpened(channelId, msg.sender, p.payee, p.token, p.authorizedSigner, p.deposit, p.expiry);
+
+            channelIds[i] = channelId;
+        }
+    }
+
+    /**
+     * @notice Settle multiple channels in a single transaction.
+     * @dev Reverts if any settlement fails (atomic).
+     * @param channelIds Array of channel IDs to settle
+     * @param cumulativeAmounts Array of cumulative amounts for each channel
+     * @param validUntils Array of voucher expiry timestamps
+     * @param signatures Array of EIP-712 signatures from each payer/authorizedSigner
+     */
+    function settleBatch(
+        bytes32[] calldata channelIds,
+        uint128[] calldata cumulativeAmounts,
+        uint64[] calldata validUntils,
+        bytes[] calldata signatures
+    ) external nonReentrant {
+        uint256 length = channelIds.length;
+        if (length == 0) revert BatchEmpty();
+        if (length > MAX_BATCH_SIZE) revert BatchTooLarge();
+        if (
+            length != cumulativeAmounts.length ||
+            length != validUntils.length ||
+            length != signatures.length
+        ) {
+            revert ArrayLengthMismatch();
+        }
+
+        for (uint256 i = 0; i < length; ++i) {
+            _settleInternal(
+                channelIds[i],
+                cumulativeAmounts[i],
+                validUntils[i],
+                signatures[i]
+            );
+        }
+    }
+
+    // --- Internal Functions ---
+
+    /**
+     * @dev Internal settle logic for batch use. Does not use nonReentrant
+     *      since the calling function already has it.
+     */
+    function _settleInternal(
+        bytes32 channelId,
+        uint128 cumulativeAmount,
+        uint64 validUntil,
+        bytes calldata signature
+    ) internal {
+        Channel storage channel = channels[channelId];
+
+        if (channel.payer == address(0)) {
+            revert ChannelNotFound();
+        }
+        if (channel.finalized) {
+            revert ChannelFinalized();
+        }
+        if (block.timestamp >= channel.expiry) {
+            revert ChannelExpired();
+        }
+        if (block.timestamp > validUntil) {
+            revert VoucherExpired();
+        }
+        if (cumulativeAmount > channel.deposit) {
+            revert AmountExceedsDeposit();
+        }
+        if (cumulativeAmount <= channel.settled) {
+            revert AmountNotIncreasing();
+        }
+
+        // Verify signature
+        bytes32 structHash = keccak256(abi.encode(
+            VOUCHER_TYPEHASH,
+            channelId,
+            cumulativeAmount,
+            validUntil
+        ));
+        bytes32 digest = _hashTypedData(structHash);
+        address signer = ECDSA.recoverCalldata(digest, signature);
+
+        // Check against authorizedSigner if set, otherwise payer
+        address expectedSigner = channel.authorizedSigner != address(0) 
+            ? channel.authorizedSigner 
+            : channel.payer;
+
+        if (signer != expectedSigner) {
+            revert InvalidSignature();
+        }
+
+        // Calculate delta and transfer
+        uint128 delta = cumulativeAmount - channel.settled;
+        channel.settled = cumulativeAmount;
+
+        bool success = ITIP20(channel.token).transfer(channel.payee, delta);
+        if (!success) {
+            revert TransferFailed();
+        }
+
+        emit Settled(channelId, cumulativeAmount, delta, channel.settled);
     }
 }

@@ -7,7 +7,6 @@ import {
 	type WalletClient,
 } from 'viem'
 import { TempoStreamChannelABI } from './abi.js'
-import { isAuthorizedSigner } from './tempo-access-keys.js'
 import type { Channel, ServerChannelState, SignedVoucher, StreamRequest } from './types.js'
 import { recoverVoucherSigner } from './voucher.js'
 
@@ -85,6 +84,7 @@ export class StreamChannelServer {
 				payer: result.payer,
 				payee: result.payee,
 				token: result.token,
+				authorizedSigner: result.authorizedSigner,
 				deposit: result.deposit,
 				settled: result.settled,
 				expiry: result.expiry,
@@ -119,10 +119,16 @@ export class StreamChannelServer {
 
 		try {
 			const signer = await recoverVoucherSigner(escrowContract, this.chainId, initialVoucher)
-			// Check if signer is authorized (either payer directly or access key)
-			const isAuthorized = await isAuthorizedSigner(this.publicClient, channel.payer, signer)
-			if (!isAuthorized) {
-				return { valid: false, error: 'Voucher signer not authorized for channel payer' }
+			// Contract checks against authorizedSigner if set, otherwise payer
+			const expectedSigner =
+				channel.authorizedSigner !== '0x0000000000000000000000000000000000000000'
+					? channel.authorizedSigner
+					: channel.payer
+			if (signer.toLowerCase() !== expectedSigner.toLowerCase()) {
+				return {
+					valid: false,
+					error: 'Voucher signer must be authorizedSigner (or payer if not set)',
+				}
 			}
 		} catch {
 			return { valid: false, error: 'Invalid voucher signature' }
@@ -134,6 +140,7 @@ export class StreamChannelServer {
 			payer: channel.payer,
 			payee: channel.payee,
 			token: channel.token,
+			authorizedSigner: channel.authorizedSigner,
 			deposit: channel.deposit,
 			settled: 0n,
 			expiry: channel.expiry,
@@ -179,12 +186,18 @@ export class StreamChannelServer {
 			return { valid: false, error: 'Voucher has expired' }
 		}
 
-		// Verify signature (supports access keys on Tempo)
+		// Verify signature - contract checks against authorizedSigner if set, otherwise payer
 		try {
 			const signer = await recoverVoucherSigner(escrowContract, this.chainId, voucher)
-			const isAuthorized = await isAuthorizedSigner(this.publicClient, state.payer, signer)
-			if (!isAuthorized) {
-				return { valid: false, error: 'Voucher signer not authorized for payer' }
+			const expectedSigner =
+				state.authorizedSigner !== '0x0000000000000000000000000000000000000000'
+					? state.authorizedSigner
+					: state.payer
+			if (signer.toLowerCase() !== expectedSigner.toLowerCase()) {
+				return {
+					valid: false,
+					error: 'Voucher signer must be authorizedSigner (or payer if not set)',
+				}
 			}
 		} catch {
 			return { valid: false, error: 'Invalid voucher signature' }

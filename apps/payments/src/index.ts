@@ -676,7 +676,8 @@ app.post('/:partner/voucher', async (c) => {
 
 // Partner proxy routes (subdomain-based only)
 app.all('/*', async (c) => {
-	const host = c.req.header('host') || ''
+	// Prefer X-Forwarded-Host for local dev (Vite rewrites Host header)
+	const host = c.req.header('x-forwarded-host') || c.req.header('host') || ''
 	const partnerSlug = getPartnerFromHost(host)
 	const forwardPath = c.req.path || '/'
 

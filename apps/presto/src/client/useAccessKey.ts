@@ -89,7 +89,7 @@ export function useAccessKey(
 						SignatureType.Secp256k1, // Using Secp256k1 for CLI compatibility
 						expiry,
 						true, // enforceLimits
-						[{ token: ALPHA_USD, amount: BigInt(10 * 1e6) }], // $10 spending limit
+						[{ token: ALPHA_USD, amount: BigInt(100 * 1e6) }], // $100 spending limit
 					],
 				})
 

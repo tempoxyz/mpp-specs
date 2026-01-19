@@ -7,6 +7,7 @@ export interface Channel {
 	payer: Address
 	payee: Address
 	token: Address
+	authorizedSigner: Address // Address authorized to sign vouchers (0 = payer)
 	deposit: bigint
 	settled: bigint
 	expiry: bigint
@@ -55,6 +56,7 @@ export interface StreamCredentialPayload {
 	type: 'stream'
 	action: 'open' | 'voucher' | 'close'
 	channelId: Hex
+	authorizedSigner?: Address // Address authorized to sign vouchers
 	openTxHash?: Hex
 	voucher: {
 		payload: VoucherTypedData
@@ -93,6 +95,7 @@ export interface OpenChannelParams {
 	deposit: bigint
 	expiry: bigint
 	salt: Hex
+	authorizedSigner?: Address // Optional: address authorized to sign vouchers (default: payer)
 }
 
 /**
@@ -103,6 +106,7 @@ export interface ServerChannelState {
 	payer: Address
 	payee: Address
 	token: Address
+	authorizedSigner: Address // Address authorized to sign vouchers
 	deposit: bigint
 	settled: bigint
 	expiry: bigint

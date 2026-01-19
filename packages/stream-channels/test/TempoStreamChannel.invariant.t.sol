@@ -114,8 +114,9 @@ contract StreamChannelHandler is Test {
         token.approve(address(channel), deposit);
         
         uint64 expiry = uint64(block.timestamp) + expiryDelta;
+        address authorizedSigner = address(0); // Use payer as signer
         bytes32 channelId = channel.computeChannelId(
-            payer, payee, address(token), deposit, expiry, salt
+            payer, payee, address(token), deposit, expiry, salt, authorizedSigner
         );
         
         // Skip if channel already exists
@@ -124,7 +125,7 @@ contract StreamChannelHandler is Test {
             return;
         }
         
-        channel.open(payee, address(token), deposit, expiry, salt);
+        channel.open(payee, address(token), deposit, expiry, salt, authorizedSigner);
         vm.stopPrank();
         
         openChannels.push(channelId);
@@ -576,7 +577,8 @@ contract TempoStreamChannelAccessControlInvariantTest is StdInvariant, Test {
             address(token),
             1_000_000,
             uint64(block.timestamp) + 1 hours,
-            bytes32(uint256(1))
+            bytes32(uint256(1)),
+            address(0)
         );
         vm.stopPrank();
         

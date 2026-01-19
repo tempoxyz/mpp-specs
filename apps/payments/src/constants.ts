@@ -45,8 +45,8 @@ export const PRICES = {
  * Contract addresses for streaming payment channels.
  */
 export const CONTRACTS = {
-	/** TempoStreamChannel escrow contract on Moderato (testnet) */
-	STREAM_ESCROW_MODERATO: '0x5513B62Ec86A8354D03E1dc5378886cdc2dD6A09' as Address,
+	/** TempoStreamChannel escrow contract on Moderato (testnet) - with authorizedSigner support */
+	STREAM_ESCROW_MODERATO: '0x7a6357dB33731cFB7B9D54aca750507f13a3FEc0' as Address,
 	/** TempoStreamChannel escrow contract on Presto (mainnet) - TODO: Deploy with funded account */
 	STREAM_ESCROW_PRESTO: '0x0000000000000000000000000000000000000000' as Address,
 } as const

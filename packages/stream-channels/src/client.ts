@@ -34,11 +34,20 @@ export class StreamChannelClient {
 	 */
 	async computeChannelId(escrowContract: Address, params: OpenChannelParams): Promise<Hex> {
 		const payer = typeof this.account === 'string' ? this.account : this.account.address
+		const authorizedSigner = params.authorizedSigner ?? '0x0000000000000000000000000000000000000000'
 		return this.publicClient.readContract({
 			address: escrowContract,
 			abi: TempoStreamChannelABI,
 			functionName: 'computeChannelId',
-			args: [payer, params.payee, params.token, params.deposit, params.expiry, params.salt],
+			args: [
+				payer,
+				params.payee,
+				params.token,
+				params.deposit,
+				params.expiry,
+				params.salt,
+				authorizedSigner,
+			],
 		})
 	}
 
@@ -81,10 +90,18 @@ export class StreamChannelClient {
 		const channelId = await this.computeChannelId(escrowContract, params)
 
 		// Open the channel
+		const authorizedSigner = params.authorizedSigner ?? '0x0000000000000000000000000000000000000000'
 		const openData = encodeFunctionData({
 			abi: TempoStreamChannelABI,
 			functionName: 'open',
-			args: [params.payee, params.token, params.deposit, params.expiry, params.salt],
+			args: [
+				params.payee,
+				params.token,
+				params.deposit,
+				params.expiry,
+				params.salt,
+				authorizedSigner,
+			],
 		})
 
 		const txHash = await this.walletClient.sendTransaction({
@@ -133,6 +150,7 @@ export class StreamChannelClient {
 			payer: result.payer,
 			payee: result.payee,
 			token: result.token,
+			authorizedSigner: result.authorizedSigner,
 			deposit: result.deposit,
 			settled: result.settled,
 			expiry: result.expiry,
