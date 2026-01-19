@@ -1225,7 +1225,7 @@ li > p:last-of-type:only-child {
 </tr></thead>
 <tfoot><tr>
 <td class="left">Moxey</td>
-<td class="center">Expires 23 July 2026</td>
+<td class="center">Expires 24 July 2026</td>
 <td class="right">[Page]</td>
 </tr></tfoot>
 </table>
@@ -1238,12 +1238,12 @@ li > p:last-of-type:only-child {
 <dd class="internet-draft">draft-ietf-httpauth-payment-01</dd>
 <dt class="label-published">Published:</dt>
 <dd class="published">
-<time datetime="2026-01-19" class="published">19 January 2026</time>
+<time datetime="2026-01-20" class="published">20 January 2026</time>
     </dd>
 <dt class="label-intended-status">Intended Status:</dt>
 <dd class="intended-status">Standards Track</dd>
 <dt class="label-expires">Expires:</dt>
-<dd class="expires"><time datetime="2026-07-23">23 July 2026</time></dd>
+<dd class="expires"><time datetime="2026-07-24">24 July 2026</time></dd>
 <dt class="label-authors">Author:</dt>
 <dd class="authors">
 <div class="author">
@@ -1283,7 +1283,7 @@ defined in separate payment method specifications.<a href="#section-abstract-2" 
         time. It is inappropriate to use Internet-Drafts as reference
         material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
 <p id="section-boilerplate.1-4">
-        This Internet-Draft will expire on 23 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+        This Internet-Draft will expire on 24 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="copyright">
@@ -2714,7 +2714,7 @@ _payment.api.example.com. TXT "v=payment1; methods=tempo,evm"
         <h3 id="name-replay-protection">
 <a href="#section-12.4" class="section-number selfRef">12.4. </a><a href="#name-replay-protection" class="section-name selfRef">Replay Protection</a>
         </h3>
-<p id="section-12.4-1">Payment methods <span class="bcp14">MUST</span> define their own replay protection mechanisms (e.g., on-chain nonce consumption, preimage revelation, authorization expiry). This specification does not mandate a specific approach.<a href="#section-12.4-1" class="pilcrow">¶</a></p>
+<p id="section-12.4-1">Payment methods <span class="bcp14">MUST</span> define their own replay protection mechanisms (e.g., onchain nonce consumption, preimage revelation, authorization expiry). This specification does not mandate a specific approach.<a href="#section-12.4-1" class="pilcrow">¶</a></p>
 <p id="section-12.4-2">Payment method specifications <span class="bcp14">SHOULD</span> define expiry semantics in the <code>request</code> payload. Servers <span class="bcp14">SHOULD</span> reject credentials for expired challenges.<a href="#section-12.4-2" class="pilcrow">¶</a></p>
 </section>
 </div>
@@ -3266,10 +3266,9 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAxIiwicGF5b
 <div class="lang-jsonc sourcecode" id="appendix-B.1-11">
 <pre>
 {
-  "method": "tempo",
   "id": "qB3wErTyU7iOpAsD9fGhJk",
   "payload": {
-    "txid": "0xabc123...",
+    "type": "transaction",
     "signature": "0x..."
   }
 }
@@ -3395,9 +3394,11 @@ Authorization: Payment eyJtZXRob2QiOiJ0ZW1wbyIsImlkIjoiY2hfdGVtcG9fMDAyIiwicGF5b
 <div class="lang-jsonc sourcecode" id="appendix-B.2-11">
 <pre>
 {
-  "method": "tempo",
   "id": "zL4xCvBnM6kJhGfD8sAaWe",
-  "payload": "0x..." // RLP-encoded Tempo key authorization
+  "payload": {
+    "type": "keyAuthorization",
+    "signature": "0x..." // RLP-encoded Tempo key authorization
+  }
 }
 </pre><a href="#appendix-B.2-11" class="pilcrow">¶</a>
 </div>

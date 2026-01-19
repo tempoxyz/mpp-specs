@@ -1,0 +1,2938 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Tempo Payment Lock Extension</title>
+<meta content="Jake Moxey" name="author">
+<meta content="Georgios Konstantopoulos" name="author">
+<meta content="
+       This document extends the Tempo Payment Method [draft-tempo-payment-method]
+with support for escrowed payment locks. It defines the  lock  intent for
+incremental payments suitable for streaming and metered services, where
+clients deposit funds into an on-chain escrow that permits the payee to
+withdraw funds up to the amount authorized by signed releases, while
+permitting the payer to withdraw any remaining funds after expiry. 
+    " name="description">
+<meta content="xml2rfc 3.31.0" name="generator">
+<meta content="draft-tempo-lock-extension-00" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.31.0
+    Python 3.11.9
+    ConfigArgParse 1.7.1
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.0.2
+    platformdirs 4.3.6
+    pycountry 24.6.1
+    PyYAML 6.0.2
+    requests 2.32.3
+    wcwidth 0.2.13
+-->
+<link href="draft-tempo-lock-extension.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">/*
+
+  NOTE: Changes at the bottom of this file overrides some earlier settings.
+
+  Once the style has stabilized and has been adopted as an official RFC style,
+  this can be consolidated so that style settings occur only in one place, but
+  for now the contents of this file consists first of the initial CSS work as
+  provided to the RFC Formatter (xml2rfc) work, followed by itemized and
+  commented changes found necessary during the development of the v3
+  formatters.
+
+*/
+
+/* fonts */
+@import url('https://static.ietf.org/fonts/noto-sans/import.css'); /* Sans-serif */
+@import url('https://static.ietf.org/fonts/noto-serif/import.css'); /* Serif (print) */
+@import url('https://static.ietf.org/fonts/roboto-mono/import.css'); /* Monospace */
+
+:root {
+  --font-sans: 'Noto Sans', Arial, Helvetica, sans-serif;
+  --font-serif: 'Noto Serif', 'Times', 'Times New Roman', serif;
+  --font-mono: 'Roboto Mono', Courier, 'Courier New', monospace;
+}
+
+@viewport {
+  zoom: 1.0;
+}
+@-ms-viewport {
+  width: extend-to-zoom;
+  zoom: 1.0;
+}
+/* general and mobile first */
+html {
+}
+body {
+  max-width: 90%;
+  margin: 1.5em auto;
+  color: #222;
+  background-color: #fff;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  scroll-behavior: smooth;
+  overflow-wrap: break-word;
+}
+.ears {
+  display: none;
+}
+
+/* headings */
+#title, h1, h2, h3, h4, h5, h6 {
+  margin: 1em 0 0.5em;
+  font-weight: bold;
+  line-height: 1.3;
+}
+#title {
+  clear: both;
+  border-bottom: 1px solid #ddd;
+  margin: 0 0 0.5em 0;
+  padding: 1em 0 0.5em;
+}
+.author {
+  padding-bottom: 4px;
+}
+h1 {
+  font-size: 26px;
+  margin: 1em 0;
+}
+h2 {
+  font-size: 22px;
+  margin-top: -20px;  /* provide offset for in-page anchors */
+  padding-top: 33px;
+}
+h3 {
+  font-size: 18px;
+  margin-top: -36px;  /* provide offset for in-page anchors */
+  padding-top: 42px;
+}
+h4 {
+  font-size: 16px;
+  margin-top: -36px;  /* provide offset for in-page anchors */
+  padding-top: 42px;
+}
+h5, h6 {
+  font-size: 14px;
+}
+#n-copyright-notice {
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 1em;
+  margin-bottom: 1em;
+}
+/* general structure */
+p {
+  padding: 0;
+  margin: 0 0 1em 0;
+  text-align: left;
+}
+div, span {
+  position: relative;
+}
+div {
+  margin: 0;
+}
+.alignRight.art-text {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  padding: 1em 1em 0;
+  margin-bottom: 1.5em;
+}
+.alignRight.art-text pre {
+  padding: 0;
+}
+.alignRight {
+  margin: 1em 0;
+}
+.alignRight > *:first-child {
+  border: none;
+  margin: 0;
+  float: right;
+  clear: both;
+}
+.alignRight > *:nth-child(2) {
+  clear: both;
+  display: block;
+  border: none;
+}
+svg {
+  display: block;
+}
+@media print {
+  svg {
+    max-height: 850px;
+    max-width: 660px;
+  }
+}
+svg[font-family~="serif" i], svg [font-family~="serif" i] {
+  font-family: var(--font-serif);
+}
+svg[font-family~="sans-serif" i], svg [font-family~="sans-serif" i] {
+  font-family: var(--font-sans);
+}
+svg[font-family~="monospace" i], svg [font-family~="monospace" i] {
+  font-family: var(--font-mono);
+}
+.alignCenter.art-text {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  padding: 1em 1em 0;
+  margin-bottom: 1.5em;
+}
+.alignCenter.art-text pre {
+  padding: 0;
+}
+.alignCenter {
+  margin: 1em 0;
+}
+.alignCenter > *:first-child {
+  display: table;
+  border: none;
+  margin: 0 auto;
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 1em 2em;
+}
+ol ol, ul ul, ol ul, ul ol {
+  margin-left: 1em;
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+.ulCompact li {
+  margin: 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+}
+ul.empty li, .ulEmpty li {
+  margin-top: 0.5em;
+}
+ul.ulBare, li.ulBare {
+  margin-left: 0em !important;
+}
+ul.compact, .ulCompact,
+ol.compact, .olCompact {
+  line-height: 100%;
+  margin: 0 0 0 2em;
+}
+
+/* definition lists */
+dl {
+}
+dl > dt {
+  float: left;
+  margin-right: 1em;
+}
+/* 
+dl.nohang > dt {
+  float: none;
+}
+*/
+dl > dd {
+  margin-bottom: .8em;
+  min-height: 1.3em;
+}
+dl.compact > dd, .dlCompact > dd {
+  margin-bottom: 0em;
+}
+dl > dd > dl {
+  margin-top: 0.5em;
+  margin-bottom: 0em;
+}
+
+/* links */
+a {
+  text-decoration: none;
+}
+a[href] {
+  color: #22e; /* Arlen: WCAG 2019 */
+}
+a[href]:hover {
+  background-color: #f2f2f2;
+}
+figcaption a[href],
+a[href].selfRef {
+  color: #222;
+}
+/* XXX probably not this:
+a.selfRef:hover {
+  background-color: transparent;
+  cursor: default;
+} */
+
+/* Figures */
+tt, code, pre {
+  background-color: #f9f9f9;
+  font-family: var(--font-mono);
+}
+pre {
+  border: 1px solid #eee;
+  margin: 0;
+  padding: 1em;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0;
+}
+figure blockquote {
+  margin: 0.8em 0.4em 0.4em;
+}
+figcaption {
+  font-style: italic;
+  margin: 0 0 1em 0;
+}
+@media screen {
+  pre {
+    overflow-x: auto;
+    max-width: 100%;
+    max-width: calc(100% - 22px);
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 1.2em 2em;
+}
+blockquote {
+  background-color: #f9f9f9;
+  color: #111; /* Arlen: WCAG 2019 */
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  margin: 1em 0;
+}
+blockquote > *:last-child {
+  margin-bottom: 0;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+.xref {
+  overflow-wrap: normal;
+}
+
+/* tables */
+table {
+  width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  border: 1px solid #eee;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5em 0.75em;
+}
+th {
+  text-align: left;
+  background-color: #e9e9e9;
+}
+tr:nth-child(2n+1) > td {
+  background-color: #f5f5f5;
+}
+table caption {
+  font-style: italic;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+table p {
+  /* XXX to avoid bottom margin on table row signifiers. If paragraphs should
+     be allowed within tables more generally, it would be far better to select on a class. */
+  margin: 0;
+}
+
+/* pilcrow */
+a.pilcrow {
+  color: #666; /* Arlen: AHDJ 2019 */
+  text-decoration: none;
+  visibility: hidden;
+  user-select: none;
+  -ms-user-select: none;
+  -o-user-select:none;
+  -moz-user-select: none;
+  -khtml-user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+@media screen {
+  aside:hover > a.pilcrow,
+  p:hover > a.pilcrow,
+  blockquote:hover > a.pilcrow,
+  div:hover > a.pilcrow,
+  li:hover > a.pilcrow,
+  pre:hover > a.pilcrow {
+    visibility: visible;
+  }
+  a.pilcrow:hover {
+    background-color: transparent;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid #eee;
+}
+.bcp14 {
+  font-variant: small-caps;
+}
+
+.role {
+  font-variant: all-small-caps;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: 0.9em;
+}
+#identifiers dt {
+  width: 3em;
+  clear: left;
+}
+#identifiers dd {
+  float: left;
+  margin-bottom: 0;
+}
+/* Fix PDF info block run off issue */
+@media print {
+  #identifiers dd {
+    max-width: 100%;
+  }
+}
+#identifiers .authors .author {
+  display: inline-block;
+  margin-right: 1.5em;
+}
+#identifiers .authors .org {
+  font-style: italic;
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #666; /* Arlen: WCAG 2019 */
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+}
+.docInfo .prepared {
+  float: left;
+}
+.docInfo .prepared {
+  float: right;
+}
+
+/* table of contents */
+#toc  {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+}
+nav.toc ul {
+  margin: 0 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+}
+nav.toc li {
+  line-height: 1.3em;
+  margin: 0.75em 0;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+/* references */
+.references dt {
+  text-align: right;
+  font-weight: bold;
+  min-width: 7em;
+}
+.references dd {
+  margin-left: 8em;
+  overflow: auto;
+}
+
+.refInstance {
+  margin-bottom: 1.25em;
+}
+
+.refSubseries {
+  margin-bottom: 1.25em;
+}
+
+.references .ascii {
+  margin-bottom: 0.25em;
+}
+
+/* index */
+.index ul {
+  margin: 0 0 0 1em;
+  padding: 0;
+  list-style: none;
+}
+.index ul ul {
+  margin: 0;
+}
+.index li {
+  margin: 0;
+  text-indent: -2em;
+  padding-left: 2em;
+  padding-bottom: 5px;
+}
+.indexIndex {
+  margin: 0.5em 0 1em;
+}
+.index a {
+  font-weight: 700;
+}
+/* make the index two-column on all but the smallest screens */
+@media (min-width: 600px) {
+  .index ul {
+    -moz-column-count: 2;
+    -moz-column-gap: 20px;
+  }
+  .index ul ul {
+    -moz-column-count: 1;
+    -moz-column-gap: 0;
+  }
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  margin: 1em 0;
+}
+
+address.vcard .nameRole {
+  font-weight: 700;
+  margin-left: 0;
+}
+address.vcard .label {
+  font-family: var(--font-sans);
+  margin: 0.5em 0;
+}
+address.vcard .type {
+  display: none;
+}
+.alternative-contact {
+  margin: 1.5em 0 1em;
+}
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+
+/* temporary notes */
+.rfcEditorRemove::before {
+  position: absolute;
+  top: 0.2em;
+  right: 0.2em;
+  padding: 0.2em;
+  content: "The RFC Editor will remove this note";
+  color: #9e2a00; /* Arlen: WCAG 2019 */
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+}
+.rfcEditorRemove {
+  position: relative;
+  padding-top: 1.8em;
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+  border-radius: 3px;
+}
+.cref {
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+/* alternative layout for smaller screens */
+@media screen and (max-width: 1023px) {
+  body {
+    padding-top: 2em;
+  }
+  #title {
+    padding: 1em 0;
+  }
+  h1 {
+    font-size: 24px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: -18px;  /* provide offset for in-page anchors */
+    padding-top: 38px;
+  }
+  #identifiers dd {
+    max-width: 60%;
+  }
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 0;
+    margin: 0;
+    background-color: inherit;
+    border-bottom: 1px solid #ccc;
+  }
+  #toc h2 {
+    margin: -1px 0 0 0;
+    padding: 4px 0 4px 6px;
+    padding-right: 1em;
+    min-width: 190px;
+    font-size: 1.1em;
+    text-align: right;
+    background-color: #444;
+    color: white;
+    cursor: pointer;
+  }
+  #toc h2::before { /* css hamburger */
+    float: right;
+    position: relative;
+    width: 1em;
+    height: 1px;
+    left: -164px;
+    margin: 6px 0 0 0;
+    background: white none repeat scroll 0 0;
+    box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+    content: "";
+  }
+  #toc nav {
+    display: none;
+    padding: 0.5em 1em 1em;
+    overflow: auto;
+    height: calc(100vh - 48px);
+    border-left: 1px solid #ddd;
+  }
+}
+
+/* alternative layout for wide screens */
+@media screen and (min-width: 1024px) {
+  body {
+    max-width: 724px;
+    margin: 42px auto;
+    padding-left: 1.5em;
+    padding-right: 29em;
+  }
+  #toc {
+    position: fixed;
+    top: 42px;
+    right: 42px;
+    width: 25%;
+    margin: 0;
+    padding: 0 1em;
+    z-index: 1;
+  }
+  #toc h2 {
+    border-top: none;
+    border-bottom: 1px solid #ddd;
+    font-size: 1em;
+    font-weight: normal;
+    margin: 0;
+    padding: 0.25em 1em 1em 0;
+  }
+  #toc nav {
+    display: block;
+    height: calc(90vh - 84px);
+    bottom: 0;
+    padding: 0.5em 0 0;
+    overflow: auto;
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc, #n-introduction {
+    page-break-before: always;
+  }
+  #toc {
+    border-top: none;
+    padding-top: 0;
+  }
+  figure, pre {
+    page-break-inside: avoid;
+  }
+  figure {
+    overflow: scroll;
+  }
+  .breakable pre {
+    break-inside: auto;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  h2+*, h3+*, h4+*, h5+*, h6+* {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+/* This is commented out here, as the string-set: doesn't
+   pass W3C validation currently */
+/*
+.ears thead .left {
+  string-set: ears-top-left content();
+}
+
+.ears thead .center {
+  string-set: ears-top-center content();
+}
+
+.ears thead .right {
+  string-set: ears-top-right content();
+}
+
+.ears tfoot .left {
+  string-set: ears-bottom-left content();
+}
+
+.ears tfoot .center {
+  string-set: ears-bottom-center content();
+}
+
+.ears tfoot .right {
+  string-set: ears-bottom-right content();
+}
+*/
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+  /* The following is commented out here, but set appropriately by in code, as
+     the content depends on the document */
+  /*
+  @top-left {
+    content: 'Internet-Draft';
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-left {
+    content: string(ears-top-left);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-center {
+    content: string(ears-top-center);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-right {
+    content: string(ears-top-right);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @bottom-left {
+    content: string(ears-bottom-left);
+    vertical-align: top;
+    border-top: solid 1px #ccc;
+  }
+  @bottom-center {
+    content: string(ears-bottom-center);
+    vertical-align: top;
+    border-top: solid 1px #ccc;
+  }
+  @bottom-right {
+      content: '[Page ' counter(page) ']';
+      vertical-align: top;
+      border-top: solid 1px #ccc;
+  }
+  */
+
+}
+
+/* Changes introduced to fix issues found during implementation */
+/* Make sure links are clickable even if overlapped by following H* */
+a {
+  z-index: 2;
+}
+/* Separate body from document info even without intervening H1 */
+section {
+  clear: both;
+}
+
+
+/* Top align author divs, to avoid names without organization dropping level with org names */
+.author {
+  vertical-align: top;
+}
+
+/* Leave room in document info to show Internet-Draft on one line */
+#identifiers dt {
+  width: 8em;
+}
+
+/* Don't waste quite as much whitespace between label and value in doc info */
+#identifiers dd {
+  margin-left: 1em;
+}
+
+/* Give floating toc a background color (needed when it's a div inside section */
+#toc {
+  background-color: white;
+}
+
+/* Make the collapsed ToC header render white on gray also when it's a link */
+@media screen and (max-width: 1023px) {
+  #toc h2 a,
+  #toc h2 a:link,
+  #toc h2 a:focus,
+  #toc h2 a:hover,
+  #toc a.toplink,
+  #toc a.toplink:hover {
+    color: white;
+    background-color: #444;
+    text-decoration: none;
+  }
+}
+
+/* Give the bottom of the ToC some whitespace */
+@media screen and (min-width: 1024px) {
+  #toc {
+    padding: 0 0 1em 1em;
+  }
+}
+
+/* Style section numbers with more space between number and title */
+.section-number {
+  padding-right: 0.5em;
+}
+
+/* prevent monospace from becoming overly large */
+tt, code, pre {
+  font-size: 95%;
+}
+
+/* Fix the height/width aspect for ascii art*/
+.sourcecode pre,
+.art-text pre {
+  line-height: 1.12;
+}
+
+
+/* Add styling for a link in the ToC that points to the top of the document */
+a.toplink {
+  float: right;
+  margin-right: 0.5em;
+}
+
+/* Fix the dl styling to match the RFC 7992 attributes */
+dl > dt,
+dl.dlParallel > dt {
+  float: left;
+  margin-right: 1em;
+}
+dl.dlNewline > dt {
+  float: none;
+}
+
+/* Provide styling for table cell text alignment */
+table td.text-left,
+table th.text-left {
+  text-align: left;
+}
+table td.text-center,
+table th.text-center {
+  text-align: center;
+}
+table td.text-right,
+table th.text-right {
+  text-align: right;
+}
+
+/* Make the alternative author contact information look less like just another
+   author, and group it closer with the primary author contact information */
+.alternative-contact {
+  margin: 0.5em 0 0.25em 0;
+}
+address .non-ascii {
+  margin: 0 0 0 2em;
+}
+
+/* With it being possible to set tables with alignment
+  left, center, and right, { width: 100%; } does not make sense */
+table {
+  width: auto;
+}
+
+/* Avoid reference text that sits in a block with very wide left margin,
+   because of a long floating dt label.*/
+.references dd {
+  overflow: visible;
+}
+
+/* Control caption placement */
+caption {
+  caption-side: bottom;
+}
+
+/* Limit the width of the author address vcard, so names in right-to-left
+   script don't end up on the other side of the page. */
+
+address.vcard {
+  max-width: 30em;
+  margin-right: auto;
+}
+
+/* For address alignment dependent on LTR or RTL scripts */
+address div.left {
+  text-align: left;
+}
+address div.right {
+  text-align: right;
+}
+
+/* Provide table alignment support.  We can't use the alignX classes above
+   since they do unwanted things with caption and other styling. */
+table.right {
+ margin-left: auto;
+ margin-right: 0;
+}
+table.center {
+ margin-left: auto;
+ margin-right: auto;
+}
+table.left {
+ margin-left: 0;
+ margin-right: auto;
+}
+
+/* Give the table caption label the same styling as the figcaption */
+caption a[href] {
+  color: #222;
+}
+
+@media print {
+  .toplink {
+    display: none;
+  }
+
+  /* avoid overwriting the top border line with the ToC header */
+  #toc {
+    padding-top: 1px;
+  }
+
+  /* Avoid page breaks inside dl and author address entries */
+  .vcard {
+    page-break-inside: avoid;
+  }
+
+}
+/* Tweak the bcp14 keyword presentation */
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+/* Tweak the invisible space above H* in order not to overlay links in text above */
+ h2 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 31px;
+ }
+ h3 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 24px;
+ }
+ h4 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 24px;
+ }
+/* Float artwork pilcrow to the right */
+@media screen {
+  .artwork a.pilcrow {
+    display: block;
+    line-height: 0.7;
+    margin-top: 0.15em;
+  }
+}
+/* Make pilcrows on dd visible */
+@media screen {
+  dd:hover > a.pilcrow {
+    visibility: visible;
+  }
+}
+/* Make the placement of figcaption match that of a table's caption
+   by removing the figure's added bottom margin */
+.alignLeft.art-text,
+.alignCenter.art-text,
+.alignRight.art-text {
+   margin-bottom: 0;
+}
+.alignLeft,
+.alignCenter,
+.alignRight {
+  margin: 1em 0 0 0;
+}
+/* In print, the pilcrow won't show on hover, so prevent it from taking up space,
+   possibly even requiring a new line */
+@media print {
+  a.pilcrow {
+    display: none;
+  }
+}
+/* Styling for the external metadata */
+div#external-metadata {
+  background-color: #eee;
+  padding: 0.5em;
+  margin-bottom: 0.5em;
+  display: none;
+}
+div#internal-metadata {
+  padding: 0.5em;                       /* to match the external-metadata padding */
+}
+/* Styling for title RFC Number */
+h1#rfcnum {
+  clear: both;
+  margin: 0 0 -1em;
+  padding: 1em 0 0 0;
+}
+/* Make .olPercent look the same as <ol><li> */
+dl.olPercent > dd {
+  margin-bottom: 0.25em;
+  min-height: initial;
+}
+/* Give aside some styling to set it apart */
+aside {
+  border-left: 1px solid #ddd;
+  margin: 1em 0 1em 2em;
+  padding: 0.2em 2em;
+}
+aside > dl,
+aside > ol,
+aside > ul,
+aside > table,
+aside > p {
+  margin-bottom: 0.5em;
+}
+/* Additional page break settings */
+@media print {
+  figcaption, table caption {
+    page-break-before: avoid;
+  }
+}
+/* Font size adjustments for print */
+@media print {
+  body  { font-size: 10pt;      line-height: normal; max-width: 96%; }
+  h1    { font-size: 1.72em;    padding-top: 1.5em; } /* 1*1.2*1.2*1.2 */
+  h2    { font-size: 1.44em;    padding-top: 1.5em; } /* 1*1.2*1.2 */
+  h3    { font-size: 1.2em;     padding-top: 1.5em; } /* 1*1.2 */
+  h4    { font-size: 1em;       padding-top: 1.5em; }
+  h5, h6 { font-size: 1em;      margin: initial; padding: 0.5em 0 0.3em; }
+}
+/* Sourcecode margin in print, when there's no pilcrow */
+@media print {
+  .artwork,
+  .artwork > pre,
+  .sourcecode {
+    margin-bottom: 1em;
+  }
+}
+/* Avoid narrow tables forcing too narrow table captions, which may render badly */
+table {
+  min-width: 20em;
+}
+/* ol type a */
+ol.type-a { list-style-type: lower-alpha; }
+ol.type-A { list-style-type: upper-alpha; }
+ol.type-i { list-style-type: lower-roman; }
+ol.type-I { list-style-type: upper-roman; }
+/* Apply the print table and row borders in general, on request from the RPC,
+and increase the contrast between border and odd row background slightly */
+table {
+  border: 1px solid #ddd;
+}
+td {
+  border-top: 1px solid #ddd;
+}
+tr {
+  break-inside: avoid;
+}
+tr:nth-child(2n+1) > td {
+  background-color: #f8f8f8;
+}
+/* Use style rules to govern display of the TOC. */
+@media screen and (max-width: 1023px) {
+  #toc nav { display: none; }
+  #toc.active nav { display: block; }
+}
+/* Add support for keepWithNext */
+.keepWithNext {
+  break-after: avoid-page;
+  break-after: avoid-page;
+}
+/* Add support for keepWithPrevious */
+.keepWithPrevious {
+  break-before: avoid-page;
+}
+/* Change the approach to avoiding breaks inside artwork etc. */
+figure, pre, table, .artwork, .sourcecode  {
+  break-before: auto;
+  break-after: auto;
+}
+/* Avoid breaks between <dt> and <dd> */
+dl {
+  break-before: auto;
+  break-inside: auto;
+}
+dt {
+  break-before: auto;
+  break-after: avoid-page;
+}
+dd {
+  break-before: avoid-page;
+  break-after: auto;
+  orphans: 3;
+  widows: 3
+}
+span.break, dd.break {
+  margin-bottom: 0;
+  min-height: 0;
+  break-before: auto;
+  break-inside: auto;
+  break-after: auto;
+}
+/* Undo break-before ToC */
+@media print {
+  #toc {
+    break-before: auto;
+  }
+}
+/* Text in compact lists should not get extra bottom margin space,
+   since that would makes the list not compact */
+ul.compact p, .ulCompact p,
+ol.compact p, .olCompact p {
+ margin: 0;
+}
+/* But the list as a whole needs the extra space at the end */
+section ul.compact,
+section .ulCompact,
+section ol.compact,
+section .olCompact {
+  margin-bottom: 1em;                    /* same as p not within ul.compact etc. */
+}
+/* The tt and code background above interferes with for instance table cell
+   backgrounds.  Changed to something a bit more selective. */
+tt, code {
+  background-color: transparent;
+}
+p tt, p code, li tt, li code, dt tt, dt code {
+  background-color: #f8f8f8;
+}
+/* Tweak the pre margin -- 0px doesn't come out well */
+pre {
+   margin-top: 0.5px;
+}
+/* Tweak the compact list text */
+ul.compact, .ulCompact,
+ol.compact, .olCompact,
+dl.compact, .dlCompact {
+  line-height: normal;
+}
+/* Don't add top margin for nested lists */
+li > ul, li > ol, li > dl,
+dd > ul, dd > ol, dd > dl,
+dl > dd > dl {
+  margin-top: initial;
+}
+/* Elements that should not be rendered on the same line as a <dt> */
+/* This should match the element list in writer.text.TextWriter.render_dl() */
+dd > div.artwork:first-child,
+dd > aside:first-child,
+dd > blockquote:first-child,
+dd > figure:first-child,
+dd > ol:first-child,
+dd > div.sourcecode:first-child,
+dd > table:first-child,
+dd > ul:first-child {
+  clear: left;
+}
+/* fix for weird browser behaviour when <dd/> is empty */
+dt+dd:empty::before{
+  content: "\00a0";
+}
+/* Make paragraph spacing inside <li> smaller than in body text, to fit better within the list */
+li > p {
+  margin-bottom: 0.5em
+}
+/* Don't let p margin spill out from inside list items */
+li > p:last-of-type:only-child {
+  margin-bottom: 0;
+}
+</style>
+<link href="rfc-local.css" rel="stylesheet" type="text/css">
+<script type="application/javascript">async function addMetadata(){try{const e=document.styleSheets[0].cssRules;for(let t=0;t<e.length;t++)if(/#identifiers/.exec(e[t].selectorText)){const a=e[t].cssText.replace("#identifiers","#external-updates");document.styleSheets[0].insertRule(a,document.styleSheets[0].cssRules.length)}}catch(e){console.log(e)}const e=document.getElementById("external-metadata");if(e)try{var t,a="",o=function(e){const t=document.getElementsByTagName("meta");for(let a=0;a<t.length;a++)if(t[a].getAttribute("name")===e)return t[a].getAttribute("content");return""}("rfc.number");if(o){t="https://www.rfc-editor.org/rfc/rfc"+o+".json";try{const e=await fetch(t);a=await e.json()}catch(e){t=document.URL.indexOf("html")>=0?document.URL.replace(/html$/,"json"):document.URL+".json";const o=await fetch(t);a=await o.json()}}if(!a)return;e.style.display="block";const s="",d="https://datatracker.ietf.org/doc",n="https://datatracker.ietf.org/ipr/search",c="https://www.rfc-editor.org/info",l=a.doc_id.toLowerCase(),i=a.doc_id.slice(0,3).toLowerCase(),f=a.doc_id.slice(3).replace(/^0+/,""),u={status:"Status",obsoletes:"Obsoletes",obsoleted_by:"Obsoleted By",updates:"Updates",updated_by:"Updated By",see_also:"See Also",errata_url:"Errata"};let h="<dl style='overflow:hidden' id='external-updates'>";["status","obsoletes","obsoleted_by","updates","updated_by","see_also","errata_url"].forEach(e=>{if("status"==e){a[e]=a[e].toLowerCase();var t=a[e].split(" "),o=t.length,w="",p=1;for(let e=0;e<o;e++)p<o?w=w+r(t[e])+" ":w+=r(t[e]),p++;a[e]=w}else if("obsoletes"==e||"obsoleted_by"==e||"updates"==e||"updated_by"==e){var g,m="",b=1;g=a[e].length;for(let t=0;t<g;t++)a[e][t]&&(a[e][t]=String(a[e][t]).toLowerCase(),m=b<g?m+"<a href='"+s+"/rfc/".concat(a[e][t])+"'>"+a[e][t].slice(3)+"</a>, ":m+"<a href='"+s+"/rfc/".concat(a[e][t])+"'>"+a[e][t].slice(3)+"</a>",b++);a[e]=m}else if("see_also"==e){var y,L="",C=1;y=a[e].length;for(let t=0;t<y;t++)if(a[e][t]){a[e][t]=String(a[e][t]);var _=a[e][t].slice(0,3),v=a[e][t].slice(3).replace(/^0+/,"");L=C<y?"RFC"!=_?L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+_+" "+v+"</a>, ":L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+v+"</a>, ":"RFC"!=_?L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+_+" "+v+"</a>":L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+v+"</a>",C++}a[e]=L}else if("errata_url"==e){var R="";R=a[e]?R+"<a href='"+a[e]+"'>Errata exist</a> | <a href='"+d+"/"+l+"'>Datatracker</a>| <a href='"+n+"/?"+i+"="+f+"&submit="+i+"'>IPR</a> | <a href='"+c+"/"+l+"'>Info page</a>":"<a href='"+d+"/"+l+"'>Datatracker</a> | <a href='"+n+"/?"+i+"="+f+"&submit="+i+"'>IPR</a> | <a href='"+c+"/"+l+"'>Info page</a>",a[e]=R}""!=a[e]?"Errata"==u[e]?h+=`<dt>More info:</dt><dd>${a[e]}</dd>`:h+=`<dt>${u[e]}:</dt><dd>${a[e]}</dd>`:"Errata"==u[e]&&(h+=`<dt>More info:</dt><dd>${a[e]}</dd>`)}),h+="</dl>",e.innerHTML=h}catch(e){console.log(e)}else console.log("Could not locate metadata <div> element");function r(e){return e.charAt(0).toUpperCase()+e.slice(1)}}window.removeEventListener("load",addMetadata),window.addEventListener("load",addMetadata);</script>
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">Tempo Payment Lock Extension</td>
+<td class="right">January 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Moxey &amp; Konstantopoulos</td>
+<td class="center">Expires 24 July 2026</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">Network Working Group</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-tempo-lock-extension-00</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-01-20" class="published">20 January 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Standards Track</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2026-07-24">24 July 2026</time></dd>
+<dt class="label-authors">Authors:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">J. Moxey</div>
+</div>
+<div class="author">
+      <div class="author-name">G. Konstantopoulos</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Tempo Payment Lock Extension</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">This document extends the Tempo Payment Method [draft-tempo-payment-method]
+with support for escrowed payment locks. It defines the <code>lock</code> intent for
+incremental payments suitable for streaming and metered services, where
+clients deposit funds into an on-chain escrow that permits the payee to
+withdraw funds up to the amount authorized by signed releases, while
+permitting the payer to withdraw any remaining funds after expiry.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 24 July 2026.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1">
+                <p id="section-toc.1-1.1.2.1.1" class="keepWithNext"><a href="#section-1.1" class="auto internal xref">1.1</a>.  <a href="#name-example-use-case-metered-ag" class="internal xref">Example Use Case: Metered Agent Execution</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.2">
+                <p id="section-toc.1-1.1.2.2.1" class="keepWithNext"><a href="#section-1.2" class="auto internal xref">1.2</a>.  <a href="#name-trust-model-and-fund-commit" class="internal xref">Trust Model and Fund Commitment</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.3">
+                <p id="section-toc.1-1.1.2.3.1" class="keepWithNext"><a href="#section-1.3" class="auto internal xref">1.3</a>.  <a href="#name-relationship-to-base-specif" class="internal xref">Relationship to Base Specification</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-requirements-language" class="internal xref">Requirements Language</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-terminology" class="internal xref">Terminology</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-intent-lock" class="internal xref">Intent: "lock"</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-lock-request-schema" class="internal xref">Lock Request Schema</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-lock-credential-schema" class="internal xref">Lock Credential Schema</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.1">
+                <p id="section-toc.1-1.6.2.1.1"><a href="#section-6.1" class="auto internal xref">6.1</a>.  <a href="#name-lock-credential" class="internal xref">Lock Credential</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.2">
+                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-release-credential" class="internal xref">Release Credential</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-eip-712-release-format" class="internal xref">EIP-712 Release Format</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.1">
+                <p id="section-toc.1-1.7.2.1.1"><a href="#section-7.1" class="auto internal xref">7.1</a>.  <a href="#name-domain-separator" class="internal xref">Domain Separator</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.2">
+                <p id="section-toc.1-1.7.2.2.1"><a href="#section-7.2" class="auto internal xref">7.2</a>.  <a href="#name-release-type" class="internal xref">Release Type</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.3">
+                <p id="section-toc.1-1.7.2.3.1"><a href="#section-7.3" class="auto internal xref">7.3</a>.  <a href="#name-cumulative-semantics" class="internal xref">Cumulative Semantics</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.4">
+                <p id="section-toc.1-1.7.2.4.1"><a href="#section-7.4" class="auto internal xref">7.4</a>.  <a href="#name-example-release" class="internal xref">Example Release</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-tip20escrow-interface" class="internal xref">TIP20Escrow Interface</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.1">
+                <p id="section-toc.1-1.8.2.1.1"><a href="#section-8.1" class="auto internal xref">8.1</a>.  <a href="#name-lock-state" class="internal xref">Lock State</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2">
+                <p id="section-toc.1-1.8.2.2.1"><a href="#section-8.2" class="auto internal xref">8.2</a>.  <a href="#name-functions" class="internal xref">Functions</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.1">
+                    <p id="section-toc.1-1.8.2.2.2.1.1"><a href="#section-8.2.1" class="auto internal xref">8.2.1</a>.  <a href="#name-lock" class="internal xref">lock</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.2">
+                    <p id="section-toc.1-1.8.2.2.2.2.1"><a href="#section-8.2.2" class="auto internal xref">8.2.2</a>.  <a href="#name-release" class="internal xref">release</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.3">
+                    <p id="section-toc.1-1.8.2.2.2.3.1"><a href="#section-8.2.3" class="auto internal xref">8.2.3</a>.  <a href="#name-requestrelease" class="internal xref">requestRelease</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.4">
+                    <p id="section-toc.1-1.8.2.2.2.4.1"><a href="#section-8.2.4" class="auto internal xref">8.2.4</a>.  <a href="#name-withdraw" class="internal xref">withdraw</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.5">
+                    <p id="section-toc.1-1.8.2.2.2.5.1"><a href="#section-8.2.5" class="auto internal xref">8.2.5</a>.  <a href="#name-modifylock" class="internal xref">modifyLock</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2.2.6">
+                    <p id="section-toc.1-1.8.2.2.2.6.1"><a href="#section-8.2.6" class="auto internal xref">8.2.6</a>.  <a href="#name-getlock" class="internal xref">getLock</a></p>
+</li>
+                </ul>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-verification-procedure" class="internal xref">Verification Procedure</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1">
+                <p id="section-toc.1-1.9.2.1.1"><a href="#section-9.1" class="auto internal xref">9.1</a>.  <a href="#name-lock-verification" class="internal xref">Lock Verification</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.2">
+                <p id="section-toc.1-1.9.2.2.1"><a href="#section-9.2" class="auto internal xref">9.2</a>.  <a href="#name-release-verification" class="internal xref">Release Verification</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#section-10" class="auto internal xref">10</a>. <a href="#name-settlement-procedure" class="internal xref">Settlement Procedure</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10.2.1">
+                <p id="section-toc.1-1.10.2.1.1"><a href="#section-10.1" class="auto internal xref">10.1</a>.  <a href="#name-settlement-flow" class="internal xref">Settlement Flow</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10.2.2">
+                <p id="section-toc.1-1.10.2.2.1"><a href="#section-10.2" class="auto internal xref">10.2</a>.  <a href="#name-post-expiry-recovery" class="internal xref">Post-Expiry Recovery</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10.2.3">
+                <p id="section-toc.1-1.10.2.3.1"><a href="#section-10.3" class="auto internal xref">10.3</a>.  <a href="#name-early-release" class="internal xref">Early Release</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#section-11" class="auto internal xref">11</a>. <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.1">
+                <p id="section-toc.1-1.11.2.1.1"><a href="#section-11.1" class="auto internal xref">11.1</a>.  <a href="#name-lock-security" class="internal xref">Lock Security</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11.2.2">
+                <p id="section-toc.1-1.11.2.2.1"><a href="#section-11.2" class="auto internal xref">11.2</a>.  <a href="#name-release-security" class="internal xref">Release Security</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12">
+            <p id="section-toc.1-1.12.1"><a href="#section-12" class="auto internal xref">12</a>. <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13">
+            <p id="section-toc.1-1.13.1"><a href="#section-13" class="auto internal xref">13</a>. <a href="#name-references" class="internal xref">References</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.1">
+                <p id="section-toc.1-1.13.2.1.1"><a href="#section-13.1" class="auto internal xref">13.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14">
+            <p id="section-toc.1-1.14.1"><a href="#appendix-A" class="auto internal xref">Appendix A</a>.  <a href="#name-examples" class="internal xref">Examples</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14.2.1">
+                <p id="section-toc.1-1.14.2.1.1"><a href="#appendix-A.1" class="auto internal xref">A.1</a>.  <a href="#name-payment-lock-flow" class="internal xref">Payment Lock Flow</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14.2.2">
+                <p id="section-toc.1-1.14.2.2.1"><a href="#appendix-A.2" class="auto internal xref">A.2</a>.  <a href="#name-challenge" class="internal xref">Challenge</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14.2.3">
+                <p id="section-toc.1-1.14.2.3.1"><a href="#appendix-A.3" class="auto internal xref">A.3</a>.  <a href="#name-lock-credential-2" class="internal xref">Lock Credential</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14.2.4">
+                <p id="section-toc.1-1.14.2.4.1"><a href="#appendix-A.4" class="auto internal xref">A.4</a>.  <a href="#name-release-request" class="internal xref">Release Request</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.15">
+            <p id="section-toc.1-1.15.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-acknowledgements" class="internal xref">Acknowledgements</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.16">
+            <p id="section-toc.1-1.16.1"><a href="#appendix-C" class="auto internal xref"></a><a href="#name-authors-addresses" class="internal xref">Authors' Addresses</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="introduction">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">The base Tempo Payment Method [draft-tempo-payment-method] supports one-time charges, authorizations, and subscriptions. However, these intents require the payment amount to be known upfront or bounded by a fixed authorization.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">For metered services—where consumption is only known as the service is delivered—a different model is required: one where clients deposit funds into escrow, receive service, and authorize incremental releases as they consume.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">This extension defines the <code>lock</code> intent, which establishes an <strong>escrowed payment lock</strong> using:<a href="#section-1-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1-4.1">
+          <strong>TIP20Escrow interface</strong> for on-chain fund escrow (implementable as a<a href="#section-1-4.1" class="pilcrow">¶</a>
+</li>
+      </ul>
+<p id="section-1-5">smart contract or chain-native precompile)<a href="#section-1-5" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1-6.1">
+          <strong>Off-chain EIP-712 releases</strong> for incremental release authorization<a href="#section-1-6.1" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-1-6.2">
+          <strong>Payee-controlled settlement</strong> for efficient fund collection<a href="#section-1-6.2" class="pilcrow">¶</a>
+</li>
+      </ul>
+<div id="example-use-case-metered-agent-execution">
+<section id="section-1.1">
+        <h3 id="name-example-use-case-metered-ag">
+<a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-example-use-case-metered-ag" class="section-name selfRef">Example Use Case: Metered Agent Execution</a>
+        </h3>
+<p id="section-1.1-1">This section is non-normative.<a href="#section-1.1-1" class="pilcrow">¶</a></p>
+<p id="section-1.1-2">Consider a user delegating tasks to an AI agent that consumes API tokens:<a href="#section-1.1-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.1-3">
+          <li id="section-1.1-3.1">User initiates an agent task (e.g., a research task)<a href="#section-1.1-3.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-1.1-3.2">Agent's API returns 402 with a <code>lock</code> challenge<a href="#section-1.1-3.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-1.1-3.3">User creates a lock with a budget for the task<a href="#section-1.1-3.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-1.1-3.4">As tokens are consumed, the client sends EIP-712 releases authorizing payment<a href="#section-1.1-3.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-1.1-3.5">Server settles periodically or when the task completes<a href="#section-1.1-3.5" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.1-4">The user pays for tokens consumed, with unused budget reclaimable after lock expiry. This enables users to delegate open-ended tasks to agents with bounded spending.<a href="#section-1.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="trust-model-and-fund-commitment">
+<section id="section-1.2">
+        <h3 id="name-trust-model-and-fund-commit">
+<a href="#section-1.2" class="section-number selfRef">1.2. </a><a href="#name-trust-model-and-fund-commit" class="section-name selfRef">Trust Model and Fund Commitment</a>
+        </h3>
+<p id="section-1.2-1">In this document, the <strong>server</strong> acts as the <strong>payee</strong>, and the <strong>client</strong> acts on behalf of the <strong>payer</strong>.<a href="#section-1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.2-2">Payment locks use an <strong>escrow-based model</strong> with on-chain fund locking:<a href="#section-1.2-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.2-3">
+          <li id="section-1.2-3.1">
+            <strong>Funds are locked at creation.</strong> The payer deposits TIP-20 tokens into<a href="#section-1.2-3.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.2-4">a TIP20Escrow implementation. These funds are locked until release or expiry.<a href="#section-1.2-4" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.2-5">
+          <li id="section-1.2-5.1">
+            <strong>Payee can release at any time.</strong> Using a signed release from the payer,<a href="#section-1.2-5.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.2-6">the payee can withdraw funds from the escrow (up to the released amount).<a href="#section-1.2-6" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.2-7">
+          <li id="section-1.2-7.1">
+            <strong>Partial release is supported.</strong> The payee can release multiple times,<a href="#section-1.2-7.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.2-8">each time withdrawing the delta between the release amount and previously    released amount.<a href="#section-1.2-8" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.2-9">
+          <li id="section-1.2-9.1">
+            <strong>Payer can withdraw after expiry.</strong> If the payee fails to release before<a href="#section-1.2-9.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.2-10">the lock expires, the payer can withdraw all remaining (unreleased) funds.<a href="#section-1.2-10" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.2-11">
+          <li id="section-1.2-11.1">
+            <strong>Payee bears the risk of not settling.</strong> The only risk to the payee is<a href="#section-1.2-11.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-1.2-12">failing to release before expiry; escrowed funds are committed for payment.<a href="#section-1.2-12" class="pilcrow">¶</a></p>
+<p id="section-1.2-13">Trust properties:<a href="#section-1.2-13" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.2-14.1">
+            <strong>Payer protection</strong>: Funds can only be released by payee with a valid<a href="#section-1.2-14.1" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-1.2-15">signed release; after expiry, payer reclaims unreleased funds.<a href="#section-1.2-15" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.2-16.1">
+            <strong>Payee protection</strong>: Escrowed funds are committed for payment for valid<a href="#section-1.2-16.1" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-1.2-17">releases (no risk of payer draining wallet).<a href="#section-1.2-17" class="pilcrow">¶</a></p>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-1.2-18">
+<pre>
+Lock Lifecycle:
+
+  CREATE           SERVICE            RELEASE          EXPIRY
+    │                  │                 │                │
+    ▼                  ▼                 ▼                ▼
+┌─────────┐      ┌───────────┐     ┌──────────┐     ┌──────────┐
+│ Deposit │      │ Releases  │     │ Payee    │     │ Payer    │
+│ to      │─────▶│ signed    │────▶│ withdraws│────▶│ withdraws│
+│ escrow  │      │ (off-chain)│    │ delta    │     │ remainder│
+└─────────┘      └───────────┘     └──────────┘     └──────────┘
+     │                                  │
+     └──────────────────────────────────┘
+              Funds locked in escrow
+              (guaranteed for payee)
+</pre><a href="#section-1.2-18" class="pilcrow">¶</a>
+</div>
+<p id="section-1.2-19">Cumulative release semantics:<a href="#section-1.2-19" class="pilcrow">¶</a></p>
+<p id="section-1.2-20">Releases <span class="bcp14">MUST</span> authorize a <strong>cumulative total</strong>, not incremental deltas. A release's <code>cumulativeAmount</code> <span class="bcp14">MUST</span> be strictly greater than the previously accepted <code>cumulativeAmount</code> for the same lock.<a href="#section-1.2-20" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.2-21.1">Release #1: <code>cumulativeAmount = 100000</code> (authorizes 100000 total)<a href="#section-1.2-21.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.2-21.2">Release #2: <code>cumulativeAmount = 250000</code> (authorizes 250000 total)<a href="#section-1.2-21.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.2-21.3">Release #3: <code>cumulativeAmount = 400000</code> (authorizes 400000 total)<a href="#section-1.2-21.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-1.2-22">When settling, the implementation computes: <code>delta = cumulativeAmount - released</code><a href="#section-1.2-22" class="pilcrow">¶</a></p>
+<p id="section-1.2-23">This permits the lock to remain usable after partial releases—the payer continues signing releases with higher cumulative amounts up to the deposit.<a href="#section-1.2-23" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="relationship-to-base-specification">
+<section id="section-1.3">
+        <h3 id="name-relationship-to-base-specif">
+<a href="#section-1.3" class="section-number selfRef">1.3. </a><a href="#name-relationship-to-base-specif" class="section-name selfRef">Relationship to Base Specification</a>
+        </h3>
+<p id="section-1.3-1">This document extends [draft-tempo-payment-method] with:<a href="#section-1.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.3-2.1">A new <code>lock</code> intent (Section 4)<a href="#section-1.3-2.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-2.2">Lock-specific request and credential schemas (Sections 5-6)<a href="#section-1.3-2.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-2.3">EIP-712 release format (Section 7)<a href="#section-1.3-2.3" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-2.4">TIP20Escrow interface (Section 8)<a href="#section-1.3-2.4" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-2.5">Lock-specific verification and settlement procedures (Sections 9-10)<a href="#section-1.3-2.5" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-1.3-3">All other aspects of the Tempo Payment Method apply unchanged.<a href="#section-1.3-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="requirements-language">
+<section id="section-2">
+      <h2 id="name-requirements-language">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-requirements-language" class="section-name selfRef">Requirements Language</a>
+      </h2>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>", "<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="terminology">
+<section id="section-3">
+      <h2 id="name-terminology">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-terminology" class="section-name selfRef">Terminology</a>
+      </h2>
+<span class="break"></span><dl class="dlParallel" id="section-3-1">
+        <dt id="section-3-1.1">Payment Lock</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.2">
+          <p id="section-3-1.2.1">An on-chain escrow where the payer deposits TIP-20 tokens that can only be released to a designated payee using signed releases, or withdrawn by the payer after expiry.<a href="#section-3-1.2.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-3-1.3">Release</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.4">
+          <p id="section-3-1.4.1">An EIP-712 signed message authorizing a cumulative release amount for a specific lock. Releases are monotonically increasing in amount.<a href="#section-3-1.4.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-3-1.5">TIP20Escrow</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.6">
+          <p id="section-3-1.6.1">An interface for payment lock escrow, providing <code>lock</code>, <code>release</code>, <code>requestRelease</code>, and <code>withdraw</code> operations. Implementations <span class="bcp14">MAY</span> be deployed as smart contracts or chain-native precompiles.<a href="#section-3-1.6.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-3-1.7">Lock ID</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.8">
+          <p id="section-3-1.8.1">A unique identifier (bytes32) for a specific lock, returned by a TIP20Escrow implementation when a lock is created.<a href="#section-3-1.8.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-3-1.9">Cumulative Amount</dt>
+        <dd style="margin-left: 1.5em" id="section-3-1.10">
+          <p id="section-3-1.10.1">The total amount authorized for release since lock creation. Each release's <code>cumulativeAmount</code> <span class="bcp14">MUST</span> be greater than the previous.<a href="#section-3-1.10.1" class="pilcrow">¶</a></p>
+</dd>
+      <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="intent-lock">
+<section id="section-4">
+      <h2 id="name-intent-lock">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-intent-lock" class="section-name selfRef">Intent: "lock"</a>
+      </h2>
+<p id="section-4-1">An escrowed payment lock for streaming or metered services. The payer deposits funds into an on-chain escrow (a TIP20Escrow implementation) that permits the payee to withdraw funds up to the amount authorized by releases, while permitting the payer to withdraw any remaining funds after expiry.<a href="#section-4-1" class="pilcrow">¶</a></p>
+<p id="section-4-2">A lock request <span class="bcp14">MUST</span> include the parameters defined as <span class="bcp14">REQUIRED</span> in Section 5. A server challenge for <code>intent="lock"</code> <span class="bcp14">MUST NOT</span> omit any <span class="bcp14">REQUIRED</span> fields.<a href="#section-4-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="lock-request-schema">
+<section id="section-5">
+      <h2 id="name-lock-request-schema">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-lock-request-schema" class="section-name selfRef">Lock Request Schema</a>
+      </h2>
+<p id="section-5-1">For <code>intent="lock"</code>, the <code>request</code> parameter contains a base64url-encoded JSON object with the following fields:<a href="#section-5-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-1">
+        <caption><a href="#table-1" class="selfRef">Table 1</a></caption>
+<thead>
+          <tr>
+            <th class="text-left" rowspan="1" colspan="1">Field</th>
+            <th class="text-left" rowspan="1" colspan="1">Type</th>
+            <th class="text-left" rowspan="1" colspan="1">Required</th>
+            <th class="text-left" rowspan="1" colspan="1">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>asset</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">string</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">REQUIRED</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">TIP-20 token address</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>amount</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">string</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">REQUIRED</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">Amount to lock in base units (stringified number)</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>expiry</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">string</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">REQUIRED</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">Lock expiry as UNIX timestamp in seconds (stringified number)</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>payee</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">string</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">REQUIRED</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">Recipient address for released funds</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>trust</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">string</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">OPTIONAL</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">Exclusive intermediary authorized to call release (if set, payee cannot)</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>feePayer</code>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">boolean</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <span class="bcp14">OPTIONAL</span>
+</td>
+            <td class="text-left" rowspan="1" colspan="1">If <code>true</code>, server will pay transaction fees (default: <code>false</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+<p id="section-5-3">If <code>trust</code> is present, only <code>trust</code> can call <code>release()</code>; the <code>payee</code> cannot. Funds are still transferred to <code>payee</code>, but <code>trust</code> acts as an exclusive intermediary (e.g., an arbitration service). If <code>trust</code> is absent, <code>payee</code> calls <code>release()</code> directly.<a href="#section-5-3" class="pilcrow">¶</a></p>
+<p id="section-5-4">The following is a non-normative example:<a href="#section-5-4" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-5-5">
+<pre>
+{
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "10000000",
+  "expiry": "1737043200",
+  "payee": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+}
+</pre><a href="#section-5-5" class="pilcrow">¶</a>
+</div>
+<p id="section-5-6">In this example, the request specifies a lock of 10.00 alphaUSD (10000000 base units) expiring at UNIX timestamp 1737043200.<a href="#section-5-6" class="pilcrow">¶</a></p>
+<p id="section-5-7">The client <span class="bcp14">MUST</span> fulfill this by signing a Tempo Transaction that:<a href="#section-5-7" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5-8">
+        <li id="section-5-8.1">Calls <code>lock(asset, amount, expiry, payee, trust)</code> on a TIP20Escrow<a href="#section-5-8.1" class="pilcrow">¶</a>
+</li>
+      </ol>
+<p id="section-5-9">implementation<a href="#section-5-9" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5-10">
+        <li id="section-5-10.1">The implementation transfers <code>amount</code> of <code>asset</code> from the payer to escrow<a href="#section-5-10.1" class="pilcrow">¶</a>
+</li>
+        <li id="section-5-10.2">Returns a <code>lockId</code> that identifies this specific lock<a href="#section-5-10.2" class="pilcrow">¶</a>
+</li>
+      </ol>
+<p id="section-5-11">The <code>trust</code> field, if present, specifies an additional address that can release funds (e.g., an arbitration service). If omitted, only the <code>payee</code> can release funds before expiry.<a href="#section-5-11" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="lock-credential-schema">
+<section id="section-6">
+      <h2 id="name-lock-credential-schema">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-lock-credential-schema" class="section-name selfRef">Lock Credential Schema</a>
+      </h2>
+<div id="lock-credential">
+<section id="section-6.1">
+        <h3 id="name-lock-credential">
+<a href="#section-6.1" class="section-number selfRef">6.1. </a><a href="#name-lock-credential" class="section-name selfRef">Lock Credential</a>
+        </h3>
+<p id="section-6.1-1">For <code>intent="lock"</code>, the credential includes a <code>lockId</code> field that identifies the created lock on-chain. The client <span class="bcp14">MUST</span> broadcast the lock creation transaction and obtain the resulting <code>lockId</code> before sending the credential.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-2">
+          <caption><a href="#table-2" class="selfRef">Table 2</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>id</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Challenge ID from the server</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>source</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">OPTIONAL</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Payer identifier as a DID</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>payload</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">object</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Contains <code>type</code>, <code>signature</code>, and <code>lockId</code>
+</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-6.1-3">The <code>payload</code> object for lock credentials:<a href="#section-6.1-3" class="pilcrow">¶</a></p>
+<table class="center" id="table-3">
+          <caption><a href="#table-3" class="selfRef">Table 3</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>type</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>"lock"</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>hash</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Transaction hash of the lock creation transaction</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>lockId</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Lock identifier returned by the TIP20Escrow implementation</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-6.1-5">Example:<a href="#section-6.1-5" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-6.1-6">
+<pre>
+{
+  "id": "xT4wLkM9pQvR2nJsY6aDfE",
+  "payload": {
+    "type": "lock",
+    "hash": "0x1234567890abcdef...",
+    "lockId": "0x6d0f4fdf..."
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+</pre><a href="#section-6.1-6" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+<div id="release-credential">
+<section id="section-6.2">
+        <h3 id="name-release-credential">
+<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-release-credential" class="section-name selfRef">Release Credential</a>
+        </h3>
+<p id="section-6.2-1">Release credentials are transmitted out of band (for example, via HTTP POST to an endpoint defined by the server). The credential includes the EIP-712 message and signature:<a href="#section-6.2-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-4">
+          <caption><a href="#table-4" class="selfRef">Table 4</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>id</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Original challenge ID from the lock session</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>payload</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">object</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Contains <code>type</code>, <code>message</code>, and <code>signature</code>
+</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-6.2-3">The <code>payload</code> object for release credentials:<a href="#section-6.2-3" class="pilcrow">¶</a></p>
+<table class="center" id="table-5">
+          <caption><a href="#table-5" class="selfRef">Table 5</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Required</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>type</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>"release"</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>message</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">object</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">EIP-712 Release struct (see Section 7)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>signature</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <span class="bcp14">REQUIRED</span>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">EIP-712 signature over the message</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-6.2-5">The <code>message</code> object:<a href="#section-6.2-5" class="pilcrow">¶</a></p>
+<table class="center" id="table-6">
+          <caption><a href="#table-6" class="selfRef">Table 6</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>lockId</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Lock identifier (bytes32 hex)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>cumulativeAmount</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">Total amount authorized for release (cumulative, base units)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>expires</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">string</td>
+              <td class="text-left" rowspan="1" colspan="1">UNIX timestamp after which release expires</td>
+            </tr>
+          </tbody>
+        </table>
+<p id="section-6.2-7">Example:<a href="#section-6.2-7" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="section-6.2-8">
+<pre>
+{
+  "id": "mK7xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "type": "release",
+    "message": {
+      "lockId": "0x6d0f4fdf9a8b2c3e...",
+      "cumulativeAmount": "250000",
+      "expires": "1737043200"
+    },
+    "signature": "0xabc123...EIP-712 signature..."
+  }
+}
+</pre><a href="#section-6.2-8" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="eip-712-release-format">
+<section id="section-7">
+      <h2 id="name-eip-712-release-format">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-eip-712-release-format" class="section-name selfRef">EIP-712 Release Format</a>
+      </h2>
+<p id="section-7-1">To release funds from a lock, the payee <span class="bcp14">MUST</span> provide an EIP-712 signed release from the lock owner. The signed release authorizes the payee to withdraw funds up to <code>cumulativeAmount</code> from the lock.<a href="#section-7-1" class="pilcrow">¶</a></p>
+<div id="domain-separator">
+<section id="section-7.1">
+        <h3 id="name-domain-separator">
+<a href="#section-7.1" class="section-number selfRef">7.1. </a><a href="#name-domain-separator" class="section-name selfRef">Domain Separator</a>
+        </h3>
+<p id="section-7.1-1">The EIP-712 domain <span class="bcp14">MUST</span> use the following values:<a href="#section-7.1-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-7">
+          <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>name</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>"TIP20Escrow"</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>version</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>"1"</code>
+</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>chainId</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Tempo chain ID (e.g., 42431)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>verifyingContract</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">Address of the TIP20Escrow implementation that created the lock</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="release-type">
+<section id="section-7.2">
+        <h3 id="name-release-type">
+<a href="#section-7.2" class="section-number selfRef">7.2. </a><a href="#name-release-type" class="section-name selfRef">Release Type</a>
+        </h3>
+<div class="lang-solidity sourcecode" id="section-7.2-1">
+<pre>
+struct Release {
+    bytes32 lockId;
+    uint256 cumulativeAmount;
+    uint256 expires;
+}
+</pre><a href="#section-7.2-1" class="pilcrow">¶</a>
+</div>
+<table class="center" id="table-8">
+          <caption><a href="#table-8" class="selfRef">Table 8</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>lockId</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">bytes32</td>
+              <td class="text-left" rowspan="1" colspan="1">Lock identifier</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>cumulativeAmount</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint256</td>
+              <td class="text-left" rowspan="1" colspan="1">Total amount authorized for release (cumulative, not delta)</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>expires</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint256</td>
+              <td class="text-left" rowspan="1" colspan="1">UNIX timestamp after which this release expires</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="cumulative-semantics">
+<section id="section-7.3">
+        <h3 id="name-cumulative-semantics">
+<a href="#section-7.3" class="section-number selfRef">7.3. </a><a href="#name-cumulative-semantics" class="section-name selfRef">Cumulative Semantics</a>
+        </h3>
+<p id="section-7.3-1">Releases <span class="bcp14">MUST</span> authorize a cumulative total, not incremental deltas. A TIP20Escrow implementation <span class="bcp14">MUST</span> reject any release where <code>cumulativeAmount &lt;= released</code>. A payee <span class="bcp14">SHOULD</span> use the highest valid release available when calling <code>release()</code>.<a href="#section-7.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7.3-2.1">Release #1: <code>cumulativeAmount = 100000</code> → releases 100000<a href="#section-7.3-2.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-7.3-2.2">Release #2: <code>cumulativeAmount = 250000</code> → releases 150000 more (delta)<a href="#section-7.3-2.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-7.3-2.3">Release #3: <code>cumulativeAmount = 400000</code> → releases 150000 more (delta)<a href="#section-7.3-2.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-7.3-3">The implementation computes: <code>delta = cumulativeAmount - lock.released</code><a href="#section-7.3-3" class="pilcrow">¶</a></p>
+<p id="section-7.3-4">This prevents replay attacks and permits the lock to remain usable after partial releases—the payer continues signing releases with higher cumulative amounts up to the locked deposit.<a href="#section-7.3-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="example-release">
+<section id="section-7.4">
+        <h3 id="name-example-release">
+<a href="#section-7.4" class="section-number selfRef">7.4. </a><a href="#name-example-release" class="section-name selfRef">Example Release</a>
+        </h3>
+<div class="lang-json sourcecode" id="section-7.4-1">
+<pre>
+{
+  "types": {
+    "EIP712Domain": [
+      { "name": "name", "type": "string" },
+      { "name": "version", "type": "string" },
+      { "name": "chainId", "type": "uint256" },
+      { "name": "verifyingContract", "type": "address" }
+    ],
+    "Release": [
+      { "name": "lockId", "type": "bytes32" },
+      { "name": "cumulativeAmount", "type": "uint256" },
+      { "name": "expires", "type": "uint256" }
+    ]
+  },
+  "primaryType": "Release",
+  "domain": {
+    "name": "TIP20Escrow",
+    "version": "1",
+    "chainId": 42431,
+    "verifyingContract": "0x0000000000000000000000000000000000000100"
+  },
+  "message": {
+    "lockId": "0x6d0f4fdf9a8b2c3e...",
+    "cumulativeAmount": "250000",
+    "expires": "1737043200"
+  }
+}
+</pre><a href="#section-7.4-1" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="tip20escrow-interface">
+<section id="section-8">
+      <h2 id="name-tip20escrow-interface">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-tip20escrow-interface" class="section-name selfRef">TIP20Escrow Interface</a>
+      </h2>
+<p id="section-8-1">The TIP20Escrow interface defines the escrow functionality for payment locks. Implementations <span class="bcp14">MAY</span> be deployed as:<a href="#section-8-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-8-2.1">
+          <strong>Smart contracts</strong>: Standard EVM contracts deployable on any EVM chain<a href="#section-8-2.1" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-8-2.2">
+          <strong>Precompiles</strong>: Chain-native implementations at fixed addresses for<a href="#section-8-2.2" class="pilcrow">¶</a>
+</li>
+      </ul>
+<p id="section-8-3">improved gas efficiency<a href="#section-8-3" class="pilcrow">¶</a></p>
+<p id="section-8-4">The interface is described using Solidity for exposition; non-Solidity implementations <span class="bcp14">MUST</span> provide equivalent semantics.<a href="#section-8-4" class="pilcrow">¶</a></p>
+<div id="lock-state">
+<section id="section-8.1">
+        <h3 id="name-lock-state">
+<a href="#section-8.1" class="section-number selfRef">8.1. </a><a href="#name-lock-state" class="section-name selfRef">Lock State</a>
+        </h3>
+<p id="section-8.1-1">Each lock is identified by a unique <code>lockId</code> and stores:<a href="#section-8.1-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-9">
+          <caption><a href="#table-9" class="selfRef">Table 9</a></caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Field</th>
+              <th class="text-left" rowspan="1" colspan="1">Type</th>
+              <th class="text-left" rowspan="1" colspan="1">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>active</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">bool</td>
+              <td class="text-left" rowspan="1" colspan="1">Whether the lock is active</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>asset</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">address</td>
+              <td class="text-left" rowspan="1" colspan="1">TIP-20 token address</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>amount</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint256</td>
+              <td class="text-left" rowspan="1" colspan="1">Total amount deposited</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>released</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint256</td>
+              <td class="text-left" rowspan="1" colspan="1">Cumulative amount already released</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>expires</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">uint256</td>
+              <td class="text-left" rowspan="1" colspan="1">UNIX timestamp after which payer can withdraw</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>payee</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">address</td>
+              <td class="text-left" rowspan="1" colspan="1">Recipient of released funds</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">
+                <code>trust</code>
+</td>
+              <td class="text-left" rowspan="1" colspan="1">address</td>
+              <td class="text-left" rowspan="1" colspan="1">If set, exclusive caller for release (payee cannot call)</td>
+            </tr>
+          </tbody>
+        </table>
+</section>
+</div>
+<div id="functions">
+<section id="section-8.2">
+        <h3 id="name-functions">
+<a href="#section-8.2" class="section-number selfRef">8.2. </a><a href="#name-functions" class="section-name selfRef">Functions</a>
+        </h3>
+<div id="lock">
+<section id="section-8.2.1">
+          <h4 id="name-lock">
+<a href="#section-8.2.1" class="section-number selfRef">8.2.1. </a><a href="#name-lock" class="section-name selfRef">lock</a>
+          </h4>
+<p id="section-8.2.1-1">Creates a new payment lock with escrowed funds.<a href="#section-8.2.1-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.1-2">
+<pre>
+function lock(
+    address asset,
+    uint256 amount,
+    uint256 duration,
+    address payee,
+    address trust
+) external returns (bytes32 lockId);
+</pre><a href="#section-8.2.1-2" class="pilcrow">¶</a>
+</div>
+<p id="section-8.2.1-3">The implementation <span class="bcp14">MUST</span>:<a href="#section-8.2.1-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.1-4">
+            <li id="section-8.2.1-4.1">Transfer <code>amount</code> of <code>asset</code> from <code>msg.sender</code> to the implementation<a href="#section-8.2.1-4.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.1-4.2">Compute <code>expires = block.timestamp + duration</code><a href="#section-8.2.1-4.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.1-4.3">Generate unique <code>lockId</code><a href="#section-8.2.1-4.3" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.1-4.4">Store lock state with <code>released = 0</code><a href="#section-8.2.1-4.4" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.1-4.5">Emit <code>LockCreated</code> event<a href="#section-8.2.1-4.5" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.1-4.6">Return <code>lockId</code><a href="#section-8.2.1-4.6" class="pilcrow">¶</a>
+</li>
+          </ol>
+</section>
+</div>
+<div id="release">
+<section id="section-8.2.2">
+          <h4 id="name-release">
+<a href="#section-8.2.2" class="section-number selfRef">8.2.2. </a><a href="#name-release" class="section-name selfRef">release</a>
+          </h4>
+<p id="section-8.2.2-1">Payee releases funds using a signed release.<a href="#section-8.2.2-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.2-2">
+<pre>
+function release(
+    address account,
+    bytes32 lockId,
+    uint256 cumulativeAmount,
+    bytes calldata signature
+) external;
+</pre><a href="#section-8.2.2-2" class="pilcrow">¶</a>
+</div>
+<p id="section-8.2.2-3">The implementation <span class="bcp14">MUST</span>:<a href="#section-8.2.2-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.2-4">
+            <li id="section-8.2.2-4.1">If <code>lock.trust</code> is set: verify <code>msg.sender == lock.trust</code><a href="#section-8.2.2-4.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.2-5">If <code>lock.trust</code> is not set: verify <code>msg.sender == lock.payee</code><a href="#section-8.2.2-5" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.2-6">
+            <li id="section-8.2.2-6.1">Verify <code>block.timestamp &lt; lock.expires</code><a href="#section-8.2.2-6.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.2">Verify EIP-712 signature from <code>account</code> (lock owner)<a href="#section-8.2.2-6.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.3">Verify <code>cumulativeAmount &gt; lock.released</code> (monotonicity)<a href="#section-8.2.2-6.3" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.4">Verify <code>cumulativeAmount &lt;= lock.amount</code> (cap)<a href="#section-8.2.2-6.4" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.5">Compute <code>delta = cumulativeAmount - lock.released</code><a href="#section-8.2.2-6.5" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.6">Transfer <code>delta</code> to <code>lock.payee</code><a href="#section-8.2.2-6.6" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.7">Update <code>lock.released = cumulativeAmount</code><a href="#section-8.2.2-6.7" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.2-6.8">Emit <code>FundsReleased</code> event<a href="#section-8.2.2-6.8" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.2-7">The implementation <span class="bcp14">MUST</span> reject releases after expiry.<a href="#section-8.2.2-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="requestrelease">
+<section id="section-8.2.3">
+          <h4 id="name-requestrelease">
+<a href="#section-8.2.3" class="section-number selfRef">8.2.3. </a><a href="#name-requestrelease" class="section-name selfRef">requestRelease</a>
+          </h4>
+<p id="section-8.2.3-1">Payer requests early release of the lock.<a href="#section-8.2.3-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.3-2">
+<pre>
+function requestRelease(bytes32 lockId) external;
+</pre><a href="#section-8.2.3-2" class="pilcrow">¶</a>
+</div>
+<p id="section-8.2.3-3">The implementation <span class="bcp14">MUST</span>:<a href="#section-8.2.3-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.3-4">
+            <li id="section-8.2.3-4.1">Verify <code>msg.sender</code> is lock owner<a href="#section-8.2.3-4.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.3-4.2">Set <code>lock.releaseRequested = block.timestamp</code><a href="#section-8.2.3-4.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.3-4.3">Emit <code>ReleaseRequested</code> event<a href="#section-8.2.3-4.3" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.3-5">After the implementation-defined grace period, the payer can call <code>withdraw()</code>. The grace period <span class="bcp14">SHOULD</span> be documented by the implementation.<a href="#section-8.2.3-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="withdraw">
+<section id="section-8.2.4">
+          <h4 id="name-withdraw">
+<a href="#section-8.2.4" class="section-number selfRef">8.2.4. </a><a href="#name-withdraw" class="section-name selfRef">withdraw</a>
+          </h4>
+<p id="section-8.2.4-1">Payer withdraws remaining funds after expiry or grace period.<a href="#section-8.2.4-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.4-2">
+<pre>
+function withdraw(bytes32 lockId) external;
+</pre><a href="#section-8.2.4-2" class="pilcrow">¶</a>
+</div>
+<p id="section-8.2.4-3">The implementation <span class="bcp14">MUST</span>:<a href="#section-8.2.4-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.4-4">
+            <li id="section-8.2.4-4.1">Verify <code>msg.sender</code> is lock owner<a href="#section-8.2.4-4.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.4-4.2">Verify either:<a href="#section-8.2.4-4.2" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.4-5">- <code>block.timestamp &gt;= lock.expires</code>, OR    - <code>lock.releaseRequested &gt; 0 &amp;&amp; block.timestamp &gt;= lock.releaseRequested + gracePeriod</code><a href="#section-8.2.4-5" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.4-6">
+            <li id="section-8.2.4-6.1">Compute <code>remaining = lock.amount - lock.released</code><a href="#section-8.2.4-6.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.4-6.2">Transfer <code>remaining</code> to lock owner<a href="#section-8.2.4-6.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.4-6.3">Mark lock as inactive<a href="#section-8.2.4-6.3" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.4-6.4">Emit <code>LockClosed</code> event<a href="#section-8.2.4-6.4" class="pilcrow">¶</a>
+</li>
+          </ol>
+</section>
+</div>
+<div id="modifylock">
+<section id="section-8.2.5">
+          <h4 id="name-modifylock">
+<a href="#section-8.2.5" class="section-number selfRef">8.2.5. </a><a href="#name-modifylock" class="section-name selfRef">modifyLock</a>
+          </h4>
+<p id="section-8.2.5-1">Payer adds funds and/or extends expiry on an existing lock.<a href="#section-8.2.5-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.5-2">
+<pre>
+function modifyLock(
+    bytes32 lockId,
+    uint256 additionalAmount,
+    uint256 newExpiry
+) external;
+</pre><a href="#section-8.2.5-2" class="pilcrow">¶</a>
+</div>
+<p id="section-8.2.5-3">The implementation <span class="bcp14">MUST</span>:<a href="#section-8.2.5-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.5-4">
+            <li id="section-8.2.5-4.1">Verify <code>msg.sender</code> is lock owner<a href="#section-8.2.5-4.1" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.5-4.2">Verify lock is active<a href="#section-8.2.5-4.2" class="pilcrow">¶</a>
+</li>
+            <li id="section-8.2.5-4.3">If <code>additionalAmount &gt; 0</code>:<a href="#section-8.2.5-4.3" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.5-5">- Transfer <code>additionalAmount</code> of the lock's asset from payer to escrow    - Add to <code>lock.amount</code><a href="#section-8.2.5-5" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.5-6">
+            <li id="section-8.2.5-6.1">If <code>newExpiry &gt; lock.expires</code>:<a href="#section-8.2.5-6.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.5-7">- Update <code>lock.expires = newExpiry</code><a href="#section-8.2.5-7" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2.5-8">
+            <li id="section-8.2.5-8.1">Emit <code>LockModified</code> event<a href="#section-8.2.5-8.1" class="pilcrow">¶</a>
+</li>
+          </ol>
+<p id="section-8.2.5-9">The implementation <span class="bcp14">MUST</span> reject if <code>newExpiry &lt; lock.expires</code> (expiry can only be extended, not shortened).<a href="#section-8.2.5-9" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="getlock">
+<section id="section-8.2.6">
+          <h4 id="name-getlock">
+<a href="#section-8.2.6" class="section-number selfRef">8.2.6. </a><a href="#name-getlock" class="section-name selfRef">getLock</a>
+          </h4>
+<p id="section-8.2.6-1">Query lock state.<a href="#section-8.2.6-1" class="pilcrow">¶</a></p>
+<div class="lang-solidity sourcecode" id="section-8.2.6-2">
+<pre>
+function getLock(
+    address account,
+    bytes32 lockId
+) external view returns (Lock memory);
+</pre><a href="#section-8.2.6-2" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="verification-procedure">
+<section id="section-9">
+      <h2 id="name-verification-procedure">
+<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-verification-procedure" class="section-name selfRef">Verification Procedure</a>
+      </h2>
+<div id="lock-verification">
+<section id="section-9.1">
+        <h3 id="name-lock-verification">
+<a href="#section-9.1" class="section-number selfRef">9.1. </a><a href="#name-lock-verification" class="section-name selfRef">Lock Verification</a>
+        </h3>
+<p id="section-9.1-1">For <code>intent="lock"</code> credentials, servers <span class="bcp14">MUST</span> verify the lock state on-chain before granting access:<a href="#section-9.1-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1-2">
+          <li id="section-9.1-2.1">Extract <code>lockId</code> from the credential payload<a href="#section-9.1-2.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.1-2.2">Call <code>getLock(payer, lockId)</code> on the TIP20Escrow implementation<a href="#section-9.1-2.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.1-2.3">Verify the returned lock state:<a href="#section-9.1-2.3" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-9.1-3">- <code>active</code> is <code>true</code>    - <code>asset</code> matches the requested token    - <code>amount</code> &gt;= the requested minimum amount    - <code>expires</code> <span class="bcp14">MUST</span> be greater than the current time. Servers <span class="bcp14">SHOULD</span> enforce      an implementation-defined minimum remaining lifetime suitable for the      requested service.    - <code>payee</code> matches the server's address<a href="#section-9.1-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.1-4">
+          <li id="section-9.1-4.1">If <code>trust</code> was specified in the request, verify it matches<a href="#section-9.1-4.1" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-9.1-5">Servers <span class="bcp14">SHOULD</span> cache lock state and periodically re-verify for long-running services.<a href="#section-9.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="release-verification">
+<section id="section-9.2">
+        <h3 id="name-release-verification">
+<a href="#section-9.2" class="section-number selfRef">9.2. </a><a href="#name-release-verification" class="section-name selfRef">Release Verification</a>
+        </h3>
+<p id="section-9.2-1">Servers receiving a <code>type="release"</code> credential <span class="bcp14">MUST</span> perform the following checks:<a href="#section-9.2-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-9.2-2">
+          <li id="section-9.2-2.1">Verify <code>id</code> matches an active lock session<a href="#section-9.2-2.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-2.2">Extract release fields: <code>lockId</code>, <code>cumulativeAmount</code>, <code>expires</code>, <code>signature</code><a href="#section-9.2-2.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-2.3">Verify <code>cumulativeAmount</code> &gt; previously received release amount (monotonicity)<a href="#section-9.2-2.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-2.4">Verify <code>expires</code> &gt; current time<a href="#section-9.2-2.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-2.5">Verify EIP-712 signature matches the lock owner (see Section 7)<a href="#section-9.2-2.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-9.2-2.6">Store the release for later settlement<a href="#section-9.2-2.6" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-9.2-3">Servers <span class="bcp14">SHOULD</span> acknowledge receipt of valid releases. Servers <span class="bcp14">MAY</span> batch multiple releases and settle periodically rather than per-release.<a href="#section-9.2-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="settlement-procedure">
+<section id="section-10">
+      <h2 id="name-settlement-procedure">
+<a href="#section-10" class="section-number selfRef">10. </a><a href="#name-settlement-procedure" class="section-name selfRef">Settlement Procedure</a>
+      </h2>
+<p id="section-10-1">For <code>intent="lock"</code>, settlement requires a signed release from the lock owner. The signed release authorizes the payee to withdraw funds up to <code>cumulativeAmount</code> from the lock, enabling incremental authorization for streaming services.<a href="#section-10-1" class="pilcrow">¶</a></p>
+<div id="settlement-flow">
+<section id="section-10.1">
+        <h3 id="name-settlement-flow">
+<a href="#section-10.1" class="section-number selfRef">10.1. </a><a href="#name-settlement-flow" class="section-name selfRef">Settlement Flow</a>
+        </h3>
+<div class="alignLeft art-ascii-art art-text artwork" id="section-10.1-1">
+<pre>
+   Client                        Server                     Tempo Network
+      │                             │                             │
+      │  (1) Sign lock tx           │                             │
+      │                             │                             │
+      │  (2) Broadcast lock tx      │                             │
+      ├────────────────────────────────────────────────────────────&gt;│
+      │                             │                             │
+      │  (3) Lock created           │                             │
+      │&lt;────────────────────────────────────────────────────────────┤
+      │                             │                             │
+      │  (4) Authorization:         │                             │
+      │      Payment &lt;credential&gt;   │                             │
+      │      (with lockId)          │                             │
+      ├────────────────────────────&gt;│                             │
+      │                             │                             │
+      │                             │  (5) Verify lock state      │
+      │                             │      getLock(payer, lockId) │
+      │                             ├────────────────────────────&gt;│
+      │                             │  (6) Lock verified          │
+      │                             │&lt;────────────────────────────┤
+      │                             │                             │
+      │  (7) 200 OK                 │                             │
+      │      (service begins)       │                             │
+      │&lt;────────────────────────────┤                             │
+      │                             │                             │
+      │         ... service streaming ...                         │
+      │                             │                             │
+      │  (8) Sign EIP-712 release   │                             │
+      │                             │                             │
+      │  (9) Authorization:         │                             │
+      │      Payment &lt;release&gt;      │                             │
+      ├────────────────────────────&gt;│                             │
+      │                             │                             │
+      │         ... more service ...                              │
+      │                             │                             │
+      │  (10) Authorization:        │                             │
+      │       Payment &lt;final&gt;       │                             │
+      ├────────────────────────────&gt;│                             │
+      │                             │                             │
+      │                             │  (11) release(payer, lockId,│
+      │                             │       cumulativeAmount, sig)│
+      │                             ├────────────────────────────&gt;│
+      │                             │                             │
+      │                             │  (12) Funds transferred     │
+      │                             │&lt;────────────────────────────┤
+      │                             │                             │
+</pre><a href="#section-10.1-1" class="pilcrow">¶</a>
+</div>
+<p id="section-10.1-2">The following is an illustrative (non-normative) flow:<a href="#section-10.1-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-10.1-3">
+          <li id="section-10.1-3.1">Client signs and broadcasts a transaction with <code>lock()</code> call<a href="#section-10.1-3.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.2">Lock is created; client receives <code>lockId</code><a href="#section-10.1-3.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.3">Client sends lock credential via <code>Authorization: Payment</code> header<a href="#section-10.1-3.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.4">Server verifies lock state on-chain and begins service<a href="#section-10.1-3.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.5">As service streams, client signs EIP-712 releases<a href="#section-10.1-3.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.6">Client sends release credentials via <code>Authorization: Payment</code> header<a href="#section-10.1-3.6" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.7">Server collects releases; settles periodically<a href="#section-10.1-3.7" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.8">Server calls <code>release(payer, lockId, amount, signature)</code> with latest release<a href="#section-10.1-3.8" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.1-3.9">Implementation verifies signature and transfers <code>delta</code> to payee<a href="#section-10.1-3.9" class="pilcrow">¶</a>
+</li>
+        </ol>
+</section>
+</div>
+<div id="post-expiry-recovery">
+<section id="section-10.2">
+        <h3 id="name-post-expiry-recovery">
+<a href="#section-10.2" class="section-number selfRef">10.2. </a><a href="#name-post-expiry-recovery" class="section-name selfRef">Post-Expiry Recovery</a>
+        </h3>
+<p id="section-10.2-1">After expiry, the lock owner can reclaim all unreleased funds by calling <code>withdraw(lockId)</code> (no signature required—only the lock owner can withdraw their own funds after expiry).<a href="#section-10.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="early-release">
+<section id="section-10.3">
+        <h3 id="name-early-release">
+<a href="#section-10.3" class="section-number selfRef">10.3. </a><a href="#name-early-release" class="section-name selfRef">Early Release</a>
+        </h3>
+<p id="section-10.3-1">If the payer wants to end the lock before expiry:<a href="#section-10.3-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-10.3-2">
+          <li id="section-10.3-2.1">Payer calls <code>requestRelease(lockId)</code> on the TIP20Escrow implementation<a href="#section-10.3-2.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.3-2.2">The implementation-defined grace period begins<a href="#section-10.3-2.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.3-2.3">Payee can still call <code>release()</code> with any pending releases during grace<a href="#section-10.3-2.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-10.3-2.4">After grace period, payer can call <code>withdraw(lockId)</code> to reclaim remaining funds<a href="#section-10.3-2.4" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-10.3-3">This mechanism permits the payee to settle outstanding authorized amounts during the grace period while permitting the payer to recover unspent funds thereafter.<a href="#section-10.3-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="security-considerations">
+<section id="section-11">
+      <h2 id="name-security-considerations">
+<a href="#section-11" class="section-number selfRef">11. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<div id="lock-security">
+<section id="section-11.1">
+        <h3 id="name-lock-security">
+<a href="#section-11.1" class="section-number selfRef">11.1. </a><a href="#name-lock-security" class="section-name selfRef">Lock Security</a>
+        </h3>
+<p id="section-11.1-1">Implementations <span class="bcp14">MUST</span> consider the following security properties:<a href="#section-11.1-1" class="pilcrow">¶</a></p>
+<p id="section-11.1-2"><strong>Expiry Management</strong>: Servers <span class="bcp14">MUST</span> release funds before the lock expires. After expiry, the payer can reclaim all remaining funds. Servers <span class="bcp14">SHOULD</span>:<a href="#section-11.1-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.1-3.1">Set alerts for approaching lock expiry<a href="#section-11.1-3.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.1-3.2">Release funds well before expiry (with margin for transaction confirmation)<a href="#section-11.1-3.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.1-3.3">Track all active locks and their expiry timestamps<a href="#section-11.1-3.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.1-4"><strong>Payee Address Verification</strong>: Clients <span class="bcp14">MUST</span> verify the <code>payee</code> address in the lock request matches the expected server. A malicious server could specify a different address to redirect funds.<a href="#section-11.1-4" class="pilcrow">¶</a></p>
+<p id="section-11.1-5"><strong>Lock Amount</strong>: Clients <span class="bcp14">SHOULD</span> limit locked amounts to those consistent with their risk tolerance. While expiry protects against indefinite fund locking, funds remain unavailable until expiry.<a href="#section-11.1-5" class="pilcrow">¶</a></p>
+<p id="section-11.1-6"><strong>Trust Address</strong>: If the <code>trust</code> field is specified, only that address can call <code>release()</code>; the payee cannot. Clients <span class="bcp14">SHOULD</span> only accept trusted arbitration services and verify the trust address is legitimate.<a href="#section-11.1-6" class="pilcrow">¶</a></p>
+<p id="section-11.1-7"><strong>Partial Release</strong>: TIP20Escrow implementations support partial releases. Servers <span class="bcp14">SHOULD</span> release only the amount consumed to minimize client exposure. Clients can reclaim unreleased funds after expiry.<a href="#section-11.1-7" class="pilcrow">¶</a></p>
+<p id="section-11.1-8"><strong>Early Release (requestRelease)</strong>: Payers can request early release before expiry. This starts an implementation-defined grace period during which:<a href="#section-11.1-8" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.1-9.1">The payee can still call <code>release()</code> with valid releases<a href="#section-11.1-9.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.1-9.2">After the grace period, the payer can call <code>withdraw()</code> to reclaim funds<a href="#section-11.1-9.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.1-9.3">Servers <span class="bcp14">SHOULD</span> monitor for <code>ReleaseRequested</code> events and settle promptly<a href="#section-11.1-9.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.1-10">This permits payer flexibility while providing the payee time to finalize settlement.<a href="#section-11.1-10" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="release-security">
+<section id="section-11.2">
+        <h3 id="name-release-security">
+<a href="#section-11.2" class="section-number selfRef">11.2. </a><a href="#name-release-security" class="section-name selfRef">Release Security</a>
+        </h3>
+<p id="section-11.2-1">Implementations <span class="bcp14">MUST</span> consider the following EIP-712 release security properties:<a href="#section-11.2-1" class="pilcrow">¶</a></p>
+<p id="section-11.2-2"><strong>Replay Prevention</strong>: Releases use cumulative semantics—each release authorizes a total amount, not a delta. The implementation enforces:<a href="#section-11.2-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.2-3.1">
+            <code>cumulativeAmount &gt; lock.released</code> (monotonicity)<a href="#section-11.2-3.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-3.2">
+            <code>cumulativeAmount &lt;= lock.amount</code> (cap)<a href="#section-11.2-3.2" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.2-4">This prevents replay: submitting the same release twice has no effect after the first settlement.<a href="#section-11.2-4" class="pilcrow">¶</a></p>
+<p id="section-11.2-5"><strong>Release Expiry</strong>: The <code>expires</code> field limits release validity. Clients <span class="bcp14">SHOULD</span> use short windows during active streaming to limit exposure if a release is intercepted. Implementations <span class="bcp14">MUST</span> reject releases where <code>block.timestamp &gt; expires</code>.<a href="#section-11.2-5" class="pilcrow">¶</a></p>
+<p id="section-11.2-6"><strong>Signature Verification</strong>: Implementations <span class="bcp14">MUST</span>:<a href="#section-11.2-6" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.2-7.1">Use strict ECDSA recovery to derive signer address<a href="#section-11.2-7.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-7.2">Verify signer matches the lock owner (<code>account</code> parameter)<a href="#section-11.2-7.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-7.3">Prevent signature malleability attacks<a href="#section-11.2-7.3" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-7.4">Bind signature to <code>lockId</code>, <code>cumulativeAmount</code>, and <code>expires</code><a href="#section-11.2-7.4" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.2-8"><strong>Release Interception</strong>: Even if an attacker intercepts a release:<a href="#section-11.2-8" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-11.2-9.1">They cannot submit it (only payee/trust can call <code>release()</code>)<a href="#section-11.2-9.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-9.2">They cannot modify the amount (signature verification fails)<a href="#section-11.2-9.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-11.2-9.3">They cannot use it on another lock (bound to <code>lockId</code>)<a href="#section-11.2-9.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-11.2-10"><strong>Off-chain Release Delivery</strong>: Clients send releases to servers out of band (for example, via HTTP POST to a server-defined endpoint). The release credential includes both the EIP-712 message and signature.<a href="#section-11.2-10" class="pilcrow">¶</a></p>
+<p id="section-11.2-11">When release credentials are transmitted over HTTP, the client <span class="bcp14">MUST</span> use TLS <span>[<a href="#RFC8446" class="cite xref">RFC8446</a>]</span>. Servers <span class="bcp14">SHOULD</span> acknowledge receipt of valid releases.<a href="#section-11.2-11" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="iana-considerations">
+<section id="section-12">
+      <h2 id="name-iana-considerations">
+<a href="#section-12" class="section-number selfRef">12. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-12-1">This document registers the following payment intent:<a href="#section-12-1" class="pilcrow">¶</a></p>
+<p id="section-12-2"><strong>Intent:</strong> <code>lock</code> <strong>Method:</strong> <code>tempo</code> <strong>Reference:</strong> This document<a href="#section-12-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<section id="section-13">
+      <h2 id="name-references">
+<a href="#section-13" class="section-number selfRef">13. </a><a href="#name-references" class="section-name selfRef">References</a>
+      </h2>
+<section id="section-13.1">
+        <h3 id="name-normative-references">
+<a href="#section-13.1" class="section-number selfRef">13.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+        </h3>
+<dl class="references">
+<dt id="RFC2119">[RFC2119]</dt>
+        <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+        <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc8174">https://www.rfc-editor.org/info/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8446">[RFC8446]</dt>
+      <dd>
+<span class="refAuthor">Rescorla, E.</span>, <span class="refTitle">"The Transport Layer Security (TLS) Protocol Version 1.3"</span>, <span class="seriesInfo">RFC 8446</span>, <span class="seriesInfo">DOI 10.17487/RFC8446</span>, <time datetime="2018-08" class="refDate">August 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc8446">https://www.rfc-editor.org/info/rfc8446</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</section>
+<div id="examples">
+<section id="appendix-A">
+      <h2 id="name-examples">
+<a href="#appendix-A" class="section-number selfRef">Appendix A. </a><a href="#name-examples" class="section-name selfRef">Examples</a>
+      </h2>
+<div id="payment-lock-flow">
+<section id="appendix-A.1">
+        <h3 id="name-payment-lock-flow">
+<a href="#appendix-A.1" class="section-number selfRef">A.1. </a><a href="#name-payment-lock-flow" class="section-name selfRef">Payment Lock Flow</a>
+        </h3>
+<div class="alignLeft art-ascii-art art-text artwork" id="appendix-A.1-1">
+<pre>
+Client                                 Server                    Tempo
+  │                                      │                         │
+  │ (1) GET /video/stream                │                         │
+  ├─────────────────────────────────────&gt;│                         │
+  │                                      │                         │
+  │ (2) 402 Payment Required             │                         │
+  │     WWW-Authenticate: Payment        │                         │
+  │       method="tempo"                 │                         │
+  │       intent="lock"                  │                         │
+  │       request=&lt;base64url&gt;            │                         │
+  │&lt;─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (3) Sign and broadcast lock tx       │                         │
+  ├─────────────────────────────────────────────────────────────── │
+  │                                      │                         │
+  │ (4) Lock created, receive lockId     │                         │
+  │&lt;───────────────────────────────────────────────────────────────┤
+  │                                      │                         │
+  │ (5) GET /video/stream                │                         │
+  │     Authorization: Payment           │                         │
+  │       &lt;lock credential&gt;              │                         │
+  ├─────────────────────────────────────&gt;│                         │
+  │                                      │ (6) Verify lock         │
+  │                                      ├────────────────────────&gt;│
+  │                                      │&lt;────────────────────────┤
+  │ (7) 200 OK                           │                         │
+  │     Content-Type: video/mp4          │                         │
+  │&lt;─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (8) Video streaming...               │                         │
+  │&lt;─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (9) POST /payments/release            │                         │
+  │     Authorization: Payment           │                         │
+  │       &lt;release credential&gt;           │                         │
+  ├─────────────────────────────────────&gt;│                         │
+  │                                      │                         │
+  │ ... continue streaming ...           │                         │
+  │                                      │                         │
+  │ (10) POST /payments/release          │                         │
+  │      Authorization: Payment          │                         │
+  │        &lt;final release credential&gt;    │                         │
+  ├─────────────────────────────────────&gt;│                         │
+  │                                      │ (11) release()          │
+  │                                      ├────────────────────────&gt;│
+  │                                      │&lt;────────────────────────┤
+  │ (12) 200 OK                          │                         │
+  │      Payment-Receipt: &lt;receipt&gt;      │                         │
+  │&lt;─────────────────────────────────────┤                         │
+</pre><a href="#appendix-A.1-1" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+<div id="challenge">
+<section id="appendix-A.2">
+        <h3 id="name-challenge">
+<a href="#appendix-A.2" class="section-number selfRef">A.2. </a><a href="#name-challenge" class="section-name selfRef">Challenge</a>
+        </h3>
+<div class="lang-http sourcecode" id="appendix-A.2-1">
+<pre>
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="lock_kM9xPqWvT2nJrHsY4aDfEb",
+  realm="video.example.com",
+  method="tempo",
+  intent="lock",
+  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImFtb3VudCI6IjEwMDAwMDAwIiwiZXhwaXJlcyI6IjM2MDAiLCJwYXllZSI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9"
+</pre><a href="#appendix-A.2-1" class="pilcrow">¶</a>
+</div>
+<p id="appendix-A.2-2">Decoded request:<a href="#appendix-A.2-2" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="appendix-A.2-3">
+<pre>
+{
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "10000000",
+  "expiry": "1737043200",
+  "payee": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+}
+</pre><a href="#appendix-A.2-3" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+<div id="lock-credential-2">
+<section id="appendix-A.3">
+        <h3 id="name-lock-credential-2">
+<a href="#appendix-A.3" class="section-number selfRef">A.3. </a><a href="#name-lock-credential-2" class="section-name selfRef">Lock Credential</a>
+        </h3>
+<div class="lang-json sourcecode" id="appendix-A.3-1">
+<pre>
+{
+  "id": "lock_kM9xPqWvT2nJrHsY4aDfEb",
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678",
+  "payload": {
+    "type": "lock",
+    "hash": "0xabcd1234...",
+    "lockId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f"
+  }
+}
+</pre><a href="#appendix-A.3-1" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+<div id="release-request">
+<section id="appendix-A.4">
+        <h3 id="name-release-request">
+<a href="#appendix-A.4" class="section-number selfRef">A.4. </a><a href="#name-release-request" class="section-name selfRef">Release Request</a>
+        </h3>
+<div class="lang-http sourcecode" id="appendix-A.4-1">
+<pre>
+POST /payments/release HTTP/1.1
+Host: video.example.com
+Authorization: Payment eyJpZCI6ImxvY2tfa005eFBxV3ZUMm5KckhzWTRhRGZFYiIsInBheWxvYWQiOnsidHlwZSI6InJlbGVhc2UiLCJtZXNzYWdlIjp7ImxvY2tJZCI6IjB4NmQwZjRmZGYuLi4iLCJjdW11bGF0aXZlQW1vdW50IjoiNTAwMDAwIiwiZXhwaXJlcyI6IjE3MzcwNDMyMDAifSwic2lnbmF0dXJlIjoiMHhhYmMxMjMuLi4ifX0
+</pre><a href="#appendix-A.4-1" class="pilcrow">¶</a>
+</div>
+<p id="appendix-A.4-2">Decoded credential:<a href="#appendix-A.4-2" class="pilcrow">¶</a></p>
+<div class="lang-json sourcecode" id="appendix-A.4-3">
+<pre>
+{
+  "id": "lock_kM9xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "type": "release",
+    "message": {
+      "lockId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "cumulativeAmount": "500000",
+      "expires": "1737043200"
+    },
+    "signature": "0xabc123...EIP-712 signature..."
+  }
+}
+</pre><a href="#appendix-A.4-3" class="pilcrow">¶</a>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="acknowledgements">
+<section id="appendix-B">
+      <h2 id="name-acknowledgements">
+<a href="#name-acknowledgements" class="section-name selfRef">Acknowledgements</a>
+      </h2>
+<p id="appendix-B-1">The authors thank the Tempo community for their feedback on payment lock design.<a href="#appendix-B-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-C">
+      <h2 id="name-authors-addresses">
+<a href="#name-authors-addresses" class="section-name selfRef">Authors' Addresses</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Jake Moxey</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:jake@tempo.xyz" class="email">jake@tempo.xyz</a>
+</div>
+</address>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Georgios Konstantopoulos</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:georgios@tempo.xyz" class="email">georgios@tempo.xyz</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1014 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc [
+  <!ENTITY nbsp "&#160;">
+  <!ENTITY zwsp "&#8203;">
+]>
+<rfc xmlns:xi="http://www.w3.org/2001/XInclude"
+     ipr="trust200902"
+     docName="draft-tempo-lock-extension-00"
+     submissionType="IETF"
+     category="std"
+     consensus="true"
+     version="3">
+
+  <front>
+    <title>Tempo Payment Lock Extension</title>
+    <seriesInfo name="Internet-Draft" value="draft-tempo-lock-extension-00"/>
+    <author fullname="Jake Moxey">
+      <address>
+        <email>jake@tempo.xyz</email>
+      </address>
+    </author>
+    <author fullname="Georgios Konstantopoulos">
+      <address>
+        <email>georgios@tempo.xyz</email>
+      </address>
+    </author>
+    <date/>
+    <abstract>
+      <t>This document extends the Tempo Payment Method [draft-tempo-payment-method]
+with support for escrowed payment locks. It defines the <tt>lock</tt> intent for
+incremental payments suitable for streaming and metered services, where
+clients deposit funds into an on-chain escrow that permits the payee to
+withdraw funds up to the amount authorized by signed releases, while
+permitting the payer to withdraw any remaining funds after expiry.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="introduction">
+      <name>Introduction</name>
+      <t>The base Tempo Payment Method [draft-tempo-payment-method] supports one-time charges, authorizations, and subscriptions. However, these intents require the payment amount to be known upfront or bounded by a fixed authorization.</t>
+      <t>For metered services—where consumption is only known as the service is delivered—a different model is required: one where clients deposit funds into escrow, receive service, and authorize incremental releases as they consume.</t>
+      <t>This extension defines the <tt>lock</tt> intent, which establishes an <strong>escrowed payment lock</strong> using:</t>
+      <ul>
+        <li><strong>TIP20Escrow interface</strong> for on-chain fund escrow (implementable as a</li>
+      </ul>
+      <t>smart contract or chain-native precompile)</t>
+      <ul>
+        <li><strong>Off-chain EIP-712 releases</strong> for incremental release authorization</li>
+        <li><strong>Payee-controlled settlement</strong> for efficient fund collection</li>
+      </ul>
+      <section anchor="example-use-case-metered-agent-execution">
+        <name>Example Use Case: Metered Agent Execution</name>
+        <t>This section is non-normative.</t>
+        <t>Consider a user delegating tasks to an AI agent that consumes API tokens:</t>
+        <ol type="1">
+          <li>User initiates an agent task (e.g., a research task)</li>
+          <li>Agent&apos;s API returns 402 with a <tt>lock</tt> challenge</li>
+          <li>User creates a lock with a budget for the task</li>
+          <li>As tokens are consumed, the client sends EIP-712 releases authorizing payment</li>
+          <li>Server settles periodically or when the task completes</li>
+        </ol>
+        <t>The user pays for tokens consumed, with unused budget reclaimable after lock expiry. This enables users to delegate open-ended tasks to agents with bounded spending.</t>
+      </section>
+      <section anchor="trust-model-and-fund-commitment">
+        <name>Trust Model and Fund Commitment</name>
+        <t>In this document, the <strong>server</strong> acts as the <strong>payee</strong>, and the <strong>client</strong> acts on behalf of the <strong>payer</strong>.</t>
+        <t>Payment locks use an <strong>escrow-based model</strong> with on-chain fund locking:</t>
+        <ol type="1">
+          <li><strong>Funds are locked at creation.</strong> The payer deposits TIP-20 tokens into</li>
+        </ol>
+        <t>a TIP20Escrow implementation. These funds are locked until release or expiry.</t>
+        <ol type="1">
+          <li><strong>Payee can release at any time.</strong> Using a signed release from the payer,</li>
+        </ol>
+        <t>the payee can withdraw funds from the escrow (up to the released amount).</t>
+        <ol type="1">
+          <li><strong>Partial release is supported.</strong> The payee can release multiple times,</li>
+        </ol>
+        <t>each time withdrawing the delta between the release amount and previously    released amount.</t>
+        <ol type="1">
+          <li><strong>Payer can withdraw after expiry.</strong> If the payee fails to release before</li>
+        </ol>
+        <t>the lock expires, the payer can withdraw all remaining (unreleased) funds.</t>
+        <ol type="1">
+          <li><strong>Payee bears the risk of not settling.</strong> The only risk to the payee is</li>
+        </ol>
+        <t>failing to release before expiry; escrowed funds are committed for payment.</t>
+        <t>Trust properties:</t>
+        <ul>
+          <li><strong>Payer protection</strong>: Funds can only be released by payee with a valid</li>
+        </ul>
+        <t>signed release; after expiry, payer reclaims unreleased funds.</t>
+        <ul>
+          <li><strong>Payee protection</strong>: Escrowed funds are committed for payment for valid</li>
+        </ul>
+        <t>releases (no risk of payer draining wallet).</t>
+        <artwork type="ascii-art"><![CDATA[
+Lock Lifecycle:
+                                                             
+  CREATE           SERVICE            RELEASE          EXPIRY
+    │                  │                 │                │
+    ▼                  ▼                 ▼                ▼
+┌─────────┐      ┌───────────┐     ┌──────────┐     ┌──────────┐
+│ Deposit │      │ Releases  │     │ Payee    │     │ Payer    │
+│ to      │─────▶│ signed    │────▶│ withdraws│────▶│ withdraws│
+│ escrow  │      │ (off-chain)│    │ delta    │     │ remainder│
+└─────────┘      └───────────┘     └──────────┘     └──────────┘
+     │                                  │
+     └──────────────────────────────────┘
+              Funds locked in escrow
+              (guaranteed for payee)
+]]></artwork>
+        <t>Cumulative release semantics:</t>
+        <t>Releases <bcp14>MUST</bcp14> authorize a <strong>cumulative total</strong>, not incremental deltas. A release&apos;s <tt>cumulativeAmount</tt> <bcp14>MUST</bcp14> be strictly greater than the previously accepted <tt>cumulativeAmount</tt> for the same lock.</t>
+        <ul>
+          <li>Release #1: <tt>cumulativeAmount = 100000</tt> (authorizes 100000 total)</li>
+          <li>Release #2: <tt>cumulativeAmount = 250000</tt> (authorizes 250000 total)</li>
+          <li>Release #3: <tt>cumulativeAmount = 400000</tt> (authorizes 400000 total)</li>
+        </ul>
+        <t>When settling, the implementation computes: <tt>delta = cumulativeAmount - released</tt></t>
+        <t>This permits the lock to remain usable after partial releases—the payer continues signing releases with higher cumulative amounts up to the deposit.</t>
+      </section>
+      <section anchor="relationship-to-base-specification">
+        <name>Relationship to Base Specification</name>
+        <t>This document extends [draft-tempo-payment-method] with:</t>
+        <ul>
+          <li>A new <tt>lock</tt> intent (Section 4)</li>
+          <li>Lock-specific request and credential schemas (Sections 5-6)</li>
+          <li>EIP-712 release format (Section 7)</li>
+          <li>TIP20Escrow interface (Section 8)</li>
+          <li>Lock-specific verification and settlement procedures (Sections 9-10)</li>
+        </ul>
+        <t>All other aspects of the Tempo Payment Method apply unchanged.</t>
+      </section>
+    </section>
+    <section anchor="requirements-language">
+      <name>Requirements Language</name>
+      <t>The key words &quot;<bcp14>MUST</bcp14>&quot;, &quot;<bcp14>MUST NOT</bcp14>&quot;, &quot;<bcp14>REQUIRED</bcp14>&quot;, &quot;<bcp14>SHALL</bcp14>&quot;, &quot;<bcp14>SHALL NOT</bcp14>&quot;, &quot;<bcp14>SHOULD</bcp14>&quot;, &quot;<bcp14>SHOULD NOT</bcp14>&quot;, &quot;<bcp14>RECOMMENDED</bcp14>&quot;, &quot;<bcp14>NOT RECOMMENDED</bcp14>&quot;, &quot;<bcp14>MAY</bcp14>&quot;, and &quot;<bcp14>OPTIONAL</bcp14>&quot; in this document are to be interpreted as described in BCP 14 <xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when, they appear in all capitals, as shown here.</t>
+    </section>
+    <section anchor="terminology">
+      <name>Terminology</name>
+      <dl>
+        <dt>Payment Lock</dt>
+        <dd><t>An on-chain escrow where the payer deposits TIP-20 tokens that can only be released to a designated payee using signed releases, or withdrawn by the payer after expiry.</t></dd>
+        <dt>Release</dt>
+        <dd><t>An EIP-712 signed message authorizing a cumulative release amount for a specific lock. Releases are monotonically increasing in amount.</t></dd>
+        <dt>TIP20Escrow</dt>
+        <dd><t>An interface for payment lock escrow, providing <tt>lock</tt>, <tt>release</tt>, <tt>requestRelease</tt>, and <tt>withdraw</tt> operations. Implementations <bcp14>MAY</bcp14> be deployed as smart contracts or chain-native precompiles.</t></dd>
+        <dt>Lock ID</dt>
+        <dd><t>A unique identifier (bytes32) for a specific lock, returned by a TIP20Escrow implementation when a lock is created.</t></dd>
+        <dt>Cumulative Amount</dt>
+        <dd><t>The total amount authorized for release since lock creation. Each release&apos;s <tt>cumulativeAmount</tt> <bcp14>MUST</bcp14> be greater than the previous.</t></dd>
+      </dl>
+    </section>
+    <section anchor="intent-lock">
+      <name>Intent: &quot;lock&quot;</name>
+      <t>An escrowed payment lock for streaming or metered services. The payer deposits funds into an on-chain escrow (a TIP20Escrow implementation) that permits the payee to withdraw funds up to the amount authorized by releases, while permitting the payer to withdraw any remaining funds after expiry.</t>
+      <t>A lock request <bcp14>MUST</bcp14> include the parameters defined as <bcp14>REQUIRED</bcp14> in Section 5. A server challenge for <tt>intent=&quot;lock&quot;</tt> <bcp14>MUST NOT</bcp14> omit any <bcp14>REQUIRED</bcp14> fields.</t>
+    </section>
+    <section anchor="lock-request-schema">
+      <name>Lock Request Schema</name>
+      <t>For <tt>intent=&quot;lock&quot;</tt>, the <tt>request</tt> parameter contains a base64url-encoded JSON object with the following fields:</t>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><tt>asset</tt></td>
+            <td>string</td>
+            <td><bcp14>REQUIRED</bcp14></td>
+            <td>TIP-20 token address</td>
+          </tr>
+          <tr>
+            <td><tt>amount</tt></td>
+            <td>string</td>
+            <td><bcp14>REQUIRED</bcp14></td>
+            <td>Amount to lock in base units (stringified number)</td>
+          </tr>
+          <tr>
+            <td><tt>expiry</tt></td>
+            <td>string</td>
+            <td><bcp14>REQUIRED</bcp14></td>
+            <td>Lock expiry as UNIX timestamp in seconds (stringified number)</td>
+          </tr>
+          <tr>
+            <td><tt>payee</tt></td>
+            <td>string</td>
+            <td><bcp14>REQUIRED</bcp14></td>
+            <td>Recipient address for released funds</td>
+          </tr>
+          <tr>
+            <td><tt>trust</tt></td>
+            <td>string</td>
+            <td><bcp14>OPTIONAL</bcp14></td>
+            <td>Exclusive intermediary authorized to call release (if set, payee cannot)</td>
+          </tr>
+          <tr>
+            <td><tt>feePayer</tt></td>
+            <td>boolean</td>
+            <td><bcp14>OPTIONAL</bcp14></td>
+            <td>If <tt>true</tt>, server will pay transaction fees (default: <tt>false</tt>)</td>
+          </tr>
+        </tbody>
+      </table>
+      <t>If <tt>trust</tt> is present, only <tt>trust</tt> can call <tt>release()</tt>; the <tt>payee</tt> cannot. Funds are still transferred to <tt>payee</tt>, but <tt>trust</tt> acts as an exclusive intermediary (e.g., an arbitration service). If <tt>trust</tt> is absent, <tt>payee</tt> calls <tt>release()</tt> directly.</t>
+      <t>The following is a non-normative example:</t>
+      <sourcecode type="json"><![CDATA[
+{
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "10000000",
+  "expiry": "1737043200",
+  "payee": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+}
+]]></sourcecode>
+      <t>In this example, the request specifies a lock of 10.00 alphaUSD (10000000 base units) expiring at UNIX timestamp 1737043200.</t>
+      <t>The client <bcp14>MUST</bcp14> fulfill this by signing a Tempo Transaction that:</t>
+      <ol type="1">
+        <li>Calls <tt>lock(asset, amount, expiry, payee, trust)</tt> on a TIP20Escrow</li>
+      </ol>
+      <t>implementation</t>
+      <ol type="1">
+        <li>The implementation transfers <tt>amount</tt> of <tt>asset</tt> from the payer to escrow</li>
+        <li>Returns a <tt>lockId</tt> that identifies this specific lock</li>
+      </ol>
+      <t>The <tt>trust</tt> field, if present, specifies an additional address that can release funds (e.g., an arbitration service). If omitted, only the <tt>payee</tt> can release funds before expiry.</t>
+    </section>
+    <section anchor="lock-credential-schema">
+      <name>Lock Credential Schema</name>
+
+      <section anchor="lock-credential">
+        <name>Lock Credential</name>
+        <t>For <tt>intent=&quot;lock&quot;</tt>, the credential includes a <tt>lockId</tt> field that identifies the created lock on-chain. The client <bcp14>MUST</bcp14> broadcast the lock creation transaction and obtain the resulting <tt>lockId</tt> before sending the credential.</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>id</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Challenge ID from the server</td>
+            </tr>
+            <tr>
+              <td><tt>source</tt></td>
+              <td>string</td>
+              <td><bcp14>OPTIONAL</bcp14></td>
+              <td>Payer identifier as a DID</td>
+            </tr>
+            <tr>
+              <td><tt>payload</tt></td>
+              <td>object</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Contains <tt>type</tt>, <tt>signature</tt>, and <tt>lockId</tt></td>
+            </tr>
+          </tbody>
+        </table>
+        <t>The <tt>payload</tt> object for lock credentials:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>type</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td><tt>&quot;lock&quot;</tt></td>
+            </tr>
+            <tr>
+              <td><tt>hash</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Transaction hash of the lock creation transaction</td>
+            </tr>
+            <tr>
+              <td><tt>lockId</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Lock identifier returned by the TIP20Escrow implementation</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>Example:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "id": "xT4wLkM9pQvR2nJsY6aDfE",
+  "payload": {
+    "type": "lock",
+    "hash": "0x1234567890abcdef...",
+    "lockId": "0x6d0f4fdf..."
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+]]></sourcecode>
+      </section>
+      <section anchor="release-credential">
+        <name>Release Credential</name>
+        <t>Release credentials are transmitted out of band (for example, via HTTP POST to an endpoint defined by the server). The credential includes the EIP-712 message and signature:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>id</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Original challenge ID from the lock session</td>
+            </tr>
+            <tr>
+              <td><tt>payload</tt></td>
+              <td>object</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>Contains <tt>type</tt>, <tt>message</tt>, and <tt>signature</tt></td>
+            </tr>
+          </tbody>
+        </table>
+        <t>The <tt>payload</tt> object for release credentials:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>type</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td><tt>&quot;release&quot;</tt></td>
+            </tr>
+            <tr>
+              <td><tt>message</tt></td>
+              <td>object</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>EIP-712 Release struct (see Section 7)</td>
+            </tr>
+            <tr>
+              <td><tt>signature</tt></td>
+              <td>string</td>
+              <td><bcp14>REQUIRED</bcp14></td>
+              <td>EIP-712 signature over the message</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>The <tt>message</tt> object:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>lockId</tt></td>
+              <td>string</td>
+              <td>Lock identifier (bytes32 hex)</td>
+            </tr>
+            <tr>
+              <td><tt>cumulativeAmount</tt></td>
+              <td>string</td>
+              <td>Total amount authorized for release (cumulative, base units)</td>
+            </tr>
+            <tr>
+              <td><tt>expires</tt></td>
+              <td>string</td>
+              <td>UNIX timestamp after which release expires</td>
+            </tr>
+          </tbody>
+        </table>
+        <t>Example:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "id": "mK7xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "type": "release",
+    "message": {
+      "lockId": "0x6d0f4fdf9a8b2c3e...",
+      "cumulativeAmount": "250000",
+      "expires": "1737043200"
+    },
+    "signature": "0xabc123...EIP-712 signature..."
+  }
+}
+]]></sourcecode>
+      </section>
+    </section>
+    <section anchor="eip-712-release-format">
+      <name>EIP-712 Release Format</name>
+      <t>To release funds from a lock, the payee <bcp14>MUST</bcp14> provide an EIP-712 signed release from the lock owner. The signed release authorizes the payee to withdraw funds up to <tt>cumulativeAmount</tt> from the lock.</t>
+      <section anchor="domain-separator">
+        <name>Domain Separator</name>
+        <t>The EIP-712 domain <bcp14>MUST</bcp14> use the following values:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>name</tt></td>
+              <td><tt>&quot;TIP20Escrow&quot;</tt></td>
+            </tr>
+            <tr>
+              <td><tt>version</tt></td>
+              <td><tt>&quot;1&quot;</tt></td>
+            </tr>
+            <tr>
+              <td><tt>chainId</tt></td>
+              <td>Tempo chain ID (e.g., 42431)</td>
+            </tr>
+            <tr>
+              <td><tt>verifyingContract</tt></td>
+              <td>Address of the TIP20Escrow implementation that created the lock</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="release-type">
+        <name>Release Type</name>
+        <sourcecode type="solidity"><![CDATA[
+struct Release {
+    bytes32 lockId;
+    uint256 cumulativeAmount;
+    uint256 expires;
+}
+]]></sourcecode>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>lockId</tt></td>
+              <td>bytes32</td>
+              <td>Lock identifier</td>
+            </tr>
+            <tr>
+              <td><tt>cumulativeAmount</tt></td>
+              <td>uint256</td>
+              <td>Total amount authorized for release (cumulative, not delta)</td>
+            </tr>
+            <tr>
+              <td><tt>expires</tt></td>
+              <td>uint256</td>
+              <td>UNIX timestamp after which this release expires</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="cumulative-semantics">
+        <name>Cumulative Semantics</name>
+        <t>Releases <bcp14>MUST</bcp14> authorize a cumulative total, not incremental deltas. A TIP20Escrow implementation <bcp14>MUST</bcp14> reject any release where <tt>cumulativeAmount &lt;= released</tt>. A payee <bcp14>SHOULD</bcp14> use the highest valid release available when calling <tt>release()</tt>.</t>
+        <ul>
+          <li>Release #1: <tt>cumulativeAmount = 100000</tt> → releases 100000</li>
+          <li>Release #2: <tt>cumulativeAmount = 250000</tt> → releases 150000 more (delta)</li>
+          <li>Release #3: <tt>cumulativeAmount = 400000</tt> → releases 150000 more (delta)</li>
+        </ul>
+        <t>The implementation computes: <tt>delta = cumulativeAmount - lock.released</tt></t>
+        <t>This prevents replay attacks and permits the lock to remain usable after partial releases—the payer continues signing releases with higher cumulative amounts up to the locked deposit.</t>
+      </section>
+      <section anchor="example-release">
+        <name>Example Release</name>
+        <sourcecode type="json"><![CDATA[
+{
+  "types": {
+    "EIP712Domain": [
+      { "name": "name", "type": "string" },
+      { "name": "version", "type": "string" },
+      { "name": "chainId", "type": "uint256" },
+      { "name": "verifyingContract", "type": "address" }
+    ],
+    "Release": [
+      { "name": "lockId", "type": "bytes32" },
+      { "name": "cumulativeAmount", "type": "uint256" },
+      { "name": "expires", "type": "uint256" }
+    ]
+  },
+  "primaryType": "Release",
+  "domain": {
+    "name": "TIP20Escrow",
+    "version": "1",
+    "chainId": 42431,
+    "verifyingContract": "0x0000000000000000000000000000000000000100"
+  },
+  "message": {
+    "lockId": "0x6d0f4fdf9a8b2c3e...",
+    "cumulativeAmount": "250000",
+    "expires": "1737043200"
+  }
+}
+]]></sourcecode>
+      </section>
+    </section>
+    <section anchor="tip20escrow-interface">
+      <name>TIP20Escrow Interface</name>
+      <t>The TIP20Escrow interface defines the escrow functionality for payment locks. Implementations <bcp14>MAY</bcp14> be deployed as:</t>
+      <ul>
+        <li><strong>Smart contracts</strong>: Standard EVM contracts deployable on any EVM chain</li>
+        <li><strong>Precompiles</strong>: Chain-native implementations at fixed addresses for</li>
+      </ul>
+      <t>improved gas efficiency</t>
+      <t>The interface is described using Solidity for exposition; non-Solidity implementations <bcp14>MUST</bcp14> provide equivalent semantics.</t>
+      <section anchor="lock-state">
+        <name>Lock State</name>
+        <t>Each lock is identified by a unique <tt>lockId</tt> and stores:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>active</tt></td>
+              <td>bool</td>
+              <td>Whether the lock is active</td>
+            </tr>
+            <tr>
+              <td><tt>asset</tt></td>
+              <td>address</td>
+              <td>TIP-20 token address</td>
+            </tr>
+            <tr>
+              <td><tt>amount</tt></td>
+              <td>uint256</td>
+              <td>Total amount deposited</td>
+            </tr>
+            <tr>
+              <td><tt>released</tt></td>
+              <td>uint256</td>
+              <td>Cumulative amount already released</td>
+            </tr>
+            <tr>
+              <td><tt>expires</tt></td>
+              <td>uint256</td>
+              <td>UNIX timestamp after which payer can withdraw</td>
+            </tr>
+            <tr>
+              <td><tt>payee</tt></td>
+              <td>address</td>
+              <td>Recipient of released funds</td>
+            </tr>
+            <tr>
+              <td><tt>trust</tt></td>
+              <td>address</td>
+              <td>If set, exclusive caller for release (payee cannot call)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="functions">
+        <name>Functions</name>
+
+        <section anchor="lock">
+          <name>lock</name>
+          <t>Creates a new payment lock with escrowed funds.</t>
+          <sourcecode type="solidity"><![CDATA[
+function lock(
+    address asset,
+    uint256 amount,
+    uint256 duration,
+    address payee,
+    address trust
+) external returns (bytes32 lockId);
+]]></sourcecode>
+          <t>The implementation <bcp14>MUST</bcp14>:</t>
+          <ol type="1">
+            <li>Transfer <tt>amount</tt> of <tt>asset</tt> from <tt>msg.sender</tt> to the implementation</li>
+            <li>Compute <tt>expires = block.timestamp + duration</tt></li>
+            <li>Generate unique <tt>lockId</tt></li>
+            <li>Store lock state with <tt>released = 0</tt></li>
+            <li>Emit <tt>LockCreated</tt> event</li>
+            <li>Return <tt>lockId</tt></li>
+          </ol>
+        </section>
+        <section anchor="release">
+          <name>release</name>
+          <t>Payee releases funds using a signed release.</t>
+          <sourcecode type="solidity"><![CDATA[
+function release(
+    address account,
+    bytes32 lockId,
+    uint256 cumulativeAmount,
+    bytes calldata signature
+) external;
+]]></sourcecode>
+          <t>The implementation <bcp14>MUST</bcp14>:</t>
+          <ol type="1">
+            <li>If <tt>lock.trust</tt> is set: verify <tt>msg.sender == lock.trust</tt></li>
+          </ol>
+          <t>If <tt>lock.trust</tt> is not set: verify <tt>msg.sender == lock.payee</tt></t>
+          <ol type="1">
+            <li>Verify <tt>block.timestamp &lt; lock.expires</tt></li>
+            <li>Verify EIP-712 signature from <tt>account</tt> (lock owner)</li>
+            <li>Verify <tt>cumulativeAmount &gt; lock.released</tt> (monotonicity)</li>
+            <li>Verify <tt>cumulativeAmount &lt;= lock.amount</tt> (cap)</li>
+            <li>Compute <tt>delta = cumulativeAmount - lock.released</tt></li>
+            <li>Transfer <tt>delta</tt> to <tt>lock.payee</tt></li>
+            <li>Update <tt>lock.released = cumulativeAmount</tt></li>
+            <li>Emit <tt>FundsReleased</tt> event</li>
+          </ol>
+          <t>The implementation <bcp14>MUST</bcp14> reject releases after expiry.</t>
+        </section>
+        <section anchor="requestrelease">
+          <name>requestRelease</name>
+          <t>Payer requests early release of the lock.</t>
+          <sourcecode type="solidity"><![CDATA[
+function requestRelease(bytes32 lockId) external;
+]]></sourcecode>
+          <t>The implementation <bcp14>MUST</bcp14>:</t>
+          <ol type="1">
+            <li>Verify <tt>msg.sender</tt> is lock owner</li>
+            <li>Set <tt>lock.releaseRequested = block.timestamp</tt></li>
+            <li>Emit <tt>ReleaseRequested</tt> event</li>
+          </ol>
+          <t>After the implementation-defined grace period, the payer can call <tt>withdraw()</tt>. The grace period <bcp14>SHOULD</bcp14> be documented by the implementation.</t>
+        </section>
+        <section anchor="withdraw">
+          <name>withdraw</name>
+          <t>Payer withdraws remaining funds after expiry or grace period.</t>
+          <sourcecode type="solidity"><![CDATA[
+function withdraw(bytes32 lockId) external;
+]]></sourcecode>
+          <t>The implementation <bcp14>MUST</bcp14>:</t>
+          <ol type="1">
+            <li>Verify <tt>msg.sender</tt> is lock owner</li>
+            <li>Verify either:</li>
+          </ol>
+          <t>- <tt>block.timestamp &gt;= lock.expires</tt>, OR    - <tt>lock.releaseRequested &gt; 0 &amp;&amp; block.timestamp &gt;= lock.releaseRequested + gracePeriod</tt></t>
+          <ol type="1">
+            <li>Compute <tt>remaining = lock.amount - lock.released</tt></li>
+            <li>Transfer <tt>remaining</tt> to lock owner</li>
+            <li>Mark lock as inactive</li>
+            <li>Emit <tt>LockClosed</tt> event</li>
+          </ol>
+        </section>
+        <section anchor="modifylock">
+          <name>modifyLock</name>
+          <t>Payer adds funds and/or extends expiry on an existing lock.</t>
+          <sourcecode type="solidity"><![CDATA[
+function modifyLock(
+    bytes32 lockId,
+    uint256 additionalAmount,
+    uint256 newExpiry
+) external;
+]]></sourcecode>
+          <t>The implementation <bcp14>MUST</bcp14>:</t>
+          <ol type="1">
+            <li>Verify <tt>msg.sender</tt> is lock owner</li>
+            <li>Verify lock is active</li>
+            <li>If <tt>additionalAmount &gt; 0</tt>:</li>
+          </ol>
+          <t>- Transfer <tt>additionalAmount</tt> of the lock&apos;s asset from payer to escrow    - Add to <tt>lock.amount</tt></t>
+          <ol type="1">
+            <li>If <tt>newExpiry &gt; lock.expires</tt>:</li>
+          </ol>
+          <t>- Update <tt>lock.expires = newExpiry</tt></t>
+          <ol type="1">
+            <li>Emit <tt>LockModified</tt> event</li>
+          </ol>
+          <t>The implementation <bcp14>MUST</bcp14> reject if <tt>newExpiry &lt; lock.expires</tt> (expiry can only be extended, not shortened).</t>
+        </section>
+        <section anchor="getlock">
+          <name>getLock</name>
+          <t>Query lock state.</t>
+          <sourcecode type="solidity"><![CDATA[
+function getLock(
+    address account,
+    bytes32 lockId
+) external view returns (Lock memory);
+]]></sourcecode>
+        </section>
+      </section>
+    </section>
+    <section anchor="verification-procedure">
+      <name>Verification Procedure</name>
+
+      <section anchor="lock-verification">
+        <name>Lock Verification</name>
+        <t>For <tt>intent=&quot;lock&quot;</tt> credentials, servers <bcp14>MUST</bcp14> verify the lock state on-chain before granting access:</t>
+        <ol type="1">
+          <li>Extract <tt>lockId</tt> from the credential payload</li>
+          <li>Call <tt>getLock(payer, lockId)</tt> on the TIP20Escrow implementation</li>
+          <li>Verify the returned lock state:</li>
+        </ol>
+        <t>- <tt>active</tt> is <tt>true</tt>    - <tt>asset</tt> matches the requested token    - <tt>amount</tt> &gt;= the requested minimum amount    - <tt>expires</tt> <bcp14>MUST</bcp14> be greater than the current time. Servers <bcp14>SHOULD</bcp14> enforce      an implementation-defined minimum remaining lifetime suitable for the      requested service.    - <tt>payee</tt> matches the server&apos;s address</t>
+        <ol type="1">
+          <li>If <tt>trust</tt> was specified in the request, verify it matches</li>
+        </ol>
+        <t>Servers <bcp14>SHOULD</bcp14> cache lock state and periodically re-verify for long-running services.</t>
+      </section>
+      <section anchor="release-verification">
+        <name>Release Verification</name>
+        <t>Servers receiving a <tt>type=&quot;release&quot;</tt> credential <bcp14>MUST</bcp14> perform the following checks:</t>
+        <ol type="1">
+          <li>Verify <tt>id</tt> matches an active lock session</li>
+          <li>Extract release fields: <tt>lockId</tt>, <tt>cumulativeAmount</tt>, <tt>expires</tt>, <tt>signature</tt></li>
+          <li>Verify <tt>cumulativeAmount</tt> &gt; previously received release amount (monotonicity)</li>
+          <li>Verify <tt>expires</tt> &gt; current time</li>
+          <li>Verify EIP-712 signature matches the lock owner (see Section 7)</li>
+          <li>Store the release for later settlement</li>
+        </ol>
+        <t>Servers <bcp14>SHOULD</bcp14> acknowledge receipt of valid releases. Servers <bcp14>MAY</bcp14> batch multiple releases and settle periodically rather than per-release.</t>
+      </section>
+    </section>
+    <section anchor="settlement-procedure">
+      <name>Settlement Procedure</name>
+      <t>For <tt>intent=&quot;lock&quot;</tt>, settlement requires a signed release from the lock owner. The signed release authorizes the payee to withdraw funds up to <tt>cumulativeAmount</tt> from the lock, enabling incremental authorization for streaming services.</t>
+      <section anchor="settlement-flow">
+        <name>Settlement Flow</name>
+        <artwork type="ascii-art"><![CDATA[
+   Client                        Server                     Tempo Network
+      │                             │                             │
+      │  (1) Sign lock tx           │                             │
+      │                             │                             │
+      │  (2) Broadcast lock tx      │                             │
+      ├────────────────────────────────────────────────────────────>│
+      │                             │                             │
+      │  (3) Lock created           │                             │
+      │<────────────────────────────────────────────────────────────┤
+      │                             │                             │
+      │  (4) Authorization:         │                             │
+      │      Payment <credential>   │                             │
+      │      (with lockId)          │                             │
+      ├────────────────────────────>│                             │
+      │                             │                             │
+      │                             │  (5) Verify lock state      │
+      │                             │      getLock(payer, lockId) │
+      │                             ├────────────────────────────>│
+      │                             │  (6) Lock verified          │
+      │                             │<────────────────────────────┤
+      │                             │                             │
+      │  (7) 200 OK                 │                             │
+      │      (service begins)       │                             │
+      │<────────────────────────────┤                             │
+      │                             │                             │
+      │         ... service streaming ...                         │
+      │                             │                             │
+      │  (8) Sign EIP-712 release   │                             │
+      │                             │                             │
+      │  (9) Authorization:         │                             │
+      │      Payment <release>      │                             │
+      ├────────────────────────────>│                             │
+      │                             │                             │
+      │         ... more service ...                              │
+      │                             │                             │
+      │  (10) Authorization:        │                             │
+      │       Payment <final>       │                             │
+      ├────────────────────────────>│                             │
+      │                             │                             │
+      │                             │  (11) release(payer, lockId,│
+      │                             │       cumulativeAmount, sig)│
+      │                             ├────────────────────────────>│
+      │                             │                             │
+      │                             │  (12) Funds transferred     │
+      │                             │<────────────────────────────┤
+      │                             │                             │
+]]></artwork>
+        <t>The following is an illustrative (non-normative) flow:</t>
+        <ol type="1">
+          <li>Client signs and broadcasts a transaction with <tt>lock()</tt> call</li>
+          <li>Lock is created; client receives <tt>lockId</tt></li>
+          <li>Client sends lock credential via <tt>Authorization: Payment</tt> header</li>
+          <li>Server verifies lock state on-chain and begins service</li>
+          <li>As service streams, client signs EIP-712 releases</li>
+          <li>Client sends release credentials via <tt>Authorization: Payment</tt> header</li>
+          <li>Server collects releases; settles periodically</li>
+          <li>Server calls <tt>release(payer, lockId, amount, signature)</tt> with latest release</li>
+          <li>Implementation verifies signature and transfers <tt>delta</tt> to payee</li>
+        </ol>
+      </section>
+      <section anchor="post-expiry-recovery">
+        <name>Post-Expiry Recovery</name>
+        <t>After expiry, the lock owner can reclaim all unreleased funds by calling <tt>withdraw(lockId)</tt> (no signature required—only the lock owner can withdraw their own funds after expiry).</t>
+      </section>
+      <section anchor="early-release">
+        <name>Early Release</name>
+        <t>If the payer wants to end the lock before expiry:</t>
+        <ol type="1">
+          <li>Payer calls <tt>requestRelease(lockId)</tt> on the TIP20Escrow implementation</li>
+          <li>The implementation-defined grace period begins</li>
+          <li>Payee can still call <tt>release()</tt> with any pending releases during grace</li>
+          <li>After grace period, payer can call <tt>withdraw(lockId)</tt> to reclaim remaining funds</li>
+        </ol>
+        <t>This mechanism permits the payee to settle outstanding authorized amounts during the grace period while permitting the payer to recover unspent funds thereafter.</t>
+      </section>
+    </section>
+    <section anchor="security-considerations">
+      <name>Security Considerations</name>
+
+      <section anchor="lock-security">
+        <name>Lock Security</name>
+        <t>Implementations <bcp14>MUST</bcp14> consider the following security properties:</t>
+        <t><strong>Expiry Management</strong>: Servers <bcp14>MUST</bcp14> release funds before the lock expires. After expiry, the payer can reclaim all remaining funds. Servers <bcp14>SHOULD</bcp14>:</t>
+        <ul>
+          <li>Set alerts for approaching lock expiry</li>
+          <li>Release funds well before expiry (with margin for transaction confirmation)</li>
+          <li>Track all active locks and their expiry timestamps</li>
+        </ul>
+        <t><strong>Payee Address Verification</strong>: Clients <bcp14>MUST</bcp14> verify the <tt>payee</tt> address in the lock request matches the expected server. A malicious server could specify a different address to redirect funds.</t>
+        <t><strong>Lock Amount</strong>: Clients <bcp14>SHOULD</bcp14> limit locked amounts to those consistent with their risk tolerance. While expiry protects against indefinite fund locking, funds remain unavailable until expiry.</t>
+        <t><strong>Trust Address</strong>: If the <tt>trust</tt> field is specified, only that address can call <tt>release()</tt>; the payee cannot. Clients <bcp14>SHOULD</bcp14> only accept trusted arbitration services and verify the trust address is legitimate.</t>
+        <t><strong>Partial Release</strong>: TIP20Escrow implementations support partial releases. Servers <bcp14>SHOULD</bcp14> release only the amount consumed to minimize client exposure. Clients can reclaim unreleased funds after expiry.</t>
+        <t><strong>Early Release (requestRelease)</strong>: Payers can request early release before expiry. This starts an implementation-defined grace period during which:</t>
+        <ul>
+          <li>The payee can still call <tt>release()</tt> with valid releases</li>
+          <li>After the grace period, the payer can call <tt>withdraw()</tt> to reclaim funds</li>
+          <li>Servers <bcp14>SHOULD</bcp14> monitor for <tt>ReleaseRequested</tt> events and settle promptly</li>
+        </ul>
+        <t>This permits payer flexibility while providing the payee time to finalize settlement.</t>
+      </section>
+      <section anchor="release-security">
+        <name>Release Security</name>
+        <t>Implementations <bcp14>MUST</bcp14> consider the following EIP-712 release security properties:</t>
+        <t><strong>Replay Prevention</strong>: Releases use cumulative semantics—each release authorizes a total amount, not a delta. The implementation enforces:</t>
+        <ul>
+          <li><tt>cumulativeAmount &gt; lock.released</tt> (monotonicity)</li>
+          <li><tt>cumulativeAmount &lt;= lock.amount</tt> (cap)</li>
+        </ul>
+        <t>This prevents replay: submitting the same release twice has no effect after the first settlement.</t>
+        <t><strong>Release Expiry</strong>: The <tt>expires</tt> field limits release validity. Clients <bcp14>SHOULD</bcp14> use short windows during active streaming to limit exposure if a release is intercepted. Implementations <bcp14>MUST</bcp14> reject releases where <tt>block.timestamp &gt; expires</tt>.</t>
+        <t><strong>Signature Verification</strong>: Implementations <bcp14>MUST</bcp14>:</t>
+        <ul>
+          <li>Use strict ECDSA recovery to derive signer address</li>
+          <li>Verify signer matches the lock owner (<tt>account</tt> parameter)</li>
+          <li>Prevent signature malleability attacks</li>
+          <li>Bind signature to <tt>lockId</tt>, <tt>cumulativeAmount</tt>, and <tt>expires</tt></li>
+        </ul>
+        <t><strong>Release Interception</strong>: Even if an attacker intercepts a release:</t>
+        <ul>
+          <li>They cannot submit it (only payee/trust can call <tt>release()</tt>)</li>
+          <li>They cannot modify the amount (signature verification fails)</li>
+          <li>They cannot use it on another lock (bound to <tt>lockId</tt>)</li>
+        </ul>
+        <t><strong>Off-chain Release Delivery</strong>: Clients send releases to servers out of band (for example, via HTTP POST to a server-defined endpoint). The release credential includes both the EIP-712 message and signature.</t>
+        <t>When release credentials are transmitted over HTTP, the client <bcp14>MUST</bcp14> use TLS <xref target="RFC8446"/>. Servers <bcp14>SHOULD</bcp14> acknowledge receipt of valid releases.</t>
+      </section>
+    </section>
+    <section anchor="iana-considerations">
+      <name>IANA Considerations</name>
+      <t>This document registers the following payment intent:</t>
+      <t><strong>Intent:</strong> <tt>lock</tt> <strong>Method:</strong> <tt>tempo</tt> <strong>Reference:</strong> This document</t>
+    </section>
+  </middle>
+
+  <back>
+    <references>
+      <name>References</name>
+      <references>
+        <name>Normative References</name>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.2119.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8174.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8446.xml"/>
+      </references>
+    </references>
+    <section anchor="examples">
+      <name>Examples</name>
+
+      <section anchor="payment-lock-flow">
+        <name>Payment Lock Flow</name>
+        <artwork type="ascii-art"><![CDATA[
+Client                                 Server                    Tempo
+  │                                      │                         │
+  │ (1) GET /video/stream                │                         │
+  ├─────────────────────────────────────>│                         │
+  │                                      │                         │
+  │ (2) 402 Payment Required             │                         │
+  │     WWW-Authenticate: Payment        │                         │
+  │       method="tempo"                 │                         │
+  │       intent="lock"                  │                         │
+  │       request=<base64url>            │                         │
+  │<─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (3) Sign and broadcast lock tx       │                         │
+  ├─────────────────────────────────────────────────────────────── │
+  │                                      │                         │
+  │ (4) Lock created, receive lockId     │                         │
+  │<───────────────────────────────────────────────────────────────┤
+  │                                      │                         │
+  │ (5) GET /video/stream                │                         │
+  │     Authorization: Payment           │                         │
+  │       <lock credential>              │                         │
+  ├─────────────────────────────────────>│                         │
+  │                                      │ (6) Verify lock         │
+  │                                      ├────────────────────────>│
+  │                                      │<────────────────────────┤
+  │ (7) 200 OK                           │                         │
+  │     Content-Type: video/mp4          │                         │
+  │<─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (8) Video streaming...               │                         │
+  │<─────────────────────────────────────┤                         │
+  │                                      │                         │
+  │ (9) POST /payments/release            │                         │
+  │     Authorization: Payment           │                         │
+  │       <release credential>           │                         │
+  ├─────────────────────────────────────>│                         │
+  │                                      │                         │
+  │ ... continue streaming ...           │                         │
+  │                                      │                         │
+  │ (10) POST /payments/release          │                         │
+  │      Authorization: Payment          │                         │
+  │        <final release credential>    │                         │
+  ├─────────────────────────────────────>│                         │
+  │                                      │ (11) release()          │
+  │                                      ├────────────────────────>│
+  │                                      │<────────────────────────┤
+  │ (12) 200 OK                          │                         │
+  │      Payment-Receipt: <receipt>      │                         │
+  │<─────────────────────────────────────┤                         │
+]]></artwork>
+      </section>
+      <section anchor="challenge">
+        <name>Challenge</name>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="lock_kM9xPqWvT2nJrHsY4aDfEb",
+  realm="video.example.com",
+  method="tempo",
+  intent="lock",
+  request="eyJhc3NldCI6IjB4MjBjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSIsImFtb3VudCI6IjEwMDAwMDAwIiwiZXhwaXJlcyI6IjM2MDAiLCJwYXllZSI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9"
+]]></sourcecode>
+        <t>Decoded request:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "10000000",
+  "expiry": "1737043200",
+  "payee": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+}
+]]></sourcecode>
+      </section>
+      <section anchor="lock-credential-2">
+        <name>Lock Credential</name>
+        <sourcecode type="json"><![CDATA[
+{
+  "id": "lock_kM9xPqWvT2nJrHsY4aDfEb",
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678",
+  "payload": {
+    "type": "lock",
+    "hash": "0xabcd1234...",
+    "lockId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f"
+  }
+}
+]]></sourcecode>
+      </section>
+      <section anchor="release-request">
+        <name>Release Request</name>
+        <sourcecode type="http"><![CDATA[
+POST /payments/release HTTP/1.1
+Host: video.example.com
+Authorization: Payment eyJpZCI6ImxvY2tfa005eFBxV3ZUMm5KckhzWTRhRGZFYiIsInBheWxvYWQiOnsidHlwZSI6InJlbGVhc2UiLCJtZXNzYWdlIjp7ImxvY2tJZCI6IjB4NmQwZjRmZGYuLi4iLCJjdW11bGF0aXZlQW1vdW50IjoiNTAwMDAwIiwiZXhwaXJlcyI6IjE3MzcwNDMyMDAifSwic2lnbmF0dXJlIjoiMHhhYmMxMjMuLi4ifX0
+]]></sourcecode>
+        <t>Decoded credential:</t>
+        <sourcecode type="json"><![CDATA[
+{
+  "id": "lock_kM9xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "type": "release",
+    "message": {
+      "lockId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "cumulativeAmount": "500000",
+      "expires": "1737043200"
+    },
+    "signature": "0xabc123...EIP-712 signature..."
+  }
+}
+]]></sourcecode>
+      </section>
+    </section>
+    <section anchor="acknowledgements" numbered="false">
+      <name>Acknowledgements</name>
+      <t>The authors thank the Tempo community for their feedback on payment lock design.</t>
+    </section>
+  </back>
+
+</rfc>
