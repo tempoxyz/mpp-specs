@@ -1,6 +1,6 @@
 import * as PublicKey from 'ox/PublicKey'
 import * as Secp256k1 from 'ox/Secp256k1'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Address, Hex } from 'viem'
 import { createClient, createPublicClient, encodeFunctionData, http, keccak256 } from 'viem'
 import { prepareTransactionRequest, signTransaction as viemSignTransaction } from 'viem/actions'
@@ -9,6 +9,7 @@ import { Account as TempoAccount } from 'viem/tempo'
 import { ACCOUNT_KEYCHAIN_ADDRESS, accountKeychainAbi, SignatureType } from './accountKeychain'
 
 const ALPHA_USD = '0x20c0000000000000000000000000000000000001' as const
+const ACCESS_KEY_STORAGE_KEY = 'presto_access_key'
 
 interface StoredAccessKey {
 	keyId: Address
@@ -16,6 +17,34 @@ interface StoredAccessKey {
 	publicKey: Hex // Secp256k1 public key
 	expiry: number // Unix timestamp
 	accountAddress: Address // The account this key belongs to
+}
+
+function getStorageKey(accountAddress: Address): string {
+	return `${ACCESS_KEY_STORAGE_KEY}_${accountAddress.toLowerCase()}`
+}
+
+function loadStoredAccessKey(accountAddress: Address | null): StoredAccessKey | null {
+	if (!accountAddress) return null
+	try {
+		const stored = localStorage.getItem(getStorageKey(accountAddress))
+		if (!stored) return null
+		const parsed = JSON.parse(stored) as StoredAccessKey
+		if (parsed.expiry * 1000 < Date.now()) {
+			localStorage.removeItem(getStorageKey(accountAddress))
+			return null
+		}
+		return parsed
+	} catch {
+		return null
+	}
+}
+
+function saveAccessKey(key: StoredAccessKey): void {
+	localStorage.setItem(getStorageKey(key.accountAddress), JSON.stringify(key))
+}
+
+function removeAccessKey(accountAddress: Address): void {
+	localStorage.removeItem(getStorageKey(accountAddress))
 }
 
 /**
@@ -51,6 +80,15 @@ export function useAccessKey(
 		chain: tempoModerato,
 		transport: http('https://rpc.moderato.tempo.xyz'),
 	})
+
+	useEffect(() => {
+		const stored = loadStoredAccessKey(accountAddress)
+		if (stored) {
+			setAccessKey(stored)
+		} else {
+			setAccessKey(null)
+		}
+	}, [accountAddress])
 
 	/**
 	 * Authorize a new Access Key using the Root Key (passkey)
@@ -123,7 +161,6 @@ export function useAccessKey(
 
 				console.log('✅ Access Key authorized!')
 
-				// Store the access key in state only
 				const storedKey: StoredAccessKey = {
 					keyId,
 					privateKey,
@@ -132,6 +169,7 @@ export function useAccessKey(
 					accountAddress,
 				}
 
+				saveAccessKey(storedKey)
 				setAccessKey(storedKey)
 
 				return { keyId, txHash }
@@ -227,6 +265,9 @@ export function useAccessKey(
 
 			await publicClient.waitForTransactionReceipt({ hash: txHash })
 
+			if (accountAddress) {
+				removeAccessKey(accountAddress)
+			}
 			setAccessKey(null)
 
 			return txHash
@@ -238,8 +279,11 @@ export function useAccessKey(
 	 * Clear the local access key without revoking on-chain
 	 */
 	const clearAccessKey = useCallback(() => {
+		if (accountAddress) {
+			removeAccessKey(accountAddress)
+		}
 		setAccessKey(null)
-	}, [])
+	}, [accountAddress])
 
 	return {
 		accessKey,

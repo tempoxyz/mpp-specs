@@ -840,19 +840,10 @@ app.all('/*', async (c) => {
 		}
 
 		// Stream payment successful - proxy the request
-		console.log(`[stream-voucher] Proxying request to ${partner.slug}${forwardPath}`)
 		try {
-			const { response: upstreamResponse, upstreamLatencyMs } = await proxyRequest(
-				c,
-				partner,
-				forwardPath,
-				{
-					preReadBody,
-				},
-			)
-			console.log(
-				`[stream-voucher] Upstream responded: ${upstreamResponse.status} in ${upstreamLatencyMs}ms, streaming=${upstreamResponse.headers.get('content-type')?.includes('event-stream')}`,
-			)
+			const { response: upstreamResponse } = await proxyRequest(c, partner, forwardPath, {
+				preReadBody,
+			})
 
 			// Add stream payment receipt
 			const responseHeaders = new Headers(upstreamResponse.headers)
@@ -868,9 +859,6 @@ app.all('/*', async (c) => {
 			responseHeaders.set('X-Payment-ChannelId', streamCred.channelId)
 			responseHeaders.set('X-Payment-Remaining', remaining.toString())
 
-			console.log(
-				`[stream-voucher] Returning streaming response, body type=${upstreamResponse.body?.constructor?.name}`,
-			)
 			return new Response(upstreamResponse.body, {
 				status: upstreamResponse.status,
 				statusText: upstreamResponse.statusText,
