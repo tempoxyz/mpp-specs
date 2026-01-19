@@ -326,12 +326,22 @@ defined by [draft-ietf-httpauth-payment] Section 5.2:
 ```json
 {
   "id": "ch_a1b2c3d4e5f6...",
+  "source": "did:pkh:eip155:42431:0x1234...",
   "payload": "<method-specific-proof>"
 }
 ```
 
-- **`id`**: MUST match the challenge `id`
-- **`payload`**: Payment-method-specific proof (e.g., signature, preimage)
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Challenge identifier (must match challenge `id`) |
+| `source` | string | No | Payer identifier as a DID [W3C-DID] (e.g., `"did:key:z6Mk..."`) |
+| `payload` | object | Yes | Payload to fulfil the payment challenge (method-specific) |
+
+The `source` field is an OPTIONAL Decentralized Identifier [W3C-DID]
+identifying the payer. Clients MAY include this field to enable servers
+to associate payments with a persistent identity across requests. Servers
+MUST NOT require this field unless the payment method specification
+mandates it.
 
 ---
 
@@ -355,8 +365,17 @@ field at the root level of the response object.
 
 ### 8.2. Receipt Format
 
-The receipt format is defined by [draft-ietf-httpauth-payment] Section
-5.3. Receipts provide proof of payment but are not cryptographic proofs
+The `receipt` is a base64url-encoded JSON object. The structure mirrors
+[draft-ietf-httpauth-payment] Section 5.3:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Payment status: "success" or "failed" |
+| `method` | string | Payment method used |
+| `timestamp` | string | ISO 8601 settlement time |
+| `reference` | string | Method-specific reference (tx hash, etc.) |
+
+Receipts provide proof of payment but are not cryptographic proofs
 of settlement (see Security Considerations).
 
 ---
@@ -375,29 +394,38 @@ high-frequency interactions.
   "id": 2,
   "result": { ... },
   "receipt": "<base64url>",
-  "paymentAuthorization": "<base64url-encoded-authorization>"
+  "paymentAuthorization": "Payment <b64token>, expires=\"2025-01-19T13:00:00Z\""
 }
 ```
 
-### 9.2. Authorization Object
+### 9.2. Authorization Format
 
-The `paymentAuthorization` is a base64url-encoded JSON object. When
-decoded, it contains:
+The `paymentAuthorization` field mirrors the HTTP `Payment-Authorization`
+header format from [draft-ietf-httpauth-payment] Section 5.4:
 
-```json
-{
-  "realm": "api.example.com",
-  "expires": "2025-01-19T13:00:00Z"
-}
+```abnf
+paymentAuthorization = "Payment" 1*SP b64token *( "," OWS auth-param )
+auth-param           = token "=" quoted-string
 ```
 
-**`realm`** (string, REQUIRED)
-: The protection space where this authorization is valid.
+The credential portion (`Payment` followed by `b64token`) is directly usable
+as the `authorization` field value for subsequent requests.
 
-**`expires`** (string, REQUIRED)
-: RFC 3339 timestamp after which the authorization is invalid.
+#### 9.2.1. Parameters
 
-Padding characters ("=") MUST NOT be included in the base64url encoding.
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `expires` | Yes | RFC 3339 timestamp after which the authorization expires |
+| `realm` | No | Protection space scope (defaults to challenge realm) |
+
+**Example:**
+
+```
+Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
+```
+
+The server MAY return a different token in `paymentAuthorization` than
+the original credential (e.g., an access token optimized for reuse).
 
 ### 9.3. Using Cached Authorizations
 
@@ -723,19 +751,18 @@ billing), it includes `paymentAuthorization` in the response.
     ]
   },
   "receipt": "eyJ0eCI6IjB4MTIzNCJ9",
-  "paymentAuthorization": "eyJyZWFsbSI6Im1jcC5leGFtcGxlLmNvbS9pbWFnZSIsImV4cGlyZXMiOiIyMDI1LTAxLTE5VDEzOjAwOjAwWiJ9"
+  "paymentAuthorization": "Payment eyJpZCI6ImNoXzdmM2E5YjJjMWQ0ZTVmNmEifQ, expires=\"2025-01-19T13:00:00Z\""
 }
 ```
 
-The decoded `paymentAuthorization` contains:
-```json
-{
-  "realm": "mcp.example.com/image",
-  "expires": "2025-01-19T13:00:00Z"
-}
-```
+The `paymentAuthorization` uses the same format as the HTTP
+`Payment-Authorization` header: `Payment <b64token>` followed by
+comma-separated parameters.
 
 **Subsequent request (reusing credential):**
+
+The client extracts the `Payment <b64token>` portion and uses it directly:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -748,7 +775,7 @@ The decoded `paymentAuthorization` contains:
       "size": "512x512"
     }
   },
-  "authorization": "Payment eyJpZCI6ImNoXzdmM2E5YjJjMWQ0ZTVmNmEiLCJwYXlsb2FkIjoiMHhhYmNkZWYuLi4ifQ"
+  "authorization": "Payment eyJpZCI6ImNoXzdmM2E5YjJjMWQ0ZTVmNmEifQ"
 }
 ```
 
