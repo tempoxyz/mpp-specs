@@ -2,7 +2,6 @@ import {
 	type ChargeRequest,
 	formatReceipt,
 	formatWwwAuthenticate,
-	generateChallengeId,
 	MalformedProofError,
 	type PaymentChallenge,
 	type PaymentCredential,
@@ -42,15 +41,39 @@ import {
 	verifyVoucher,
 } from './streaming.js'
 
-// Challenge store (in production, use KV or Durable Objects)
-const challengeStore = new Map<
-	string,
-	{
-		challenge: PaymentChallenge<ChargeRequest>
-		used: boolean
-		partner: PartnerConfig
+// Stateless challenge: encode challenge data + HMAC in the ID itself
+// Replay protection comes from on-chain tx nonce uniqueness
+const CHALLENGE_SECRET = 'tempo-payments-challenge-v1' // Could move to env var
+
+async function signChallenge(data: string): Promise<string> {
+	const encoder = new TextEncoder()
+	const key = await crypto.subtle.importKey(
+		'raw',
+		encoder.encode(CHALLENGE_SECRET),
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign'],
+	)
+	const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data))
+	return btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/[+/=]/g, (c) =>
+		c === '+' ? '-' : c === '/' ? '_' : '',
+	)
+}
+
+async function verifyChallenge(
+	id: string,
+): Promise<{ valid: true; data: { partnerSlug: string; price: string; expires: string } } | { valid: false }> {
+	try {
+		const [dataPart, sig] = id.split('.')
+		if (!dataPart || !sig) return { valid: false }
+		const data = JSON.parse(atob(dataPart.replace(/-/g, '+').replace(/_/g, '/')))
+		const expectedSig = await signChallenge(dataPart)
+		if (sig !== expectedSig) return { valid: false }
+		return { valid: true, data }
+	} catch {
+		return { valid: false }
 	}
->()
+}
 
 /**
  * Extract partner slug from hostname subdomain.
@@ -87,13 +110,14 @@ function getPartnerFromHost(host: string): string | null {
 
 /**
  * Create a new payment challenge for a partner request.
+ * Challenge ID is a signed token containing all data needed for stateless verification.
  */
-function createChallenge(
+async function createChallenge(
 	_env: Env,
 	partner: PartnerConfig,
 	price: string,
 	description?: string,
-): PaymentChallenge<ChargeRequest> {
+): Promise<PaymentChallenge<ChargeRequest>> {
 	const validityMs = 300_000 // 5 minutes
 	const expiresAt = new Date(Date.now() + validityMs)
 
@@ -104,23 +128,33 @@ function createChallenge(
 		expires: expiresAt.toISOString(),
 	}
 
+	// Encode challenge data in the ID for stateless verification
+	// Include 128-bit random nonce per IETF spec requirement (Section 5.1.1)
+	const nonceBytes = new Uint8Array(16)
+	crypto.getRandomValues(nonceBytes)
+	const nonce = btoa(String.fromCharCode(...nonceBytes)).replace(/[+/=]/g, (c) =>
+		c === '+' ? '-' : c === '/' ? '_' : '',
+	)
+	const challengeData = {
+		partnerSlug: partner.slug,
+		price,
+		expires: expiresAt.toISOString(),
+		nonce, // 128-bit entropy for unpredictability
+	}
+	const dataPart = btoa(JSON.stringify(challengeData)).replace(/[+/=]/g, (c) =>
+		c === '+' ? '-' : c === '/' ? '_' : '',
+	)
+	const sig = await signChallenge(dataPart)
+	const statelessId = `${dataPart}.${sig}`
+
 	const challenge: PaymentChallenge<ChargeRequest> = {
-		id: generateChallengeId(),
+		id: statelessId,
 		realm: `payments/${partner.slug}`,
 		method: 'tempo',
 		intent: 'charge',
 		request,
 		expires: expiresAt.toISOString(),
 		description: description ?? `Pay to access ${partner.name} API`,
-	}
-
-	challengeStore.set(challenge.id, { challenge, used: false, partner })
-
-	// Cleanup expired challenges
-	for (const [id, entry] of challengeStore) {
-		if (entry.challenge.expires && new Date(entry.challenge.expires) < new Date()) {
-			challengeStore.delete(id)
-		}
 	}
 
 	return challenge
@@ -761,7 +795,7 @@ app.all('/*', async (c) => {
 
 	if (!authHeader || !authHeader.startsWith('Payment ')) {
 		// No payment - issue challenge(s)
-		const challenge = createChallenge(
+		const challenge = await createChallenge(
 			c.env,
 			partner,
 			price,
@@ -800,30 +834,28 @@ app.all('/*', async (c) => {
 		return c.json(new MalformedProofError('Invalid Authorization header format').toJSON(), 400)
 	}
 
-	// Validate challenge
-	const storedChallenge = challengeStore.get(credential.id)
-	if (!storedChallenge) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env, partner, price)))
+	// Validate challenge (stateless - decode and verify signature from ID)
+	const challengeResult = await verifyChallenge(credential.id)
+	if (!challengeResult.valid) {
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
 		return c.json(
 			new PaymentVerificationFailedError('Unknown or expired challenge ID').toJSON(),
 			401,
 		)
 	}
 
-	if (storedChallenge.used) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env, partner, price)))
+	// Verify challenge matches current request context
+	if (challengeResult.data.partnerSlug !== partner.slug) {
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
 		return c.json(
-			new PaymentVerificationFailedError('Challenge has already been used').toJSON(),
+			new PaymentVerificationFailedError('Challenge partner mismatch').toJSON(),
 			401,
 		)
 	}
 
-	if (
-		storedChallenge.challenge.expires &&
-		new Date(storedChallenge.challenge.expires) < new Date()
-	) {
-		challengeStore.delete(credential.id)
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env, partner, price)))
+	// Check expiry
+	if (new Date(challengeResult.data.expires) < new Date()) {
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
 		return c.json(new PaymentExpiredError('Challenge has expired').toJSON(), 402)
 	}
 
@@ -899,8 +931,16 @@ app.all('/*', async (c) => {
 	const signedTx = credential.payload.signature as Hex
 	const timestamp = new Date().toISOString()
 
+	// Reconstruct challenge request from stateless data for verification
+	const expectedRequest: ChargeRequest = {
+		amount: challengeResult.data.price,
+		asset: partner.asset,
+		destination: partner.destination,
+		expires: challengeResult.data.expires,
+	}
+
 	// Verify the transaction
-	const verification = await verifyTransaction(signedTx, storedChallenge.challenge.request)
+	const verification = await verifyTransaction(signedTx, expectedRequest)
 	if (!verification.valid) {
 		return c.json(
 			new PaymentVerificationFailedError(
@@ -910,14 +950,12 @@ app.all('/*', async (c) => {
 		)
 	}
 
-	// Mark challenge as used
-	storedChallenge.used = true
+	// No need to mark as used - replay protection comes from on-chain tx nonce
 
 	// Broadcast the transaction
 	const broadcastResult = await broadcastTransaction(signedTx, c.env)
 
 	if (!broadcastResult.success) {
-		storedChallenge.used = false
 		return c.json(
 			new PaymentVerificationFailedError(`Broadcast failed: ${broadcastResult.error}`).toJSON(),
 			500,
