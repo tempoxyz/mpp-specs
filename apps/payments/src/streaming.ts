@@ -54,6 +54,87 @@ function getStreamServer(env: Env, serverAddress: Address): StreamChannelServer 
 }
 
 /**
+ * Re-hydrate channel state from on-chain after worker restart.
+ * This allows vouchers to work even if the in-memory state was lost.
+ * Note: We start with highestVoucherAmount = settled (from chain), so any
+ * vouchers already submitted but not settled will be re-accepted. This is
+ * fine for a demo - worst case we double-grant access for already-paid requests.
+ */
+async function rehydrateChannelFromChain(
+	env: Env,
+	partner: PartnerConfig,
+	channelId: Hex,
+	streamConfig: StreamingConfig,
+): Promise<{ valid: true; state: ServerChannelState } | { valid: false; error: string }> {
+	const publicClient = createPublicClient({
+		chain: tempoModerato,
+		transport: http(env.TEMPO_RPC_URL),
+	})
+
+	try {
+		const { TempoStreamChannelABI } = await import('@tempo/stream-channels')
+		
+		const result = await publicClient.readContract({
+			address: streamConfig.escrowContract,
+			abi: TempoStreamChannelABI,
+			functionName: 'getChannel',
+			args: [channelId],
+		})
+
+		if (result.payer === '0x0000000000000000000000000000000000000000') {
+			return { valid: false, error: 'Channel does not exist on-chain' }
+		}
+
+		if (result.finalized) {
+			return { valid: false, error: 'Channel is finalized' }
+		}
+
+		// Initialize state from on-chain data
+		// Use 'settled' as the starting point for highestVoucherAmount
+		const state: ServerChannelState = {
+			channelId,
+			payer: result.payer,
+			payee: result.payee,
+			token: result.token,
+			authorizedSigner: result.authorizedSigner,
+			deposit: result.deposit,
+			settled: result.settled,
+			expiry: result.expiry,
+			highestVoucherAmount: result.settled, // Start from settled amount
+			highestVoucher: null,
+		}
+
+		// Store in memory for future requests
+		// FIXME: Vouchers are stored in-memory only and will be lost on worker restart.
+		// This means vouchers submitted between restarts may be re-accepted (double-granting access).
+		// To fix: Add Durable Objects (PAYMENT_CHANNEL) and D1 (CHANNELS_DB) bindings to wrangler.jsonc.
+		// See: migrations/0001_create_channels.sql and src/durable-objects/PaymentChannel.ts
+		console.warn(
+			`[streaming] FIXME: Re-hydrating channel ${channelId} from chain. ` +
+			`Voucher history is not persisted - previous vouchers since last settlement may be re-accepted. ` +
+			`Configure Durable Objects + D1 for production use.`
+		)
+		activeChannels.set(channelId, {
+			channelId,
+			escrowContract: streamConfig.escrowContract,
+			partner,
+			state,
+			createdAt: new Date(),
+		})
+
+		// Also register with the server instance
+		const server = getStreamServer(env, partner.destination)
+		// The server's internal channels map needs the state too
+		// We access it via the verifyChannelOpen path by creating a minimal open
+		;(server as any).channels?.set(channelId, state)
+
+		return { valid: true, state }
+	} catch (e) {
+		return { valid: false, error: `Failed to read channel from chain: ${e}` }
+	}
+}
+
+/**
  * Create a stream request challenge for a partner.
  */
 export function createStreamChallenge(
@@ -157,9 +238,15 @@ export async function verifyVoucher(
 	}
 
 	// Get current state to calculate delta
-	const currentState = server.getChannelState(credential.channelId)
+	let currentState = server.getChannelState(credential.channelId)
+	
+	// If channel not in memory, try to re-hydrate from chain (happens after worker restart)
 	if (!currentState) {
-		return { valid: false, error: 'Channel not found' }
+		const rehydrated = await rehydrateChannelFromChain(env, partner, credential.channelId, streamConfig)
+		if (!rehydrated.valid) {
+			return { valid: false, error: rehydrated.error }
+		}
+		currentState = rehydrated.state
 	}
 
 	const previousAmount = currentState.highestVoucherAmount

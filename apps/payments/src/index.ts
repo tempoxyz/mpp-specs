@@ -62,7 +62,9 @@ async function signChallenge(data: string): Promise<string> {
 
 async function verifyChallenge(
 	id: string,
-): Promise<{ valid: true; data: { partnerSlug: string; price: string; expires: string } } | { valid: false }> {
+): Promise<
+	{ valid: true; data: { partnerSlug: string; price: string; expires: string } } | { valid: false }
+> {
 	try {
 		const [dataPart, sig] = id.split('.')
 		if (!dataPart || !sig) return { valid: false }
@@ -449,6 +451,10 @@ app.use('*', async (c, next) => {
 	await next()
 	const ms = Date.now() - start
 	console.log(`← ${c.req.method} ${c.req.path} ${c.res.status} (${ms}ms)`)
+	// Debug: prove which worker handled the request
+	c.res.headers.set('X-Payments-Worker', 'payments-v2')
+	c.res.headers.set('X-Payments-Host', c.req.header('host') || 'unknown')
+	c.res.headers.set('X-Payments-Time', String(Date.now()))
 })
 
 // Health check
@@ -705,6 +711,7 @@ app.post('/:partner/voucher', async (c) => {
 app.all('/*', async (c) => {
 	// Prefer X-Forwarded-Host for local dev (Vite rewrites Host header)
 	const host = c.req.header('x-forwarded-host') || c.req.header('host') || ''
+	console.log('🔀 Catch-all route hit', { host, path: c.req.path, method: c.req.method })
 	const partnerSlug = getPartnerFromHost(host)
 	const forwardPath = c.req.path || '/'
 
@@ -820,7 +827,10 @@ app.all('/*', async (c) => {
 	// Validate challenge (stateless - decode and verify signature from ID)
 	const challengeResult = await verifyChallenge(credential.id)
 	if (!challengeResult.valid) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
+		c.header(
+			'WWW-Authenticate',
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price)),
+		)
 		return c.json(
 			new PaymentVerificationFailedError('Unknown or expired challenge ID').toJSON(),
 			401,
@@ -829,16 +839,19 @@ app.all('/*', async (c) => {
 
 	// Verify challenge matches current request context
 	if (challengeResult.data.partnerSlug !== partner.slug) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
-		return c.json(
-			new PaymentVerificationFailedError('Challenge partner mismatch').toJSON(),
-			401,
+		c.header(
+			'WWW-Authenticate',
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price)),
 		)
+		return c.json(new PaymentVerificationFailedError('Challenge partner mismatch').toJSON(), 401)
 	}
 
 	// Check expiry
 	if (new Date(challengeResult.data.expires) < new Date()) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env, partner, price)))
+		c.header(
+			'WWW-Authenticate',
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price)),
+		)
 		return c.json(new PaymentExpiredError('Challenge has expired').toJSON(), 402)
 	}
 
