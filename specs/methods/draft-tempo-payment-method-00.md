@@ -1,7 +1,8 @@
 ---
 title: Tempo Payment Method for HTTP Payment Authentication
 docName: draft-tempo-payment-method-00
-category: std
+version: 00
+category: info
 ipr: trust200902
 submissionType: IETF
 consensus: true
