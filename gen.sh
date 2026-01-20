@@ -8,7 +8,7 @@ if ! command -v npx &> /dev/null; then
 fi
 
 if ! command -v xml2rfc &> /dev/null; then
-  echo "❌ xml2rfc not found. Install with: pip install xml2rfc"
+  echo "❌ xml2rfc not found. Install with: pip3 install xml2rfc"
   exit 1
 fi
 
