@@ -115,8 +115,8 @@ describe('api-pricing', () => {
 		it('calculates flat price with defaults', () => {
 			const pricing = getModelPricing('gpt-4o-mini')!
 			const price = calculateFlatRequestPrice(pricing)
-			// Should be at least minimum price
-			expect(price).toBeGreaterThanOrEqual(BigInt(10000))
+			// Should be at least minimum price ($0.001 = 1000 base units)
+			expect(price).toBeGreaterThanOrEqual(BigInt(1000))
 		})
 
 		it('respects minimum price', () => {
@@ -147,7 +147,7 @@ describe('api-pricing', () => {
 			}
 			const usage = estimateTokensFromRequest(body)
 			expect(usage.inputTokens).toBeGreaterThan(0)
-			expect(usage.outputTokens).toBe(1000) // Default output
+			expect(usage.outputTokens).toBe(300) // Default output
 		})
 
 		it('estimates tokens from prompt string', () => {
@@ -162,7 +162,8 @@ describe('api-pricing', () => {
 				max_tokens: 500,
 			}
 			const usage = estimateTokensFromRequest(body)
-			expect(usage.outputTokens).toBe(500)
+			// Uses 25% of max_tokens, capped at 500
+			expect(usage.outputTokens).toBe(125)
 		})
 
 		it('handles multipart content with images', () => {
@@ -183,8 +184,8 @@ describe('api-pricing', () => {
 
 		it('returns defaults for invalid input', () => {
 			const usage = estimateTokensFromRequest(null)
-			expect(usage.inputTokens).toBe(500)
-			expect(usage.outputTokens).toBe(1000)
+			expect(usage.inputTokens).toBe(200)
+			expect(usage.outputTokens).toBe(300)
 		})
 	})
 
