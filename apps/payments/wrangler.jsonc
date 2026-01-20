@@ -7,9 +7,7 @@
 	"observability": { "enabled": true },
 	"workers_dev": true,
 	"preview_urls": true,
-	"vars": {
-		"TEMPO_RPC_URL": "https://rpc.tempo.xyz"
-	},
+	"vars": {},
 	"assets": {
 		"directory": "./public",
 		"binding": "ASSETS"
