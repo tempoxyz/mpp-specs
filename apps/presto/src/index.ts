@@ -7,7 +7,7 @@ import { Hono } from 'hono'
 export interface Env {
 	ENVIRONMENT: string
 	ASSETS: Fetcher
-	KEYS: KVNamespace
+	KEYS?: KVNamespace
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -72,6 +72,9 @@ app.get('/health', (c) => {
 
 // Store public key for credential (used during WebAuthn registration)
 app.post('/keys', async (c) => {
+	if (!c.env.KEYS) {
+		return c.json({ error: 'KV not configured' }, 503)
+	}
 	try {
 		const body = (await c.req.json()) as {
 			credentialId: string
@@ -107,6 +110,9 @@ app.get('/keys/challenge', (_c) => {
 
 // Get public key for credential (used during discoverable credential sign-in)
 app.get('/keys/:credentialId', async (c) => {
+	if (!c.env.KEYS) {
+		return c.json({ error: 'KV not configured' }, 503)
+	}
 	const credentialId = c.req.param('credentialId')
 
 	const stored = await c.env.KEYS.get(credentialId)
@@ -193,12 +199,14 @@ app.post('/webauthn/recover', async (c) => {
 			)
 		}
 
-		// Rehydrate KV for future sign-ins
-		await c.env.KEYS.put(
-			body.credentialId,
-			JSON.stringify({ publicKey: recoveredPubKeyHex, address: recoveredAddress }),
-			{ expirationTtl: 60 * 60 * 24 * 365 },
-		)
+		// Rehydrate KV for future sign-ins (if configured)
+		if (c.env.KEYS) {
+			await c.env.KEYS.put(
+				body.credentialId,
+				JSON.stringify({ publicKey: recoveredPubKeyHex, address: recoveredAddress }),
+				{ expirationTtl: 60 * 60 * 24 * 365 },
+			)
+		}
 
 		return c.json({
 			publicKey: recoveredPubKeyHex,
