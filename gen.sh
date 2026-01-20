@@ -22,8 +22,8 @@ for md in draft-*.md; do
     echo "❌ $md: missing 'title:' in frontmatter"
     errors=1
   fi
-  if ! grep -q "^docname:" "$md"; then
-    echo "❌ $md: missing 'docname:' in frontmatter"
+  if ! grep -qi "^docname:" "$md"; then
+    echo "❌ $md: missing 'docName:' in frontmatter"
     errors=1
   fi
 done
