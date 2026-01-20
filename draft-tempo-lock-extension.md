@@ -227,10 +227,10 @@ JSON object with the following fields:
 | `trust` | string | OPTIONAL | Exclusive intermediary authorized to call release (if set, payee cannot) |
 | `feePayer` | boolean | OPTIONAL | If `true`, server will pay transaction fees (default: `false`) |
 
-If `trust` is present, only `trust` can call `release()`; the `payee` cannot.
+If `trust` is present, only `trust` can call `withdraw()`; the `payee` cannot.
 Funds are still transferred to `payee`, but `trust` acts as an exclusive
 intermediary (e.g., an arbitration service). If `trust` is absent, `payee`
-calls `release()` directly.
+calls `withdraw()` directly.
 
 The following is a non-normative example:
 
@@ -379,7 +379,7 @@ struct Release {
 Releases MUST authorize a cumulative total, not incremental deltas. A
 TIP20Escrow implementation MUST reject any release where
 `cumulativeAmount <= released`. A payee SHOULD use the highest valid
-release available when calling `release()`.
+release available when calling `withdraw()`.
 
 - Release #1: `cumulativeAmount = 100000` → releases 100000
 - Release #2: `cumulativeAmount = 250000` → releases 150000 more (delta)
@@ -702,7 +702,7 @@ If the payer wants to end the lock before expiry:
 
 1. Payer calls `requestRelease(lockId)` on the TIP20Escrow implementation
 2. The implementation-defined grace period begins
-3. Payee can still call `release()` with any pending releases during grace
+3. Payee can still call `withdraw()` with any pending releases during grace
 4. After grace period, payer can call `withdraw(lockId)` to reclaim remaining funds
 
 This mechanism permits the payee to settle outstanding authorized amounts
@@ -733,7 +733,7 @@ with their risk tolerance. While expiry protects against indefinite fund
 locking, funds remain unavailable until expiry.
 
 **Trust Address**: If the `trust` field is specified, only that address can
-call `release()`; the payee cannot. Clients SHOULD only accept trusted
+call `withdraw()`; the payee cannot. Clients SHOULD only accept trusted
 arbitration services and verify the trust address is legitimate.
 
 **Partial Release**: TIP20Escrow implementations support partial releases.
@@ -743,7 +743,7 @@ Clients can reclaim unreleased funds after expiry.
 **Early Release (requestRelease)**: Payers can request early release before
 expiry. This starts an implementation-defined grace period during which:
 
-- The payee can still call `release()` with valid releases
+- The payee can still call `withdraw()` with valid releases
 - After the grace period, the payer can call `withdraw()` to reclaim funds
 - Servers SHOULD monitor for `ReleaseRequested` events and settle promptly
 
@@ -777,7 +777,7 @@ if a release is intercepted. Implementations MUST reject releases where
 
 **Release Interception**: Even if an attacker intercepts a release:
 
-- They cannot submit it (only payee/trust can call `release()`)
+- They cannot submit it (only payee/trust can call `withdraw()`)
 - They cannot modify the amount (signature verification fails)
 - They cannot use it on another lock (bound to `lockId`)
 
@@ -870,7 +870,7 @@ Client                                 Server                    Tempo
   │      Authorization: Payment          │                         │
   │        <final release credential>    │                         │
   ├─────────────────────────────────────>│                         │
-  │                                      │ (11) release()          │
+  │                                      │ (11) withdraw()          │
   │                                      ├────────────────────────>│
   │                                      │<────────────────────────┤
   │ (12) 200 OK                          │                         │
