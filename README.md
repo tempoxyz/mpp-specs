@@ -1,26 +1,113 @@
 # The "Payment" HTTP Authentication Scheme
 
-This repository contains the specification for the "Payment" HTTP Authentication Scheme and its Payment Method extension specifications.
+HTTP 402 "Payment Required" was reserved in HTTP/1.1 but never standardized. This specification defines the "Payment" authentication scheme that gives 402 its semantics, enabling HTTP resources to require payment before granting access.
+
+## Protocol Overview
+
+The Payment scheme extends HTTP Authentication to support payment challenges in order to access protected resources.
+
+```
+Client                                            Server
+   │                                                 │
+   │  (1) GET /resource                              │
+   ├────────────────────────────────────────────────>│
+   │                                                 │
+   │  (2) 402 Payment Required                       │
+   │      WWW-Authenticate: Payment id="..",         │
+   │        method="..", intent="..", request=".."   │
+   │<────────────────────────────────────────────────┤
+   │                                                 │
+   │  (3) Client fulfills payment challenge          │
+   │                                                 │
+   │  (4) GET /resource                              │
+   │      Authorization: Payment <credential>        │
+   ├────────────────────────────────────────────────>│
+   │                                                 │
+   │  (5) 200 OK                                     │
+   │      Payment-Receipt: <receipt>                 │
+   │<────────────────────────────────────────────────┤
+```
+
+The protocol is **payment-method agnostic**—it works with any payment network, currency, or processor through registered payment method identifiers.
+
+## Architecture
+
+The specification is modular, separating stable protocol mechanics from evolving payment ecosystems:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CORE                                           │
+│  HTTP 402 semantics, headers, IANA registries                               │
+│  (stable, rarely changes)                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┴─────────────────────────┐
+          ▼                                                   ▼
+┌─────────────────────────────────┐     ┌─────────────────────────────────────┐
+│           INTENTS               │     │            METHODS                  │
+│   (abstract payment patterns)   │     │    (concrete implementations)       │
+├─────────────────────────────────┤     ├─────────────────────────────────────┤
+│ • charge      → one-time        │     │ • tempo   → Tempo blockchain        │
+│ • authorize   → pre-auth        │     │ • stripe  → Stripe payments         │
+│ • subscription → recurring      │     │ • (lightning, etc.)                 │
+└─────────────────────────────────┘     └─────────────────────────────────────┘
+                                    │
+                                    ▼
+                   ┌─────────────────────────────────────┐
+                   │           EXTENSIONS                │
+                   │   (optional protocol additions)     │
+                   ├─────────────────────────────────────┤
+                   │ • discovery → well-known, DNS       │
+                   └─────────────────────────────────────┘
+```
+
+**Core** defines the HTTP mechanics and registries. It should rarely change.
+
+**Intents** define abstract payment patterns (charge, authorize, subscription) that work across payment networks. New intents can be added without modifying core.
+
+**Methods** define how specific payment networks implement intents. Anyone can create a method spec for their payment infrastructure.
+
+**Extensions** add optional protocol features like discovery mechanisms.
 
 ## Specifications
 
+### Core (Standards Track)
+
 | Document | Description |
 |----------|-------------|
-| [draft-ietf-httpauth-payment.md](draft-ietf-httpauth-payment.md) | The "Payment" HTTP Authentication Scheme |
-| [draft-stripe-payment-method.md](draft-stripe-payment-method.md) | Stripe Payment Method |
-| [draft-tempo-payment-method.md](draft-tempo-payment-method.md) | Tempo Payment Method |
+| [draft-httpauth-payment](specs/core/draft-httpauth-payment-00.md) | HTTP 402 + Payment authentication scheme |
 
-## Build
+### Intents (Standards Track)
 
-### 1. Prerequisites
+| Document | Description |
+|----------|-------------|
+| [draft-payment-intent-charge](specs/intents/draft-payment-intent-charge-00.md) | One-time immediate payment |
+| [draft-payment-intent-authorize](specs/intents/draft-payment-intent-authorize-00.md) | Pre-authorization for future charges |
+| [draft-payment-intent-subscription](specs/intents/draft-payment-intent-subscription-00.md) | Recurring periodic payments |
 
-- [Python 3.x](https://www.python.org/downloads/)
-- [Node.js](https://nodejs.org/en/download)
-- `xml2rfc`: `pip install xml2rfc` or `pipx install xml2rfc`
+### Methods (Informational)
 
-### 2. Generate Artifacts
+| Document | Description |
+|----------|-------------|
+| [draft-tempo-payment-method](specs/methods/draft-tempo-payment-method-00.md) | Tempo blockchain payments |
+| [draft-stripe-payment-method](specs/methods/draft-stripe-payment-method-00.md) | Stripe payment processing |
+
+### Extensions (Informational)
+
+| Document | Description |
+|----------|-------------|
+| [draft-payment-discovery](specs/extensions/draft-payment-discovery-00.md) | Discovery via well-known endpoints and DNS |
+
+## Building
+
+Generate HTML/TXT artifacts from the markdown specs:
 
 ```bash
-./gen.sh
+./scripts/gen.sh
 ```
 
+Requires Python 3.x and `xml2rfc` (`pip install xml2rfc`).
+
+## License
+
+These specifications are released into the public domain (CC0 1.0 Universal).
