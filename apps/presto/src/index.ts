@@ -13,14 +13,15 @@ export interface Env {
 const app = new Hono<{ Bindings: Env }>()
 
 const WHEEL_VERSION = '0.1.0'
-const BUILD_TIME = Date.now()
 
-const INSTALL_SCRIPT = `#!/bin/bash
+function getInstallScript(): string {
+	const buildTime = Date.now()
+	return `#!/bin/bash
 set -e
 
 # Presto installer - installs presto CLI from presto.tempo.xyz
 
-WHEEL_URL="https://presto.tempo.xyz/presto_tempo-${WHEEL_VERSION}-py3-none-any.whl?v=${BUILD_TIME}"
+WHEEL_URL="https://presto.tempo.xyz/presto_tempo-${WHEEL_VERSION}-py3-none-any.whl?v=${buildTime}"
 
 echo "Installing presto..."
 
@@ -51,13 +52,14 @@ echo "✓ Installed presto"
 echo ""
 echo "Run 'presto' to start!"
 `
+}
 
 // Serve install script
 app.get('/install.sh', (_c) => {
-	return new Response(INSTALL_SCRIPT, {
+	return new Response(getInstallScript(), {
 		headers: {
 			'Content-Type': 'text/plain; charset=utf-8',
-			'Cache-Control': 'public, max-age=60',
+			'Cache-Control': 'no-cache',
 		},
 	})
 })
