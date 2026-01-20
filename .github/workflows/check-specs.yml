@@ -1,0 +1,39 @@
+name: Check Specs Generated
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.5'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install xml2rfc
+        run: pip install xml2rfc
+
+      - name: Build specs
+        run: ./gen.sh
+
+      - name: Check for uncommitted changes
+        run: |
+          # Only check XML files - HTML/TXT have timestamps that vary
+          if [ -n "$(git status --porcelain docs/*.xml)" ]; then
+            echo "Generated docs are out of date. Please run ./gen.sh and commit the changes."
+            git diff --stat docs/*.xml
+            exit 1
+          fi
+          echo "All docs are up to date."

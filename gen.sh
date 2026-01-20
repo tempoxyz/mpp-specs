@@ -1,6 +1,41 @@
 #!/bin/bash
 set -euo pipefail
 
+# Add common Python bin paths for xml2rfc
+export PATH="$HOME/Library/Python/3.9/bin:$HOME/.local/bin:$PATH"
+
+# Check dependencies
+if ! command -v npx &> /dev/null; then
+  echo "Error: npx not found. Install Node.js from https://nodejs.org/"
+  exit 1
+fi
+
+if ! command -v xml2rfc &> /dev/null; then
+  echo "Error: xml2rfc not found. Install with: pip3 install xml2rfc"
+  exit 1
+fi
+
+# Validate markdown specs before conversion
+errors=0
+for md in draft-*.md; do
+  [[ -f "$md" ]] || continue
+  
+  # Check for required frontmatter fields
+  if ! grep -q "^title:" "$md"; then
+    echo "Error: $md: missing 'title:' in frontmatter"
+    errors=1
+  fi
+  if ! grep -qi "^docname:" "$md"; then
+    echo "Error: $md: missing 'docName:' in frontmatter"
+    errors=1
+  fi
+done
+
+if [[ $errors -eq 1 ]]; then
+  echo "Validation failed. Fix the above errors before generating."
+  exit 1
+fi
+
 OUT_DIR="docs"
 mkdir -p "$OUT_DIR"
 
