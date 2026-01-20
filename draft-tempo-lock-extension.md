@@ -476,18 +476,40 @@ The implementation MUST:
 5. Emit `LockCreated` event
 6. Return `lockId`
 
-#### 8.2.2. release
+#### 8.2.2. withdraw
 
-Payee releases funds using a signed release.
+Withdraw funds from a lock.
 
 ```solidity
-function release(
+// Payer reclaims remaining funds after expiry or grace period
+function withdraw(
+    address account,
+    bytes32 lockId
+) external;
+
+// Payee/trust claims earned funds using payer's signed release
+function withdraw(
     address account,
     bytes32 lockId,
     uint256 cumulativeAmount,
     bytes calldata signature
 ) external;
 ```
+
+**Payer reclaim** (no signature):
+
+The implementation MUST:
+
+1. Verify `msg.sender == account` (lock owner)
+2. Verify either:
+   - `block.timestamp >= lock.expires`, OR
+   - `lock.releaseRequested > 0 && block.timestamp >= lock.releaseRequested + gracePeriod`
+3. Compute `remaining = lock.amount - lock.released`
+4. Transfer `remaining` to `msg.sender`
+5. Mark lock as `active = false`
+6. Emit `FundsReleased` event
+
+**Payee claim** (with signature):
 
 The implementation MUST:
 
@@ -502,7 +524,7 @@ The implementation MUST:
 8. Update `lock.released = cumulativeAmount`
 9. Emit `FundsReleased` event
 
-The implementation MUST reject releases after expiry.
+The implementation MUST reject payee claims after expiry.
 
 #### 8.2.3. requestRelease
 
@@ -521,28 +543,10 @@ The implementation MUST:
 After the implementation-defined grace period, the payer can call `withdraw()`.
 The grace period SHOULD be documented by the implementation.
 
-#### 8.2.4. withdraw
+#### 8.2.4. modifyLock
 
-Payer withdraws remaining funds after expiry or grace period.
-
-```solidity
-function withdraw(bytes32 lockId) external;
-```
-
-The implementation MUST:
-
-1. Verify `msg.sender` is lock owner
-2. Verify either:
-   - `block.timestamp >= lock.expires`, OR
-   - `lock.releaseRequested > 0 && block.timestamp >= lock.releaseRequested + gracePeriod`
-3. Compute `remaining = lock.amount - lock.released`
-4. Transfer `remaining` to lock owner
-5. Mark lock as inactive
-6. Emit `LockClosed` event
-
-#### 8.2.5. modifyLock
-
-Payer adds funds and/or extends expiry on an existing lock.
+Payer adds funds and/or extends expiry on an existing lock. A value of `0`
+indicates no change for that field.
 
 ```solidity
 function modifyLock(
@@ -559,14 +563,12 @@ The implementation MUST:
 3. If `additionalAmount > 0`:
    - Transfer `additionalAmount` of the lock's asset from payer to escrow
    - Add to `lock.amount`
-4. If `newExpiry > lock.expires`:
+4. If `newExpiry > 0`:
+   - Reject if `newExpiry <= lock.expires` (expiry can only be extended)
    - Update `lock.expires = newExpiry`
 5. Emit `LockModified` event
 
-The implementation MUST reject if `newExpiry < lock.expires` (expiry can only
-be extended, not shortened).
-
-#### 8.2.6. getLock
+#### 8.2.5. getLock
 
 Query lock state.
 
