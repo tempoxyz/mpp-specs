@@ -86,9 +86,8 @@ export interface PartnerConfig {
 export interface Env {
 	ENVIRONMENT: string
 	DEBUG?: string
+	/** Tempo RPC URL (with credentials embedded if needed, e.g., https://user:pass@rpc.tempo.xyz) */
 	TEMPO_RPC_URL: string
-	TEMPO_RPC_USERNAME?: string
-	TEMPO_RPC_PASSWORD?: string
 	/** Static assets for dashboard (Vite-built client) */
 	ASSETS?: Fetcher
 	/** Escrow contract address for streaming channels */
@@ -108,9 +107,6 @@ export interface Env {
 	OPENROUTER_API_KEY?: string
 	TWITTER_BEARER_TOKEN?: string
 	ANTHROPIC_API_KEY?: string
-	/** Tempo RPC upstream URL and auth (for rpc partner) */
-	TEMPO_RPC_UPSTREAM_URL?: string
-	TEMPO_RPC_AUTH?: string
 	/** Allow additional string keys for tests and future API keys */
 	[key: string]: string | DurableObjectNamespace | D1Database | Queue | Fetcher | undefined
 }

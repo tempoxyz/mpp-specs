@@ -5,7 +5,7 @@ import type { Env } from './config.js'
  * Test demonstrating how RPC requests are formatted for testnet (Moderato).
  *
  * This shows:
- * 1. URL construction with username/password authentication
+ * 1. URL construction with embedded credentials
  * 2. HTTP request headers
  * 3. JSON-RPC request body format
  */
@@ -22,13 +22,11 @@ describe('RPC Request Formatting for Testnet', () => {
 		globalThis.fetch = originalFetch
 	})
 
-	it('formats RPC request with username/password authentication for testnet', async () => {
-		// Testnet (Moderato) configuration
+	it('formats RPC request with embedded credentials in URL for testnet', async () => {
+		// Testnet (Moderato) configuration with embedded credentials
 		const env: Env = {
 			ENVIRONMENT: 'moderato',
-			TEMPO_RPC_URL: 'https://rpc.moderato.tempo.xyz',
-			TEMPO_RPC_USERNAME: 'REDACTED_USERNAME',
-			TEMPO_RPC_PASSWORD: 'REDACTED_PASSWORD',
+			TEMPO_RPC_URL: 'https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz',
 		}
 
 		// Mock a successful RPC response
@@ -43,19 +41,10 @@ describe('RPC Request Formatting for Testnet', () => {
 			json: async () => mockResponse,
 		} as Response)
 
-		// Simulate the broadcastTransaction function logic
-		let rpcUrl = env.TEMPO_RPC_URL
-		if (env.TEMPO_RPC_USERNAME && env.TEMPO_RPC_PASSWORD) {
-			const url = new URL(rpcUrl)
-			url.username = env.TEMPO_RPC_USERNAME
-			url.password = env.TEMPO_RPC_PASSWORD
-			rpcUrl = url.toString()
-		}
-
 		const signedTx =
 			'0x02f8a701820a9684773594008502540be4008502540be400830186a09420c00000000000000000000000000000000000000180b844a9059cbb0000000000000000000000001234567890123456789012345678901234567890000000000000000000000000000000000000000000000000000000000002710c001a0abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefa0defabc1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
 
-		const response = await fetch(rpcUrl, {
+		const response = await fetch(env.TEMPO_RPC_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -72,12 +61,8 @@ describe('RPC Request Formatting for Testnet', () => {
 		const callArgs = vi.mocked(globalThis.fetch).mock.calls[0]!
 		const [actualUrl, actualOptions] = callArgs
 
-		// Verify URL includes username/password
-		// Note: URL.toString() may add a trailing slash, so we check includes
+		// Verify URL includes embedded credentials
 		expect(actualUrl).toContain('REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz')
-		expect(actualUrl).toMatch(
-			/^https:\/\/REDACTED_USERNAME:REDACTED_PASSWORD@rpc\.moderato\.tempo\.xyz\/?$/,
-		)
 
 		// Verify HTTP method
 		expect(actualOptions?.method).toBe('POST')
@@ -101,11 +86,10 @@ describe('RPC Request Formatting for Testnet', () => {
 		expect(data).toEqual(mockResponse)
 	})
 
-	it('formats RPC request without authentication when credentials are missing', async () => {
+	it('formats RPC request without authentication when no credentials embedded', async () => {
 		const env: Env = {
 			ENVIRONMENT: 'moderato',
 			TEMPO_RPC_URL: 'https://rpc.moderato.tempo.xyz',
-			// No username/password
 		}
 
 		const mockResponse = {
@@ -119,18 +103,9 @@ describe('RPC Request Formatting for Testnet', () => {
 			json: async () => mockResponse,
 		} as Response)
 
-		// Simulate the broadcastTransaction function logic
-		let rpcUrl = env.TEMPO_RPC_URL
-		if (env.TEMPO_RPC_USERNAME && env.TEMPO_RPC_PASSWORD) {
-			const url = new URL(rpcUrl)
-			url.username = env.TEMPO_RPC_USERNAME
-			url.password = env.TEMPO_RPC_PASSWORD
-			rpcUrl = url.toString()
-		}
-
 		const signedTx = '0x1234567890abcdef'
 
-		await fetch(rpcUrl, {
+		await fetch(env.TEMPO_RPC_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -144,22 +119,13 @@ describe('RPC Request Formatting for Testnet', () => {
 		const callArgs = vi.mocked(globalThis.fetch).mock.calls[0]!
 		const [actualUrl] = callArgs
 
-		// URL should NOT include username/password
+		// URL should NOT include credentials
 		expect(actualUrl).toBe('https://rpc.moderato.tempo.xyz')
 	})
 
 	it('demonstrates complete request format with example values', () => {
-		// Example testnet configuration
-		const testnetConfig = {
-			rpcUrl: 'https://rpc.moderato.tempo.xyz',
-			username: 'REDACTED_USERNAME',
-			password: 'REDACTED_PASSWORD',
-		}
-
-		// Construct URL with authentication
-		const url = new URL(testnetConfig.rpcUrl)
-		url.username = testnetConfig.username
-		url.password = testnetConfig.password
+		// Example testnet configuration with embedded credentials
+		const rpcUrl = 'https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz'
 
 		// Example signed transaction (hex string)
 		const signedTransaction =
@@ -167,7 +133,7 @@ describe('RPC Request Formatting for Testnet', () => {
 
 		// Complete request format
 		const request = {
-			url: url.toString(),
+			url: rpcUrl,
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -180,10 +146,8 @@ describe('RPC Request Formatting for Testnet', () => {
 			}),
 		}
 
-		// Verify URL format (URL.toString() may add trailing slash)
-		expect(request.url).toMatch(
-			/^https:\/\/REDACTED_USERNAME:REDACTED_PASSWORD@rpc\.moderato\.tempo\.xyz\/?$/,
-		)
+		// Verify URL format
+		expect(request.url).toBe('https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz')
 
 		// Verify JSON-RPC format
 		const body = JSON.parse(request.body)
@@ -203,23 +167,13 @@ describe('RPC Request Formatting for Testnet', () => {
 	})
 
 	it('demonstrates getTransactionReceipt request format', () => {
-		const testnetConfig = {
-			rpcUrl: 'https://rpc.moderato.tempo.xyz',
-			username: 'REDACTED_USERNAME',
-			password: 'REDACTED_PASSWORD',
-		}
-
-		const url = new URL(testnetConfig.rpcUrl)
-		url.username = testnetConfig.username
-		url.password = testnetConfig.password
+		// URL with embedded credentials
+		const rpcUrl = 'https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz'
 
 		const txHash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
 
 		// Note: getTransactionReceipt uses viem's createPublicClient with http transport
 		// which internally makes JSON-RPC calls. The URL format is the same.
-		const rpcUrl = url.toString()
-
-		// The viem http transport will make requests like:
 		const request = {
 			url: rpcUrl,
 			method: 'POST',
@@ -234,9 +188,7 @@ describe('RPC Request Formatting for Testnet', () => {
 			}),
 		}
 
-		expect(request.url).toMatch(
-			/^https:\/\/REDACTED_USERNAME:REDACTED_PASSWORD@rpc\.moderato\.tempo\.xyz\/?$/,
-		)
+		expect(request.url).toBe('https://REDACTED_USERNAME:REDACTED_PASSWORD@rpc.moderato.tempo.xyz')
 
 		const body = JSON.parse(request.body)
 		expect(body.method).toBe('eth_getTransactionReceipt')

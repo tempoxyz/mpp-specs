@@ -358,20 +358,11 @@ async function broadcastTransaction(
 	env: Env,
 ): Promise<{ success: true; transactionHash: Hex } | { success: false; error: string }> {
 	try {
-		let rpcUrl = env.TEMPO_RPC_URL
-		if (env.TEMPO_RPC_USERNAME && env.TEMPO_RPC_PASSWORD) {
-			const url = new URL(rpcUrl)
-			url.username = env.TEMPO_RPC_USERNAME
-			url.password = env.TEMPO_RPC_PASSWORD
-			rpcUrl = url.toString()
-		}
-
 		debug(env, 'broadcast', 'Sending eth_sendRawTransaction', {
-			rpcUrl: env.TEMPO_RPC_URL,
 			signedTx: `${signedTx.slice(0, 20)}...`,
 		})
 
-		const response = await fetch(rpcUrl, {
+		const response = await fetch(env.TEMPO_RPC_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -429,17 +420,9 @@ async function getTransactionReceipt(
 	env: Env,
 ): Promise<{ blockNumber: bigint | null }> {
 	try {
-		let rpcUrl = env.TEMPO_RPC_URL
-		if (env.TEMPO_RPC_USERNAME && env.TEMPO_RPC_PASSWORD) {
-			const url = new URL(rpcUrl)
-			url.username = env.TEMPO_RPC_USERNAME
-			url.password = env.TEMPO_RPC_PASSWORD
-			rpcUrl = url.toString()
-		}
-
 		const client = createPublicClient({
 			chain: tempoModerato,
-			transport: http(rpcUrl),
+			transport: http(env.TEMPO_RPC_URL),
 		})
 
 		const receipt = await client.waitForTransactionReceipt({

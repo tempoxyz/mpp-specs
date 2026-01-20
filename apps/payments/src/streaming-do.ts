@@ -24,8 +24,6 @@ export type { StreamingConfig }
 interface EnvWithDO {
 	ENVIRONMENT: string
 	TEMPO_RPC_URL: string
-	TEMPO_RPC_USERNAME?: string
-	TEMPO_RPC_PASSWORD?: string
 	STREAM_ESCROW_CONTRACT?: string
 	PAYMENT_CHANNEL: DurableObjectNamespace<PaymentChannel>
 	CHANNELS_DB?: D1Database
