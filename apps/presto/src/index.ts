@@ -12,12 +12,15 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>()
 
+const WHEEL_VERSION = '0.1.0'
+const BUILD_TIME = Date.now()
+
 const INSTALL_SCRIPT = `#!/bin/bash
 set -e
 
 # Presto installer - installs presto CLI from presto.tempo.xyz
 
-WHEEL_URL="https://presto.tempo.xyz/presto_tempo-0.1.0-py3-none-any.whl"
+WHEEL_URL="https://presto.tempo.xyz/presto_tempo-${WHEEL_VERSION}-py3-none-any.whl?v=${BUILD_TIME}"
 
 echo "Installing presto..."
 
