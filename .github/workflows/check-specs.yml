@@ -1,0 +1,41 @@
+name: Check Specs Generated
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.5'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install xml2rfc
+        run: pip install xml2rfc
+
+      - name: Install md2xml
+        run: npm install -g @anthropic/md2xml
+
+      - name: Build specs
+        run: ./scripts/gen.sh
+
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain artifacts/)" ]; then
+            echo "❌ Generated artifacts are out of date. Please run ./scripts/gen.sh and commit the changes."
+            git diff --stat artifacts/
+            exit 1
+          fi
+          echo "✅ All artifacts are up to date."
