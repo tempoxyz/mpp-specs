@@ -25,17 +25,14 @@ jobs:
       - name: Install xml2rfc
         run: pip install xml2rfc
 
-      - name: Install md2xml
-        run: npm install -g md2xml
-
       - name: Build specs
-        run: ./scripts/gen.sh
+        run: ./gen.sh
 
       - name: Check for uncommitted changes
         run: |
-          if [ -n "$(git status --porcelain artifacts/)" ]; then
-            echo "❌ Generated artifacts are out of date. Please run ./scripts/gen.sh and commit the changes."
-            git diff --stat artifacts/
+          if [ -n "$(git status --porcelain docs/)" ]; then
+            echo "❌ Generated docs are out of date. Please run ./gen.sh and commit the changes."
+            git diff --stat docs/
             exit 1
           fi
-          echo "✅ All artifacts are up to date."
+          echo "✅ All docs are up to date."

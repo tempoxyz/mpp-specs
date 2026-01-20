@@ -37,5 +37,5 @@ jobs:
       - name: Commit docs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "build: docs"
+          commit_message: "build: regenerate docs"
           file_pattern: "docs/*"
