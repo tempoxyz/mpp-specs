@@ -30,9 +30,10 @@ jobs:
 
       - name: Check for uncommitted changes
         run: |
-          if [ -n "$(git status --porcelain docs/)" ]; then
-            echo "❌ Generated docs are out of date. Please run ./gen.sh and commit the changes."
-            git diff --stat docs/
+          # Only check XML files - HTML/TXT have timestamps that vary
+          if [ -n "$(git status --porcelain docs/*.xml)" ]; then
+            echo "Generated docs are out of date. Please run ./gen.sh and commit the changes."
+            git diff --stat docs/*.xml
             exit 1
           fi
-          echo "✅ All docs are up to date."
+          echo "All docs are up to date."
