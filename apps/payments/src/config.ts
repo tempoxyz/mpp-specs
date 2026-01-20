@@ -1,6 +1,20 @@
 import type { Address } from 'viem'
 
 /**
+ * Debug logger that only logs when DEBUG env var is set.
+ * Usage: debug(env, 'tag', 'message', data)
+ */
+export function debug(env: { DEBUG?: string }, tag: string, message: string, data?: unknown): void {
+	if (!env.DEBUG) return
+	const prefix = `[${tag}]`
+	if (data !== undefined) {
+		console.log(prefix, message, data)
+	} else {
+		console.log(prefix, message)
+	}
+}
+
+/**
  * Configuration for streaming payment channels.
  */
 export interface StreamingConfig {
@@ -71,6 +85,7 @@ export interface PartnerConfig {
  */
 export interface Env {
 	ENVIRONMENT: string
+	DEBUG?: string
 	TEMPO_RPC_URL: string
 	TEMPO_RPC_USERNAME?: string
 	TEMPO_RPC_PASSWORD?: string

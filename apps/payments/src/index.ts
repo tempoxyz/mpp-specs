@@ -30,7 +30,7 @@ import {
 import { tempoModerato } from 'viem/chains'
 import { Abis, Transaction as TempoTransaction } from 'viem/tempo'
 import type { Env, PartnerConfig } from './config.js'
-import { getPriceForRequest } from './config.js'
+import { debug, getPriceForRequest } from './config.js'
 import { getPartner, partners } from './partners/index.js'
 import { proxyRequest } from './proxy.js'
 import {
@@ -332,6 +332,11 @@ async function broadcastTransaction(
 			rpcUrl = url.toString()
 		}
 
+		debug(env, 'broadcast', 'Sending eth_sendRawTransaction', {
+			rpcUrl: env.TEMPO_RPC_URL,
+			signedTx: signedTx.slice(0, 20) + '...',
+		})
+
 		const response = await fetch(rpcUrl, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -348,7 +353,10 @@ async function broadcastTransaction(
 			error?: { code: number; message: string; data?: unknown }
 		}
 
+		debug(env, 'broadcast', 'RPC response', data)
+
 		if (data.error) {
+			debug(env, 'broadcast', 'RPC error', data.error)
 			return {
 				success: false,
 				error: `RPC Error (${data.error.code}): ${
@@ -363,9 +371,11 @@ async function broadcastTransaction(
 				: data.result
 
 		if (!transactionHash) {
+			debug(env, 'broadcast', 'No transaction hash in response')
 			return { success: false, error: 'No transaction hash returned from RPC' }
 		}
 
+		debug(env, 'broadcast', 'Transaction broadcast successful', { transactionHash })
 		return { success: true, transactionHash }
 	} catch (error) {
 		return {

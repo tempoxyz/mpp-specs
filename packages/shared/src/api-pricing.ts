@@ -573,10 +573,10 @@ export interface FlatPriceOptions {
 }
 
 const DEFAULT_FLAT_PRICE_OPTIONS: Required<FlatPriceOptions> = {
-	avgInputTokens: 500,
-	avgOutputTokens: 1000,
+	avgInputTokens: 200,
+	avgOutputTokens: 300,
 	premiumMultiplier: 1.5,
-	minPrice: BigInt(10000), // $0.01 minimum
+	minPrice: BigInt(1000), // $0.001 minimum
 }
 
 /**
@@ -608,12 +608,11 @@ export function calculateFlatRequestPrice(
  */
 export function estimateTokensFromRequest(body: unknown): TokenUsage {
 	if (!body || typeof body !== 'object') {
-		return { inputTokens: 500, outputTokens: 1000 }
+		return { inputTokens: 200, outputTokens: 300 }
 	}
 
 	const request = body as Record<string, unknown>
 	let inputTokens = 0
-	let outputTokens = 1000 // Default expected output
 
 	// Handle messages array (OpenAI/Anthropic format)
 	if (Array.isArray(request.messages)) {
@@ -651,15 +650,18 @@ export function estimateTokensFromRequest(body: unknown): TokenUsage {
 		inputTokens += Math.ceil(request.system.length / 4)
 	}
 
-	// Handle max_tokens if specified
+	// Estimate output tokens conservatively
+	// Use 25% of max_tokens if specified, otherwise default to 300
+	// Cap at 500 to avoid overcharging for large max_tokens values
+	let outputTokens = 300
 	if (typeof request.max_tokens === 'number') {
-		outputTokens = request.max_tokens
+		outputTokens = Math.min(Math.ceil(request.max_tokens * 0.25), 500)
 	}
 
 	// Ensure minimum values
 	return {
-		inputTokens: Math.max(inputTokens, 100),
-		outputTokens: Math.max(outputTokens, 100),
+		inputTokens: Math.max(inputTokens, 50),
+		outputTokens: Math.max(outputTokens, 50),
 	}
 }
 
