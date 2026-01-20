@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { recoverVoucherSigner, verifyVoucher } from './voucher'
 import type { SignedVoucher } from './types'
+import { recoverVoucherSigner, verifyVoucher } from './voucher'
 
 /**
  * Cross-language voucher verification test.

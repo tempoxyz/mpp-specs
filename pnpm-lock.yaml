@@ -160,7 +160,7 @@ importers:
         version: 4.11.4
       ox:
         specifier: ^0.11.3
-        version: 0.11.3(typescript@5.9.3)(zod@4.3.5)
+        version: 0.11.3(typescript@5.9.3)(zod@3.25.76)
       react:
         specifier: ^19.0.0
         version: 19.2.3
@@ -169,13 +169,13 @@ importers:
         version: 19.2.3(react@19.2.3)
       tempo.ts:
         specifier: ^0.13.0
-        version: 0.13.0(@remix-run/headers@0.17.2)(@remix-run/route-pattern@0.15.3)(@remix-run/session@0.4.1)(typescript@5.9.3)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5))(zod@4.3.5)
+        version: 0.13.0(@remix-run/headers@0.17.2)(@remix-run/route-pattern@0.15.3)(@remix-run/session@0.4.1)(typescript@5.9.3)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
       viem:
         specifier: ^2.21.0
-        version: 2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5)
+        version: 2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       wagmi:
         specifier: ^2.14.0
-        version: 2.19.5(@tanstack/query-core@5.90.18)(@tanstack/react-query@5.90.18(react@19.2.3))(@types/react@19.2.8)(bufferutil@4.1.0)(react@19.2.3)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5))(zod@4.3.5)
+        version: 2.19.5(@tanstack/query-core@5.90.18)(@tanstack/react-query@5.90.18(react@19.2.3))(@types/react@19.2.8)(bufferutil@4.1.0)(react@19.2.3)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: ^1.0.0
@@ -302,6 +302,12 @@ importers:
 
   apps/presto:
     dependencies:
+      '@noble/curves':
+        specifier: ^1.9.7
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@tanstack/react-query':
         specifier: ^5.62.0
         version: 5.90.18(react@19.2.3)
@@ -313,7 +319,7 @@ importers:
         version: 4.11.4
       ox:
         specifier: ^0.11.3
-        version: 0.11.3(typescript@5.9.3)(zod@3.25.76)
+        version: 0.11.3(typescript@5.9.3)(zod@4.3.5)
       react:
         specifier: ^19.0.0
         version: 19.2.3
@@ -322,13 +328,13 @@ importers:
         version: 19.2.3(react@19.2.3)
       tempo.ts:
         specifier: ^0.13.0
-        version: 0.13.0(@remix-run/headers@0.17.2)(@remix-run/route-pattern@0.15.3)(@remix-run/session@0.4.1)(typescript@5.9.3)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
+        version: 0.13.0(@remix-run/headers@0.17.2)(@remix-run/route-pattern@0.15.3)(@remix-run/session@0.4.1)(typescript@5.9.3)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5))(zod@4.3.5)
       viem:
         specifier: ^2.21.0
-        version: 2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+        version: 2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5)
       wagmi:
         specifier: ^2.14.0
-        version: 2.19.5(@tanstack/query-core@5.90.18)(@tanstack/react-query@5.90.18(react@19.2.3))(@types/react@19.2.8)(bufferutil@4.1.0)(react@19.2.3)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
+        version: 2.19.5(@tanstack/query-core@5.90.18)(@tanstack/react-query@5.90.18(react@19.2.3))(@types/react@19.2.8)(bufferutil@4.1.0)(react@19.2.3)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.44.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.5))(zod@4.3.5)
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: ^1.0.0

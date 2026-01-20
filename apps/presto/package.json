@@ -14,6 +14,8 @@
 		"deploy:prod": "wrangler deploy"
 	},
 	"dependencies": {
+		"@noble/curves": "^1.9.7",
+		"@noble/hashes": "^1.8.0",
 		"@tanstack/react-query": "^5.62.0",
 		"@tempo/paymentauth-protocol": "workspace:*",
 		"hono": "^4.6.0",

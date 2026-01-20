@@ -334,7 +334,7 @@ async function broadcastTransaction(
 
 		debug(env, 'broadcast', 'Sending eth_sendRawTransaction', {
 			rpcUrl: env.TEMPO_RPC_URL,
-			signedTx: signedTx.slice(0, 20) + '...',
+			signedTx: `${signedTx.slice(0, 20)}...`,
 		})
 
 		const response = await fetch(rpcUrl, {
