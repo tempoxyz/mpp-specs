@@ -1,14 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
+# Add common Python bin paths for xml2rfc
+export PATH="$HOME/Library/Python/3.9/bin:$HOME/.local/bin:$PATH"
+
 # Check dependencies
 if ! command -v npx &> /dev/null; then
-  echo "❌ npx not found. Install Node.js from https://nodejs.org/"
+  echo "Error: npx not found. Install Node.js from https://nodejs.org/"
   exit 1
 fi
 
 if ! command -v xml2rfc &> /dev/null; then
-  echo "❌ xml2rfc not found. Install with: pip3 install xml2rfc"
+  echo "Error: xml2rfc not found. Install with: pip3 install xml2rfc"
   exit 1
 fi
 
@@ -19,17 +22,17 @@ for md in draft-*.md; do
   
   # Check for required frontmatter fields
   if ! grep -q "^title:" "$md"; then
-    echo "❌ $md: missing 'title:' in frontmatter"
+    echo "Error: $md: missing 'title:' in frontmatter"
     errors=1
   fi
   if ! grep -qi "^docname:" "$md"; then
-    echo "❌ $md: missing 'docName:' in frontmatter"
+    echo "Error: $md: missing 'docName:' in frontmatter"
     errors=1
   fi
 done
 
 if [[ $errors -eq 1 ]]; then
-  echo "❌ Validation failed. Fix the above errors before generating."
+  echo "Validation failed. Fix the above errors before generating."
   exit 1
 fi
 
