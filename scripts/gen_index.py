@@ -24,6 +24,17 @@ CATEGORIES = {
 }
 
 
+def capitalize_title(title: str) -> str:
+    """Capitalize the first letter of the title, handling quoted words."""
+    if not title:
+        return title
+    # Handle titles starting with quoted word like "authorize"
+    if title.startswith('"') and len(title) > 1:
+        # Find the closing quote and capitalize the first letter inside
+        return '"' + title[1].upper() + title[2:]
+    return title[0].upper() + title[1:]
+
+
 def parse_frontmatter(md_path: Path) -> dict:
     """Extract YAML frontmatter from a markdown file.
 
@@ -46,7 +57,7 @@ def parse_frontmatter(md_path: Path) -> dict:
         if (title.startswith('"') and title.endswith('"')) or \
            (title.startswith("'") and title.endswith("'")):
             title = title[1:-1]
-        result["title"] = title
+        result["title"] = capitalize_title(title)
 
     # Extract other simple fields using regex (safer than YAML for mixed content)
     for field in ["docName", "category", "version"]:

@@ -2,7 +2,7 @@
 title: "subscription" Intent for HTTP Payment Authentication
 docName: draft-payment-intent-subscription-00
 version: 00
-category: std
+category: info
 ipr: trust200902
 submissionType: IETF
 consensus: true
