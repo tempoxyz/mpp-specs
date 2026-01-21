@@ -165,6 +165,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
           <name>Optional Parameters</name>
           <t><strong><tt>expires</tt></strong>: Timestamp indicating when this challenge expires, formatted   as an <xref target="RFC3339"/> date-time string (e.g., <tt>&quot;2025-01-15T12:00:00Z&quot;</tt>).   Servers <bcp14>SHOULD</bcp14> include this parameter. Clients <bcp14>MUST NOT</bcp14> submit   credentials for expired challenges.</t>
           <t><strong><tt>description</tt></strong>: Human-readable description of the resource or payment   purpose. This parameter is for display purposes only and <bcp14>MUST NOT</bcp14> be   relied upon for payment verification (see Section 11.5).</t>
+          <t><strong><tt>preference</tt></strong>: Integer value from 1 to 100 indicating server preference   for this payment method when multiple methods are offered (Section 6.3).   Higher values indicate stronger preference. Clients <bcp14>MAY</bcp14> use this value   as a tiebreaker when the client has no preference among available methods.</t>
           <t>Unknown parameters <bcp14>MUST</bcp14> be ignored by clients.</t>
         </section>
         <section anchor="example-challenge">
@@ -304,6 +305,60 @@ sub-method        = 1*( ALPHA / DIGIT / "-" )
       <section anchor="method-registry">
         <name>Method Registry</name>
         <t>Payment methods are registered in the HTTP Payment Methods registry (Section 12.3). Each registered method has an associated specification that defines the <tt>request</tt> and <tt>payload</tt> schemas.</t>
+      </section>
+      <section anchor="multiple-payment-method-selection">
+        <name>Multiple Payment Method Selection</name>
+        <t>Servers <bcp14>MAY</bcp14> offer multiple payment methods by including multiple <tt>WWW-Authenticate</tt> headers, each with a distinct <tt>method</tt> value:</t>
+        <sourcecode type="http"><![CDATA[
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="abc", realm="example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="def", realm="example.com", method="exact", intent="charge", request="..."
+WWW-Authenticate: Payment id="ghi", realm="example.com", method="lightning", intent="charge", request="..."
+]]></sourcecode>
+        <section anchor="server-preference-indication">
+          <name>Server Preference Indication</name>
+          <t>Servers <bcp14>SHOULD</bcp14> order <tt>WWW-Authenticate</tt> headers by preference, with the most preferred method listed first. This ordering provides a hint to clients that may not have their own preference.</t>
+          <t>Servers <bcp14>MAY</bcp14> also include a <tt>preference</tt> parameter (integer, 1-100) on each challenge to explicitly indicate relative preference:</t>
+          <sourcecode type="http"><![CDATA[
+WWW-Authenticate: Payment ..., method="stripe", preference="90", ...
+WWW-Authenticate: Payment ..., method="lightning", preference="70", ...
+]]></sourcecode>
+          <t>Higher values indicate stronger server preference. If the <tt>preference</tt> parameter is omitted, clients <bcp14>SHOULD</bcp14> assume preference based on header order.</t>
+        </section>
+        <section anchor="client-selection-algorithm">
+          <name>Client Selection Algorithm</name>
+          <t>Clients <bcp14>SHOULD</bcp14> select a payment method using the following algorithm:</t>
+          <ol type="1">
+            <li>Filter: Remove challenges with unrecognized <tt>method</tt> or <tt>intent</tt></li>
+          </ol>
+          <t>values, expired challenges, or unsatisfiable payment requirements.</t>
+          <ol type="1">
+            <li>Prioritize: Order remaining challenges by client preference. Client</li>
+          </ol>
+          <t>preference <bcp14>MAY</bcp14> consider factors such as:    - Payment methods the client has credentials for    - Transaction fees or exchange rates    - Settlement speed requirements    - User-configured preferences</t>
+          <ol type="1">
+            <li>Fallback: If no challenges match client preferences, the client <bcp14>MAY</bcp14></li>
+          </ol>
+          <t>consider server preference (header order or <tt>preference</tt> parameter)    as a tiebreaker.</t>
+          <ol type="1">
+            <li>Select: Choose the highest-priority challenge from the ordered list.</li>
+          </ol>
+          <t>Clients <bcp14>MUST NOT</bcp14> respond to multiple challenges simultaneously for the same resource request.</t>
+        </section>
+        <section anchor="fallback-behavior">
+          <name>Fallback Behavior</name>
+          <t>If a client cannot fulfill any offered challenge:</t>
+          <ul>
+            <li>The client <bcp14>SHOULD NOT</bcp14> send a credential</li>
+            <li>The client <bcp14>MAY</bcp14> display available options to the user for manual</li>
+          </ul>
+          <t>selection or configuration</t>
+          <ul>
+            <li>The client <bcp14>SHOULD</bcp14> treat the resource as inaccessible until a</li>
+          </ul>
+          <t>supported payment method is configured</t>
+          <t>If a client&apos;s selected method fails verification (401 response), the client <bcp14>MAY</bcp14> retry with a different available method from the original 402 response, provided the challenge IDs have not expired.</t>
+        </section>
       </section>
     </section>
     <section anchor="payment-intents">
