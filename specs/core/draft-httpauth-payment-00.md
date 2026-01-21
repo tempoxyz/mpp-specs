@@ -304,69 +304,6 @@ The decoded JSON object contains:
 
 Payment method specifications MAY define additional fields for receipts.
 
-### 5.4. Payment-Authorization Header
-
-Servers MAY include a `Payment-Authorization` header on successful responses
-to indicate that a credential may be reused for subsequent requests:
-
-```abnf
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
-```
-
-The credential portion is directly usable as an `Authorization` header
-value. The following parameters are appended:
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `expires` | Yes | RFC 3339 timestamp after which the authorization expires |
-| `realm` | No | Protection space scope (defaults to challenge realm) |
-
-**Example:**
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/json
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGFtcCI6IjIwMjUtMDEtMTVUMTI6MDA6MDBaIn0
-Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
-```
-
-Subsequent requests reuse the credential directly:
-
-```http
-GET /api/data HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
-```
-
-The server MAY return a different token in Payment-Authorization than the
-original credential (e.g., an access token optimized for reuse).
-
-#### 5.4.1. Client Behavior
-
-Clients that receive a `Payment-Authorization` header SHOULD:
-
-1. Extract the credential portion (`Payment <b64token>`) for reuse
-2. Cache it along with the `expires` timestamp and `realm`
-3. Use the cached credential for subsequent requests to the same realm
-4. Stop reusing the credential after the `expires` timestamp
-
-#### 5.4.2. Server Behavior
-
-Servers that issue `Payment-Authorization` MUST:
-
-1. Track which authorizations are valid and not yet expired
-2. Accept the issued credential for requests within the authorized realm
-3. Return 401 with a fresh challenge if the authorization has expired
-4. NOT require re-payment for requests within the authorization window
-
-### 5.5. Reusing Credentials
-
-Payment credentials are generally single-use unless the server explicitly
-grants reuse via the `Payment-Authorization` header.
-
-Clients MUST NOT reuse Payment credentials across different challenges
-unless the server has returned a `Payment-Authorization` header.
-
 ---
 
 ## 6. Payment Methods
@@ -423,7 +360,7 @@ If a server supports multiple intents, it MAY issue multiple challenges:
 
 ```http
 WWW-Authenticate: Payment id="abc", realm="api.example.com", method="example", intent="charge", request="..."
-WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", intent="authorize", request="..."
+WWW-Authenticate: Payment id="def", realm="api.example.com", method="other", intent="charge", request="..."
 ```
 
 Clients choose which challenge to respond to. Clients that do not
@@ -433,37 +370,132 @@ recognize an intent SHOULD treat the challenge as unsupported.
 
 ## 8. Error Handling
 
-### 8.1. Error Response Format
+This section defines error responses using Problem Details for HTTP APIs
+[RFC9457]. All error responses MUST use the `application/problem+json`
+media type.
 
-Servers SHOULD return JSON error bodies with 402 responses:
+### 8.1. Problem Details Format
 
-```json
-{
-  "error": "error_code",
-  "message": "Human-readable description"
-}
-```
+Error responses MUST conform to [RFC9457] and include the following
+members:
 
-### 8.2. Error Codes
+| Member | Type | Required | Description |
+|--------|------|----------|-------------|
+| `type` | string | REQUIRED | URI reference identifying the problem type |
+| `title` | string | REQUIRED | Short, human-readable summary |
+| `status` | integer | REQUIRED | HTTP status code |
+| `detail` | string | OPTIONAL | Human-readable explanation specific to this occurrence |
+| `instance` | string | OPTIONAL | URI reference identifying this specific occurrence |
 
-| Code | HTTP | Description |
-|------|------|-------------|
-| `payment_required` | 402 | Resource requires payment |
-| `payment_insufficient` | 402 | Amount too low |
-| `payment_expired` | 402 | Challenge or authorization expired |
-| `payment_verification_failed` | 401 | Proof invalid |
-| `payment_method_unsupported` | 400 | Method not accepted |
-| `malformed_proof` | 400 | Invalid proof format |
+### 8.2. Payment-Specific Problem Types
 
-### 8.3. Retry Behavior
+This specification defines the following problem type URIs. The base URI
+`https://ietf.org/payment/problems/` is used for all problem types
+defined in this specification.
 
-Servers SHOULD use the `Retry-After` HTTP header [RFC9110] to indicate
-when clients may retry:
+| Problem Type | HTTP | Title |
+|--------------|------|-------|
+| `payment-required` | 402 | Payment Required |
+| `payment-insufficient` | 402 | Insufficient Payment |
+| `payment-expired` | 402 | Payment Expired |
+| `verification-failed` | 401 | Payment Verification Failed |
+| `method-unsupported` | 400 | Payment Method Unsupported |
+| `malformed-credential` | 400 | Malformed Payment Credential |
+| `access-denied` | 403 | Payment Accepted But Access Denied |
+
+### 8.3. Payment Problem Extensions
+
+In addition to standard [RFC9457] members, payment problem responses
+MAY include:
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `challengeId` | string | The `id` of the related payment challenge |
+| `method` | string | The payment method identifier |
+| `retryAfter` | integer | Seconds before retry is appropriate |
+
+### 8.4. Error Response Examples
+
+#### 8.4.1. Payment Required (402)
 
 ```http
 HTTP/1.1 402 Payment Required
+Content-Type: application/problem+json
+WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa", ...
+
+{
+  "type": "https://ietf.org/payment/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Access to this resource requires payment.",
+  "instance": "/api/resource/123",
+  "challengeId": "x7Tg2pLqR9mKvNwY3hBcZa"
+}
+```
+
+#### 8.4.2. Verification Failed (401)
+
+```http
+HTTP/1.1 401 Unauthorized
+Content-Type: application/problem+json
+WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", ...
+
+{
+  "type": "https://ietf.org/payment/problems/verification-failed",
+  "title": "Payment Verification Failed",
+  "status": 401,
+  "detail": "The payment proof could not be verified.",
+  "challengeId": "x7Tg2pLqR9mKvNwY3hBcZa"
+}
+```
+
+#### 8.4.3. Malformed Credential (400)
+
+```http
+HTTP/1.1 400 Bad Request
+Content-Type: application/problem+json
+
+{
+  "type": "https://ietf.org/payment/problems/malformed-credential",
+  "title": "Malformed Payment Credential",
+  "status": 400,
+  "detail": "The credential payload is not valid base64url-encoded JSON."
+}
+```
+
+#### 8.4.4. Access Denied (403)
+
+```http
+HTTP/1.1 403 Forbidden
+Content-Type: application/problem+json
+
+{
+  "type": "https://ietf.org/payment/problems/access-denied",
+  "title": "Payment Accepted But Access Denied",
+  "status": 403,
+  "detail": "Payment was verified but access is denied by policy."
+}
+```
+
+### 8.5. Retry Behavior
+
+Servers SHOULD use the `Retry-After` HTTP header [RFC9110] to indicate
+when clients may retry. The `retryAfter` extension member MAY also be
+included in the problem details:
+
+```http
+HTTP/1.1 402 Payment Required
+Content-Type: application/problem+json
 Retry-After: 60
 WWW-Authenticate: Payment ...
+
+{
+  "type": "https://ietf.org/payment/problems/payment-expired",
+  "title": "Payment Expired",
+  "status": 402,
+  "detail": "The payment challenge has expired.",
+  "retryAfter": 60
+}
 ```
 
 ---
@@ -621,7 +653,6 @@ This document registers the following header fields:
 | Field Name | Status | Reference |
 |------------|--------|-----------|
 | Payment-Receipt | permanent | This document, Section 5.3 |
-| Payment-Authorization | permanent | This document, Section 5.4 |
 
 ### 12.3. Payment Method Registry
 
@@ -693,6 +724,9 @@ identifiers upon publication.
 - **[RFC9110]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Semantics", STD 97, RFC 9110, June 2022.
 
+- **[RFC9457]** Nottingham, M., Wilde, E., and S. Dalal, "Problem Details
+  for HTTP APIs", RFC 9457, July 2023.
+
 ### 13.2. Informative References
 
 - **[W3C-DID]** W3C, "Decentralized Identifiers (DIDs) v1.0",
@@ -719,9 +753,6 @@ payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
 Payment-Receipt       = b64token
-
-; Payment-Authorization header field value
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
