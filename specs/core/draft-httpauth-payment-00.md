@@ -33,28 +33,6 @@ of BCP 78 and BCP 79.
 Copyright (c) 2025 IETF Trust and the persons identified as the document
 authors. All rights reserved.
 
-## Table of Contents
-
-1. [Introduction](#1-introduction)
-2. [Requirements Language](#2-requirements-language)
-3. [Terminology](#3-terminology)
-4. [Protocol Overview](#4-protocol-overview)
-5. [The Payment Authentication Scheme](#5-the-payment-authentication-scheme)
-6. [Payment Methods](#6-payment-methods)
-7. [Payment Intents](#7-payment-intents)
-8. [Error Handling](#8-error-handling)
-9. [Extensibility](#9-extensibility)
-10. [Internationalization Considerations](#10-internationalization-considerations)
-11. [Security Considerations](#11-security-considerations)
-12. [IANA Considerations](#12-iana-considerations)
-13. [References](#13-references)
-14. [Appendix A: ABNF Collected](#appendix-a-abnf-collected)
-15. [Appendix B: Examples](#appendix-b-examples)
-16. [Acknowledgements](#acknowledgements)
-17. [Authors' Addresses](#authors-addresses)
-
----
-
 ## 1. Introduction
 
 HTTP 402 "Payment Required" was reserved in HTTP/1.1 [RFC9110] for future
@@ -259,7 +237,7 @@ containing:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Challenge identifier (must match challenge `id`) |
-| `source` | string | No | Payer identifier as a DID [W3C-DID] |
+| `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
 
 The `payload` field contains the payment-method-specific data needed to
@@ -926,5 +904,3 @@ Tempo Labs
 Email: jake@tempo.xyz
 
 ---
-
-**License:** This specification is released into the public domain (CC0 1.0 Universal).
