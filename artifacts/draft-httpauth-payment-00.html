@@ -1968,6 +1968,15 @@ Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGF
 Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
 </pre><a href="#section-5.4-6" class="pilcrow">¶</a>
 </div>
+<p id="section-5.4-7">Subsequent requests reuse the credential directly:<a href="#section-5.4-7" class="pilcrow">¶</a></p>
+<div class="lang-http sourcecode" id="section-5.4-8">
+<pre>
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
+</pre><a href="#section-5.4-8" class="pilcrow">¶</a>
+</div>
+<p id="section-5.4-9">The server <span class="bcp14">MAY</span> return a different token in Payment-Authorization than the original credential (e.g., an access token optimized for reuse).<a href="#section-5.4-9" class="pilcrow">¶</a></p>
 <div id="client-behavior">
 <section id="section-5.4.1">
           <h4 id="name-client-behavior">
