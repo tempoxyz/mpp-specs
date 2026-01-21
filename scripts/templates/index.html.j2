@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Auth Specs</title>
+  <style>
+    :root {
+      --color-link: #0066cc;
+      --color-text: #333;
+    }
+
+    body {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+      color: var(--color-text);
+    }
+
+    h1 {
+      border-bottom: 2px solid var(--color-text);
+      padding-bottom: 0.5rem;
+    }
+
+    .tree {
+      font-size: 0.9rem;
+    }
+
+    .folder {
+      margin: 1.5rem 0 0.5rem 0;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .folder-icon {
+      margin-right: 0.5rem;
+    }
+
+    .spec-entry {
+      margin: 0.25rem 0;
+      padding-left: 1.5rem;
+    }
+
+    .branch {
+      color: #666;
+      user-select: none;
+    }
+
+    .spec-title {
+      font-weight: 500;
+    }
+
+    .maturity {
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      margin-left: 0.5rem;
+      font-weight: 500;
+      background: #e7f3ff;
+      color: #0066cc;
+    }
+
+    .category {
+      font-size: 0.75rem;
+      color: #666;
+      margin-left: 0.5rem;
+    }
+
+    .formats {
+      display: block;
+      padding-left: 2.5rem;
+      font-size: 0.85rem;
+    }
+
+    .formats a {
+      color: var(--color-link);
+      text-decoration: none;
+      margin-right: 0.25rem;
+    }
+
+    .formats a:hover {
+      text-decoration: underline;
+    }
+
+    .sep {
+      color: #999;
+      margin: 0 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>IETF Payment Auth Specifications</h1>
+
+  <div class="tree">
+{%- for domain in domains %}
+    <div class="folder"><span class="folder-icon">📁</span>{{ domain.name }}</div>
+{%- for spec in domain.specs %}
+{%- set is_last = loop.last %}
+    <div class="spec-entry">
+      <span class="branch">{{ '└──' if is_last else '├──' }}</span> <span class="spec-title">{{ spec.title }}</span><span class="maturity">{{ spec.maturity.label }}</span><span class="category">{{ spec.maturity.category }}</span>
+      <span class="formats"><a href="{{ spec.name }}.html">HTML</a><span class="sep">·</span><a href="{{ spec.name }}.txt">TXT</a><span class="sep">·</span><a href="{{ spec.name }}.xml">XML</a><span class="sep">·</span><a href="{{ spec.name }}.pdf">PDF</a></span>
+    </div>
+{%- endfor %}
+{%- endfor %}
+  </div>
+</body>
+</html>
