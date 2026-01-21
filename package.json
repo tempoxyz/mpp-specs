@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "dependencies": {
+    "md2xml": "0.0.1"
+  }
+}

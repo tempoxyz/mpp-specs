@@ -6,9 +6,10 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SPECS_DIR="$ROOT_DIR/specs"
 OUT_DIR="$ROOT_DIR/artifacts"
 
-# Config file path (differs inside Docker vs local)
+# Detect Docker environment
+IN_DOCKER=false
 if [[ -d /data/specs ]]; then
-  # Running inside Docker
+  IN_DOCKER=true
   CONFIG_FILE="/data/xml2rfc.conf"
 else
   CONFIG_FILE="$ROOT_DIR/xml2rfc.conf"
@@ -48,10 +49,14 @@ while read -r md; do
   echo "==> $name"
 
   echo "    [md2xml] Converting Markdown to XML..."
+  # Use md2xml directly in Docker (pre-installed), npx locally
+  MD2XML_CMD="npx md2xml"
+  $IN_DOCKER && MD2XML_CMD="md2xml"
+
   if $VERBOSE; then
-    npx md2xml "$md" -o "$OUT_DIR/${name}.xml"
+    $MD2XML_CMD "$md" -o "$OUT_DIR/${name}.xml"
   else
-    npx md2xml "$md" -o "$OUT_DIR/${name}.xml" 2>/dev/null
+    $MD2XML_CMD "$md" -o "$OUT_DIR/${name}.xml" 2>/dev/null
   fi
 
   echo "    [xml2rfc] Generating HTML..."
