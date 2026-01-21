@@ -34,11 +34,10 @@ authors. All rights reserved.
 1. [Introduction](#1-introduction)
 2. [Requirements Language](#2-requirements-language)
 3. [Well-Known Endpoint](#3-well-known-endpoint)
-4. [DNS Discovery](#4-dns-discovery)
-5. [Security Considerations](#5-security-considerations)
-6. [IANA Considerations](#6-iana-considerations)
-7. [References](#7-references)
-8. [Authors' Addresses](#authors-addresses)
+4. [Security Considerations](#4-security-considerations)
+5. [IANA Considerations](#5-iana-considerations)
+6. [References](#6-references)
+7. [Authors' Addresses](#authors-addresses)
 
 ---
 
@@ -50,13 +49,10 @@ with `WWW-Authenticate: Payment` header provides all information needed
 to complete a payment, clients may benefit from discovering payment
 capabilities before making requests.
 
-This specification defines two optional discovery mechanisms:
+This specification defines the Well-Known Endpoint discovery mechanism:
+an HTTP endpoint returning structured payment capability information.
 
-1. **Well-Known Endpoint**: An HTTP endpoint returning structured payment
-   capability information
-2. **DNS Discovery**: DNS TXT records advertising payment support
-
-Discovery is OPTIONAL. Servers MAY implement these mechanisms to improve
+Discovery is OPTIONAL. Servers MAY implement this mechanism to improve
 client experience. Clients MUST NOT require discovery to function.
 
 ---
@@ -152,71 +148,29 @@ discovery is unavailable.
 
 ---
 
-## 4. DNS Discovery
+## 4. Security Considerations
 
-### 4.1. TXT Record Format
-
-Servers MAY advertise payment support via DNS TXT records at the
-`_payment` subdomain:
-
-```
-_payment.<domain>. TXT "v=payment1; methods=<method-list>"
-```
-
-**Parameters:**
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `v` | REQUIRED | Version identifier. MUST be `payment1`. |
-| `methods` | REQUIRED | Comma-separated list of supported method identifiers. |
-
-**Example:**
-
-```
-_payment.api.example.com. TXT "v=payment1; methods=tempo,lightning"
-```
-
-### 4.2. Multiple Records
-
-If multiple TXT records exist, clients SHOULD use the first record with
-a valid `v=payment1` prefix.
-
-### 4.3. Limitations
-
-DNS discovery provides only basic capability advertisement. For detailed
-information (assets, intents), clients SHOULD use the well-known endpoint
-or rely on 402 responses.
-
----
-
-## 5. Security Considerations
-
-### 5.1. Discovery Spoofing
+### 4.1. Discovery Spoofing
 
 Discovery information is advisory and not cryptographically authenticated.
 Clients MUST NOT rely on discovery for security decisions. The actual
 payment challenge in the 402 response is authoritative.
 
-### 5.2. DNS Security
-
-DNS TXT records are subject to DNS spoofing attacks. Clients SHOULD use
-DNSSEC-validated resolvers when available.
-
-### 5.3. Well-Known Endpoint Security
+### 4.2. Well-Known Endpoint Security
 
 The well-known endpoint MUST be served over HTTPS. Clients MUST NOT
 accept discovery information over unencrypted HTTP.
 
-### 5.4. Information Disclosure
+### 4.3. Information Disclosure
 
 Discovery endpoints reveal payment capabilities to unauthenticated clients.
 Servers should consider whether this information disclosure is acceptable.
 
 ---
 
-## 6. IANA Considerations
+## 5. IANA Considerations
 
-### 6.1. Well-Known URI Registration
+### 5.1. Well-Known URI Registration
 
 This document registers the following well-known URI in the "Well-Known
 URIs" registry established by [RFC8615]:
@@ -229,9 +183,9 @@ URIs" registry established by [RFC8615]:
 
 ---
 
-## 7. References
+## 6. References
 
-### 7.1. Normative References
+### 6.1. Normative References
 
 - **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
   Requirement Levels", BCP 14, RFC 2119, March 1997.

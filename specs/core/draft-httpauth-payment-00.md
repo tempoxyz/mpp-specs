@@ -419,15 +419,15 @@ See the Payment Intent Registry for registered intents.
 
 ### 7.3. Intent Negotiation
 
-If a server supports multiple intents, it MAY issue multiple challenges:
+If a server supports multiple payment methods, it MAY issue multiple challenges:
 
 ```http
-WWW-Authenticate: Payment id="abc", realm="api.example.com", method="example", intent="charge", request="..."
-WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", intent="authorize", request="..."
+WWW-Authenticate: Payment id="abc", realm="api.example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="def", realm="api.example.com", method="lightning", intent="charge", request="..."
 ```
 
-Clients choose which challenge to respond to. Clients that do not
-recognize an intent SHOULD treat the challenge as unsupported.
+Clients choose which challenge to respond to based on supported methods.
+For method selection guidance, see Section 6.3.
 
 ---
 
