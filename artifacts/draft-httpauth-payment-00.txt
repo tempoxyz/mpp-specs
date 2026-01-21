@@ -64,6 +64,10 @@ Table of Contents
      4.1.  Request Flow
      4.2.  Status Codes
      4.3.  Relationship to 401 Unauthorized
+     4.4.  Usage of 402 Payment Required
+       4.4.1.  When to Return 402
+       4.4.2.  When NOT to Return 402
+       4.4.3.  Interaction with Other Authentication Schemes
    5.  The Payment Authentication Scheme
      5.1.  Challenge (WWW-Authenticate)
        5.1.1.  Required Parameters
@@ -72,10 +76,6 @@ Table of Contents
      5.2.  Credentials (Authorization)
        5.2.1.  Example Credential
      5.3.  Payment-Receipt Header
-     5.4.  Payment-Authorization Header
-       5.4.1.  Client Behavior
-       5.4.2.  Server Behavior
-     5.5.  Reusing Credentials
    6.  Payment Methods
      6.1.  Method Identifier Format
      6.2.  Method Registry
@@ -105,7 +105,6 @@ Table of Contents
      11.8.  Caching
      11.9.  Cross-Origin Considerations
      11.10. Denial of Service
-     11.11. Authorization Reuse
    12. IANA Considerations
      12.1.  Authentication Scheme Registration
      12.2.  Header Field Registration
@@ -118,9 +117,8 @@ Table of Contents
    Appendix B.  Examples
      B.1.  One-Time Charge
      B.2.  Signed Authorization
-     B.3.  Payment with Reusable Authorization
-     B.4.  Multiple Payment Options
-     B.5.  Failed Payment Verification
+     B.3.  Multiple Payment Options
+     B.4.  Failed Payment Verification
    Acknowledgements
    Author's Address
 
@@ -238,6 +236,63 @@ Table of Contents
    return 401 (Unauthorized) with a WWW-Authenticate: Payment header
    containing a fresh challenge.
 
+4.4.  Usage of 402 Payment Required
+
+   The 402 (Payment Required) status code was reserved by [RFC9110] for
+   future use.  This specification defines semantics for 402 within the
+   context of the Payment authentication scheme.
+
+4.4.1.  When to Return 402
+
+   Servers SHOULD return 402 when:
+
+   *  The resource requires payment as a precondition for access
+
+   *  The server can provide a Payment challenge that the client may
+      fulfill
+
+   *  Payment is the primary barrier to access (not authentication or
+      authorization)
+
+   Servers MAY return 402 when:
+
+   *  Offering optional paid features or premium content
+
+   *  Indicating that a previously-paid resource requires additional
+      payment
+
+   *  The payment requirement applies to a subset of request methods
+
+4.4.2.  When NOT to Return 402
+
+   Servers SHOULD NOT return 402 when:
+
+   *  The client lacks authentication credentials (use 401)
+
+   *  The client is authenticated but lacks authorization (use 403)
+
+   *  The resource does not exist (use 404)
+
+   *  No Payment challenge can be constructed for the request
+
+   Servers MUST NOT return 402 without including a WWW-Authenticate
+   header containing at least one Payment challenge.
+
+4.4.3.  Interaction with Other Authentication Schemes
+
+   When a resource requires both authentication and payment, servers
+   SHOULD:
+
+   1.  First verify authentication credentials
+
+   2.  Return 401 if authentication fails
+
+   3.  Return 402 with a Payment challenge only after successful
+       authentication
+
+   This ordering prevents information leakage about payment requirements
+   to unauthenticated clients.
+
 5.  The Payment Authentication Scheme
 
 5.1.  Challenge (WWW-Authenticate)
@@ -317,20 +372,19 @@ Table of Contents
    The b64token value is a base64url-encoded JSON object (without
    padding) containing:
 
-        +=========+========+==========+===========================+
-        | Field   | Type   | Required | Description               |
-        +=========+========+==========+===========================+
-        | id      | string | Yes      | Challenge identifier      |
-        |         |        |          | (must match challenge id) |
-        +---------+--------+----------+---------------------------+
-        | source  | string | No       | Payer identifier as a DID |
-        |         |        |          | [w3c-did]                 |
-        +---------+--------+----------+---------------------------+
-        | payload | object | Yes      | Method-specific payment   |
-        |         |        |          | proof                     |
-        +---------+--------+----------+---------------------------+
+     +=========+========+==========+================================+
+     | Field   | Type   | Required | Description                    |
+     +=========+========+==========+================================+
+     | id      | string | Yes      | Challenge identifier (must     |
+     |         |        |          | match challenge id)            |
+     +---------+--------+----------+--------------------------------+
+     | source  | string | No       | Payer identifier (RECOMMENDED: |
+     |         |        |          | DID format per [w3c-did])      |
+     +---------+--------+----------+--------------------------------+
+     | payload | object | Yes      | Method-specific payment proof  |
+     +---------+--------+----------+--------------------------------+
 
-                                  Table 2
+                                 Table 2
 
    The payload field contains the payment-method-specific data needed to
    complete the payment challenge.  Payment method specifications define
@@ -377,82 +431,6 @@ Table of Contents
 
    Payment method specifications MAY define additional fields for
    receipts.
-
-5.4.  Payment-Authorization Header
-
-   Servers MAY include a Payment-Authorization header on successful
-   responses to indicate that a credential may be reused for subsequent
-   requests:
-
-   Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
-
-   The credential portion is directly usable as an Authorization header
-   value.  The following parameters are appended:
-
-         +===========+==========+================================+
-         | Parameter | Required | Description                    |
-         +===========+==========+================================+
-         | expires   | Yes      | RFC 3339 timestamp after which |
-         |           |          | the authorization expires      |
-         +-----------+----------+--------------------------------+
-         | realm     | No       | Protection space scope         |
-         |           |          | (defaults to challenge realm)  |
-         +-----------+----------+--------------------------------+
-
-                                  Table 4
-
-   Example:
-
-   HTTP/1.1 200 OK
-   Content-Type: application/json
-   Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGFtcCI6IjIwMjUtMDEtMTVUMTI6MDA6MDBaIn0
-   Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
-
-   Subsequent requests reuse the credential directly:
-
-   GET /api/data HTTP/1.1
-   Host: api.example.com
-   Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
-
-   The server MAY return a different token in Payment-Authorization than
-   the original credential (e.g., an access token optimized for reuse).
-
-5.4.1.  Client Behavior
-
-   Clients that receive a Payment-Authorization header SHOULD:
-
-   1.  Extract the credential portion (Payment <b64token>) for reuse
-
-   2.  Cache it along with the expires timestamp and realm
-
-   3.  Use the cached credential for subsequent requests to the same
-       realm
-
-   4.  Stop reusing the credential after the expires timestamp
-
-5.4.2.  Server Behavior
-
-   Servers that issue Payment-Authorization MUST:
-
-   1.  Track which authorizations are valid and not yet expired
-
-   2.  Accept the issued credential for requests within the authorized
-       realm
-
-   3.  Return 401 with a fresh challenge if the authorization has
-       expired
-
-   4.  NOT require re-payment for requests within the authorization
-       window
-
-5.5.  Reusing Credentials
-
-   Payment credentials are generally single-use unless the server
-   explicitly grants reuse via the Payment-Authorization header.
-
-   Clients MUST NOT reuse Payment credentials across different
-   challenges unless the server has returned a Payment-Authorization
-   header.
 
 6.  Payment Methods
 
@@ -541,7 +519,7 @@ Table of Contents
     | malformed_proof             | 400  | Invalid proof format      |
     +-----------------------------+------+---------------------------+
 
-                                 Table 5
+                                 Table 4
 
 8.3.  Retry Behavior
 
@@ -676,9 +654,17 @@ Table of Contents
 
 11.8.  Caching
 
-   Servers SHOULD send Cache-Control: no-store with 402 responses.
-   Responses with Payment-Receipt or Payment-Authorization headers
-   SHOULD include Cache-Control: private.
+   Payment challenges contain unique identifiers and time-sensitive
+   payment data that MUST NOT be cached or reused.  To prevent challenge
+   replay and stale payment information:
+
+   Servers MUST send Cache-Control: no-store [RFC9111] with 402
+   responses and 401 responses containing WWW-Authenticate: Payment
+   headers.
+
+   Responses containing Payment-Receipt headers MUST include Cache-
+   Control: private to prevent shared caches from storing payment
+   receipts.
 
 11.9.  Cross-Origin Considerations
 
@@ -694,16 +680,6 @@ Table of Contents
 
    Servers SHOULD implement rate limiting on challenges issued and
    credential verification attempts.
-
-11.11.  Authorization Reuse
-
-   When servers issue Payment-Authorization headers:
-
-   *  Servers SHOULD use short authorization windows
-
-   *  Clients MUST store cached credentials securely
-
-   *  Servers MUST be able to revoke authorizations before expiry
 
 12.  IANA Considerations
 
@@ -723,15 +699,13 @@ Table of Contents
 
    This document registers the following header fields:
 
-    +=======================+===========+============================+
-    | Field Name            | Status    | Reference                  |
-    +=======================+===========+============================+
-    | Payment-Receipt       | permanent | This document, Section 5.3 |
-    +-----------------------+-----------+----------------------------+
-    | Payment-Authorization | permanent | This document, Section 5.4 |
-    +-----------------------+-----------+----------------------------+
+       +=================+===========+============================+
+       | Field Name      | Status    | Reference                  |
+       +=================+===========+============================+
+       | Payment-Receipt | permanent | This document, Section 5.3 |
+       +-----------------+-----------+----------------------------+
 
-                                 Table 6
+                                 Table 5
 
 12.3.  Payment Method Registry
 
@@ -827,6 +801,11 @@ Table of Contents
               DOI 10.17487/RFC9110, June 2022,
               <https://www.rfc-editor.org/info/rfc9110>.
 
+   [RFC9111]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+              Ed., "HTTP Caching", STD 98, RFC 9111,
+              DOI 10.17487/RFC9111, June 2022,
+              <https://www.rfc-editor.org/info/rfc9111>.
+
 13.2.  Informative References
 
    [w3c-did]  W3C, "Decentralized Identifiers (DIDs) v1.0",
@@ -850,9 +829,6 @@ Appendix A.  ABNF Collected
 
    ; Payment-Receipt header field value
    Payment-Receipt       = b64token
-
-   ; Payment-Authorization header field value
-   Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
    ; Payment method identifier
    payment-method-id   = method-name [ ":" sub-method ]
@@ -970,27 +946,7 @@ B.2.  Signed Authorization
      }
    }
 
-B.3.  Payment with Reusable Authorization
-
-   Server issues an authorization for subsequent requests:
-
-   Success with Authorization:
-
-   HTTP/1.1 200 OK
-   Cache-Control: private
-   Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-   Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-   Content-Type: application/json
-
-   {"data": "..."}
-
-   Subsequent request using cached authorization:
-
-   GET /other-resource HTTP/1.1
-   Host: api.example.com
-   Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-
-B.4.  Multiple Payment Options
+B.3.  Multiple Payment Options
 
    Server offers multiple payment methods:
 
@@ -1001,7 +957,7 @@ B.4.  Multiple Payment Options
 
    Client selects preferred method and responds accordingly.
 
-B.5.  Failed Payment Verification
+B.4.  Failed Payment Verification
 
    HTTP/1.1 401 Unauthorized
    Cache-Control: no-store
