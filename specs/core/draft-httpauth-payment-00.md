@@ -325,68 +325,6 @@ The decoded JSON object contains:
 
 Payment method specifications MAY define additional fields for receipts.
 
-### 5.4. Payment-Authorization Header
-
-Servers MAY include a `Payment-Authorization` header on successful responses
-to indicate that a credential may be reused for subsequent requests:
-
-```abnf
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
-```
-
-The credential portion is directly usable as an `Authorization` header
-value. The following parameters are appended:
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `expires` | Yes | RFC 3339 timestamp after which the authorization expires |
-| `realm` | No | Protection space scope (defaults to challenge realm) |
-
-**Example:**
-
-```http
-HTTP/1.1 200 OK
-Content-Type: application/json
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGFtcCI6IjIwMjUtMDEtMTVUMTI6MDA6MDBaIn0
-Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
-```
-
-Subsequent requests reuse the credential directly:
-
-```http
-GET /api/data HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
-```
-
-The server MAY return a different token in Payment-Authorization than the
-original credential (e.g., an access token optimized for reuse).
-
-#### 5.4.1. Client Behavior
-
-Clients that receive a `Payment-Authorization` header SHOULD:
-
-1. Extract the credential portion (`Payment <b64token>`) for reuse
-2. Cache it along with the `expires` timestamp and `realm`
-3. Use the cached credential for subsequent requests to the same realm
-4. Stop reusing the credential after the `expires` timestamp
-
-#### 5.4.2. Server Behavior
-
-Servers that issue `Payment-Authorization` MUST:
-
-1. Track which authorizations are valid and not yet expired
-2. Accept the issued credential for requests within the authorized realm
-3. Return 401 with a fresh challenge if the authorization has expired
-4. NOT require re-payment for requests within the authorization window
-
-### 5.5. Reusing Credentials
-
-Payment credentials are generally single-use unless the server explicitly
-grants reuse via the `Payment-Authorization` header.
-
-Clients MUST NOT reuse Payment credentials across different challenges
-unless the server has returned a `Payment-Authorization` header.
 
 ---
 
@@ -603,9 +541,9 @@ stale payment information:
 Servers MUST send `Cache-Control: no-store` [RFC9111] with 402 responses
 and 401 responses containing `WWW-Authenticate: Payment` headers.
 
-Responses containing `Payment-Receipt` or `Payment-Authorization` headers
-MUST include `Cache-Control: private` to prevent shared caches from
-storing payment receipts or authorization tokens.
+Responses containing `Payment-Receipt` headers MUST include
+`Cache-Control: private` to prevent shared caches from storing
+payment receipts.
 
 ### 11.9. Cross-Origin Considerations
 
@@ -641,7 +579,6 @@ This document registers the following header fields:
 | Field Name | Status | Reference |
 |------------|--------|-----------|
 | Payment-Receipt | permanent | This document, Section 5.3 |
-| Payment-Authorization | permanent | This document, Section 5.4 |
 
 ### 12.3. Payment Method Registry
 
@@ -742,9 +679,6 @@ payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
 Payment-Receipt       = b64token
-
-; Payment-Authorization header field value
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
