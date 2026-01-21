@@ -1,4 +1,4 @@
-name: PR Check
+name: Check Specs
 
 on:
   pull_request:

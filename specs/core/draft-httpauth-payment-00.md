@@ -33,28 +33,6 @@ of BCP 78 and BCP 79.
 Copyright (c) 2025 IETF Trust and the persons identified as the document
 authors. All rights reserved.
 
-## Table of Contents
-
-1. [Introduction](#1-introduction)
-2. [Requirements Language](#2-requirements-language)
-3. [Terminology](#3-terminology)
-4. [Protocol Overview](#4-protocol-overview)
-5. [The Payment Authentication Scheme](#5-the-payment-authentication-scheme)
-6. [Payment Methods](#6-payment-methods)
-7. [Payment Intents](#7-payment-intents)
-8. [Error Handling](#8-error-handling)
-9. [Extensibility](#9-extensibility)
-10. [Internationalization Considerations](#10-internationalization-considerations)
-11. [Security Considerations](#11-security-considerations)
-12. [IANA Considerations](#12-iana-considerations)
-13. [References](#13-references)
-14. [Appendix A: ABNF Collected](#appendix-a-abnf-collected)
-15. [Appendix B: Examples](#appendix-b-examples)
-16. [Acknowledgements](#acknowledgements)
-17. [Authors' Addresses](#authors-addresses)
-
----
-
 ## 1. Introduction
 
 HTTP 402 "Payment Required" was reserved in HTTP/1.1 [RFC9110] for future
@@ -168,6 +146,49 @@ When a client submits an invalid Payment credential, servers MUST return
 401 (Unauthorized) with a `WWW-Authenticate: Payment` header containing a
 fresh challenge.
 
+### 4.4. Usage of 402 Payment Required
+
+The 402 (Payment Required) status code was reserved by [RFC9110] for future
+use. This specification defines semantics for 402 within the context of the
+Payment authentication scheme.
+
+#### 4.4.1. When to Return 402
+
+Servers SHOULD return 402 when:
+
+- The resource requires payment as a precondition for access
+- The server can provide a Payment challenge that the client may fulfill
+- Payment is the primary barrier to access (not authentication or authorization)
+
+Servers MAY return 402 when:
+
+- Offering optional paid features or premium content
+- Indicating that a previously-paid resource requires additional payment
+- The payment requirement applies to a subset of request methods
+
+#### 4.4.2. When NOT to Return 402
+
+Servers SHOULD NOT return 402 when:
+
+- The client lacks authentication credentials (use 401)
+- The client is authenticated but lacks authorization (use 403)
+- The resource does not exist (use 404)
+- No Payment challenge can be constructed for the request
+
+Servers MUST NOT return 402 without including a `WWW-Authenticate` header
+containing at least one Payment challenge.
+
+#### 4.4.3. Interaction with Other Authentication Schemes
+
+When a resource requires both authentication and payment, servers SHOULD:
+
+1. First verify authentication credentials
+2. Return 401 if authentication fails
+3. Return 402 with a Payment challenge only after successful authentication
+
+This ordering prevents information leakage about payment requirements to
+unauthenticated clients.
+
 ---
 
 ## 5. The Payment Authentication Scheme
@@ -259,7 +280,7 @@ containing:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Challenge identifier (must match challenge `id`) |
-| `source` | string | No | Payer identifier as a DID [W3C-DID] |
+| `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
 
 The `payload` field contains the payment-method-specific data needed to
@@ -575,9 +596,16 @@ Implementations MUST treat `Authorization: Payment` headers and
 
 ### 11.8. Caching
 
-Servers SHOULD send `Cache-Control: no-store` with 402 responses.
-Responses with `Payment-Receipt` or `Payment-Authorization` headers
-SHOULD include `Cache-Control: private`.
+Payment challenges contain unique identifiers and time-sensitive payment
+data that MUST NOT be cached or reused. To prevent challenge replay and
+stale payment information:
+
+Servers MUST send `Cache-Control: no-store` [RFC9111] with 402 responses
+and 401 responses containing `WWW-Authenticate: Payment` headers.
+
+Responses containing `Payment-Receipt` or `Payment-Authorization` headers
+MUST include `Cache-Control: private` to prevent shared caches from
+storing payment receipts or authorization tokens.
 
 ### 11.9. Cross-Origin Considerations
 
@@ -591,14 +619,6 @@ Clients (particularly browser-based wallets) SHOULD:
 
 Servers SHOULD implement rate limiting on challenges issued and
 credential verification attempts.
-
-### 11.11. Authorization Reuse
-
-When servers issue `Payment-Authorization` headers:
-
-- Servers SHOULD use short authorization windows
-- Clients MUST store cached credentials securely
-- Servers MUST be able to revoke authorizations before expiry
 
 ---
 
@@ -693,6 +713,9 @@ identifiers upon publication.
 - **[RFC9110]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Semantics", STD 97, RFC 9110, June 2022.
 
+- **[RFC9111]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+  Ed., "HTTP Caching", STD 98, RFC 9111, June 2022.
+
 ### 13.2. Informative References
 
 - **[W3C-DID]** W3C, "Decentralized Identifiers (DIDs) v1.0",
@@ -769,15 +792,21 @@ Client                                 Server
 ```http
 HTTP/1.1 402 Payment Required
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     realm="api.example.com",
     method="invoice",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
-Content-Type: application/json
 
-{"error": "payment_required", "message": "Payment required for access"}
+{
+  "type": "https://ietf.org/payment/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Payment required for access.",
+  "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
+}
 ```
 
 Decoded `request`:
@@ -860,31 +889,7 @@ Decoded `request`:
 }
 ```
 
-### B.3. Payment with Reusable Authorization
-
-Server issues an authorization for subsequent requests:
-
-**Success with Authorization:**
-
-```http
-HTTP/1.1 200 OK
-Cache-Control: private
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-Content-Type: application/json
-
-{"data": "..."}
-```
-
-**Subsequent request using cached authorization:**
-
-```http
-GET /other-resource HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-```
-
-### B.4. Multiple Payment Options
+### B.3. Multiple Payment Options
 
 Server offers multiple payment methods:
 
@@ -897,15 +902,20 @@ WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", 
 
 Client selects preferred method and responds accordingly.
 
-### B.5. Failed Payment Verification
+### B.4. Failed Payment Verification
 
 ```http
 HTTP/1.1 401 Unauthorized
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
-Content-Type: application/json
 
-{"error": "payment_verification_failed", "message": "Invalid payment proof"}
+{
+  "type": "https://ietf.org/payment/problems/verification-failed",
+  "title": "Payment Verification Failed",
+  "status": 401,
+  "detail": "Invalid payment proof."
+}
 ```
 
 Note the use of 401 (not 402) for failed verification, with a fresh
@@ -926,5 +936,3 @@ Tempo Labs
 Email: jake@tempo.xyz
 
 ---
-
-**License:** This specification is released into the public domain (CC0 1.0 Universal).
