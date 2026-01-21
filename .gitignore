@@ -10,3 +10,6 @@ node_modules/
 .idea/
 .vscode/
 *.sublime-*
+
+# Generated artifacts
+artifacts/
