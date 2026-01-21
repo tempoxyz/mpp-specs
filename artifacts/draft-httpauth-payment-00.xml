@@ -189,6 +189,44 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
 }
 ]]></sourcecode>
         </section>
+        <section anchor="challenge-lifecycle">
+          <name>Challenge Lifecycle</name>
+          <t>This section defines normative requirements for challenge validity, timing, scope, and retry behavior.</t>
+          <t>When the <tt>expires</tt> parameter is present, servers <bcp14>MUST</bcp14> reject credentials submitted after the specified timestamp. Clients <bcp14>MUST NOT</bcp14> submit credentials for challenges where the current time exceeds the <tt>expires</tt> value.</t>
+          <t>When the <tt>expires</tt> parameter is absent, servers <bcp14>MUST</bcp14> apply a default expiration of 5 minutes from challenge issuance. Servers <bcp14>MAY</bcp14> use a shorter default but <bcp14>MUST NOT</bcp14> use a longer one. Clients <bcp14>SHOULD</bcp14> assume a 5-minute validity window when <tt>expires</tt> is omitted.</t>
+          <t>To accommodate clock skew between clients and servers, servers <bcp14>SHOULD</bcp14> accept credentials submitted within 30 seconds after the <tt>expires</tt> timestamp. Clients <bcp14>SHOULD NOT</bcp14> rely on this tolerance and <bcp14>SHOULD</bcp14> submit credentials well before expiration.</t>
+          <t>A challenge <tt>id</tt> is scoped to the combination of:</t>
+          <ul>
+            <li>The origin (scheme, host, and port) that issued the challenge</li>
+            <li>The <tt>realm</tt> parameter value</li>
+          </ul>
+          <t>Clients <bcp14>MUST NOT</bcp14> present a credential to an origin different from the one that issued the corresponding challenge. Servers <bcp14>MUST</bcp14> reject credentials where the <tt>id</tt> was issued by a different origin or realm.</t>
+          <t>A single challenge <tt>id</tt> <bcp14>MAY</bcp14> be valid for multiple resources within the same realm, at the server&apos;s discretion. Payment method specifications <bcp14>MAY</bcp14> impose additional scope restrictions.</t>
+          <t>Each challenge <tt>id</tt> <bcp14>MUST</bcp14> be usable at most once for a successful payment. After a credential is accepted and the payment is verified, servers <bcp14>MUST</bcp14> reject any subsequent credentials using the same <tt>id</tt>.</t>
+          <t>Servers <bcp14>MAY</bcp14> allow a limited number of retry attempts with the same <tt>id</tt> when credential verification fails, but <bcp14>SHOULD</bcp14> issue a fresh challenge after 3 failed attempts to prevent brute-force attacks.</t>
+          <t>When a client receives a transient error (e.g., network timeout, 503 Service Unavailable) before receiving a definitive response:</t>
+          <ol type="1">
+            <li>The client <bcp14>MAY</bcp14> retry the request with the same credential if the</li>
+          </ol>
+          <t>challenge has not expired.</t>
+          <ol type="1">
+            <li>Servers <bcp14>MUST</bcp14> implement idempotent credential verification: repeated</li>
+          </ol>
+          <t>submissions of the same credential for the same <tt>id</tt> <bcp14>MUST</bcp14> produce    the same result (success or specific failure reason).</t>
+          <ol type="1">
+            <li>If a payment was already settled, the server <bcp14>MUST</bcp14> return 200 OK with</li>
+          </ol>
+          <t>the original <tt>Payment-Receipt</tt> value.</t>
+          <t>HTTP intermediaries and client libraries that automatically retry failed requests <bcp14>MUST NOT</bcp14> modify the <tt>Authorization</tt> header between retries.</t>
+          <t>Servers <bcp14>MUST</bcp14> invalidate a challenge <tt>id</tt> when any of the following occur:</t>
+          <ul>
+            <li>The challenge expires (per Section 5.1.4.1)</li>
+            <li>A credential using the <tt>id</tt> is successfully verified</li>
+            <li>The server&apos;s maximum retry count is exceeded</li>
+            <li>The server restarts or the challenge state is otherwise lost</li>
+          </ul>
+          <t>When a client submits a credential with an invalidated <tt>id</tt>, servers <bcp14>MUST</bcp14> return 401 Unauthorized with a fresh challenge.</t>
+        </section>
       </section>
       <section anchor="credentials-authorization">
         <name>Credentials (Authorization)</name>
