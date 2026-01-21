@@ -217,7 +217,7 @@ b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
               <td><tt>source</tt></td>
               <td>string</td>
               <td>No</td>
-              <td>Payer identifier as a DID <xref target="w3c-did"/></td>
+              <td>Payer identifier (<bcp14>RECOMMENDED</bcp14>: DID format per <xref target="w3c-did"/>)</td>
             </tr>
             <tr>
               <td><tt>payload</tt></td>
