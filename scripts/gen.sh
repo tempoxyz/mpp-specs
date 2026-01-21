@@ -70,44 +70,9 @@ while read -r md; do
 
 done < <(find "$SPECS_DIR" -name "draft-*.md")
 
-# Generate index.html
+# Generate index.html using Python/Jinja2 templating
 echo "==> Generating index.html"
-cat > "$OUT_DIR/index.html" << 'INDEXEOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IETF Payment Auth Specs</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
-    th { background: #f5f5f5; }
-    a { color: #0066cc; }
-  </style>
-</head>
-<body>
-  <h1>IETF Payment Auth Specifications</h1>
-  <table>
-    <thead>
-      <tr><th>Specification</th><th>HTML</th><th>TXT</th><th>XML</th><th>PDF</th></tr>
-    </thead>
-    <tbody>
-INDEXEOF
-
-for html in "$OUT_DIR"/draft-*.html; do
-  name="$(basename "$html" .html)"
-  echo "      <tr><td>$name</td><td><a href=\"${name}.html\">HTML</a></td><td><a href=\"${name}.txt\">TXT</a></td><td><a href=\"${name}.xml\">XML</a></td><td><a href=\"${name}.pdf\">PDF</a></td></tr>" >> "$OUT_DIR/index.html"
-done
-
-cat >> "$OUT_DIR/index.html" << 'INDEXEOF'
-    </tbody>
-  </table>
-</body>
-</html>
-INDEXEOF
+python3 "$SCRIPT_DIR/gen_index.py"
 
 echo ""
 echo "Done. Output in $OUT_DIR/"
