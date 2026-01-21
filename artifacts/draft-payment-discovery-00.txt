@@ -3,9 +3,9 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                           20 January 2026
+Internet-Draft                                           21 January 2026
 Intended status: Informational                                          
-Expires: 24 July 2026
+Expires: 25 July 2026
 
 
           Discovery Mechanisms for HTTP Payment Authentication
@@ -34,7 +34,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 24 July 2026.
+   This Internet-Draft will expire on 25 July 2026.
 
 Copyright Notice
 
