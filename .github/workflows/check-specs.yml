@@ -26,14 +26,14 @@ jobs:
         run: pip install xml2rfc
 
       - name: Build specs
-        run: ./gen.sh
+        run: ./scripts/gen.sh
 
       - name: Check for uncommitted changes
         run: |
           # Only check XML files - HTML/TXT have timestamps that vary
-          if [ -n "$(git status --porcelain docs/*.xml)" ]; then
-            echo "Generated docs are out of date. Please run ./gen.sh and commit the changes."
-            git diff --stat docs/*.xml
+          if [ -n "$(git status --porcelain artifacts/*.xml)" ]; then
+            echo "Generated docs are out of date. Please run ./scripts/gen.sh and commit the changes."
+            git diff --stat artifacts/*.xml
             exit 1
           fi
           echo "All docs are up to date."

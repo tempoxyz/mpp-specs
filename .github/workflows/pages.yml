@@ -32,10 +32,10 @@ jobs:
         run: pip install xml2rfc
 
       - name: Build specs
-        run: ./gen.sh
+        run: ./scripts/gen.sh
 
       - name: Commit docs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "build: regenerate docs"
-          file_pattern: "docs/*"
+          file_pattern: "artifacts/*"

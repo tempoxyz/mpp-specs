@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc [
+  <!ENTITY nbsp "&#160;">
+  <!ENTITY zwsp "&#8203;">
+]>
+<rfc xmlns:xi="http://www.w3.org/2001/XInclude"
+     ipr="trust200902"
+     docName="draft-payment-intent-authorize-00"
+     submissionType="IETF"
+     category="std"
+     consensus="true"
+     version="3">
+
+  <front>
+    <title>&quot;authorize&quot; Intent for HTTP Payment Authentication</title>
+    <seriesInfo name="Internet-Draft" value="draft-payment-intent-authorize-00"/>
+    <author fullname="Jake Moxey">
+      <address>
+        <email>jake@tempo.xyz</email>
+      </address>
+    </author>
+    <date/>
+    <abstract>
+      <t>This document defines the &quot;authorize&quot; payment intent for use with the
+Payment HTTP Authentication Scheme <xref target="i-d-httpauth-payment"/>. The &quot;authorize&quot;
+intent represents a pre-authorization where the payer grants the server
+permission to charge up to a specified amount within a time window,
+without immediate payment.</t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="introduction">
+      <name>Introduction</name>
+      <t>The &quot;authorize&quot; intent enables pre-authorized payments where the payer grants the server permission to charge up to a specified amount at a later time. This is useful for:</t>
+      <ul>
+        <li><strong>Metered billing</strong>: Pay-per-use APIs where total cost is unknown upfront</li>
+        <li><strong>Delayed fulfillment</strong>: Services where delivery occurs after authorization</li>
+        <li><strong>Spending caps</strong>: User-controlled limits on automated spending</li>
+      </ul>
+      <t>Unlike the &quot;charge&quot; intent which requires immediate payment, &quot;authorize&quot; creates a payment capability that the server can exercise later.</t>
+      <section anchor="relationship-to-payment-methods">
+        <name>Relationship to Payment Methods</name>
+        <t>Payment methods implement &quot;authorize&quot; using their native authorization mechanisms:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Implementation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Tempo</td>
+              <td>Access Keys with spending limits</td>
+            </tr>
+            <tr>
+              <td>Stripe</td>
+              <td>SetupIntent + saved PaymentMethod</td>
+            </tr>
+            <tr>
+              <td>EVM</td>
+              <td>ERC-20 <tt>approve()</tt> or EIP-3009 authorization</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+    <section anchor="requirements-language">
+      <name>Requirements Language</name>
+      <t>The key words &quot;<bcp14>MUST</bcp14>&quot;, &quot;<bcp14>MUST NOT</bcp14>&quot;, &quot;<bcp14>REQUIRED</bcp14>&quot;, &quot;<bcp14>SHALL</bcp14>&quot;, &quot;<bcp14>SHALL NOT</bcp14>&quot;, &quot;<bcp14>SHOULD</bcp14>&quot;, &quot;<bcp14>SHOULD NOT</bcp14>&quot;, &quot;<bcp14>RECOMMENDED</bcp14>&quot;, &quot;<bcp14>NOT RECOMMENDED</bcp14>&quot;, &quot;<bcp14>MAY</bcp14>&quot;, and &quot;<bcp14>OPTIONAL</bcp14>&quot; in this document are to be interpreted as described in BCP 14 <xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when, they appear in all capitals, as shown here.</t>
+    </section>
+    <section anchor="intent-semantics">
+      <name>Intent Semantics</name>
+
+      <section anchor="definition">
+        <name>Definition</name>
+        <t>The &quot;authorize&quot; intent represents a request for the payer to grant permission for the server to initiate payments up to a specified limit, within a specified time window.</t>
+      </section>
+      <section anchor="properties">
+        <name>Properties</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Property</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Intent Identifier</strong></td>
+              <td><tt>authorize</tt></td>
+            </tr>
+            <tr>
+              <td><strong>Payment Timing</strong></td>
+              <td>Deferred (server-initiated later)</td>
+            </tr>
+            <tr>
+              <td><strong>Idempotency</strong></td>
+              <td>Reusable within limits</td>
+            </tr>
+            <tr>
+              <td><strong>Reversibility</strong></td>
+              <td>Revocable before use</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="flow">
+        <name>Flow</name>
+        <artwork type="ascii-art"><![CDATA[
+   Client                           Server                    Payment Network
+      │                                │                              │
+      │  (1) GET /resource             │                              │
+      ├───────────────────────────────>│                              │
+      │                                │                              │
+      │  (2) 402 Payment Required      │                              │
+      │      intent="authorize"        │                              │
+      │<───────────────────────────────┤                              │
+      │                                │                              │
+      │  (3) Sign authorization        │                              │
+      │                                │                              │
+      │  (4) Authorization: Payment    │                              │
+      ├───────────────────────────────>│                              │
+      │                                │                              │
+      │                                │  (5) Register authorization  │
+      │                                ├─────────────────────────────>│
+      │                                │                              │
+      │  (6) 200 OK (authorized)       │                              │
+      │<───────────────────────────────┤                              │
+      │                                │                              │
+      │        ... later ...           │                              │
+      │                                │                              │
+      │  (7) GET /resource             │                              │
+      ├───────────────────────────────>│                              │
+      │                                │  (8) Charge via auth         │
+      │                                ├─────────────────────────────>│
+      │                                │                              │
+      │  (9) 200 OK + Receipt          │                              │
+      │<───────────────────────────────┤                              │
+      │                                │                              │
+]]></artwork>
+      </section>
+      <section anchor="non-atomicity">
+        <name>Non-Atomicity</name>
+        <t>Unlike &quot;charge&quot;, the &quot;authorize&quot; intent is non-atomic:</t>
+        <ul>
+          <li>Authorization registration is separate from payment collection</li>
+          <li>Multiple charges may occur against a single authorization</li>
+          <li>Total charges <bcp14>MUST NOT</bcp14> exceed the authorized limit</li>
+        </ul>
+      </section>
+    </section>
+    <section anchor="request-schema">
+      <name>Request Schema</name>
+
+      <section anchor="required-fields">
+        <name>Required Fields</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>limit</tt></td>
+              <td>string/number</td>
+              <td>Maximum amount that may be charged</td>
+            </tr>
+            <tr>
+              <td><tt>expires</tt></td>
+              <td>string</td>
+              <td>Authorization expiry timestamp</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="recommended-fields">
+        <name>Recommended Fields</name>
+        <table>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>currency</tt> or <tt>asset</tt></td>
+              <td>string</td>
+              <td>Currency/asset identifier</td>
+            </tr>
+            <tr>
+              <td><tt>recipient</tt></td>
+              <td>string</td>
+              <td>Payment recipient (for methods that require it)</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="example">
+        <name>Example</name>
+        <sourcecode type="json"><![CDATA[
+{
+  "limit": "100000000",
+  "asset": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-15T00:00:00Z"
+}
+]]></sourcecode>
+      </section>
+    </section>
+    <section anchor="credential-requirements">
+      <name>Credential Requirements</name>
+
+      <section anchor="payload">
+        <name>Payload</name>
+        <t>The credential <tt>payload</tt> for an &quot;authorize&quot; intent contains the authorization grant. The format is method-specific:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Authorization Type</th>
+              <th>Description</th>
+              <th>Example Methods</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Signed Key Auth</td>
+              <td>Delegated signing key</td>
+              <td>Tempo Access Keys</td>
+            </tr>
+            <tr>
+              <td>Token Approval</td>
+              <td>On-chain approval</td>
+              <td>EVM ERC-20 approve</td>
+            </tr>
+            <tr>
+              <td>Saved Payment Method</td>
+              <td>Stored card/account</td>
+              <td>Stripe SetupIntent</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="reusability">
+        <name>Reusability</name>
+        <t>Unlike &quot;charge&quot; credentials, &quot;authorize&quot; credentials may enable multiple subsequent charges. The authorization persists until:</t>
+        <ul>
+          <li>The expiry timestamp is reached</li>
+          <li>The spending limit is exhausted</li>
+          <li>The payer explicitly revokes it</li>
+        </ul>
+      </section>
+    </section>
+    <section anchor="authorization-lifecycle">
+      <name>Authorization Lifecycle</name>
+
+      <section anchor="registration">
+        <name>Registration</name>
+        <t>When the server receives an &quot;authorize&quot; credential:</t>
+        <ol type="1">
+          <li>Verify the authorization signature/proof</li>
+          <li>Store the authorization for future use</li>
+          <li>Return success (200) to indicate authorization accepted</li>
+          <li>Optionally return <tt>Payment-Authorization</tt> for session reuse</li>
+        </ol>
+      </section>
+      <section anchor="charging">
+        <name>Charging</name>
+        <t>When charging against an authorization:</t>
+        <ol type="1">
+          <li>Verify the authorization is still valid (not expired, not revoked)</li>
+          <li>Verify sufficient limit remains</li>
+          <li>Execute the charge via method-specific mechanism</li>
+          <li>Decrement the remaining limit</li>
+          <li>Return <tt>Payment-Receipt</tt> with charge details</li>
+        </ol>
+      </section>
+      <section anchor="revocation">
+        <name>Revocation</name>
+        <t>Payers <bcp14>SHOULD</bcp14> be able to revoke authorizations before expiry. Revocation mechanisms are method-specific:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Revocation Mechanism</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Tempo</td>
+              <td>Remove Access Key from account</td>
+            </tr>
+            <tr>
+              <td>EVM</td>
+              <td>Set approval to zero</td>
+            </tr>
+            <tr>
+              <td>Stripe</td>
+              <td>Detach PaymentMethod from Customer</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="expiry">
+        <name>Expiry</name>
+        <t>Servers <bcp14>MUST NOT</bcp14> charge against expired authorizations. Servers <bcp14>SHOULD</bcp14> provide a mechanism for payers to query authorization status.</t>
+      </section>
+    </section>
+    <section anchor="security-considerations">
+      <name>Security Considerations</name>
+
+      <section anchor="limit-verification">
+        <name>Limit Verification</name>
+        <t>Clients <bcp14>MUST</bcp14> verify the requested limit is acceptable before signing. Authorizations grant future spending capability without further user interaction.</t>
+      </section>
+      <section anchor="expiry-windows">
+        <name>Expiry Windows</name>
+        <t>Clients <bcp14>SHOULD</bcp14> prefer short authorization windows. Long-lived authorizations increase risk if credentials are compromised.</t>
+        <t>Recommended maximum windows:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Use Case</th>
+              <th>Recommended Max</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Single session</td>
+              <td>1 hour</td>
+            </tr>
+            <tr>
+              <td>Daily usage</td>
+              <td>24 hours</td>
+            </tr>
+            <tr>
+              <td>Monthly billing</td>
+              <td>30 days</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section anchor="revocation-capability">
+        <name>Revocation Capability</name>
+        <t>Payment methods implementing &quot;authorize&quot; <bcp14>SHOULD</bcp14> provide revocation mechanisms. Payers <bcp14>MUST</bcp14> be able to revoke authorizations if they suspect compromise.</t>
+      </section>
+      <section anchor="authorization-scope">
+        <name>Authorization Scope</name>
+        <t>Authorizations <bcp14>SHOULD</bcp14> be scoped as narrowly as possible:</t>
+        <ul>
+          <li>Specific recipient address (not &quot;any address&quot;)</li>
+          <li>Specific asset/currency</li>
+          <li>Reasonable limits and expiry</li>
+        </ul>
+      </section>
+      <section anchor="server-accountability">
+        <name>Server Accountability</name>
+        <t>Servers holding authorizations are responsible for:</t>
+        <ul>
+          <li>Secure storage of authorization data</li>
+          <li>Not exceeding authorized limits</li>
+          <li>Providing transaction records to payers</li>
+          <li>Honoring revocation requests</li>
+        </ul>
+      </section>
+    </section>
+    <section anchor="iana-considerations">
+      <name>IANA Considerations</name>
+
+      <section anchor="payment-intent-registration">
+        <name>Payment Intent Registration</name>
+        <t>This document registers the &quot;authorize&quot; intent in the &quot;HTTP Payment Intents&quot; registry established by <xref target="i-d-httpauth-payment"/>:</t>
+        <table>
+          <thead>
+            <tr>
+              <th>Intent</th>
+              <th>Description</th>
+              <th>Reference</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><tt>authorize</tt></td>
+              <td>Pre-authorization for future charges</td>
+              <td>This document</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+  </middle>
+
+  <back>
+    <references>
+      <name>References</name>
+      <references>
+        <name>Normative References</name>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.2119.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8174.xml"/>
+        <reference anchor="i-d-httpauth-payment">
+          <front>
+            <title>The &apos;Payment&apos; HTTP Authentication Scheme</title>
+            <author fullname="Moxey, J."/>
+          </front>
+        </reference>
+      </references>
+    </references>
+  </back>
+
+</rfc>
