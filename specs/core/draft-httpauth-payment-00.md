@@ -620,14 +620,6 @@ Clients (particularly browser-based wallets) SHOULD:
 Servers SHOULD implement rate limiting on challenges issued and
 credential verification attempts.
 
-### 11.11. Authorization Reuse
-
-When servers issue `Payment-Authorization` headers:
-
-- Servers SHOULD use short authorization windows
-- Clients MUST store cached credentials securely
-- Servers MUST be able to revoke authorizations before expiry
-
 ---
 
 ## 12. IANA Considerations
@@ -800,15 +792,21 @@ Client                                 Server
 ```http
 HTTP/1.1 402 Payment Required
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     realm="api.example.com",
     method="invoice",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
-Content-Type: application/json
 
-{"error": "payment_required", "message": "Payment required for access"}
+{
+  "type": "https://ietf.org/payment/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Payment required for access.",
+  "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
+}
 ```
 
 Decoded `request`:
@@ -891,31 +889,7 @@ Decoded `request`:
 }
 ```
 
-### B.3. Payment with Reusable Authorization
-
-Server issues an authorization for subsequent requests:
-
-**Success with Authorization:**
-
-```http
-HTTP/1.1 200 OK
-Cache-Control: private
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-Content-Type: application/json
-
-{"data": "..."}
-```
-
-**Subsequent request using cached authorization:**
-
-```http
-GET /other-resource HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-```
-
-### B.4. Multiple Payment Options
+### B.3. Multiple Payment Options
 
 Server offers multiple payment methods:
 
@@ -928,15 +902,20 @@ WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", 
 
 Client selects preferred method and responds accordingly.
 
-### B.5. Failed Payment Verification
+### B.4. Failed Payment Verification
 
 ```http
 HTTP/1.1 401 Unauthorized
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
-Content-Type: application/json
 
-{"error": "payment_verification_failed", "message": "Invalid payment proof"}
+{
+  "type": "https://ietf.org/payment/problems/verification-failed",
+  "title": "Payment Verification Failed",
+  "status": 401,
+  "detail": "Invalid payment proof."
+}
 ```
 
 Note the use of 401 (not 402) for failed verification, with a fresh
