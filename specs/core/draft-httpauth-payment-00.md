@@ -720,9 +720,6 @@ payment-credentials   = "Payment" 1*SP b64token
 ; Payment-Receipt header field value
 Payment-Receipt       = b64token
 
-; Payment-Authorization header field value
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
-
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
 method-name         = 1*ALPHA
@@ -775,9 +772,14 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
-Content-Type: application/json
+Content-Type: application/problem+json
 
-{"error": "payment_required", "message": "Payment required for access"}
+{
+  "type": "https://example.com/errors/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Payment required for access to this resource."
+}
 ```
 
 Decoded `request`:
@@ -860,31 +862,7 @@ Decoded `request`:
 }
 ```
 
-### B.3. Payment with Reusable Authorization
-
-Server issues an authorization for subsequent requests:
-
-**Success with Authorization:**
-
-```http
-HTTP/1.1 200 OK
-Cache-Control: private
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-Content-Type: application/json
-
-{"data": "..."}
-```
-
-**Subsequent request using cached authorization:**
-
-```http
-GET /other-resource HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-```
-
-### B.4. Multiple Payment Options
+### B.3. Multiple Payment Options
 
 Server offers multiple payment methods:
 
@@ -897,15 +875,20 @@ WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", 
 
 Client selects preferred method and responds accordingly.
 
-### B.5. Failed Payment Verification
+### B.4. Failed Payment Verification
 
 ```http
 HTTP/1.1 401 Unauthorized
 Cache-Control: no-store
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
-Content-Type: application/json
+Content-Type: application/problem+json
 
-{"error": "payment_verification_failed", "message": "Invalid payment proof"}
+{
+  "type": "https://example.com/errors/payment-verification-failed",
+  "title": "Payment Verification Failed",
+  "status": 401,
+  "detail": "The payment proof provided was invalid or could not be verified."
+}
 ```
 
 Note the use of 401 (not 402) for failed verification, with a fresh
