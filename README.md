@@ -100,13 +100,49 @@ The specification is modular, separating stable protocol mechanics from evolving
 
 ## Building
 
-Generate HTML/TXT artifacts from the markdown specs:
+### Using Docker (recommended)
 
 ```bash
-./scripts/gen.sh
+# Build the Docker image (first time only)
+make docker-build
+
+# Generate XML, HTML, TXT, and PDF artifacts
+make build
+
+# Run build + validation
+make check
+
+# Interactive shell for debugging
+make shell
+
+# Clean generated artifacts
+make clean
 ```
 
-Requires Python 3.x and `xml2rfc` (`pip install xml2rfc`).
+### Local Development
+
+```bash
+# Install dependencies
+npm install
+pip install -r requirements.txt
+
+# Generate artifacts
+./scripts/gen.sh
+
+# With verbose output (shows all warnings)
+./scripts/gen.sh --verbose
+
+# Run in Docker from local machine
+./scripts/gen.sh --docker
+```
+
+### Generated Outputs
+
+All outputs are written to `artifacts/`:
+- `draft-*.xml` - RFC XML (v3)
+- `draft-*.html` - HTML version
+- `draft-*.txt` - Plain text version
+- `draft-*.pdf` - PDF version
 
 ## License
 
