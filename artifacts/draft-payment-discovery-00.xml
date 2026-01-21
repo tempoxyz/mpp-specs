@@ -32,15 +32,8 @@ including supported payment methods, assets, and intents.</t>
     <section anchor="introduction">
       <name>Introduction</name>
       <t>The &quot;Payment&quot; HTTP authentication scheme <xref target="i-d-httpauth-payment"/> enables servers to require payment for resource access. While the 402 response with <tt>WWW-Authenticate: Payment</tt> header provides all information needed to complete a payment, clients may benefit from discovering payment capabilities before making requests.</t>
-      <t>This specification defines two optional discovery mechanisms:</t>
-      <ol type="1">
-        <li><strong>Well-Known Endpoint</strong>: An HTTP endpoint returning structured payment</li>
-      </ol>
-      <t>capability information</t>
-      <ol type="1">
-        <li><strong>DNS Discovery</strong>: DNS TXT records advertising payment support</li>
-      </ol>
-      <t>Discovery is <bcp14>OPTIONAL</bcp14>. Servers <bcp14>MAY</bcp14> implement these mechanisms to improve client experience. Clients <bcp14>MUST NOT</bcp14> require discovery to function.</t>
+      <t>This specification defines the Well-Known Endpoint discovery mechanism: an HTTP endpoint returning structured payment capability information.</t>
+      <t>Discovery is <bcp14>OPTIONAL</bcp14>. Servers <bcp14>MAY</bcp14> implement this mechanism to improve client experience. Clients <bcp14>MUST NOT</bcp14> require discovery to function.</t>
     </section>
     <section anchor="requirements-language">
       <name>Requirements Language</name>
@@ -156,61 +149,12 @@ Cache-Control: max-age=3600
         <t>If the server does not support discovery, it <bcp14>SHOULD</bcp14> return 404 Not Found. Clients <bcp14>MUST NOT</bcp14> treat a 404 response as an error; it simply indicates discovery is unavailable.</t>
       </section>
     </section>
-    <section anchor="dns-discovery">
-      <name>DNS Discovery</name>
-
-      <section anchor="txt-record-format">
-        <name>TXT Record Format</name>
-        <t>Servers <bcp14>MAY</bcp14> advertise payment support via DNS TXT records at the <tt>_payment</tt> subdomain:</t>
-        <sourcecode><![CDATA[
-_payment.<domain>. TXT "v=payment1; methods=<method-list>"
-]]></sourcecode>
-        <t>Parameters:</t>
-        <table>
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              <th>Required</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><tt>v</tt></td>
-              <td><bcp14>REQUIRED</bcp14></td>
-              <td>Version identifier. <bcp14>MUST</bcp14> be <tt>payment1</tt>.</td>
-            </tr>
-            <tr>
-              <td><tt>methods</tt></td>
-              <td><bcp14>REQUIRED</bcp14></td>
-              <td>Comma-separated list of supported method identifiers.</td>
-            </tr>
-          </tbody>
-        </table>
-        <t>Example:</t>
-        <sourcecode><![CDATA[
-_payment.api.example.com. TXT "v=payment1; methods=tempo,lightning"
-]]></sourcecode>
-      </section>
-      <section anchor="multiple-records">
-        <name>Multiple Records</name>
-        <t>If multiple TXT records exist, clients <bcp14>SHOULD</bcp14> use the first record with a valid <tt>v=payment1</tt> prefix.</t>
-      </section>
-      <section anchor="limitations">
-        <name>Limitations</name>
-        <t>DNS discovery provides only basic capability advertisement. For detailed information (assets, intents), clients <bcp14>SHOULD</bcp14> use the well-known endpoint or rely on 402 responses.</t>
-      </section>
-    </section>
     <section anchor="security-considerations">
       <name>Security Considerations</name>
 
       <section anchor="discovery-spoofing">
         <name>Discovery Spoofing</name>
         <t>Discovery information is advisory and not cryptographically authenticated. Clients <bcp14>MUST NOT</bcp14> rely on discovery for security decisions. The actual payment challenge in the 402 response is authoritative.</t>
-      </section>
-      <section anchor="dns-security">
-        <name>DNS Security</name>
-        <t>DNS TXT records are subject to DNS spoofing attacks. Clients <bcp14>SHOULD</bcp14> use DNSSEC-validated resolvers when available.</t>
       </section>
       <section anchor="well-known-endpoint-security">
         <name>Well-Known Endpoint Security</name>

@@ -397,12 +397,12 @@ intent = 1*( ALPHA / DIGIT / "-" )
       </section>
       <section anchor="intent-negotiation">
         <name>Intent Negotiation</name>
-        <t>If a server supports multiple intents, it <bcp14>MAY</bcp14> issue multiple challenges:</t>
+        <t>If a server supports multiple payment methods, it <bcp14>MAY</bcp14> issue multiple challenges:</t>
         <sourcecode type="http"><![CDATA[
-WWW-Authenticate: Payment id="abc", realm="api.example.com", method="example", intent="charge", request="..."
-WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", intent="authorize", request="..."
+WWW-Authenticate: Payment id="abc", realm="api.example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="def", realm="api.example.com", method="lightning", intent="charge", request="..."
 ]]></sourcecode>
-        <t>Clients choose which challenge to respond to. Clients that do not recognize an intent <bcp14>SHOULD</bcp14> treat the challenge as unsupported.</t>
+        <t>Clients choose which challenge to respond to based on supported methods. For method selection guidance, see Section 6.3.</t>
       </section>
     </section>
     <section anchor="error-handling">
@@ -573,7 +573,7 @@ WWW-Authenticate: Payment ...
       </section>
       <section anchor="caching">
         <name>Caching</name>
-        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> or <tt>Payment-Authorization</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
+        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
       </section>
       <section anchor="cross-origin-considerations">
         <name>Cross-Origin Considerations</name>
@@ -587,15 +587,6 @@ WWW-Authenticate: Payment ...
       <section anchor="denial-of-service">
         <name>Denial of Service</name>
         <t>Servers <bcp14>SHOULD</bcp14> implement rate limiting on challenges issued and credential verification attempts.</t>
-      </section>
-      <section anchor="authorization-reuse">
-        <name>Authorization Reuse</name>
-        <t>When servers issue <tt>Payment-Authorization</tt> headers:</t>
-        <ul>
-          <li>Servers <bcp14>SHOULD</bcp14> use short authorization windows</li>
-          <li>Clients <bcp14>MUST</bcp14> store cached credentials securely</li>
-          <li>Servers <bcp14>MUST</bcp14> be able to revoke authorizations before expiry</li>
-        </ul>
       </section>
     </section>
     <section anchor="iana-considerations">
@@ -756,15 +747,21 @@ Client                                 Server
         <sourcecode type="http"><![CDATA[
 HTTP/1.1 402 Payment Required
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     realm="api.example.com",
     method="invoice",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
-Content-Type: application/json
 
-{"error": "payment_required", "message": "Payment required for access"}
+{
+  "type": "https://ietf.org/payment/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Payment required for access.",
+  "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
+}
 ]]></sourcecode>
         <t>Decoded <tt>request</tt>:</t>
         <sourcecode type="json"><![CDATA[
@@ -833,26 +830,6 @@ WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
 }
 ]]></sourcecode>
       </section>
-      <section anchor="payment-with-reusable-authorization">
-        <name>Payment with Reusable Authorization</name>
-        <t>Server issues an authorization for subsequent requests:</t>
-        <t>Success with Authorization:</t>
-        <sourcecode type="http"><![CDATA[
-HTTP/1.1 200 OK
-Cache-Control: private
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-Content-Type: application/json
-
-{"data": "..."}
-]]></sourcecode>
-        <t>Subsequent request using cached authorization:</t>
-        <sourcecode type="http"><![CDATA[
-GET /other-resource HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
-]]></sourcecode>
-      </section>
       <section anchor="multiple-payment-options">
         <name>Multiple Payment Options</name>
         <t>Server offers multiple payment methods:</t>
@@ -869,10 +846,15 @@ WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", 
         <sourcecode type="http"><![CDATA[
 HTTP/1.1 401 Unauthorized
 Cache-Control: no-store
+Content-Type: application/problem+json
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
-Content-Type: application/json
 
-{"error": "payment_verification_failed", "message": "Invalid payment proof"}
+{
+  "type": "https://ietf.org/payment/problems/verification-failed",
+  "title": "Payment Verification Failed",
+  "status": 401,
+  "detail": "Invalid payment proof."
+}
 ]]></sourcecode>
         <t>Note the use of 401 (not 402) for failed verification, with a fresh challenge for retry.</t>
       </section>
