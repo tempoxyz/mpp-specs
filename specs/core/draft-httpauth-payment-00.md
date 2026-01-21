@@ -330,6 +330,17 @@ Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGF
 Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
 ```
 
+Subsequent requests reuse the credential directly:
+
+```http
+GET /api/data HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
+```
+
+The server MAY return a different token in Payment-Authorization than the
+original credential (e.g., an access token optimized for reuse).
+
 #### 5.4.1. Client Behavior
 
 Clients that receive a `Payment-Authorization` header SHOULD:
