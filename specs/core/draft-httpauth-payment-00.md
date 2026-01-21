@@ -243,6 +243,81 @@ Example decoded `request`:
 }
 ```
 
+#### 5.1.4. Challenge Lifecycle
+
+This section defines normative requirements for challenge validity,
+timing, scope, and retry behavior.
+
+##### 5.1.4.1. Expiration
+
+When the `expires` parameter is present, servers MUST reject credentials
+submitted after the specified timestamp. Clients MUST NOT submit
+credentials for challenges where the current time exceeds the `expires`
+value.
+
+When the `expires` parameter is absent, servers MUST apply a default
+expiration of 5 minutes from challenge issuance. Servers MAY use a
+shorter default but MUST NOT use a longer one. Clients SHOULD assume
+a 5-minute validity window when `expires` is omitted.
+
+To accommodate clock skew between clients and servers, servers SHOULD
+accept credentials submitted within 30 seconds after the `expires`
+timestamp. Clients SHOULD NOT rely on this tolerance and SHOULD submit
+credentials well before expiration.
+
+##### 5.1.4.2. Challenge Scope
+
+A challenge `id` is scoped to the combination of:
+
+- The origin (scheme, host, and port) that issued the challenge
+- The `realm` parameter value
+
+Clients MUST NOT present a credential to an origin different from the
+one that issued the corresponding challenge. Servers MUST reject
+credentials where the `id` was issued by a different origin or realm.
+
+A single challenge `id` MAY be valid for multiple resources within the
+same realm, at the server's discretion. Payment method specifications
+MAY impose additional scope restrictions.
+
+##### 5.1.4.3. One-Time Use
+
+Each challenge `id` MUST be usable at most once for a successful payment.
+After a credential is accepted and the payment is verified, servers MUST
+reject any subsequent credentials using the same `id`.
+
+Servers MAY allow a limited number of retry attempts with the same `id`
+when credential verification fails, but SHOULD issue a fresh challenge
+after 3 failed attempts to prevent brute-force attacks.
+
+##### 5.1.4.4. Retry Behavior
+
+When a client receives a transient error (e.g., network timeout, 503
+Service Unavailable) before receiving a definitive response:
+
+1. The client MAY retry the request with the same credential if the
+   challenge has not expired.
+2. Servers MUST implement idempotent credential verification: repeated
+   submissions of the same credential for the same `id` MUST produce
+   the same result (success or specific failure reason).
+3. If a payment was already settled, the server MUST return 200 OK with
+   the original `Payment-Receipt` value.
+
+HTTP intermediaries and client libraries that automatically retry failed
+requests MUST NOT modify the `Authorization` header between retries.
+
+##### 5.1.4.5. Challenge Invalidation
+
+Servers MUST invalidate a challenge `id` when any of the following occur:
+
+- The challenge expires (per Section 5.1.4.1)
+- A credential using the `id` is successfully verified
+- The server's maximum retry count is exceeded
+- The server restarts or the challenge state is otherwise lost
+
+When a client submits a credential with an invalidated `id`, servers
+MUST return 401 Unauthorized with a fresh challenge.
+
 ### 5.2. Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
@@ -287,22 +362,37 @@ Decoded credential:
 
 ### 5.3. Payment-Receipt Header
 
-Servers SHOULD include a `Payment-Receipt` header on successful responses:
+Servers MAY include a `Payment-Receipt` header on successful responses.
+Receipts are OPTIONAL but provide valuable confirmation for audit trails,
+dispute resolution, and client record-keeping.
 
 ```abnf
 Payment-Receipt = b64token
 ```
 
-The decoded JSON object contains:
+The value is a base64url-encoded JSON object. When a server includes a
+`Payment-Receipt` header, the decoded JSON object MUST contain the following
+fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | string | Payment status: "success" or "failed" |
-| `method` | string | Payment method used |
-| `timestamp` | string | ISO 8601 settlement time |
-| `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `status` | Yes | string | Payment status: "success" or "failed" |
+| `timestamp` | Yes | string | ISO 8601 settlement time |
+| `reference` | Yes | string | Method-specific reference (tx hash, invoice id, etc.) |
+| `method` | No | string | Payment method used (RECOMMENDED) |
 
 Payment method specifications MAY define additional fields for receipts.
+
+Clients SHOULD NOT assume a missing `Payment-Receipt` header indicates
+payment failure. The authoritative signal is the HTTP status code (200 for
+success).
+
+#### 5.3.1. Versioning Considerations
+
+Future versions of this specification or payment method specifications MAY
+define additional receipt fields. Clients MUST ignore unknown fields when
+parsing receipts. Servers MUST NOT remove required fields but MAY add new
+optional fields for method-specific data.
 
 
 ---
@@ -330,6 +420,73 @@ the semantics of their sub-methods.
 Payment methods are registered in the HTTP Payment Methods registry
 (Section 12.3). Each registered method has an associated specification
 that defines the `request` and `payload` schemas.
+
+### 6.3. Multiple Payment Method Selection
+
+Servers MAY offer multiple payment methods by including multiple
+`WWW-Authenticate` headers, each with a distinct `method` value:
+
+```http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="abc", realm="example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="def", realm="example.com", method="exact", intent="charge", request="..."
+WWW-Authenticate: Payment id="ghi", realm="example.com", method="lightning", intent="charge", request="..."
+```
+
+#### 6.3.1. Server Preference Indication
+
+Servers SHOULD order `WWW-Authenticate` headers by preference, with the
+most preferred method listed first. This ordering provides a hint to
+clients that may not have their own preference.
+
+Servers MAY also include a `preference` parameter (integer, 1-100) on
+each challenge to explicitly indicate relative preference:
+
+```http
+WWW-Authenticate: Payment ..., method="stripe", preference="90", ...
+WWW-Authenticate: Payment ..., method="lightning", preference="70", ...
+```
+
+Higher values indicate stronger server preference. If the `preference`
+parameter is omitted, clients SHOULD assume preference based on header
+order.
+
+#### 6.3.2. Client Selection Algorithm
+
+Clients SHOULD select a payment method using the following algorithm:
+
+1. Filter: Remove challenges with unrecognized `method` or `intent`
+   values, expired challenges, or unsatisfiable payment requirements.
+
+2. Prioritize: Order remaining challenges by client preference. Client
+   preference MAY consider factors such as:
+   - Payment methods the client has credentials for
+   - Transaction fees or exchange rates
+   - Settlement speed requirements
+   - User-configured preferences
+
+3. Fallback: If no challenges match client preferences, the client MAY
+   consider server preference (header order or `preference` parameter)
+   as a tiebreaker.
+
+4. Select: Choose the highest-priority challenge from the ordered list.
+
+Clients MUST NOT respond to multiple challenges simultaneously for the
+same resource request.
+
+#### 6.3.3. Fallback Behavior
+
+If a client cannot fulfill any offered challenge:
+
+- The client SHOULD NOT send a credential
+- The client MAY display available options to the user for manual
+  selection or configuration
+- The client SHOULD treat the resource as inaccessible until a
+  supported payment method is configured
+
+If a client's selected method fails verification (401 response), the
+client MAY retry with a different available method from the original
+402 response, provided the challenge IDs have not expired.
 
 ---
 
