@@ -218,6 +218,11 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see Section 11.5).
 
+**`preference`**: Integer value from 1 to 100 indicating server preference
+  for this payment method when multiple methods are offered (Section 6.3).
+  Higher values indicate stronger preference. Clients MAY use this value
+  as a tiebreaker when the client has no preference among available methods.
+
 Unknown parameters MUST be ignored by clients.
 
 #### 5.1.3. Example Challenge
@@ -330,6 +335,73 @@ the semantics of their sub-methods.
 Payment methods are registered in the HTTP Payment Methods registry
 (Section 12.3). Each registered method has an associated specification
 that defines the `request` and `payload` schemas.
+
+### 6.3. Multiple Payment Method Selection
+
+Servers MAY offer multiple payment methods by including multiple
+`WWW-Authenticate` headers, each with a distinct `method` value:
+
+```http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="abc", realm="example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="def", realm="example.com", method="exact", intent="charge", request="..."
+WWW-Authenticate: Payment id="ghi", realm="example.com", method="lightning", intent="charge", request="..."
+```
+
+#### 6.3.1. Server Preference Indication
+
+Servers SHOULD order `WWW-Authenticate` headers by preference, with the
+most preferred method listed first. This ordering provides a hint to
+clients that may not have their own preference.
+
+Servers MAY also include a `preference` parameter (integer, 1-100) on
+each challenge to explicitly indicate relative preference:
+
+```http
+WWW-Authenticate: Payment ..., method="stripe", preference="90", ...
+WWW-Authenticate: Payment ..., method="lightning", preference="70", ...
+```
+
+Higher values indicate stronger server preference. If the `preference`
+parameter is omitted, clients SHOULD assume preference based on header
+order.
+
+#### 6.3.2. Client Selection Algorithm
+
+Clients SHOULD select a payment method using the following algorithm:
+
+1. Filter: Remove challenges with unrecognized `method` or `intent`
+   values, expired challenges, or unsatisfiable payment requirements.
+
+2. Prioritize: Order remaining challenges by client preference. Client
+   preference MAY consider factors such as:
+   - Payment methods the client has credentials for
+   - Transaction fees or exchange rates
+   - Settlement speed requirements
+   - User-configured preferences
+
+3. Fallback: If no challenges match client preferences, the client MAY
+   consider server preference (header order or `preference` parameter)
+   as a tiebreaker.
+
+4. Select: Choose the highest-priority challenge from the ordered list.
+
+Clients MUST NOT respond to multiple challenges simultaneously for the
+same resource request.
+
+#### 6.3.3. Fallback Behavior
+
+If a client cannot fulfill any offered challenge:
+
+- The client SHOULD NOT send a credential
+- The client MAY display available options to the user for manual
+  selection or configuration
+- The client SHOULD treat the resource as inaccessible until a
+  supported payment method is configured
+
+If a client's selected method fails verification (401 response), the
+client MAY retry with a different available method from the original
+402 response, provided the challenge IDs have not expired.
 
 ---
 
