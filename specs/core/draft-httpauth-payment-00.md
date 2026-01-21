@@ -596,9 +596,16 @@ Implementations MUST treat `Authorization: Payment` headers and
 
 ### 11.8. Caching
 
-Servers SHOULD send `Cache-Control: no-store` with 402 responses.
-Responses with `Payment-Receipt` or `Payment-Authorization` headers
-SHOULD include `Cache-Control: private`.
+Payment challenges contain unique identifiers and time-sensitive payment
+data that MUST NOT be cached or reused. To prevent challenge replay and
+stale payment information:
+
+Servers MUST send `Cache-Control: no-store` [RFC9111] with 402 responses
+and 401 responses containing `WWW-Authenticate: Payment` headers.
+
+Responses containing `Payment-Receipt` or `Payment-Authorization` headers
+MUST include `Cache-Control: private` to prevent shared caches from
+storing payment receipts or authorization tokens.
 
 ### 11.9. Cross-Origin Considerations
 
@@ -713,6 +720,9 @@ identifiers upon publication.
 
 - **[RFC9110]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Semantics", STD 97, RFC 9110, June 2022.
+
+- **[RFC9111]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+  Ed., "HTTP Caching", STD 98, RFC 9111, June 2022.
 
 ### 13.2. Informative References
 

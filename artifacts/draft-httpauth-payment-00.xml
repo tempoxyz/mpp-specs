@@ -613,7 +613,9 @@ WWW-Authenticate: Payment ...
       </section>
       <section anchor="caching">
         <name>Caching</name>
-        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> or <tt>Payment-Authorization</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
+        <t>Payment challenges contain unique identifiers and time-sensitive payment data that <bcp14>MUST NOT</bcp14> be cached or reused. To prevent challenge replay and stale payment information:</t>
+        <t>Servers <bcp14>MUST</bcp14> send <tt>Cache-Control: no-store</tt> <xref target="RFC9111"/> with 402 responses and 401 responses containing <tt>WWW-Authenticate: Payment</tt> headers.</t>
+        <t>Responses containing <tt>Payment-Receipt</tt> or <tt>Payment-Authorization</tt> headers <bcp14>MUST</bcp14> include <tt>Cache-Control: private</tt> to prevent shared caches from storing payment receipts or authorization tokens.</t>
       </section>
       <section anchor="cross-origin-considerations">
         <name>Cross-Origin Considerations</name>
@@ -718,6 +720,7 @@ WWW-Authenticate: Payment ...
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8259.xml"/>
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8446.xml"/>
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9110.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9111.xml"/>
       </references>
       <references>
         <name>Informative References</name>
