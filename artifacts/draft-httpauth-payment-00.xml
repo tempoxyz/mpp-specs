@@ -249,15 +249,16 @@ Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJwYXlsb2FkIjp7I
       </section>
       <section anchor="payment-receipt-header">
         <name>Payment-Receipt Header</name>
-        <t>Servers <bcp14>SHOULD</bcp14> include a <tt>Payment-Receipt</tt> header on successful responses:</t>
+        <t>Servers <bcp14>MAY</bcp14> include a <tt>Payment-Receipt</tt> header on successful responses. Receipts are <bcp14>OPTIONAL</bcp14> but provide valuable confirmation for audit trails, dispute resolution, and client record-keeping.</t>
         <sourcecode type="abnf"><![CDATA[
 Payment-Receipt = b64token
 ]]></sourcecode>
-        <t>The decoded JSON object contains:</t>
+        <t>The value is a base64url-encoded JSON object. When a server includes a <tt>Payment-Receipt</tt> header, the decoded JSON object <bcp14>MUST</bcp14> contain the following fields:</t>
         <table>
           <thead>
             <tr>
               <th>Field</th>
+              <th>Required</th>
               <th>Type</th>
               <th>Description</th>
             </tr>
@@ -265,27 +266,36 @@ Payment-Receipt = b64token
           <tbody>
             <tr>
               <td><tt>status</tt></td>
+              <td>Yes</td>
               <td>string</td>
               <td>Payment status: &quot;success&quot; or &quot;failed&quot;</td>
             </tr>
             <tr>
-              <td><tt>method</tt></td>
-              <td>string</td>
-              <td>Payment method used</td>
-            </tr>
-            <tr>
               <td><tt>timestamp</tt></td>
+              <td>Yes</td>
               <td>string</td>
               <td>ISO 8601 settlement time</td>
             </tr>
             <tr>
               <td><tt>reference</tt></td>
+              <td>Yes</td>
               <td>string</td>
               <td>Method-specific reference (tx hash, invoice id, etc.)</td>
+            </tr>
+            <tr>
+              <td><tt>method</tt></td>
+              <td>No</td>
+              <td>string</td>
+              <td>Payment method used (<bcp14>RECOMMENDED</bcp14>)</td>
             </tr>
           </tbody>
         </table>
         <t>Payment method specifications <bcp14>MAY</bcp14> define additional fields for receipts.</t>
+        <t>Clients <bcp14>SHOULD NOT</bcp14> assume a missing <tt>Payment-Receipt</tt> header indicates payment failure. The authoritative signal is the HTTP status code (200 for success).</t>
+        <section anchor="versioning-considerations">
+          <name>Versioning Considerations</name>
+          <t>Future versions of this specification or payment method specifications <bcp14>MAY</bcp14> define additional receipt fields. Clients <bcp14>MUST</bcp14> ignore unknown fields when parsing receipts. Servers <bcp14>MUST NOT</bcp14> remove required fields but <bcp14>MAY</bcp14> add new optional fields for method-specific data.</t>
+        </section>
       </section>
     </section>
     <section anchor="payment-methods">

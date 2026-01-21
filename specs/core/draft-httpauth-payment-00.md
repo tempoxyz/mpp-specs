@@ -292,22 +292,37 @@ Decoded credential:
 
 ### 5.3. Payment-Receipt Header
 
-Servers SHOULD include a `Payment-Receipt` header on successful responses:
+Servers MAY include a `Payment-Receipt` header on successful responses.
+Receipts are OPTIONAL but provide valuable confirmation for audit trails,
+dispute resolution, and client record-keeping.
 
 ```abnf
 Payment-Receipt = b64token
 ```
 
-The decoded JSON object contains:
+The value is a base64url-encoded JSON object. When a server includes a
+`Payment-Receipt` header, the decoded JSON object MUST contain the following
+fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | string | Payment status: "success" or "failed" |
-| `method` | string | Payment method used |
-| `timestamp` | string | ISO 8601 settlement time |
-| `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `status` | Yes | string | Payment status: "success" or "failed" |
+| `timestamp` | Yes | string | ISO 8601 settlement time |
+| `reference` | Yes | string | Method-specific reference (tx hash, invoice id, etc.) |
+| `method` | No | string | Payment method used (RECOMMENDED) |
 
 Payment method specifications MAY define additional fields for receipts.
+
+Clients SHOULD NOT assume a missing `Payment-Receipt` header indicates
+payment failure. The authoritative signal is the HTTP status code (200 for
+success).
+
+#### 5.3.1. Versioning Considerations
+
+Future versions of this specification or payment method specifications MAY
+define additional receipt fields. Clients MUST ignore unknown fields when
+parsing receipts. Servers MUST NOT remove required fields but MAY add new
+optional fields for method-specific data.
 
 
 ---
