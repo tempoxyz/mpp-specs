@@ -700,7 +700,7 @@ policy: First Come First Served.
 
 **[I-D.ietf-httpauth-payment]**
 : Moxey, J., "The 'Payment' HTTP Authentication Scheme",
-  draft-ietf-httpauth-payment-01, January 2025.
+  draft-httpauth-payment-00, January 2025.
 
 ### 13.2. Informative References
 
