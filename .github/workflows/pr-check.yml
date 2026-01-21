@@ -2,9 +2,10 @@ name: Check Specs
 
 on:
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: pr-${{ github.event.number }}
+  group: pr-${{ github.event.number || github.run_id }}
   cancel-in-progress: true
 
 env:
@@ -57,11 +58,12 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ github.event.number }}-specs
+          name: ${{ github.event.number && format('pr-{0}-specs', github.event.number) || format('manual-{0}-specs', github.run_id) }}
           path: artifacts/
           retention-days: 30
 
       - name: Comment on PR
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
