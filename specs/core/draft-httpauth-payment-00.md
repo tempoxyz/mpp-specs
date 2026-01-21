@@ -168,6 +168,49 @@ When a client submits an invalid Payment credential, servers MUST return
 401 (Unauthorized) with a `WWW-Authenticate: Payment` header containing a
 fresh challenge.
 
+### 4.4. Usage of 402 Payment Required
+
+The 402 (Payment Required) status code was reserved by [RFC9110] for future
+use. This specification defines semantics for 402 within the context of the
+Payment authentication scheme.
+
+#### 4.4.1. When to Return 402
+
+Servers SHOULD return 402 when:
+
+- The resource requires payment as a precondition for access
+- The server can provide a Payment challenge that the client may fulfill
+- Payment is the primary barrier to access (not authentication or authorization)
+
+Servers MAY return 402 when:
+
+- Offering optional paid features or premium content
+- Indicating that a previously-paid resource requires additional payment
+- The payment requirement applies to a subset of request methods
+
+#### 4.4.2. When NOT to Return 402
+
+Servers SHOULD NOT return 402 when:
+
+- The client lacks authentication credentials (use 401)
+- The client is authenticated but lacks authorization (use 403)
+- The resource does not exist (use 404)
+- No Payment challenge can be constructed for the request
+
+Servers MUST NOT return 402 without including a `WWW-Authenticate` header
+containing at least one Payment challenge.
+
+#### 4.4.3. Interaction with Other Authentication Schemes
+
+When a resource requires both authentication and payment, servers SHOULD:
+
+1. First verify authentication credentials
+2. Return 401 if authentication fails
+3. Return 402 with a Payment challenge only after successful authentication
+
+This ordering prevents information leakage about payment requirements to
+unauthenticated clients.
+
 ---
 
 ## 5. The Payment Authentication Scheme
