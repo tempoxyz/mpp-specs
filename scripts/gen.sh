@@ -18,7 +18,7 @@ find "$SPECS_DIR" -name "draft-*.md" | while read -r md; do
   echo "Generating $name..."
   
   # Convert markdown to xml2rfc XML
-  md2xml "$md" -o "$OUT_DIR/${name}.xml"
+  npx md2xml "$md" -o "$OUT_DIR/${name}.xml"
   
   # Generate HTML
   xml2rfc --html --no-pagination "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.html"
