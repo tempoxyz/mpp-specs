@@ -248,6 +248,81 @@ Example decoded `request`:
 }
 ```
 
+#### 5.1.4. Challenge Lifecycle
+
+This section defines normative requirements for challenge validity,
+timing, scope, and retry behavior.
+
+##### 5.1.4.1. Expiration
+
+When the `expires` parameter is present, servers MUST reject credentials
+submitted after the specified timestamp. Clients MUST NOT submit
+credentials for challenges where the current time exceeds the `expires`
+value.
+
+When the `expires` parameter is absent, servers MUST apply a default
+expiration of 5 minutes from challenge issuance. Servers MAY use a
+shorter default but MUST NOT use a longer one. Clients SHOULD assume
+a 5-minute validity window when `expires` is omitted.
+
+To accommodate clock skew between clients and servers, servers SHOULD
+accept credentials submitted within 30 seconds after the `expires`
+timestamp. Clients SHOULD NOT rely on this tolerance and SHOULD submit
+credentials well before expiration.
+
+##### 5.1.4.2. Challenge Scope
+
+A challenge `id` is scoped to the combination of:
+
+- The origin (scheme, host, and port) that issued the challenge
+- The `realm` parameter value
+
+Clients MUST NOT present a credential to an origin different from the
+one that issued the corresponding challenge. Servers MUST reject
+credentials where the `id` was issued by a different origin or realm.
+
+A single challenge `id` MAY be valid for multiple resources within the
+same realm, at the server's discretion. Payment method specifications
+MAY impose additional scope restrictions.
+
+##### 5.1.4.3. One-Time Use
+
+Each challenge `id` MUST be usable at most once for a successful payment.
+After a credential is accepted and the payment is verified, servers MUST
+reject any subsequent credentials using the same `id`.
+
+Servers MAY allow a limited number of retry attempts with the same `id`
+when credential verification fails, but SHOULD issue a fresh challenge
+after 3 failed attempts to prevent brute-force attacks.
+
+##### 5.1.4.4. Retry Behavior
+
+When a client receives a transient error (e.g., network timeout, 503
+Service Unavailable) before receiving a definitive response:
+
+1. The client MAY retry the request with the same credential if the
+   challenge has not expired.
+2. Servers MUST implement idempotent credential verification: repeated
+   submissions of the same credential for the same `id` MUST produce
+   the same result (success or specific failure reason).
+3. If a payment was already settled, the server MUST return 200 OK with
+   the original `Payment-Receipt` value.
+
+HTTP intermediaries and client libraries that automatically retry failed
+requests MUST NOT modify the `Authorization` header between retries.
+
+##### 5.1.4.5. Challenge Invalidation
+
+Servers MUST invalidate a challenge `id` when any of the following occur:
+
+- The challenge expires (per Section 5.1.4.1)
+- A credential using the `id` is successfully verified
+- The server's maximum retry count is exceeded
+- The server restarts or the challenge state is otherwise lost
+
+When a client submits a credential with an invalidated `id`, servers
+MUST return 401 Unauthorized with a fresh challenge.
+
 ### 5.2. Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
