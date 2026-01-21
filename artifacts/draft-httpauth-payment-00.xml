@@ -286,74 +286,6 @@ Payment-Receipt = b64token
         </table>
         <t>Payment method specifications <bcp14>MAY</bcp14> define additional fields for receipts.</t>
       </section>
-      <section anchor="payment-authorization-header">
-        <name>Payment-Authorization Header</name>
-        <t>Servers <bcp14>MAY</bcp14> include a <tt>Payment-Authorization</tt> header on successful responses to indicate that a credential may be reused for subsequent requests:</t>
-        <sourcecode type="abnf"><![CDATA[
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
-]]></sourcecode>
-        <t>The credential portion is directly usable as an <tt>Authorization</tt> header value. The following parameters are appended:</t>
-        <table>
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              <th>Required</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><tt>expires</tt></td>
-              <td>Yes</td>
-              <td>RFC 3339 timestamp after which the authorization expires</td>
-            </tr>
-            <tr>
-              <td><tt>realm</tt></td>
-              <td>No</td>
-              <td>Protection space scope (defaults to challenge realm)</td>
-            </tr>
-          </tbody>
-        </table>
-        <t>Example:</t>
-        <sourcecode type="http"><![CDATA[
-HTTP/1.1 200 OK
-Content-Type: application/json
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiZXhhbXBsZSIsInRpbWVzdGFtcCI6IjIwMjUtMDEtMTVUMTI6MDA6MDBaIn0
-Payment-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ, expires="2025-01-16T12:00:00Z"
-]]></sourcecode>
-        <t>Subsequent requests reuse the credential directly:</t>
-        <sourcecode type="http"><![CDATA[
-GET /api/data HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEifQ
-]]></sourcecode>
-        <t>The server <bcp14>MAY</bcp14> return a different token in Payment-Authorization than the original credential (e.g., an access token optimized for reuse).</t>
-        <section anchor="client-behavior">
-          <name>Client Behavior</name>
-          <t>Clients that receive a <tt>Payment-Authorization</tt> header <bcp14>SHOULD</bcp14>:</t>
-          <ol type="1">
-            <li>Extract the credential portion (<tt>Payment &lt;b64token&gt;</tt>) for reuse</li>
-            <li>Cache it along with the <tt>expires</tt> timestamp and <tt>realm</tt></li>
-            <li>Use the cached credential for subsequent requests to the same realm</li>
-            <li>Stop reusing the credential after the <tt>expires</tt> timestamp</li>
-          </ol>
-        </section>
-        <section anchor="server-behavior">
-          <name>Server Behavior</name>
-          <t>Servers that issue <tt>Payment-Authorization</tt> <bcp14>MUST</bcp14>:</t>
-          <ol type="1">
-            <li>Track which authorizations are valid and not yet expired</li>
-            <li>Accept the issued credential for requests within the authorized realm</li>
-            <li>Return 401 with a fresh challenge if the authorization has expired</li>
-            <li>NOT require re-payment for requests within the authorization window</li>
-          </ol>
-        </section>
-      </section>
-      <section anchor="reusing-credentials">
-        <name>Reusing Credentials</name>
-        <t>Payment credentials are generally single-use unless the server explicitly grants reuse via the <tt>Payment-Authorization</tt> header.</t>
-        <t>Clients <bcp14>MUST NOT</bcp14> reuse Payment credentials across different challenges unless the server has returned a <tt>Payment-Authorization</tt> header.</t>
-      </section>
     </section>
     <section anchor="payment-methods">
       <name>Payment Methods</name>
@@ -573,7 +505,7 @@ WWW-Authenticate: Payment ...
       </section>
       <section anchor="caching">
         <name>Caching</name>
-        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> or <tt>Payment-Authorization</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
+        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
       </section>
       <section anchor="cross-origin-considerations">
         <name>Cross-Origin Considerations</name>
@@ -587,15 +519,6 @@ WWW-Authenticate: Payment ...
       <section anchor="denial-of-service">
         <name>Denial of Service</name>
         <t>Servers <bcp14>SHOULD</bcp14> implement rate limiting on challenges issued and credential verification attempts.</t>
-      </section>
-      <section anchor="authorization-reuse">
-        <name>Authorization Reuse</name>
-        <t>When servers issue <tt>Payment-Authorization</tt> headers:</t>
-        <ul>
-          <li>Servers <bcp14>SHOULD</bcp14> use short authorization windows</li>
-          <li>Clients <bcp14>MUST</bcp14> store cached credentials securely</li>
-          <li>Servers <bcp14>MUST</bcp14> be able to revoke authorizations before expiry</li>
-        </ul>
       </section>
     </section>
     <section anchor="iana-considerations">
@@ -626,11 +549,6 @@ WWW-Authenticate: Payment ...
               <td>Payment-Receipt</td>
               <td>permanent</td>
               <td>This document, Section 5.3</td>
-            </tr>
-            <tr>
-              <td>Payment-Authorization</td>
-              <td>permanent</td>
-              <td>This document, Section 5.4</td>
             </tr>
           </tbody>
         </table>
@@ -711,9 +629,6 @@ payment-credentials   = "Payment" 1*SP b64token
 
 ; Payment-Receipt header field value
 Payment-Receipt       = b64token
-
-; Payment-Authorization header field value
-Payment-Authorization = "Payment" 1*SP b64token *( OWS "," OWS auth-param )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
@@ -831,26 +746,6 @@ WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
     "signature": "0x1b2c3d4e5f..."
   }
 }
-]]></sourcecode>
-      </section>
-      <section anchor="payment-with-reusable-authorization">
-        <name>Payment with Reusable Authorization</name>
-        <t>Server issues an authorization for subsequent requests:</t>
-        <t>Success with Authorization:</t>
-        <sourcecode type="http"><![CDATA[
-HTTP/1.1 200 OK
-Cache-Control: private
-Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIn0
-Payment-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9, expires="2025-01-15T13:00:00Z"
-Content-Type: application/json
-
-{"data": "..."}
-]]></sourcecode>
-        <t>Subsequent request using cached authorization:</t>
-        <sourcecode type="http"><![CDATA[
-GET /other-resource HTTP/1.1
-Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJ0eXBlIjoic2Vzc2lvbiJ9
 ]]></sourcecode>
       </section>
       <section anchor="multiple-payment-options">
