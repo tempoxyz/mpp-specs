@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+*.swp
+*~
+
+# Editor directories
+.idea/
+.vscode/
+*.sublime-*
