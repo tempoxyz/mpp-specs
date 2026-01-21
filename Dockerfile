@@ -1,8 +1,5 @@
 FROM node:20-slim
 
-ENV XML2RFC_VERSION=3.31.0
-ENV RFCLINT_VERSION=1.0.0
-
 # Install Python and WeasyPrint dependencies for PDF generation
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -20,11 +17,11 @@ RUN apt-get update && \
       && \
     rm -rf /var/lib/apt/lists/*
 
-# Install xml2rfc and rfclint in a virtual environment
+# Copy requirements and install pinned dependencies
+COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir \
-      "xml2rfc[pdf]==$XML2RFC_VERSION" \
-      rfclint==$RFCLINT_VERSION
+    /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
 
 # Add venv to PATH
 ENV PATH="/opt/venv/bin:$PATH"
