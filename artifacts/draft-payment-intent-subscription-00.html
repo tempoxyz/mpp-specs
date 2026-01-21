@@ -17,7 +17,7 @@ a periodic basis.
 <meta content="draft-payment-intent-subscription-00" name="ietf.draft">
 <!-- Generator version information:
   xml2rfc 3.31.0
-    Python 3.14.2
+    Python 3.13.5
     ConfigArgParse 1.7.1
     google-i18n-address 3.1.1
     intervaltree 3.2.1
@@ -1217,7 +1217,7 @@ li > p:last-of-type:only-child {
 <table class="ears">
 <thead><tr>
 <td class="left">Internet-Draft</td>
-<td class="center">"subscription" Intent for HTTP Payment A</td>
+<td class="center">Payment Subscription Intent</td>
 <td class="right">January 2026</td>
 </tr></thead>
 <tfoot><tr>
@@ -1245,6 +1245,7 @@ li > p:last-of-type:only-child {
 <dd class="authors">
 <div class="author">
       <div class="author-name">J. Moxey</div>
+<div class="org">Tempo Labs</div>
 </div>
 </dd>
 </dl>
@@ -1253,7 +1254,7 @@ li > p:last-of-type:only-child {
 <section id="section-abstract">
       <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
 <p id="section-abstract-1">This document defines the "subscription" payment intent for use with the
-Payment HTTP Authentication Scheme <span>[<a href="#i-d-httpauth-payment" class="cite xref">i-d-httpauth-payment</a>]</span>. The
+Payment HTTP Authentication Scheme <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>. The
 "subscription" intent represents a recurring payment authorization where
 the payer grants the server permission to charge a specified amount on
 a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
@@ -1408,15 +1409,13 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
             </ul>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
-            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-references" class="internal xref">References</a></p>
-<ul class="compact toc ulBare ulEmpty">
-<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9.2.1">
-                <p id="section-toc.1-1.9.2.1.1"><a href="#section-9.1" class="auto internal xref">9.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
-</li>
-            </ul>
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
-            <p id="section-toc.1-1.10.1"><a href="#appendix-A" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
+            <p id="section-toc.1-1.10.1"><a href="#appendix-A" class="auto internal xref">Appendix A</a>.  <a href="#name-acknowledgements" class="internal xref">Acknowledgements</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
 </li>
         </ul>
 </nav>
@@ -1427,20 +1426,23 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
       <h2 id="name-introduction">
 <a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
       </h2>
-<p id="section-1-1">The "subscription" intent enables recurring payments where the payer authorizes periodic charges. Unlike "authorize" which grants a total spending limit, "subscription" grants a per-period spending limit that resets each billing cycle.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-1">The "subscription" intent enables recurring payments where the payer
+authorizes periodic charges. Unlike "authorize" which grants a total
+spending limit, "subscription" grants a per-period spending limit that
+resets each billing cycle.<a href="#section-1-1" class="pilcrow">¶</a></p>
 <p id="section-1-2">Common use cases:<a href="#section-1-2" class="pilcrow">¶</a></p>
 <ul class="normal">
 <li class="normal" id="section-1-3.1">
-          <strong>SaaS subscriptions</strong>: Monthly/annual service fees<a href="#section-1-3.1" class="pilcrow">¶</a>
+          <p id="section-1-3.1.1"><strong>SaaS subscriptions</strong>: Monthly/annual service fees<a href="#section-1-3.1.1" class="pilcrow">¶</a></p>
 </li>
         <li class="normal" id="section-1-3.2">
-          <strong>API subscriptions</strong>: Per-month API access<a href="#section-1-3.2" class="pilcrow">¶</a>
+          <p id="section-1-3.2.1"><strong>API subscriptions</strong>: Per-month API access<a href="#section-1-3.2.1" class="pilcrow">¶</a></p>
 </li>
         <li class="normal" id="section-1-3.3">
-          <strong>Streaming services</strong>: Recurring content access<a href="#section-1-3.3" class="pilcrow">¶</a>
+          <p id="section-1-3.3.1"><strong>Streaming services</strong>: Recurring content access<a href="#section-1-3.3.1" class="pilcrow">¶</a></p>
 </li>
         <li class="normal" id="section-1-3.4">
-          <strong>Metered services</strong>: Usage-based billing with periodic caps<a href="#section-1-3.4" class="pilcrow">¶</a>
+          <p id="section-1-3.4.1"><strong>Metered services</strong>: Usage-based billing with periodic caps<a href="#section-1-3.4.1" class="pilcrow">¶</a></p>
 </li>
       </ul>
 <div id="relationship-to-authorize">
@@ -1448,7 +1450,8 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-relationship-to-authorize">
 <a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-relationship-to-authorize" class="section-name selfRef">Relationship to "authorize"</a>
         </h3>
-<p id="section-1.1-1">The "subscription" intent is conceptually similar to "authorize" but with periodic limit resets:<a href="#section-1.1-1" class="pilcrow">¶</a></p>
+<p id="section-1.1-1">The "subscription" intent is conceptually similar to "authorize" but
+with periodic limit resets:<a href="#section-1.1-1" class="pilcrow">¶</a></p>
 <table class="center" id="table-1">
           <caption><a href="#table-1" class="selfRef">Table 1</a></caption>
 <thead>
@@ -1482,7 +1485,8 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-relationship-to-payment-met">
 <a href="#section-1.2" class="section-number selfRef">1.2. </a><a href="#name-relationship-to-payment-met" class="section-name selfRef">Relationship to Payment Methods</a>
         </h3>
-<p id="section-1.2-1">Payment methods implement "subscription" using their native recurring payment mechanisms:<a href="#section-1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.2-1">Payment methods implement "subscription" using their native recurring
+payment mechanisms:<a href="#section-1.2-1" class="pilcrow">¶</a></p>
 <table class="center" id="table-2">
           <caption><a href="#table-2" class="selfRef">Table 2</a></caption>
 <thead>
@@ -1515,7 +1519,10 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
       <h2 id="name-requirements-language">
 <a href="#section-2" class="section-number selfRef">2. </a><a href="#name-requirements-language" class="section-name selfRef">Requirements Language</a>
       </h2>
-<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>", "<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>",
+"<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as
+described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they
+appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="intent-semantics">
@@ -1528,7 +1535,9 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-definition">
 <a href="#section-3.1" class="section-number selfRef">3.1. </a><a href="#name-definition" class="section-name selfRef">Definition</a>
         </h3>
-<p id="section-3.1-1">The "subscription" intent represents a request for the payer to grant permission for the server to initiate recurring payments of a specified amount per billing period.<a href="#section-3.1-1" class="pilcrow">¶</a></p>
+<p id="section-3.1-1">The "subscription" intent represents a request for the payer to grant
+permission for the server to initiate recurring payments of a specified
+amount per billing period.<a href="#section-3.1-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="properties">
@@ -1580,36 +1589,36 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-flow">
 <a href="#section-3.3" class="section-number selfRef">3.3. </a><a href="#name-flow" class="section-name selfRef">Flow</a>
         </h3>
-<div class="alignLeft art-ascii-art art-text artwork" id="section-3.3-1">
+<div class="alignLeft art-text artwork" id="section-3.3-1">
 <pre>
    Client                           Server                    Payment Network
-      │                                │                              │
-      │  (1) GET /resource             │                              │
-      ├───────────────────────────────&gt;│                              │
-      │                                │                              │
-      │  (2) 402 Payment Required      │                              │
-      │      intent="subscription"     │                              │
-      │&lt;───────────────────────────────┤                              │
-      │                                │                              │
-      │  (3) Sign subscription auth    │                              │
-      │                                │                              │
-      │  (4) Authorization: Payment    │                              │
-      ├───────────────────────────────&gt;│                              │
-      │                                │                              │
-      │                                │  (5) Register subscription   │
-      │                                ├─────────────────────────────&gt;│
-      │                                │                              │
-      │                                │  (6) Charge first period     │
-      │                                ├─────────────────────────────&gt;│
-      │                                │                              │
-      │  (7) 200 OK + Receipt          │                              │
-      │&lt;───────────────────────────────┤                              │
-      │                                │                              │
-      │        ... 30 days ...         │                              │
-      │                                │                              │
-      │                                │  (8) Charge next period      │
-      │                                ├─────────────────────────────&gt;│
-      │                                │                              │
+      |                                |                              |
+      |  (1) GET /resource             |                              |
+      |-------------------------------&gt;|                              |
+      |                                |                              |
+      |  (2) 402 Payment Required      |                              |
+      |      intent="subscription"     |                              |
+      |&lt;-------------------------------|                              |
+      |                                |                              |
+      |  (3) Sign subscription auth    |                              |
+      |                                |                              |
+      |  (4) Authorization: Payment    |                              |
+      |-------------------------------&gt;|                              |
+      |                                |                              |
+      |                                |  (5) Register subscription   |
+      |                                |-----------------------------&gt;|
+      |                                |                              |
+      |                                |  (6) Charge first period     |
+      |                                |-----------------------------&gt;|
+      |                                |                              |
+      |  (7) 200 OK + Receipt          |                              |
+      |&lt;-------------------------------|                              |
+      |                                |                              |
+      |        ... 30 days ...         |                              |
+      |                                |                              |
+      |                                |  (8) Charge next period      |
+      |                                |-----------------------------&gt;|
+      |                                |                              |
 </pre><a href="#section-3.3-1" class="pilcrow">¶</a>
 </div>
 </section>
@@ -1783,7 +1792,8 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-payload">
 <a href="#section-5.1" class="section-number selfRef">5.1. </a><a href="#name-payload" class="section-name selfRef">Payload</a>
         </h3>
-<p id="section-5.1-1">The credential <code>payload</code> for a "subscription" intent contains the recurring authorization grant. The format is method-specific:<a href="#section-5.1-1" class="pilcrow">¶</a></p>
+<p id="section-5.1-1">The credential <code>payload</code> for a "subscription" intent contains the
+recurring authorization grant. The format is method-specific:<a href="#section-5.1-1" class="pilcrow">¶</a></p>
 <table class="center" id="table-7">
           <caption><a href="#table-7" class="selfRef">Table 7</a></caption>
 <thead>
@@ -1820,13 +1830,17 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-5.2-1">Subscription authorizations persist across billing periods until:<a href="#section-5.2-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.2-2.1">The subscription end date is reached<a href="#section-5.2-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.2-2.1">
+            <p id="section-5.2-2.1.1">The subscription end date is reached<a href="#section-5.2-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.2-2.2">The maximum cycles are exhausted<a href="#section-5.2-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.2-2.2">
+            <p id="section-5.2-2.2.1">The maximum cycles are exhausted<a href="#section-5.2-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.2-2.3">The payer cancels the subscription<a href="#section-5.2-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.2-2.3">
+            <p id="section-5.2-2.3.1">The payer cancels the subscription<a href="#section-5.2-2.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.2-2.4">Payment fails (method-specific retry policies apply)<a href="#section-5.2-2.4" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.2-2.4">
+            <p id="section-5.2-2.4.1">Payment fails (method-specific retry policies apply)<a href="#section-5.2-2.4.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -1845,13 +1859,17 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-6.1-1">When the server receives a "subscription" credential:<a href="#section-6.1-1" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-6.1-2">
-          <li id="section-6.1-2.1">Verify the subscription authorization<a href="#section-6.1-2.1" class="pilcrow">¶</a>
+<li id="section-6.1-2.1">
+            <p id="section-6.1-2.1.1">Verify the subscription authorization<a href="#section-6.1-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.1-2.2">Create the subscription record<a href="#section-6.1-2.2" class="pilcrow">¶</a>
+          <li id="section-6.1-2.2">
+            <p id="section-6.1-2.2.1">Create the subscription record<a href="#section-6.1-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.1-2.3">Optionally charge the first period immediately<a href="#section-6.1-2.3" class="pilcrow">¶</a>
+          <li id="section-6.1-2.3">
+            <p id="section-6.1-2.3.1">Optionally charge the first period immediately<a href="#section-6.1-2.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.1-2.4">Return success with subscription details<a href="#section-6.1-2.4" class="pilcrow">¶</a>
+          <li id="section-6.1-2.4">
+            <p id="section-6.1-2.4.1">Return success with subscription details<a href="#section-6.1-2.4.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 </section>
@@ -1863,13 +1881,17 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-6.2-1">At each billing period boundary:<a href="#section-6.2-1" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-6.2-2">
-          <li id="section-6.2-2.1">Server initiates charge for the period amount<a href="#section-6.2-2.1" class="pilcrow">¶</a>
+<li id="section-6.2-2.1">
+            <p id="section-6.2-2.1.1">Server initiates charge for the period amount<a href="#section-6.2-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.2-2.2">If successful, continue subscription<a href="#section-6.2-2.2" class="pilcrow">¶</a>
+          <li id="section-6.2-2.2">
+            <p id="section-6.2-2.2.1">If successful, continue subscription<a href="#section-6.2-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.2-2.3">If failed, apply retry policy (method-specific)<a href="#section-6.2-2.3" class="pilcrow">¶</a>
+          <li id="section-6.2-2.3">
+            <p id="section-6.2-2.3.1">If failed, apply retry policy (method-specific)<a href="#section-6.2-2.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-6.2-2.4">Notify payer of payment status<a href="#section-6.2-2.4" class="pilcrow">¶</a>
+          <li id="section-6.2-2.4">
+            <p id="section-6.2-2.4.1">Notify payer of payment status<a href="#section-6.2-2.4.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 </section>
@@ -1881,11 +1903,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-6.3-1">Payers <span class="bcp14">MUST</span> be able to cancel subscriptions. Cancellation:<a href="#section-6.3-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-6.3-2.1">Stops future charges<a href="#section-6.3-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-6.3-2.1">
+            <p id="section-6.3-2.1.1">Stops future charges<a href="#section-6.3-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-6.3-2.2">Does NOT refund past charges (unless method-specific)<a href="#section-6.3-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-6.3-2.2">
+            <p id="section-6.3-2.2.1">Does NOT refund past charges (unless method-specific)<a href="#section-6.3-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-6.3-2.3">Takes effect at end of current period (unless immediate)<a href="#section-6.3-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-6.3-2.3">
+            <p id="section-6.3-2.3.1">Takes effect at end of current period (unless immediate)<a href="#section-6.3-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 <p id="section-6.3-3">Cancellation mechanisms are method-specific:<a href="#section-6.3-3" class="pilcrow">¶</a></p>
@@ -1921,11 +1946,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-6.4-1">Some payment methods support subscription modification:<a href="#section-6.4-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-6.4-2.1">Upgrade/downgrade amount<a href="#section-6.4-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-6.4-2.1">
+            <p id="section-6.4-2.1.1">Upgrade/downgrade amount<a href="#section-6.4-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-6.4-2.2">Change billing period<a href="#section-6.4-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-6.4-2.2">
+            <p id="section-6.4-2.2.1">Change billing period<a href="#section-6.4-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-6.4-2.3">Update payment method<a href="#section-6.4-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-6.4-2.3">
+            <p id="section-6.4-2.3.1">Update payment method<a href="#section-6.4-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 <p id="section-6.4-3">Modifications require payer consent for increases.<a href="#section-6.4-3" class="pilcrow">¶</a></p>
@@ -1943,13 +1971,17 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-recurring-charge-awareness">
 <a href="#section-7.1" class="section-number selfRef">7.1. </a><a href="#name-recurring-charge-awareness" class="section-name selfRef">Recurring Charge Awareness</a>
         </h3>
-<p id="section-7.1-1">Clients <span class="bcp14">MUST</span> clearly communicate to users that they are authorizing recurring charges. User interfaces <span class="bcp14">SHOULD</span>:<a href="#section-7.1-1" class="pilcrow">¶</a></p>
+<p id="section-7.1-1">Clients <span class="bcp14">MUST</span> clearly communicate to users that they are authorizing
+recurring charges. User interfaces <span class="bcp14">SHOULD</span>:<a href="#section-7.1-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-7.1-2.1">Display the amount per period prominently<a href="#section-7.1-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-7.1-2.1">
+            <p id="section-7.1-2.1.1">Display the amount per period prominently<a href="#section-7.1-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.1-2.2">Show the total commitment if cycles are limited<a href="#section-7.1-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.1-2.2">
+            <p id="section-7.1-2.2.1">Show the total commitment if cycles are limited<a href="#section-7.1-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.1-2.3">Indicate when the subscription expires (or if it's perpetual)<a href="#section-7.1-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.1-2.3">
+            <p id="section-7.1-2.3.1">Indicate when the subscription expires (or if it's perpetual)<a href="#section-7.1-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -1961,11 +1993,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-7.2-1">Clients <span class="bcp14">MUST</span> verify:<a href="#section-7.2-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-7.2-2.1">The amount per period is acceptable<a href="#section-7.2-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-7.2-2.1">
+            <p id="section-7.2-2.1.1">The amount per period is acceptable<a href="#section-7.2-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.2-2.2">The billing period matches expectations<a href="#section-7.2-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.2-2.2">
+            <p id="section-7.2-2.2.1">The billing period matches expectations<a href="#section-7.2-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.2-2.3">The total commitment is understood<a href="#section-7.2-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.2-2.3">
+            <p id="section-7.2-2.3.1">The total commitment is understood<a href="#section-7.2-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -1977,11 +2012,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-7.3-1">Payers <span class="bcp14">MUST</span> have clear cancellation mechanisms. Servers <span class="bcp14">MUST</span>:<a href="#section-7.3-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-7.3-2.1">Provide documentation on how to cancel<a href="#section-7.3-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-7.3-2.1">
+            <p id="section-7.3-2.1.1">Provide documentation on how to cancel<a href="#section-7.3-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.3-2.2">Honor cancellation requests promptly<a href="#section-7.3-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.3-2.2">
+            <p id="section-7.3-2.2.1">Honor cancellation requests promptly<a href="#section-7.3-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.3-2.3">Not impose unreasonable cancellation barriers<a href="#section-7.3-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.3-2.3">
+            <p id="section-7.3-2.3.1">Not impose unreasonable cancellation barriers<a href="#section-7.3-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -1993,11 +2031,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-7.4-1">Servers <span class="bcp14">SHOULD</span> define clear policies for failed payments:<a href="#section-7.4-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-7.4-2.1">Number of retry attempts<a href="#section-7.4-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-7.4-2.1">
+            <p id="section-7.4-2.1.1">Number of retry attempts<a href="#section-7.4-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.4-2.2">Grace period before service suspension<a href="#section-7.4-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.4-2.2">
+            <p id="section-7.4-2.2.1">Grace period before service suspension<a href="#section-7.4-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.4-2.3">Notification to payer<a href="#section-7.4-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.4-2.3">
+            <p id="section-7.4-2.3.1">Notification to payer<a href="#section-7.4-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2009,11 +2050,14 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         </h3>
 <p id="section-7.5-1">If a server intends to change subscription pricing:<a href="#section-7.5-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-7.5-2.1">Existing subscriptions <span class="bcp14">SHOULD</span> continue at original price<a href="#section-7.5-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-7.5-2.1">
+            <p id="section-7.5-2.1.1">Existing subscriptions <span class="bcp14">SHOULD</span> continue at original price<a href="#section-7.5-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.5-2.2">Price increases require new authorization<a href="#section-7.5-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.5-2.2">
+            <p id="section-7.5-2.2.1">Price increases require new authorization<a href="#section-7.5-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-7.5-2.3">Payers <span class="bcp14">MUST</span> be notified of upcoming changes<a href="#section-7.5-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-7.5-2.3">
+            <p id="section-7.5-2.3.1">Payers <span class="bcp14">MUST</span> be notified of upcoming changes<a href="#section-7.5-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2030,7 +2074,8 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
         <h3 id="name-payment-intent-registration">
 <a href="#section-8.1" class="section-number selfRef">8.1. </a><a href="#name-payment-intent-registration" class="section-name selfRef">Payment Intent Registration</a>
         </h3>
-<p id="section-8.1-1">This document registers the "subscription" intent in the "HTTP Payment Intents" registry established by <span>[<a href="#i-d-httpauth-payment" class="cite xref">i-d-httpauth-payment</a>]</span>:<a href="#section-8.1-1" class="pilcrow">¶</a></p>
+<p id="section-8.1-1">This document registers the "subscription" intent in the "HTTP Payment
+Intents" registry established by <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>:<a href="#section-8.1-1" class="pilcrow">¶</a></p>
 <table class="center" id="table-9">
           <caption><a href="#table-9" class="selfRef">Table 9</a></caption>
 <thead>
@@ -2054,37 +2099,43 @@ a periodic basis.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
 </div>
 </section>
 </div>
+<div id="sec-normative-references">
 <section id="section-9">
-      <h2 id="name-references">
-<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-references" class="section-name selfRef">References</a>
+      <h2 id="name-normative-references">
+<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
       </h2>
-<section id="section-9.1">
-        <h3 id="name-normative-references">
-<a href="#section-9.1" class="section-number selfRef">9.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
-        </h3>
 <dl class="references">
+<dt id="PAYMENT-AUTH">[PAYMENT-AUTH]</dt>
+      <dd>
+<span class="refAuthor">Moxey, J.</span>, <span class="refTitle">"The "Payment" HTTP Authentication Scheme"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-httpauth-payment-00</span>, <time datetime="2025" class="refDate">2025</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/draft-httpauth-payment/">https://datatracker.ietf.org/doc/draft-httpauth-payment/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
 <dt id="RFC2119">[RFC2119]</dt>
-        <dd>
+      <dd>
 <span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
 <dd class="break"></dd>
 <dt id="RFC8174">[RFC8174]</dt>
-        <dd>
+    <dd>
 <span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc8174">https://www.rfc-editor.org/info/rfc8174</a>&gt;</span>. </dd>
-<dd class="break"></dd>
-<dt id="i-d-httpauth-payment">[i-d-httpauth-payment]</dt>
-      <dd>
-<span class="refAuthor">J., M.</span>, <span class="refTitle">"The 'Payment' HTTP Authentication Scheme"</span>. </dd>
 <dd class="break"></dd>
 </dl>
 </section>
-</section>
-<div id="authors-addresses">
+</div>
+<div id="acknowledgements">
 <section id="appendix-A">
+      <h2 id="name-acknowledgements">
+<a href="#appendix-A" class="section-number selfRef">Appendix A. </a><a href="#name-acknowledgements" class="section-name selfRef">Acknowledgements</a>
+      </h2>
+<p id="appendix-A-1">TBD<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-B">
       <h2 id="name-authors-address">
 <a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
       </h2>
 <address class="vcard">
         <div dir="auto" class="left"><span class="fn nameRole">Jake Moxey</span></div>
+<div dir="auto" class="left"><span class="org">Tempo Labs</span></div>
 <div class="email">
 <span>Email:</span>
 <a href="mailto:jake@tempo.xyz" class="email">jake@tempo.xyz</a>

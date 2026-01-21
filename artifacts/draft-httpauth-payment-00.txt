@@ -3,8 +3,8 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                           21 January 2026
-Intended status: Standards Track                                        
+Internet-Draft                                                Tempo Labs
+Intended status: Standards Track                         21 January 2026
 Expires: 25 July 2026
 
 
@@ -121,7 +121,7 @@ Table of Contents
      B.3.  Payment with Reusable Authorization
      B.4.  Multiple Payment Options
      B.5.  Failed Payment Verification
-   Acknowledgements
+   Appendix C.  Acknowledgements
    Author's Address
 
 1.  Introduction
@@ -149,8 +149,8 @@ Table of Contents
 
    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
    "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-   "OPTIONAL" in this document are to be interpreted as described in BCP
-   14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
 3.  Terminology
@@ -178,28 +178,28 @@ Table of Contents
 4.1.  Request Flow
 
       Client                                            Server
-         │                                                 │
-         │  (1) GET /resource                              │
-         ├────────────────────────────────────────────────>│
-         │                                                 │
-         │  (2) 402 Payment Required                       │
-         │      WWW-Authenticate: Payment id="..",         │
-         │        method="..", intent="..", request=".."   │
-         │<────────────────────────────────────────────────┤
-         │                                                 │
-         │  (3) Client fulfills payment challenge          │
-         │      (signs transaction, pays invoice, etc.)    │
-         │                                                 │
-         │  (4) GET /resource                              │
-         │      Authorization: Payment <credential>        │
-         ├────────────────────────────────────────────────>│
-         │                                                 │
-         │  (5) Server verifies and settles                │
-         │                                                 │
-         │  (6) 200 OK                                     │
-         │      Payment-Receipt: <receipt>                 │
-         │<────────────────────────────────────────────────┤
-         │                                                 │
+         |                                                 |
+         |  (1) GET /resource                              |
+         |------------------------------------------------>|
+         |                                                 |
+         |  (2) 402 Payment Required                       |
+         |      WWW-Authenticate: Payment id="..",         |
+         |        method="..", intent="..", request=".."   |
+         |<------------------------------------------------|
+         |                                                 |
+         |  (3) Client fulfills payment challenge          |
+         |      (signs transaction, pays invoice, etc.)    |
+         |                                                 |
+         |  (4) GET /resource                              |
+         |      Authorization: Payment <credential>        |
+         |------------------------------------------------>|
+         |                                                 |
+         |  (5) Server verifies and settles                |
+         |                                                 |
+         |  (6) 200 OK                                     |
+         |      Payment-Receipt: <receipt>                 |
+         |<------------------------------------------------|
+         |                                                 |
 
 4.2.  Status Codes
 
@@ -324,7 +324,7 @@ Table of Contents
         |         |        |          | (must match challenge id) |
         +---------+--------+----------+---------------------------+
         | source  | string | No       | Payer identifier as a DID |
-        |         |        |          | [w3c-did]                 |
+        |         |        |          | [W3C-DID]                 |
         +---------+--------+----------+---------------------------+
         | payload | object | Yes      | Method-specific payment   |
         |         |        |          | proof                     |
@@ -401,7 +401,7 @@ Table of Contents
 
                                   Table 4
 
-   Example:
+   *Example:*
 
    HTTP/1.1 200 OK
    Content-Type: application/json
@@ -829,10 +829,10 @@ Table of Contents
 
 13.2.  Informative References
 
-   [w3c-did]  W3C, "Decentralized Identifiers (DIDs) v1.0",
+   [W3C-DID]  W3C, "Decentralized Identifiers (DIDs) v1.0", 2022,
               <https://www.w3.org/TR/did-core/>.
 
-   [w3c-pmi]  W3C, "Payment Method Identifiers",
+   [W3C-PMI]  W3C, "Payment Method Identifiers", 2021,
               <https://www.w3.org/TR/payment-method-id/>.
 
 Appendix A.  ABNF Collected
@@ -870,27 +870,27 @@ B.1.  One-Time Charge
    the payment, and receives the resource with a receipt.
 
    Client                                 Server
-      │                                      │
-      │  (1) GET /resource                   │
-      ├─────────────────────────────────────>│
-      │                                      │
-      │  (2) 402 Payment Required            │
-      │      WWW-Authenticate: Payment ...   │
-      │<─────────────────────────────────────┤
-      │                                      │
-      │  (3) Fulfill payment challenge       │
-      │      (method-specific)               │
-      │                                      │
-      │  (4) GET /resource                   │
-      │      Authorization: Payment ...      │
-      ├─────────────────────────────────────>│
-      │                                      │
-      │  (5) 200 OK                          │
-      │      Payment-Receipt: ...            │
-      │<─────────────────────────────────────┤
-      │                                      │
+      |                                      |
+      |  (1) GET /resource                   |
+      |------------------------------------->|
+      |                                      |
+      |  (2) 402 Payment Required            |
+      |      WWW-Authenticate: Payment ...   |
+      |<-------------------------------------|
+      |                                      |
+      |  (3) Fulfill payment challenge       |
+      |      (method-specific)               |
+      |                                      |
+      |  (4) GET /resource                   |
+      |      Authorization: Payment ...      |
+      |------------------------------------->|
+      |                                      |
+      |  (5) 200 OK                          |
+      |      Payment-Receipt: ...            |
+      |<-------------------------------------|
+      |                                      |
 
-   Challenge:
+   *Challenge:*
 
    HTTP/1.1 402 Payment Required
    Cache-Control: no-store
@@ -912,7 +912,7 @@ B.1.  One-Time Charge
      "invoice": "inv_12345"
    }
 
-   Credential:
+   *Credential:*
 
    GET /resource HTTP/1.1
    Host: api.example.com
@@ -927,7 +927,7 @@ B.1.  One-Time Charge
      }
    }
 
-   Success:
+   *Success:*
 
    HTTP/1.1 200 OK
    Cache-Control: private
@@ -940,7 +940,7 @@ B.2.  Signed Authorization
 
    A payment method using cryptographic signatures:
 
-   Challenge:
+   *Challenge:*
 
    HTTP/1.1 402 Payment Required
    Cache-Control: no-store
@@ -960,7 +960,7 @@ B.2.  Signed Authorization
      "nonce": "0x1234567890"
    }
 
-   Credential:
+   *Credential:*
 
    {
      "id": "zL4xCvBnM6kJhGfD8sAaWe",
@@ -974,7 +974,7 @@ B.3.  Payment with Reusable Authorization
 
    Server issues an authorization for subsequent requests:
 
-   Success with Authorization:
+   *Success with Authorization:*
 
    HTTP/1.1 200 OK
    Cache-Control: private
@@ -984,7 +984,7 @@ B.3.  Payment with Reusable Authorization
 
    {"data": "..."}
 
-   Subsequent request using cached authorization:
+   *Subsequent request using cached authorization:*
 
    GET /other-resource HTTP/1.1
    Host: api.example.com
@@ -1013,11 +1013,12 @@ B.5.  Failed Payment Verification
    Note the use of 401 (not 402) for failed verification, with a fresh
    challenge for retry.
 
-Acknowledgements
+Appendix C.  Acknowledgements
 
    TBD
 
 Author's Address
 
    Jake Moxey
+   Tempo Labs
    Email: jake@tempo.xyz

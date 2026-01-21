@@ -6,25 +6,27 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SPECS_DIR="$ROOT_DIR/specs"
 OUT_DIR="$ROOT_DIR/artifacts"
 
-# Add Python user bin to PATH for xml2rfc
-export PATH="$HOME/Library/Python/3.9/bin:$PATH"
+# Check for --docker flag
+if [[ "${1:-}" == "--docker" ]]; then
+  docker run --rm -v "$ROOT_DIR":/data ietf-spec-tools /data/scripts/gen.sh
+  exit $?
+fi
 
 mkdir -p "$OUT_DIR"
 
-# Find all draft-*.md files in specs subdirectories
-find "$SPECS_DIR" -name "draft-*.md" | while read -r md; do
+while read -r md; do
   name="$(basename "${md%.md}")"
-  
+
   echo "Generating $name..."
-  
-  # Convert markdown to xml2rfc XML
-  npx md2xml "$md" -o "$OUT_DIR/${name}.xml"
-  
-  # Generate HTML
+
+  if ! kramdown-rfc "$md" > "$OUT_DIR/${name}.xml"; then
+    echo "ERROR: kramdown-rfc failed for $name" >&2
+    exit 1
+  fi
+
   xml2rfc --html --no-pagination "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.html"
-  
-  # Generate plain text
+
   xml2rfc --text --no-pagination "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.txt"
-done
+done < <(find "$SPECS_DIR" -name "draft-*.md")
 
 echo "Done. Output in $OUT_DIR/"

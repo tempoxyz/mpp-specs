@@ -3,8 +3,8 @@
 
 
 Network Working Group                                            B. Ryan
-Internet-Draft                                           21 January 2026
-Intended status: Informational                                          
+Internet-Draft                                                    Stripe
+Intended status: Informational                           21 January 2026
 Expires: 25 July 2026
 
 
@@ -14,11 +14,10 @@ Expires: 25 July 2026
 Abstract
 
    This document defines the "stripe" payment method for use with the
-   Payment HTTP Authentication Scheme [I-D.ietf-httpauth-payment].  It
-   specifies how clients and servers exchange payments using Stripe's
-   payment infrastructure, supporting one-time charges, payment
-   authorizations, and recurring subscriptions through Stripe Payment
-   Tokens (SPTs).
+   Payment HTTP Authentication Scheme [PAYMENT-AUTH].  It specifies how
+   clients and servers exchange payments using Stripe's payment
+   infrastructure, supporting one-time charges, payment authorizations,
+   and recurring subscriptions through Stripe Payment Tokens (SPTs).
 
 Status of This Memo
 
@@ -98,11 +97,13 @@ Table of Contents
      12.2.  Business Network Registry
    13. References
      13.1.  Normative References
+     13.2.  Informative References
    Appendix A.  ABNF Collected
    Appendix B.  Examples
      B.1.  Charge Example (HTTP Transport)
      B.2.  Business Network Example
      B.3.  Subscription Example
+   Appendix C.  Acknowledgements
    Author's Address
 
 1.  Introduction
@@ -110,7 +111,7 @@ Table of Contents
    Stripe is a technology company that builds economic infrastructure
    for the internet.  This specification defines how Stripe's payment
    infrastructure integrates with the Payment HTTP Authentication Scheme
-   [I-D.ietf-httpauth-payment].
+   [PAYMENT-AUTH].
 
    Stripe provides payment processing through Stripe Payment Tokens
    (SPTs), which are single-use tokens that represent payment
@@ -131,43 +132,43 @@ Table of Contents
    The following diagram illustrates the Stripe-specific payment flow:
 
       Client                                            Server
-         │                                                 │
-         │  (1) GET /resource                              │
-         ├────────────────────────────────────────────────>│
-         │                                                 │
-         │  (2) 402 Payment Required                       │
-         │      WWW-Authenticate: Payment method="stripe", │
-         │        intent="charge", request=<base64url>     │
-         │<────────────────────────────────────────────────┤
-         │                                                 │
-         │  (3) Client creates SPT via Stripe.js or API    │
-         │      (may involve 3DS, biometrics, etc.)        │
-         │                                                 │
-         │  (4) GET /resource                              │
-         │      Authorization: Payment <credential>        │
-         ├────────────────────────────────────────────────>│
-         │                                                 │
-         │  (5) Server processes payment via Stripe API    │
-         │      (PaymentIntent, Charge, or Subscription)   │
-         │                                                 │
-         │  (6) 200 OK                                     │
-         │      Payment-Receipt: <receipt with charge_id>  │
-         │<────────────────────────────────────────────────┤
-         │                                                 │
+         |                                                 |
+         |  (1) GET /resource                              |
+         |------------------------------------------------>|
+         |                                                 |
+         |  (2) 402 Payment Required                       |
+         |      WWW-Authenticate: Payment method="stripe", |
+         |        intent="charge", request=<base64url>     |
+         |<------------------------------------------------|
+         |                                                 |
+         |  (3) Client creates SPT via Stripe.js or API    |
+         |      (may involve 3DS, biometrics, etc.)        |
+         |                                                 |
+         |  (4) GET /resource                              |
+         |      Authorization: Payment <credential>        |
+         |------------------------------------------------>|
+         |                                                 |
+         |  (5) Server processes payment via Stripe API    |
+         |      (PaymentIntent, Charge, or Subscription)   |
+         |                                                 |
+         |  (6) 200 OK                                     |
+         |      Payment-Receipt: <receipt with charge_id>  |
+         |<------------------------------------------------|
+         |                                                 |
 
 1.2.  Relationship to the Payment Scheme
 
    This document is a payment method specification as defined in
-   Section 10.1 of [I-D.ietf-httpauth-payment].  It defines the request
-   and payload structures for the stripe payment method, along with
-   verification and settlement procedures.
+   Section 10.1 of [PAYMENT-AUTH].  It defines the request and payload
+   structures for the stripe payment method, along with verification and
+   settlement procedures.
 
 2.  Requirements Language
 
    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
    "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-   "OPTIONAL" in this document are to be interpreted as described in BCP
-   14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
 3.  Terminology
@@ -208,20 +209,18 @@ Table of Contents
 
    This specification defines three payment intents for use with the
    stripe payment method.  These intents are registered in the Payment
-   Intent Registry per Section 13.4 of [I-D.ietf-httpauth-payment].
+   Intent Registry per Section 13.4 of [PAYMENT-AUTH].
 
 5.1.  Intent: "charge"
 
    A one-time payment of the specified amount.  The server may process
    the payment immediately upon receiving the SPT.
 
-   Fulfillment mechanism:
+   *Fulfillment mechanism:*
 
    1.  *Stripe Payment Token (SPT)*: The payer creates an SPT using
-       Stripe.js
-
-   or the Stripe API, which the server uses to create a Charge or
-   PaymentIntent via the Stripe API.
+       Stripe.js or the Stripe API, which the server uses to create a
+       Charge or PaymentIntent via the Stripe API.
 
 5.2.  Intent: "authorize"
 
@@ -229,28 +228,26 @@ Table of Contents
    server permission to charge up to the specified amount at a later
    time.
 
-   Required parameters:
+   *Required parameters:*
 
    *  Maximum amount (spending limit)
 
    *  Optional: Expiry timestamp
 
-   Fulfillment mechanism:
+   *Fulfillment mechanism:*
 
    1.  *Stripe Payment Token with Authorization*: The payer creates an
-       SPT,
-
-   which the server uses to create a PaymentIntent with
-   capture_method=manual.  The server can capture the authorized funds
-   within 7 days (for cards) or according to the payment method's
-   authorization window.
+       SPT, which the server uses to create a PaymentIntent with
+       capture_method=manual.  The server can capture the authorized
+       funds within 7 days (for cards) or according to the payment
+       method's authorization window.
 
 5.3.  Intent: "subscription"
 
    A recurring payment authorization.  The payer grants the server
    permission to charge a specified amount on a recurring basis.
 
-   Required parameters:
+   *Required parameters:*
 
    *  Period duration (day, week, month, year)
 
@@ -258,14 +255,13 @@ Table of Contents
 
    *  Optional: Expiry timestamp or number of billing cycles
 
-   Fulfillment mechanism:
+   *Fulfillment mechanism:*
 
    1.  *Stripe Setup Intent*: The payer completes a SetupIntent,
-       providing
-
-   a payment method that can be charged on a recurring basis.  The
-   server creates a Stripe Subscription that automatically charges the
-   payment method according to the specified schedule.
+       providing a payment method that can be charged on a recurring
+       basis.  The server creates a Stripe Subscription that
+       automatically charges the payment method according to the
+       specified schedule.
 
 6.  Request Schema
 
@@ -310,7 +306,7 @@ Table of Contents
 
                                   Table 1
 
-   Example:
+   *Example:*
 
    {
      "amount": 5000,
@@ -363,7 +359,7 @@ Table of Contents
 
                                   Table 2
 
-   Example:
+   *Example:*
 
    {
      "amount": 100000,
@@ -421,7 +417,7 @@ Table of Contents
 
                                   Table 3
 
-   Example:
+   *Example:*
 
    {
      "amount": 9900,
@@ -461,7 +457,7 @@ Table of Contents
 
                                  Table 4
 
-   Example:
+   *Example:*
 
    {
      "spt": "spt_1N4Zv32eZvKYlo2CPhVPkJlW",
@@ -482,7 +478,7 @@ Table of Contents
 
                                  Table 5
 
-   Example:
+   *Example:*
 
    {
      "spt": "spt_1N4Zv32eZvKYlo2CPhVPkJlW"
@@ -506,7 +502,7 @@ Table of Contents
 
                                  Table 6
 
-   Example:
+   *Example:*
 
    {
      "setupIntentId": "seti_1N4Zv32eZvKYlo2CPhVPkJlW",
@@ -568,7 +564,7 @@ Table of Contents
 
 9.1.  Charge Settlement
 
-   Synchronous settlement:
+   *Synchronous settlement:*
 
    1.  Server receives and verifies the credential (Section 8.1)
 
@@ -593,7 +589,7 @@ Table of Contents
 
    2.  If failed, server returns 401 with new challenge
 
-   Settlement timing:
+   *Settlement timing:*
 
    Stripe processes payments asynchronously.  Card payments typically
    settle within seconds, but bank transfers may take several business
@@ -602,7 +598,7 @@ Table of Contents
 
 9.2.  Authorize Settlement
 
-   Deferred settlement:
+   *Deferred settlement:*
 
    1.  Server receives and verifies the credential (Section 8.2)
 
@@ -634,7 +630,7 @@ Table of Contents
      { amount_to_capture: actualAmount }
    );
 
-   Authorization window:
+   *Authorization window:*
 
    *  Cards: 7 days
 
@@ -642,7 +638,7 @@ Table of Contents
 
 9.3.  Subscription Settlement
 
-   Recurring settlement:
+   *Recurring settlement:*
 
    1.  Server receives and verifies the credential (Section 8.3)
 
@@ -674,15 +670,12 @@ Table of Contents
    2.  Stripe automatically charges the payment method on each billing
        cycle
 
-   Subscription lifecycle:
+   *Subscription lifecycle:*
 
-   Servers MUST handle subscription events via webhooks:
-
-   *  invoice.payment_succeeded: Billing cycle completed successfully
-
-   *  invoice.payment_failed: Billing cycle payment failed
-
-   *  customer.subscription.deleted: Subscription cancelled
+   Servers MUST handle subscription events via webhooks: -
+   invoice.payment_succeeded: Billing cycle completed successfully -
+   invoice.payment_failed: Billing cycle payment failed -
+   customer.subscription.deleted: Subscription cancelled
 
 9.4.  Business Network Settlement
 
@@ -706,13 +699,9 @@ Table of Contents
      }
    });
 
-   Business Networks enable:
-
-   *  Automatic routing between network participants
-
-   *  Consolidated reporting and reconciliation
-
-   *  Network-specific terms and pricing
+   Business Networks enable: - Automatic routing between network
+   participants - Consolidated reporting and reconciliation - Network-
+   specific terms and pricing
 
 10.  Internationalization Considerations
 
@@ -723,14 +712,10 @@ Table of Contents
 
 10.2.  Payment Method Localization
 
-   SPTs abstract payment method details, but servers SHOULD consider:
-
-   *  Regional payment method preferences (e.g., SEPA in Europe, ACH in
-      US)
-
-   *  Currency conversion for cross-border payments
-
-   *  Local regulatory requirements
+   SPTs abstract payment method details, but servers SHOULD consider: -
+   Regional payment method preferences (e.g., SEPA in Europe, ACH in US)
+   - Currency conversion for cross-border payments - Local regulatory
+   requirements
 
 10.3.  Description Localization
 
@@ -754,7 +739,7 @@ Table of Contents
    expectation before creating an SPT.  The SPT itself does not encode
    the amount, so clients must trust the challenge parameters.
 
-   Verification checklist:
+   *Verification checklist:*
 
    1.  Verify the amount matches the expected cost
 
@@ -768,14 +753,10 @@ Table of Contents
 
 11.3.  Business Network Authorization
 
-   When using Business Networks, clients SHOULD verify:
-
-   *  The businessNetwork ID is expected
-
-   *  The destination account (if specified) is authorized to receive
-      payment
-
-   *  The payment terms are acceptable
+   When using Business Networks, clients SHOULD verify: - The
+   businessNetwork ID is expected - The destination account (if
+   specified) is authorized to receive payment - The payment terms are
+   acceptable
 
 11.4.  PCI DSS Compliance
 
@@ -808,12 +789,11 @@ Table of Contents
 12.1.  Payment Method Registration
 
    This specification registers the "stripe" payment method in the
-   Payment Method Registry per Section 13.2 of [I-D.ietf-httpauth-
-   payment]:
+   Payment Method Registry per Section 13.2 of [PAYMENT-AUTH]:
 
    *  *Method ID*: stripe
 
-   *  *Specification*: [this document]
+   *  *Specification*: This document
 
    *  *Intents*: charge, authorize, subscription
 
@@ -827,19 +807,31 @@ Table of Contents
 
 13.1.  Normative References
 
-   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
-              Requirement Levels", BCP 14, RFC 2119,
-              DOI 10.17487/RFC2119, March 1997,
-              <https://www.rfc-editor.org/info/rfc2119>.
-
    [RFC7235]  Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer
               Protocol (HTTP/1.1): Authentication", RFC 7235,
               DOI 10.17487/RFC7235, June 2014,
               <https://www.rfc-editor.org/info/rfc7235>.
 
+   [PAYMENT-AUTH]
+              Moxey, J., "The "Payment" HTTP Authentication Scheme",
+              Work in Progress, Internet-Draft, draft-httpauth-payment-
+              00, 2025, <https://datatracker.ietf.org/doc/draft-
+              httpauth-payment/>.
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
    [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/info/rfc8174>.
+
+13.2.  Informative References
+
+   [STRIPE-API]
+              Stripe, Inc., "Stripe API Reference", 2025,
+              <https://stripe.com/docs/api>.
 
 Appendix A.  ABNF Collected
 
@@ -858,12 +850,12 @@ Appendix B.  Examples
 
 B.1.  Charge Example (HTTP Transport)
 
-   Step 1: Client requests resource
+   *Step 1: Client requests resource*
 
    GET /api/generate HTTP/1.1
    Host: api.example.com
 
-   Step 2: Server issues payment challenge
+   *Step 2: Server issues payment challenge*
 
    HTTP/1.1 402 Payment Required
    WWW-Authenticate: Payment id="ch_1a2b3c4d5e",
@@ -887,7 +879,7 @@ B.1.  Charge Example (HTTP Transport)
      "description": "AI generation"
    }
 
-   Step 3: Client creates SPT and submits credential
+   *Step 3: Client creates SPT and submits credential*
 
    GET /api/generate HTTP/1.1
    Host: api.example.com
@@ -906,7 +898,7 @@ B.1.  Charge Example (HTTP Transport)
      "spt": "spt_1N4Zv32eZvKYlo2CPhVPkJlW"
    }
 
-   Step 4: Server processes payment and returns resource
+   *Step 4: Server processes payment and returns resource*
 
    HTTP/1.1 200 OK
    Payment-Receipt: eyJ0eXBlIjoiY2hhcmdlIiwiY2hhcmdlSWQiOiJjaF8xTjRadjMyZVp2S1lsbzJDUGhWUGtKbFciLCJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwic3RhdHVzIjoic3VjY2VlZGVkIn0
@@ -926,7 +918,7 @@ B.1.  Charge Example (HTTP Transport)
 
 B.2.  Business Network Example
 
-   Payment challenge:
+   *Payment challenge:*
 
    HTTP/1.1 402 Payment Required
    WWW-Authenticate: Payment id="ch_b2b_payment",
@@ -950,7 +942,7 @@ B.2.  Business Network Example
 
 B.3.  Subscription Example
 
-   Payment challenge:
+   *Payment challenge:*
 
    HTTP/1.1 402 Payment Required
    WWW-Authenticate: Payment id="sub_setup_123",
@@ -968,7 +960,7 @@ B.3.  Subscription Example
      "description": "Premium API subscription"
    }
 
-   Client response with Setup Intent:
+   *Client response with Setup Intent:*
 
    GET /api/subscribe HTTP/1.1
    Host: saas.example.com
@@ -981,7 +973,12 @@ B.3.  Subscription Example
      "paymentMethodId": "pm_1N4Zv32eZvKYlo2CaBcDefGh"
    }
 
+Appendix C.  Acknowledgements
+
+   TBD
+
 Author's Address
 
    Brendan Ryan
+   Stripe
    Email: brendanryan@stripe.com

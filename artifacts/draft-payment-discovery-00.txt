@@ -3,8 +3,8 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                           21 January 2026
-Intended status: Informational                                          
+Internet-Draft                                                Tempo Labs
+Intended status: Informational                           21 January 2026
 Expires: 25 July 2026
 
 
@@ -14,10 +14,9 @@ Expires: 25 July 2026
 Abstract
 
    This document defines discovery mechanisms for the "Payment" HTTP
-   authentication scheme [i-d-httpauth-payment].  It specifies how
-   clients can discover a server's payment capabilities before
-   initiating requests, including supported payment methods, assets, and
-   intents.
+   authentication scheme [PAYMENT-AUTH].  It specifies how clients can
+   discover a server's payment capabilities before initiating requests,
+   including supported payment methods, assets, and intents.
 
 Status of This Memo
 
@@ -71,26 +70,24 @@ Table of Contents
      5.4.  Information Disclosure
    6.  IANA Considerations
      6.1.  Well-Known URI Registration
-   7.  References
-     7.1.  Normative References
+   7.  Normative References
+   Appendix A.  Acknowledgements
    Author's Address
 
 1.  Introduction
 
-   The "Payment" HTTP authentication scheme [i-d-httpauth-payment]
-   enables servers to require payment for resource access.  While the
-   402 response with WWW-Authenticate: Payment header provides all
+   The "Payment" HTTP authentication scheme [PAYMENT-AUTH] enables
+   servers to require payment for resource access.  While the 402
+   response with WWW-Authenticate: Payment header provides all
    information needed to complete a payment, clients may benefit from
    discovering payment capabilities before making requests.
 
    This specification defines two optional discovery mechanisms:
 
    1.  *Well-Known Endpoint*: An HTTP endpoint returning structured
-       payment
+       payment capability information
 
-   capability information
-
-   1.  *DNS Discovery*: DNS TXT records advertising payment support
+   2.  *DNS Discovery*: DNS TXT records advertising payment support
 
    Discovery is OPTIONAL.  Servers MAY implement these mechanisms to
    improve client experience.  Clients MUST NOT require discovery to
@@ -100,8 +97,8 @@ Table of Contents
 
    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
    "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-   "OPTIONAL" in this document are to be interpreted as described in BCP
-   14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
 3.  Well-Known Endpoint
@@ -126,7 +123,7 @@ Table of Contents
    The server responds with a JSON object describing its payment
    capabilities.  The response MUST use Content-Type: application/json.
 
-   Response Schema:
+   *Response Schema:*
 
      +=========+=========+==========+===============================+
      | Field   | Type    | Required | Description                   |
@@ -142,7 +139,7 @@ Table of Contents
 
                                  Table 1
 
-   Method Object Schema:
+   *Method Object Schema:*
 
    Each key in methods is a registered payment method identifier.  The
    value is an object with:
@@ -158,7 +155,7 @@ Table of Contents
 
                                   Table 2
 
-   Example Response:
+   *Example Response:*
 
    HTTP/1.1 200 OK
    Content-Type: application/json
@@ -200,7 +197,7 @@ Table of Contents
 
    _payment.<domain>. TXT "v=payment1; methods=<method-list>"
 
-   Parameters:
+   *Parameters:*
 
      +===========+==========+========================================+
      | Parameter | Required | Description                            |
@@ -213,7 +210,7 @@ Table of Contents
 
                                   Table 3
 
-   Example:
+   *Example:*
 
    _payment.api.example.com. TXT "v=payment1; methods=tempo,lightning"
 
@@ -270,9 +267,17 @@ Table of Contents
 
    *  *Related Information*: None
 
-7.  References
+7.  Normative References
 
-7.1.  Normative References
+   [RFC8615]  Nottingham, M., "Well-Known Uniform Resource Identifiers
+              (URIs)", RFC 8615, DOI 10.17487/RFC8615, May 2019,
+              <https://www.rfc-editor.org/info/rfc8615>.
+
+   [PAYMENT-AUTH]
+              Moxey, J., "The "Payment" HTTP Authentication Scheme",
+              Work in Progress, Internet-Draft, draft-httpauth-payment-
+              00, 2025, <https://datatracker.ietf.org/doc/draft-
+              httpauth-payment/>.
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -283,14 +288,12 @@ Table of Contents
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/info/rfc8174>.
 
-   [RFC8615]  Nottingham, M., "Well-Known Uniform Resource Identifiers
-              (URIs)", RFC 8615, DOI 10.17487/RFC8615, May 2019,
-              <https://www.rfc-editor.org/info/rfc8615>.
+Appendix A.  Acknowledgements
 
-   [i-d-httpauth-payment]
-              J., M., "The 'Payment' HTTP Authentication Scheme".
+   TBD
 
 Author's Address
 
    Jake Moxey
+   Tempo Labs
    Email: jake@tempo.xyz

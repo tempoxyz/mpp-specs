@@ -8,7 +8,7 @@
 <meta content="Brendan Ryan" name="author">
 <meta content="
        This document defines the &quot;stripe&quot; payment method for use with the Payment
-HTTP Authentication Scheme [I-D.ietf-httpauth-payment]. It specifies how
+HTTP Authentication Scheme  . It specifies how
 clients and servers exchange payments using Stripe's payment infrastructure,
 supporting one-time charges, payment authorizations, and recurring subscriptions
 through Stripe Payment Tokens (SPTs). 
@@ -17,7 +17,7 @@ through Stripe Payment Tokens (SPTs).
 <meta content="draft-stripe-payment-method-00" name="ietf.draft">
 <!-- Generator version information:
   xml2rfc 3.31.0
-    Python 3.14.2
+    Python 3.13.5
     ConfigArgParse 1.7.1
     google-i18n-address 3.1.1
     intervaltree 3.2.1
@@ -1217,7 +1217,7 @@ li > p:last-of-type:only-child {
 <table class="ears">
 <thead><tr>
 <td class="left">Internet-Draft</td>
-<td class="center">Stripe Payment Method for HTTP Payment A</td>
+<td class="center">Stripe Payment Method</td>
 <td class="right">January 2026</td>
 </tr></thead>
 <tfoot><tr>
@@ -1245,6 +1245,7 @@ li > p:last-of-type:only-child {
 <dd class="authors">
 <div class="author">
       <div class="author-name">B. Ryan</div>
+<div class="org">Stripe</div>
 </div>
 </dd>
 </dl>
@@ -1253,7 +1254,7 @@ li > p:last-of-type:only-child {
 <section id="section-abstract">
       <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
 <p id="section-abstract-1">This document defines the "stripe" payment method for use with the Payment
-HTTP Authentication Scheme [I-D.ietf-httpauth-payment]. It specifies how
+HTTP Authentication Scheme <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>. It specifies how
 clients and servers exchange payments using Stripe's payment infrastructure,
 supporting one-time charges, payment authorizations, and recurring subscriptions
 through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcrow">¶</a></p>
@@ -1459,6 +1460,9 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
 <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.1">
                 <p id="section-toc.1-1.13.2.1.1"><a href="#section-13.1" class="auto internal xref">13.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
 </li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.2">
+                <p id="section-toc.1-1.13.2.2.1"><a href="#section-13.2" class="auto internal xref">13.2</a>.  <a href="#name-informative-references" class="internal xref">Informative References</a></p>
+</li>
             </ul>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14">
@@ -1479,7 +1483,10 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
             </ul>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.16">
-            <p id="section-toc.1-1.16.1"><a href="#appendix-C" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
+            <p id="section-toc.1-1.16.1"><a href="#appendix-C" class="auto internal xref">Appendix C</a>.  <a href="#name-acknowledgements" class="internal xref">Acknowledgements</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.17">
+            <p id="section-toc.1-1.17.1"><a href="#appendix-D" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
 </li>
         </ul>
 </nav>
@@ -1490,18 +1497,24 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
       <h2 id="name-introduction">
 <a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
       </h2>
-<p id="section-1-1">Stripe is a technology company that builds economic infrastructure for the internet. This specification defines how Stripe's payment infrastructure integrates with the Payment HTTP Authentication Scheme [I-D.ietf-httpauth-payment].<a href="#section-1-1" class="pilcrow">¶</a></p>
-<p id="section-1-2">Stripe provides payment processing through Stripe Payment Tokens (SPTs), which are single-use tokens that represent payment authorization. SPTs abstract away the complexity of payment method details (cards, bank accounts, wallets) and provide a unified interface for payment acceptance.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-1">Stripe is a technology company that builds economic infrastructure for the
+internet. This specification defines how Stripe's payment infrastructure
+integrates with the Payment HTTP Authentication Scheme
+<span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">Stripe provides payment processing through Stripe Payment Tokens (SPTs),
+which are single-use tokens that represent payment authorization. SPTs
+abstract away the complexity of payment method details (cards, bank accounts,
+wallets) and provide a unified interface for payment acceptance.<a href="#section-1-2" class="pilcrow">¶</a></p>
 <p id="section-1-3">This specification supports three payment intents:<a href="#section-1-3" class="pilcrow">¶</a></p>
 <ul class="normal">
 <li class="normal" id="section-1-4.1">
-          <strong>charge</strong>: One-time payment via Stripe Payment Token<a href="#section-1-4.1" class="pilcrow">¶</a>
+          <p id="section-1-4.1.1"><strong>charge</strong>: One-time payment via Stripe Payment Token<a href="#section-1-4.1.1" class="pilcrow">¶</a></p>
 </li>
         <li class="normal" id="section-1-4.2">
-          <strong>authorize</strong>: Payment authorization for future capture<a href="#section-1-4.2" class="pilcrow">¶</a>
+          <p id="section-1-4.2.1"><strong>authorize</strong>: Payment authorization for future capture<a href="#section-1-4.2.1" class="pilcrow">¶</a></p>
 </li>
         <li class="normal" id="section-1-4.3">
-          <strong>subscription</strong>: Recurring payment authorization<a href="#section-1-4.3" class="pilcrow">¶</a>
+          <p id="section-1-4.3.1"><strong>subscription</strong>: Recurring payment authorization<a href="#section-1-4.3.1" class="pilcrow">¶</a></p>
 </li>
       </ul>
 <div id="stripe-payment-flow">
@@ -1510,32 +1523,32 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
 <a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-stripe-payment-flow" class="section-name selfRef">Stripe Payment Flow</a>
         </h3>
 <p id="section-1.1-1">The following diagram illustrates the Stripe-specific payment flow:<a href="#section-1.1-1" class="pilcrow">¶</a></p>
-<div class="alignLeft art-ascii-art art-text artwork" id="section-1.1-2">
+<div class="alignLeft art-text artwork" id="section-1.1-2">
 <pre>
    Client                                            Server
-      │                                                 │
-      │  (1) GET /resource                              │
-      ├────────────────────────────────────────────────&gt;│
-      │                                                 │
-      │  (2) 402 Payment Required                       │
-      │      WWW-Authenticate: Payment method="stripe", │
-      │        intent="charge", request=&lt;base64url&gt;     │
-      │&lt;────────────────────────────────────────────────┤
-      │                                                 │
-      │  (3) Client creates SPT via Stripe.js or API    │
-      │      (may involve 3DS, biometrics, etc.)        │
-      │                                                 │
-      │  (4) GET /resource                              │
-      │      Authorization: Payment &lt;credential&gt;        │
-      ├────────────────────────────────────────────────&gt;│
-      │                                                 │
-      │  (5) Server processes payment via Stripe API    │
-      │      (PaymentIntent, Charge, or Subscription)   │
-      │                                                 │
-      │  (6) 200 OK                                     │
-      │      Payment-Receipt: &lt;receipt with charge_id&gt;  │
-      │&lt;────────────────────────────────────────────────┤
-      │                                                 │
+      |                                                 |
+      |  (1) GET /resource                              |
+      |------------------------------------------------&gt;|
+      |                                                 |
+      |  (2) 402 Payment Required                       |
+      |      WWW-Authenticate: Payment method="stripe", |
+      |        intent="charge", request=&lt;base64url&gt;     |
+      |&lt;------------------------------------------------|
+      |                                                 |
+      |  (3) Client creates SPT via Stripe.js or API    |
+      |      (may involve 3DS, biometrics, etc.)        |
+      |                                                 |
+      |  (4) GET /resource                              |
+      |      Authorization: Payment &lt;credential&gt;        |
+      |------------------------------------------------&gt;|
+      |                                                 |
+      |  (5) Server processes payment via Stripe API    |
+      |      (PaymentIntent, Charge, or Subscription)   |
+      |                                                 |
+      |  (6) 200 OK                                     |
+      |      Payment-Receipt: &lt;receipt with charge_id&gt;  |
+      |&lt;------------------------------------------------|
+      |                                                 |
 </pre><a href="#section-1.1-2" class="pilcrow">¶</a>
 </div>
 </section>
@@ -1545,7 +1558,10 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
         <h3 id="name-relationship-to-the-payment">
 <a href="#section-1.2" class="section-number selfRef">1.2. </a><a href="#name-relationship-to-the-payment" class="section-name selfRef">Relationship to the Payment Scheme</a>
         </h3>
-<p id="section-1.2-1">This document is a payment method specification as defined in Section 10.1 of [I-D.ietf-httpauth-payment]. It defines the <code>request</code> and <code>payload</code> structures for the <code>stripe</code> payment method, along with verification and settlement procedures.<a href="#section-1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.2-1">This document is a payment method specification as defined in Section 10.1
+of <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>. It defines the <code>request</code> and <code>payload</code>
+structures for the <code>stripe</code> payment method, along with verification and
+settlement procedures.<a href="#section-1.2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -1555,7 +1571,10 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
       <h2 id="name-requirements-language">
 <a href="#section-2" class="section-number selfRef">2. </a><a href="#name-requirements-language" class="section-name selfRef">Requirements Language</a>
       </h2>
-<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>", "<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>",
+"<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as
+described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they
+appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="terminology">
@@ -1566,27 +1585,35 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
 <span class="break"></span><dl class="dlParallel" id="section-3-1">
         <dt id="section-3-1.1">Stripe Payment Token (SPT)</dt>
         <dd style="margin-left: 1.5em" id="section-3-1.2">
-          <p id="section-3-1.2.1">A single-use token (prefixed with <code>spt_</code>) that represents authorization to charge a payment method. SPTs are created by clients using Stripe.js or the Stripe API and consumed by servers to process payments.<a href="#section-3-1.2.1" class="pilcrow">¶</a></p>
+          <p id="section-3-1.2.1">A single-use token (prefixed with <code>spt_</code>) that represents authorization
+to charge a payment method. SPTs are created by clients using Stripe.js
+or the Stripe API and consumed by servers to process payments.<a href="#section-3-1.2.1" class="pilcrow">¶</a></p>
 </dd>
         <dd class="break"></dd>
 <dt id="section-3-1.3">Business Network</dt>
         <dd style="margin-left: 1.5em" id="section-3-1.4">
-          <p id="section-3-1.4.1">A Stripe-managed network of connected accounts that can transact with each other. Business Networks enable payments between merchants and their suppliers, partners, or service providers.<a href="#section-3-1.4.1" class="pilcrow">¶</a></p>
+          <p id="section-3-1.4.1">A Stripe-managed network of connected accounts that can transact with
+each other. Business Networks enable payments between merchants and
+their suppliers, partners, or service providers.<a href="#section-3-1.4.1" class="pilcrow">¶</a></p>
 </dd>
         <dd class="break"></dd>
 <dt id="section-3-1.5">Connected Account</dt>
         <dd style="margin-left: 1.5em" id="section-3-1.6">
-          <p id="section-3-1.6.1">A Stripe account connected to a platform account, enabling the platform to process payments on behalf of the connected account.<a href="#section-3-1.6.1" class="pilcrow">¶</a></p>
+          <p id="section-3-1.6.1">A Stripe account connected to a platform account, enabling the platform
+to process payments on behalf of the connected account.<a href="#section-3-1.6.1" class="pilcrow">¶</a></p>
 </dd>
         <dd class="break"></dd>
 <dt id="section-3-1.7">Payment Intent</dt>
         <dd style="margin-left: 1.5em" id="section-3-1.8">
-          <p id="section-3-1.8.1">A Stripe API object that tracks the lifecycle of a customer payment, from creation through settlement. Not to be confused with the HTTP Payment Auth protocol's "payment intent" parameter.<a href="#section-3-1.8.1" class="pilcrow">¶</a></p>
+          <p id="section-3-1.8.1">A Stripe API object that tracks the lifecycle of a customer payment,
+from creation through settlement. Not to be confused with the HTTP
+Payment Auth protocol's "payment intent" parameter.<a href="#section-3-1.8.1" class="pilcrow">¶</a></p>
 </dd>
         <dd class="break"></dd>
 <dt id="section-3-1.9">Setup Intent</dt>
         <dd style="margin-left: 1.5em" id="section-3-1.10">
-          <p id="section-3-1.10.1">A Stripe API object that represents an intent to collect payment method details for future use, without creating an immediate charge.<a href="#section-3-1.10.1" class="pilcrow">¶</a></p>
+          <p id="section-3-1.10.1">A Stripe API object that represents an intent to collect payment method
+details for future use, without creating an immediate charge.<a href="#section-3-1.10.1" class="pilcrow">¶</a></p>
 </dd>
       <dd class="break"></dd>
 </dl>
@@ -1598,12 +1625,13 @@ through Stripe Payment Tokens (SPTs).<a href="#section-abstract-1" class="pilcro
 <a href="#section-4" class="section-number selfRef">4. </a><a href="#name-method-identifier" class="section-name selfRef">Method Identifier</a>
       </h2>
 <p id="section-4-1">This specification registers the following payment method identifier:<a href="#section-4-1" class="pilcrow">¶</a></p>
-<div class="sourcecode" id="section-4-2">
+<div class="alignLeft art-text artwork" id="section-4-2">
 <pre>
 stripe
 </pre><a href="#section-4-2" class="pilcrow">¶</a>
 </div>
-<p id="section-4-3">The identifier is case-sensitive and <span class="bcp14">MUST</span> be lowercase. No sub-methods are defined by this specification.<a href="#section-4-3" class="pilcrow">¶</a></p>
+<p id="section-4-3">The identifier is case-sensitive and <span class="bcp14">MUST</span> be lowercase. No sub-methods
+are defined by this specification.<a href="#section-4-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="payment-intents">
@@ -1611,20 +1639,24 @@ stripe
       <h2 id="name-payment-intents">
 <a href="#section-5" class="section-number selfRef">5. </a><a href="#name-payment-intents" class="section-name selfRef">Payment Intents</a>
       </h2>
-<p id="section-5-1">This specification defines three payment intents for use with the <code>stripe</code> payment method. These intents are registered in the Payment Intent Registry per Section 13.4 of [I-D.ietf-httpauth-payment].<a href="#section-5-1" class="pilcrow">¶</a></p>
+<p id="section-5-1">This specification defines three payment intents for use with the <code>stripe</code>
+payment method. These intents are registered in the Payment Intent Registry
+per Section 13.4 of <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>.<a href="#section-5-1" class="pilcrow">¶</a></p>
 <div id="intent-charge">
 <section id="section-5.1">
         <h3 id="name-intent-charge">
 <a href="#section-5.1" class="section-number selfRef">5.1. </a><a href="#name-intent-charge" class="section-name selfRef">Intent: "charge"</a>
         </h3>
-<p id="section-5.1-1">A one-time payment of the specified amount. The server may process the payment immediately upon receiving the SPT.<a href="#section-5.1-1" class="pilcrow">¶</a></p>
-<p id="section-5.1-2">Fulfillment mechanism:<a href="#section-5.1-2" class="pilcrow">¶</a></p>
+<p id="section-5.1-1">A one-time payment of the specified amount. The server may process the
+payment immediately upon receiving the SPT.<a href="#section-5.1-1" class="pilcrow">¶</a></p>
+<p id="section-5.1-2"><strong>Fulfillment mechanism:</strong><a href="#section-5.1-2" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-5.1-3">
-          <li id="section-5.1-3.1">
-            <strong>Stripe Payment Token (SPT)</strong>: The payer creates an SPT using Stripe.js<a href="#section-5.1-3.1" class="pilcrow">¶</a>
+<li id="section-5.1-3.1">
+            <p id="section-5.1-3.1.1"><strong>Stripe Payment Token (SPT)</strong>: The payer creates an SPT using Stripe.js
+or the Stripe API, which the server uses to create a Charge or
+PaymentIntent via the Stripe API.<a href="#section-5.1-3.1.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
-<p id="section-5.1-4">or the Stripe API, which the server uses to create a Charge or    PaymentIntent via the Stripe API.<a href="#section-5.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="intent-authorize">
@@ -1632,21 +1664,27 @@ stripe
         <h3 id="name-intent-authorize">
 <a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-intent-authorize" class="section-name selfRef">Intent: "authorize"</a>
         </h3>
-<p id="section-5.2-1">A payment authorization for future capture. The payer grants the server permission to charge up to the specified amount at a later time.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
-<p id="section-5.2-2">Required parameters:<a href="#section-5.2-2" class="pilcrow">¶</a></p>
+<p id="section-5.2-1">A payment authorization for future capture. The payer grants the server
+permission to charge up to the specified amount at a later time.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
+<p id="section-5.2-2"><strong>Required parameters:</strong><a href="#section-5.2-2" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.2-3.1">Maximum amount (spending limit)<a href="#section-5.2-3.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.2-3.1">
+            <p id="section-5.2-3.1.1">Maximum amount (spending limit)<a href="#section-5.2-3.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.2-3.2">Optional: Expiry timestamp<a href="#section-5.2-3.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.2-3.2">
+            <p id="section-5.2-3.2.1">Optional: Expiry timestamp<a href="#section-5.2-3.2.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
-<p id="section-5.2-4">Fulfillment mechanism:<a href="#section-5.2-4" class="pilcrow">¶</a></p>
+<p id="section-5.2-4"><strong>Fulfillment mechanism:</strong><a href="#section-5.2-4" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-5.2-5">
-          <li id="section-5.2-5.1">
-            <strong>Stripe Payment Token with Authorization</strong>: The payer creates an SPT,<a href="#section-5.2-5.1" class="pilcrow">¶</a>
+<li id="section-5.2-5.1">
+            <p id="section-5.2-5.1.1"><strong>Stripe Payment Token with Authorization</strong>: The payer creates an SPT,
+which the server uses to create a PaymentIntent with
+<code>capture_method=manual</code>. The server can capture the authorized funds
+within 7 days (for cards) or according to the payment method's
+authorization window.<a href="#section-5.2-5.1.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
-<p id="section-5.2-6">which the server uses to create a PaymentIntent with    <code>capture_method=manual</code>. The server can capture the authorized funds    within 7 days (for cards) or according to the payment method's    authorization window.<a href="#section-5.2-6" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="intent-subscription">
@@ -1654,23 +1692,29 @@ stripe
         <h3 id="name-intent-subscription">
 <a href="#section-5.3" class="section-number selfRef">5.3. </a><a href="#name-intent-subscription" class="section-name selfRef">Intent: "subscription"</a>
         </h3>
-<p id="section-5.3-1">A recurring payment authorization. The payer grants the server permission to charge a specified amount on a recurring basis.<a href="#section-5.3-1" class="pilcrow">¶</a></p>
-<p id="section-5.3-2">Required parameters:<a href="#section-5.3-2" class="pilcrow">¶</a></p>
+<p id="section-5.3-1">A recurring payment authorization. The payer grants the server permission
+to charge a specified amount on a recurring basis.<a href="#section-5.3-1" class="pilcrow">¶</a></p>
+<p id="section-5.3-2"><strong>Required parameters:</strong><a href="#section-5.3-2" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-5.3-3.1">Period duration (day, week, month, year)<a href="#section-5.3-3.1" class="pilcrow">¶</a>
+<li class="normal" id="section-5.3-3.1">
+            <p id="section-5.3-3.1.1">Period duration (day, week, month, year)<a href="#section-5.3-3.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.3-3.2">Amount per period<a href="#section-5.3-3.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.3-3.2">
+            <p id="section-5.3-3.2.1">Amount per period<a href="#section-5.3-3.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-5.3-3.3">Optional: Expiry timestamp or number of billing cycles<a href="#section-5.3-3.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-5.3-3.3">
+            <p id="section-5.3-3.3.1">Optional: Expiry timestamp or number of billing cycles<a href="#section-5.3-3.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
-<p id="section-5.3-4">Fulfillment mechanism:<a href="#section-5.3-4" class="pilcrow">¶</a></p>
+<p id="section-5.3-4"><strong>Fulfillment mechanism:</strong><a href="#section-5.3-4" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-5.3-5">
-          <li id="section-5.3-5.1">
-            <strong>Stripe Setup Intent</strong>: The payer completes a SetupIntent, providing<a href="#section-5.3-5.1" class="pilcrow">¶</a>
+<li id="section-5.3-5.1">
+            <p id="section-5.3-5.1.1"><strong>Stripe Setup Intent</strong>: The payer completes a SetupIntent, providing
+a payment method that can be charged on a recurring basis. The server
+creates a Stripe Subscription that automatically charges the payment
+method according to the specified schedule.<a href="#section-5.3-5.1.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
-<p id="section-5.3-6">a payment method that can be charged on a recurring basis. The server    creates a Stripe Subscription that automatically charges the payment    method according to the specified schedule.<a href="#section-5.3-6" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -1680,7 +1724,10 @@ stripe
       <h2 id="name-request-schema">
 <a href="#section-6" class="section-number selfRef">6. </a><a href="#name-request-schema" class="section-name selfRef">Request Schema</a>
       </h2>
-<p id="section-6-1">The <code>request</code> parameter in the <code>WWW-Authenticate</code> challenge contains a base64url-encoded JSON object. The schema is determined by the <code>intent</code> parameter in the challenge. Clients parse the request and construct the appropriate Stripe Payment Token or Setup Intent to fulfill it.<a href="#section-6-1" class="pilcrow">¶</a></p>
+<p id="section-6-1">The <code>request</code> parameter in the <code>WWW-Authenticate</code> challenge contains a
+base64url-encoded JSON object. The schema is determined by the <code>intent</code>
+parameter in the challenge. Clients parse the request and construct the
+appropriate Stripe Payment Token or Setup Intent to fulfill it.<a href="#section-6-1" class="pilcrow">¶</a></p>
 <div id="charge-request">
 <section id="section-6.1">
         <h3 id="name-charge-request">
@@ -1770,7 +1817,7 @@ stripe
             </tr>
           </tbody>
         </table>
-<p id="section-6.1-3">Example:<a href="#section-6.1-3" class="pilcrow">¶</a></p>
+<p id="section-6.1-3"><strong>Example:</strong><a href="#section-6.1-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-6.1-4">
 <pre>
 {
@@ -1893,7 +1940,7 @@ const spt = await stripe.createPaymentToken({
             </tr>
           </tbody>
         </table>
-<p id="section-6.2-3">Example:<a href="#section-6.2-3" class="pilcrow">¶</a></p>
+<p id="section-6.2-3"><strong>Example:</strong><a href="#section-6.2-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-6.2-4">
 <pre>
 {
@@ -1905,7 +1952,8 @@ const spt = await stripe.createPaymentToken({
 }
 </pre><a href="#section-6.2-4" class="pilcrow">¶</a>
 </div>
-<p id="section-6.2-5">The client fulfills this by creating an SPT that the server will use with <code>capture_method=manual</code>:<a href="#section-6.2-5" class="pilcrow">¶</a></p>
+<p id="section-6.2-5">The client fulfills this by creating an SPT that the server will use with
+<code>capture_method=manual</code>:<a href="#section-6.2-5" class="pilcrow">¶</a></p>
 <div class="lang-javascript sourcecode" id="section-6.2-6">
 <pre>
 const spt = await stripe.createPaymentToken({
@@ -2035,7 +2083,7 @@ const spt = await stripe.createPaymentToken({
             </tr>
           </tbody>
         </table>
-<p id="section-6.3-3">Example:<a href="#section-6.3-3" class="pilcrow">¶</a></p>
+<p id="section-6.3-3"><strong>Example:</strong><a href="#section-6.3-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-6.3-4">
 <pre>
 {
@@ -2068,7 +2116,8 @@ const setupIntent = await stripe.confirmSetup({
       <h2 id="name-credential-schema">
 <a href="#section-7" class="section-number selfRef">7. </a><a href="#name-credential-schema" class="section-name selfRef">Credential Schema</a>
       </h2>
-<p id="section-7-1">The <code>payload</code> field in the Payment credential contains a base64url-encoded JSON object with Stripe-specific payment authorization data.<a href="#section-7-1" class="pilcrow">¶</a></p>
+<p id="section-7-1">The <code>payload</code> field in the Payment credential contains a base64url-encoded
+JSON object with Stripe-specific payment authorization data.<a href="#section-7-1" class="pilcrow">¶</a></p>
 <div id="charge-credential">
 <section id="section-7.1">
         <h3 id="name-charge-credential">
@@ -2108,7 +2157,7 @@ const setupIntent = await stripe.confirmSetup({
             </tr>
           </tbody>
         </table>
-<p id="section-7.1-3">Example:<a href="#section-7.1-3" class="pilcrow">¶</a></p>
+<p id="section-7.1-3"><strong>Example:</strong><a href="#section-7.1-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-7.1-4">
 <pre>
 {
@@ -2158,7 +2207,7 @@ const setupIntent = await stripe.confirmSetup({
             </tr>
           </tbody>
         </table>
-<p id="section-7.2-3">Example:<a href="#section-7.2-3" class="pilcrow">¶</a></p>
+<p id="section-7.2-3"><strong>Example:</strong><a href="#section-7.2-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-7.2-4">
 <pre>
 {
@@ -2217,7 +2266,7 @@ const setupIntent = await stripe.confirmSetup({
             </tr>
           </tbody>
         </table>
-<p id="section-7.3-3">Example:<a href="#section-7.3-3" class="pilcrow">¶</a></p>
+<p id="section-7.3-3"><strong>Example:</strong><a href="#section-7.3-3" class="pilcrow">¶</a></p>
 <div class="lang-json sourcecode" id="section-7.3-4">
 <pre>
 {
@@ -2243,15 +2292,20 @@ const setupIntent = await stripe.confirmSetup({
 <a href="#section-8.1" class="section-number selfRef">8.1. </a><a href="#name-charge-verification" class="section-name selfRef">Charge Verification</a>
         </h3>
 <ol start="1" type="1" class="normal type-1" id="section-8.1-1">
-          <li id="section-8.1-1.1">Extract the <code>spt</code> from the credential payload<a href="#section-8.1-1.1" class="pilcrow">¶</a>
+<li id="section-8.1-1.1">
+            <p id="section-8.1-1.1.1">Extract the <code>spt</code> from the credential payload<a href="#section-8.1-1.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.1-1.2">Verify the challenge ID matches the one issued<a href="#section-8.1-1.2" class="pilcrow">¶</a>
+          <li id="section-8.1-1.2">
+            <p id="section-8.1-1.2.1">Verify the challenge ID matches the one issued<a href="#section-8.1-1.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.1-1.3">Verify the challenge has not expired<a href="#section-8.1-1.3" class="pilcrow">¶</a>
+          <li id="section-8.1-1.3">
+            <p id="section-8.1-1.3.1">Verify the challenge has not expired<a href="#section-8.1-1.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.1-1.4">Verify the SPT has not been previously used (replay protection)<a href="#section-8.1-1.4" class="pilcrow">¶</a>
+          <li id="section-8.1-1.4">
+            <p id="section-8.1-1.4.1">Verify the SPT has not been previously used (replay protection)<a href="#section-8.1-1.4.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.1-1.5">Validate the SPT exists and is valid via Stripe API (optional pre-check)<a href="#section-8.1-1.5" class="pilcrow">¶</a>
+          <li id="section-8.1-1.5">
+            <p id="section-8.1-1.5.1">Validate the SPT exists and is valid via Stripe API (optional pre-check)<a href="#section-8.1-1.5.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 </section>
@@ -2261,7 +2315,7 @@ const setupIntent = await stripe.confirmSetup({
         <h3 id="name-authorize-verification">
 <a href="#section-8.2" class="section-number selfRef">8.2. </a><a href="#name-authorize-verification" class="section-name selfRef">Authorize Verification</a>
         </h3>
-<p id="section-8.2-1">Same as charge verification (Section 8.1).<a href="#section-8.2-1" class="pilcrow">¶</a></p>
+<p id="section-8.2-1">Same as charge verification (<a href="#charge-verification" class="auto internal xref">Section 8.1</a>).<a href="#section-8.2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="subscription-verification">
@@ -2270,17 +2324,23 @@ const setupIntent = await stripe.confirmSetup({
 <a href="#section-8.3" class="section-number selfRef">8.3. </a><a href="#name-subscription-verification" class="section-name selfRef">Subscription Verification</a>
         </h3>
 <ol start="1" type="1" class="normal type-1" id="section-8.3-1">
-          <li id="section-8.3-1.1">Extract the <code>setupIntentId</code> and <code>paymentMethodId</code> from the credential<a href="#section-8.3-1.1" class="pilcrow">¶</a>
+<li id="section-8.3-1.1">
+            <p id="section-8.3-1.1.1">Extract the <code>setupIntentId</code> and <code>paymentMethodId</code> from the credential<a href="#section-8.3-1.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.3-1.2">Verify the challenge ID matches<a href="#section-8.3-1.2" class="pilcrow">¶</a>
+          <li id="section-8.3-1.2">
+            <p id="section-8.3-1.2.1">Verify the challenge ID matches<a href="#section-8.3-1.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.3-1.3">Verify the challenge has not expired<a href="#section-8.3-1.3" class="pilcrow">¶</a>
+          <li id="section-8.3-1.3">
+            <p id="section-8.3-1.3.1">Verify the challenge has not expired<a href="#section-8.3-1.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.3-1.4">Retrieve the Setup Intent via Stripe API<a href="#section-8.3-1.4" class="pilcrow">¶</a>
+          <li id="section-8.3-1.4">
+            <p id="section-8.3-1.4.1">Retrieve the Setup Intent via Stripe API<a href="#section-8.3-1.4.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.3-1.5">Verify the Setup Intent status is <code>succeeded</code><a href="#section-8.3-1.5" class="pilcrow">¶</a>
+          <li id="section-8.3-1.5">
+            <p id="section-8.3-1.5.1">Verify the Setup Intent status is <code>succeeded</code><a href="#section-8.3-1.5.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-8.3-1.6">Verify the payment method is attached and valid<a href="#section-8.3-1.6" class="pilcrow">¶</a>
+          <li id="section-8.3-1.6">
+            <p id="section-8.3-1.6.1">Verify the payment method is attached and valid<a href="#section-8.3-1.6.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 </section>
@@ -2290,17 +2350,23 @@ const setupIntent = await stripe.confirmSetup({
         <h3 id="name-challenge-binding">
 <a href="#section-8.4" class="section-number selfRef">8.4. </a><a href="#name-challenge-binding" class="section-name selfRef">Challenge Binding</a>
         </h3>
-<p id="section-8.4-1">Servers <span class="bcp14">MUST</span> verify that the credential corresponds to the exact challenge issued. This includes validating:<a href="#section-8.4-1" class="pilcrow">¶</a></p>
+<p id="section-8.4-1">Servers <span class="bcp14">MUST</span> verify that the credential corresponds to the exact challenge
+issued. This includes validating:<a href="#section-8.4-1" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-8.4-2.1">Challenge ID<a href="#section-8.4-2.1" class="pilcrow">¶</a>
+<li class="normal" id="section-8.4-2.1">
+            <p id="section-8.4-2.1.1">Challenge ID<a href="#section-8.4-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-8.4-2.2">Amount (if specified in request)<a href="#section-8.4-2.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-8.4-2.2">
+            <p id="section-8.4-2.2.1">Amount (if specified in request)<a href="#section-8.4-2.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-8.4-2.3">Currency<a href="#section-8.4-2.3" class="pilcrow">¶</a>
+          <li class="normal" id="section-8.4-2.3">
+            <p id="section-8.4-2.3.1">Currency<a href="#section-8.4-2.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-8.4-2.4">Business Network (if specified)<a href="#section-8.4-2.4" class="pilcrow">¶</a>
+          <li class="normal" id="section-8.4-2.4">
+            <p id="section-8.4-2.4.1">Business Network (if specified)<a href="#section-8.4-2.4.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-8.4-2.5">Any custom metadata<a href="#section-8.4-2.5" class="pilcrow">¶</a>
+          <li class="normal" id="section-8.4-2.5">
+            <p id="section-8.4-2.5.1">Any custom metadata<a href="#section-8.4-2.5.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2317,11 +2383,13 @@ const setupIntent = await stripe.confirmSetup({
         <h3 id="name-charge-settlement">
 <a href="#section-9.1" class="section-number selfRef">9.1. </a><a href="#name-charge-settlement" class="section-name selfRef">Charge Settlement</a>
         </h3>
-<p id="section-9.1-1">Synchronous settlement:<a href="#section-9.1-1" class="pilcrow">¶</a></p>
+<p id="section-9.1-1"><strong>Synchronous settlement:</strong><a href="#section-9.1-1" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-9.1-2">
-          <li id="section-9.1-2.1">Server receives and verifies the credential (Section 8.1)<a href="#section-9.1-2.1" class="pilcrow">¶</a>
+<li id="section-9.1-2.1">
+            <p id="section-9.1-2.1.1">Server receives and verifies the credential (<a href="#charge-verification" class="auto internal xref">Section 8.1</a>)<a href="#section-9.1-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.1-2.2">Server creates a Stripe PaymentIntent or Charge:<a href="#section-9.1-2.2" class="pilcrow">¶</a>
+          <li id="section-9.1-2.2">
+            <p id="section-9.1-2.2.1">Server creates a Stripe PaymentIntent or Charge:<a href="#section-9.1-2.2.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 <div class="lang-javascript sourcecode" id="section-9.1-3">
@@ -2343,13 +2411,18 @@ const paymentIntent = await stripe.paymentIntents.create({
 </pre><a href="#section-9.1-3" class="pilcrow">¶</a>
 </div>
 <ol start="1" type="1" class="normal type-1" id="section-9.1-4">
-          <li id="section-9.1-4.1">If successful, server returns 200 with <code>Payment-Receipt</code> header<a href="#section-9.1-4.1" class="pilcrow">¶</a>
+<li id="section-9.1-4.1">
+            <p id="section-9.1-4.1.1">If successful, server returns 200 with <code>Payment-Receipt</code> header<a href="#section-9.1-4.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.1-4.2">If failed, server returns 401 with new challenge<a href="#section-9.1-4.2" class="pilcrow">¶</a>
+          <li id="section-9.1-4.2">
+            <p id="section-9.1-4.2.1">If failed, server returns 401 with new challenge<a href="#section-9.1-4.2.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
-<p id="section-9.1-5">Settlement timing:<a href="#section-9.1-5" class="pilcrow">¶</a></p>
-<p id="section-9.1-6">Stripe processes payments asynchronously. Card payments typically settle within seconds, but bank transfers may take several business days. Servers <span class="bcp14">SHOULD</span> return 200 immediately after API confirmation, even if final settlement is pending.<a href="#section-9.1-6" class="pilcrow">¶</a></p>
+<p id="section-9.1-5"><strong>Settlement timing:</strong><a href="#section-9.1-5" class="pilcrow">¶</a></p>
+<p id="section-9.1-6">Stripe processes payments asynchronously. Card payments typically settle
+within seconds, but bank transfers may take several business days. Servers
+<span class="bcp14">SHOULD</span> return 200 immediately after API confirmation, even if final
+settlement is pending.<a href="#section-9.1-6" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="authorize-settlement">
@@ -2357,11 +2430,13 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-authorize-settlement">
 <a href="#section-9.2" class="section-number selfRef">9.2. </a><a href="#name-authorize-settlement" class="section-name selfRef">Authorize Settlement</a>
         </h3>
-<p id="section-9.2-1">Deferred settlement:<a href="#section-9.2-1" class="pilcrow">¶</a></p>
+<p id="section-9.2-1"><strong>Deferred settlement:</strong><a href="#section-9.2-1" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-9.2-2">
-          <li id="section-9.2-2.1">Server receives and verifies the credential (Section 8.2)<a href="#section-9.2-2.1" class="pilcrow">¶</a>
+<li id="section-9.2-2.1">
+            <p id="section-9.2-2.1.1">Server receives and verifies the credential (<a href="#authorize-verification" class="auto internal xref">Section 8.2</a>)<a href="#section-9.2-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.2-2.2">Server creates a PaymentIntent with <code>capture_method=manual</code>:<a href="#section-9.2-2.2" class="pilcrow">¶</a>
+          <li id="section-9.2-2.2">
+            <p id="section-9.2-2.2.1">Server creates a PaymentIntent with <code>capture_method=manual</code>:<a href="#section-9.2-2.2.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 <div class="lang-javascript sourcecode" id="section-9.2-3">
@@ -2382,11 +2457,14 @@ const paymentIntent = await stripe.paymentIntents.create({
 </pre><a href="#section-9.2-3" class="pilcrow">¶</a>
 </div>
 <ol start="1" type="1" class="normal type-1" id="section-9.2-4">
-          <li id="section-9.2-4.1">Server stores the PaymentIntent ID for later capture<a href="#section-9.2-4.1" class="pilcrow">¶</a>
+<li id="section-9.2-4.1">
+            <p id="section-9.2-4.1.1">Server stores the PaymentIntent ID for later capture<a href="#section-9.2-4.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.2-4.2">Server returns 200 with <code>Payment-Receipt</code> containing authorization details<a href="#section-9.2-4.2" class="pilcrow">¶</a>
+          <li id="section-9.2-4.2">
+            <p id="section-9.2-4.2.1">Server returns 200 with <code>Payment-Receipt</code> containing authorization details<a href="#section-9.2-4.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.2-4.3">Server may capture funds later:<a href="#section-9.2-4.3" class="pilcrow">¶</a>
+          <li id="section-9.2-4.3">
+            <p id="section-9.2-4.3.1">Server may capture funds later:<a href="#section-9.2-4.3.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 <div class="lang-javascript sourcecode" id="section-9.2-5">
@@ -2397,11 +2475,13 @@ const capture = await stripe.paymentIntents.capture(
 );
 </pre><a href="#section-9.2-5" class="pilcrow">¶</a>
 </div>
-<p id="section-9.2-6">Authorization window:<a href="#section-9.2-6" class="pilcrow">¶</a></p>
+<p id="section-9.2-6"><strong>Authorization window:</strong><a href="#section-9.2-6" class="pilcrow">¶</a></p>
 <ul class="normal">
-<li class="normal" id="section-9.2-7.1">Cards: 7 days<a href="#section-9.2-7.1" class="pilcrow">¶</a>
+<li class="normal" id="section-9.2-7.1">
+            <p id="section-9.2-7.1.1">Cards: 7 days<a href="#section-9.2-7.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li class="normal" id="section-9.2-7.2">Other payment methods: varies by payment method<a href="#section-9.2-7.2" class="pilcrow">¶</a>
+          <li class="normal" id="section-9.2-7.2">
+            <p id="section-9.2-7.2.1">Other payment methods: varies by payment method<a href="#section-9.2-7.2.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2411,11 +2491,13 @@ const capture = await stripe.paymentIntents.capture(
         <h3 id="name-subscription-settlement">
 <a href="#section-9.3" class="section-number selfRef">9.3. </a><a href="#name-subscription-settlement" class="section-name selfRef">Subscription Settlement</a>
         </h3>
-<p id="section-9.3-1">Recurring settlement:<a href="#section-9.3-1" class="pilcrow">¶</a></p>
+<p id="section-9.3-1"><strong>Recurring settlement:</strong><a href="#section-9.3-1" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-9.3-2">
-          <li id="section-9.3-2.1">Server receives and verifies the credential (Section 8.3)<a href="#section-9.3-2.1" class="pilcrow">¶</a>
+<li id="section-9.3-2.1">
+            <p id="section-9.3-2.1.1">Server receives and verifies the credential (<a href="#subscription-verification" class="auto internal xref">Section 8.3</a>)<a href="#section-9.3-2.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.3-2.2">Server creates a Stripe Subscription:<a href="#section-9.3-2.2" class="pilcrow">¶</a>
+          <li id="section-9.3-2.2">
+            <p id="section-9.3-2.2.1">Server creates a Stripe Subscription:<a href="#section-9.3-2.2.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 <div class="lang-javascript sourcecode" id="section-9.3-3">
@@ -2442,24 +2524,18 @@ const subscription = await stripe.subscriptions.create({
 </pre><a href="#section-9.3-3" class="pilcrow">¶</a>
 </div>
 <ol start="1" type="1" class="normal type-1" id="section-9.3-4">
-          <li id="section-9.3-4.1">Server returns 200 with <code>Payment-Receipt</code> containing subscription ID<a href="#section-9.3-4.1" class="pilcrow">¶</a>
+<li id="section-9.3-4.1">
+            <p id="section-9.3-4.1.1">Server returns 200 with <code>Payment-Receipt</code> containing subscription ID<a href="#section-9.3-4.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-9.3-4.2">Stripe automatically charges the payment method on each billing cycle<a href="#section-9.3-4.2" class="pilcrow">¶</a>
+          <li id="section-9.3-4.2">
+            <p id="section-9.3-4.2.1">Stripe automatically charges the payment method on each billing cycle<a href="#section-9.3-4.2.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
-<p id="section-9.3-5">Subscription lifecycle:<a href="#section-9.3-5" class="pilcrow">¶</a></p>
-<p id="section-9.3-6">Servers <span class="bcp14">MUST</span> handle subscription events via webhooks:<a href="#section-9.3-6" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-9.3-7.1">
-            <code>invoice.payment_succeeded</code>: Billing cycle completed successfully<a href="#section-9.3-7.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-9.3-7.2">
-            <code>invoice.payment_failed</code>: Billing cycle payment failed<a href="#section-9.3-7.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-9.3-7.3">
-            <code>customer.subscription.deleted</code>: Subscription cancelled<a href="#section-9.3-7.3" class="pilcrow">¶</a>
-</li>
-        </ul>
+<p id="section-9.3-5"><strong>Subscription lifecycle:</strong><a href="#section-9.3-5" class="pilcrow">¶</a></p>
+<p id="section-9.3-6">Servers <span class="bcp14">MUST</span> handle subscription events via webhooks:
+- <code>invoice.payment_succeeded</code>: Billing cycle completed successfully
+- <code>invoice.payment_failed</code>: Billing cycle payment failed
+- <code>customer.subscription.deleted</code>: Subscription cancelled<a href="#section-9.3-6" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="business-network-settlement">
@@ -2467,7 +2543,8 @@ const subscription = await stripe.subscriptions.create({
         <h3 id="name-business-network-settlement">
 <a href="#section-9.4" class="section-number selfRef">9.4. </a><a href="#name-business-network-settlement" class="section-name selfRef">Business Network Settlement</a>
         </h3>
-<p id="section-9.4-1">When <code>businessNetwork</code> is specified, payments flow through Stripe's Business Network infrastructure:<a href="#section-9.4-1" class="pilcrow">¶</a></p>
+<p id="section-9.4-1">When <code>businessNetwork</code> is specified, payments flow through Stripe's
+Business Network infrastructure:<a href="#section-9.4-1" class="pilcrow">¶</a></p>
 <div class="lang-javascript sourcecode" id="section-9.4-2">
 <pre>
 const paymentIntent = await stripe.paymentIntents.create({
@@ -2488,15 +2565,10 @@ const paymentIntent = await stripe.paymentIntents.create({
 });
 </pre><a href="#section-9.4-2" class="pilcrow">¶</a>
 </div>
-<p id="section-9.4-3">Business Networks enable:<a href="#section-9.4-3" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-9.4-4.1">Automatic routing between network participants<a href="#section-9.4-4.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-9.4-4.2">Consolidated reporting and reconciliation<a href="#section-9.4-4.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-9.4-4.3">Network-specific terms and pricing<a href="#section-9.4-4.3" class="pilcrow">¶</a>
-</li>
-        </ul>
+<p id="section-9.4-3">Business Networks enable:
+- Automatic routing between network participants
+- Consolidated reporting and reconciliation
+- Network-specific terms and pricing<a href="#section-9.4-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2511,7 +2583,8 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-currency-support">
 <a href="#section-10.1" class="section-number selfRef">10.1. </a><a href="#name-currency-support" class="section-name selfRef">Currency Support</a>
         </h3>
-<p id="section-10.1-1">Stripe supports 135+ currencies. Servers <span class="bcp14">MUST</span> specify currency using three-letter ISO 4217 codes (e.g., "usd", "eur", "jpy").<a href="#section-10.1-1" class="pilcrow">¶</a></p>
+<p id="section-10.1-1">Stripe supports 135+ currencies. Servers <span class="bcp14">MUST</span> specify currency using
+three-letter ISO 4217 codes (e.g., "usd", "eur", "jpy").<a href="#section-10.1-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="payment-method-localization">
@@ -2519,15 +2592,10 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-payment-method-localization">
 <a href="#section-10.2" class="section-number selfRef">10.2. </a><a href="#name-payment-method-localization" class="section-name selfRef">Payment Method Localization</a>
         </h3>
-<p id="section-10.2-1">SPTs abstract payment method details, but servers <span class="bcp14">SHOULD</span> consider:<a href="#section-10.2-1" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-10.2-2.1">Regional payment method preferences (e.g., SEPA in Europe, ACH in US)<a href="#section-10.2-2.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-10.2-2.2">Currency conversion for cross-border payments<a href="#section-10.2-2.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-10.2-2.3">Local regulatory requirements<a href="#section-10.2-2.3" class="pilcrow">¶</a>
-</li>
-        </ul>
+<p id="section-10.2-1">SPTs abstract payment method details, but servers <span class="bcp14">SHOULD</span> consider:
+- Regional payment method preferences (e.g., SEPA in Europe, ACH in US)
+- Currency conversion for cross-border payments
+- Local regulatory requirements<a href="#section-10.2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="description-localization">
@@ -2535,7 +2603,9 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-description-localization">
 <a href="#section-10.3" class="section-number selfRef">10.3. </a><a href="#name-description-localization" class="section-name selfRef">Description Localization</a>
         </h3>
-<p id="section-10.3-1">The <code>description</code> field <span class="bcp14">SHOULD</span> be localized to the customer's language when possible. Clients <span class="bcp14">MAY</span> include an <code>Accept-Language</code> header to indicate language preference.<a href="#section-10.3-1" class="pilcrow">¶</a></p>
+<p id="section-10.3-1">The <code>description</code> field <span class="bcp14">SHOULD</span> be localized to the customer's language
+when possible. Clients <span class="bcp14">MAY</span> include an <code>Accept-Language</code> header to indicate
+language preference.<a href="#section-10.3-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2550,7 +2620,10 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-spt-single-use-constraint">
 <a href="#section-11.1" class="section-number selfRef">11.1. </a><a href="#name-spt-single-use-constraint" class="section-name selfRef">SPT Single-Use Constraint</a>
         </h3>
-<p id="section-11.1-1">SPTs are single-use tokens. Servers <span class="bcp14">MUST</span> track used SPTs and reject replayed tokens. Stripe automatically prevents SPT reuse at the API level, but servers <span class="bcp14">SHOULD</span> implement their own replay protection by storing challenge IDs and verifying they haven't been previously fulfilled.<a href="#section-11.1-1" class="pilcrow">¶</a></p>
+<p id="section-11.1-1">SPTs are single-use tokens. Servers <span class="bcp14">MUST</span> track used SPTs and reject
+replayed tokens. Stripe automatically prevents SPT reuse at the API level,
+but servers <span class="bcp14">SHOULD</span> implement their own replay protection by storing
+challenge IDs and verifying they haven't been previously fulfilled.<a href="#section-11.1-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="amount-verification">
@@ -2558,18 +2631,25 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-amount-verification">
 <a href="#section-11.2" class="section-number selfRef">11.2. </a><a href="#name-amount-verification" class="section-name selfRef">Amount Verification</a>
         </h3>
-<p id="section-11.2-1">Clients <span class="bcp14">MUST</span> verify the payment amount in the challenge matches their expectation before creating an SPT. The SPT itself does not encode the amount, so clients must trust the challenge parameters.<a href="#section-11.2-1" class="pilcrow">¶</a></p>
-<p id="section-11.2-2">Verification checklist:<a href="#section-11.2-2" class="pilcrow">¶</a></p>
+<p id="section-11.2-1">Clients <span class="bcp14">MUST</span> verify the payment amount in the challenge matches their
+expectation before creating an SPT. The SPT itself does not encode the
+amount, so clients must trust the challenge parameters.<a href="#section-11.2-1" class="pilcrow">¶</a></p>
+<p id="section-11.2-2"><strong>Verification checklist:</strong><a href="#section-11.2-2" class="pilcrow">¶</a></p>
 <ol start="1" type="1" class="normal type-1" id="section-11.2-3">
-          <li id="section-11.2-3.1">Verify the <code>amount</code> matches the expected cost<a href="#section-11.2-3.1" class="pilcrow">¶</a>
+<li id="section-11.2-3.1">
+            <p id="section-11.2-3.1.1">Verify the <code>amount</code> matches the expected cost<a href="#section-11.2-3.1.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-11.2-3.2">Verify the <code>currency</code> matches the expected currency<a href="#section-11.2-3.2" class="pilcrow">¶</a>
+          <li id="section-11.2-3.2">
+            <p id="section-11.2-3.2.1">Verify the <code>currency</code> matches the expected currency<a href="#section-11.2-3.2.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-11.2-3.3">Verify the <code>description</code> matches the expected service<a href="#section-11.2-3.3" class="pilcrow">¶</a>
+          <li id="section-11.2-3.3">
+            <p id="section-11.2-3.3.1">Verify the <code>description</code> matches the expected service<a href="#section-11.2-3.3.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-11.2-3.4">Verify the challenge hasn't expired<a href="#section-11.2-3.4" class="pilcrow">¶</a>
+          <li id="section-11.2-3.4">
+            <p id="section-11.2-3.4.1">Verify the challenge hasn't expired<a href="#section-11.2-3.4.1" class="pilcrow">¶</a></p>
 </li>
-          <li id="section-11.2-3.5">Verify the server's identity (TLS certificate validation)<a href="#section-11.2-3.5" class="pilcrow">¶</a>
+          <li id="section-11.2-3.5">
+            <p id="section-11.2-3.5.1">Verify the server's identity (TLS certificate validation)<a href="#section-11.2-3.5.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 </section>
@@ -2579,15 +2659,10 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-business-network-authorizat">
 <a href="#section-11.3" class="section-number selfRef">11.3. </a><a href="#name-business-network-authorizat" class="section-name selfRef">Business Network Authorization</a>
         </h3>
-<p id="section-11.3-1">When using Business Networks, clients <span class="bcp14">SHOULD</span> verify:<a href="#section-11.3-1" class="pilcrow">¶</a></p>
-<ul class="normal">
-<li class="normal" id="section-11.3-2.1">The <code>businessNetwork</code> ID is expected<a href="#section-11.3-2.1" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.3-2.2">The <code>destination</code> account (if specified) is authorized to receive payment<a href="#section-11.3-2.2" class="pilcrow">¶</a>
-</li>
-          <li class="normal" id="section-11.3-2.3">The payment terms are acceptable<a href="#section-11.3-2.3" class="pilcrow">¶</a>
-</li>
-        </ul>
+<p id="section-11.3-1">When using Business Networks, clients <span class="bcp14">SHOULD</span> verify:
+- The <code>businessNetwork</code> ID is expected
+- The <code>destination</code> account (if specified) is authorized to receive payment
+- The payment terms are acceptable<a href="#section-11.3-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="pci-dss-compliance">
@@ -2595,15 +2670,19 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-pci-dss-compliance">
 <a href="#section-11.4" class="section-number selfRef">11.4. </a><a href="#name-pci-dss-compliance" class="section-name selfRef">PCI DSS Compliance</a>
         </h3>
-<p id="section-11.4-1">Stripe's SPT model ensures clients never handle raw payment method details, significantly reducing PCI DSS compliance scope. Servers using this specification inherit Stripe's PCI Level 1 certification.<a href="#section-11.4-1" class="pilcrow">¶</a></p>
+<p id="section-11.4-1">Stripe's SPT model ensures clients never handle raw payment method details,
+significantly reducing PCI DSS compliance scope. Servers using this
+specification inherit Stripe's PCI Level 1 certification.<a href="#section-11.4-1" class="pilcrow">¶</a></p>
 </section>
 </div>
-<div id="sec-3d-secure-and-strong-customer-authentication">
+<div id="d-secure-and-strong-customer-authentication">
 <section id="section-11.5">
         <h3 id="name-3d-secure-and-strong-custom">
 <a href="#section-11.5" class="section-number selfRef">11.5. </a><a href="#name-3d-secure-and-strong-custom" class="section-name selfRef">3D Secure and Strong Customer Authentication</a>
         </h3>
-<p id="section-11.5-1">Stripe.js automatically handles 3D Secure challenges when required by the customer's bank or EU Strong Customer Authentication regulations. Clients <span class="bcp14">MUST</span> use Stripe.js or equivalent SDKs that support challenge flows.<a href="#section-11.5-1" class="pilcrow">¶</a></p>
+<p id="section-11.5-1">Stripe.js automatically handles 3D Secure challenges when required by
+the customer's bank or EU Strong Customer Authentication regulations.
+Clients <span class="bcp14">MUST</span> use Stripe.js or equivalent SDKs that support challenge flows.<a href="#section-11.5-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="credential-storage">
@@ -2611,8 +2690,10 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-credential-storage">
 <a href="#section-11.6" class="section-number selfRef">11.6. </a><a href="#name-credential-storage" class="section-name selfRef">Credential Storage</a>
         </h3>
-<p id="section-11.6-1">Clients <span class="bcp14">MUST NOT</span> log or persist SPTs. SPTs are bearer tokens that grant payment authorization.<a href="#section-11.6-1" class="pilcrow">¶</a></p>
-<p id="section-11.6-2">Servers <span class="bcp14">MUST NOT</span> store SPTs after processing. Instead, store the resulting Stripe PaymentIntent ID, Charge ID, or Subscription ID.<a href="#section-11.6-2" class="pilcrow">¶</a></p>
+<p id="section-11.6-1">Clients <span class="bcp14">MUST NOT</span> log or persist SPTs. SPTs are bearer tokens that grant
+payment authorization.<a href="#section-11.6-1" class="pilcrow">¶</a></p>
+<p id="section-11.6-2">Servers <span class="bcp14">MUST NOT</span> store SPTs after processing. Instead, store the resulting
+Stripe PaymentIntent ID, Charge ID, or Subscription ID.<a href="#section-11.6-2" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="https-requirement">
@@ -2620,7 +2701,8 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-https-requirement">
 <a href="#section-11.7" class="section-number selfRef">11.7. </a><a href="#name-https-requirement" class="section-name selfRef">HTTPS Requirement</a>
         </h3>
-<p id="section-11.7-1">All communication <span class="bcp14">MUST</span> use TLS 1.2 or higher. Stripe Payment Tokens <span class="bcp14">MUST</span> only be transmitted over HTTPS connections.<a href="#section-11.7-1" class="pilcrow">¶</a></p>
+<p id="section-11.7-1">All communication <span class="bcp14">MUST</span> use TLS 1.2 or higher. Stripe Payment Tokens <span class="bcp14">MUST</span>
+only be transmitted over HTTPS connections.<a href="#section-11.7-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
@@ -2635,16 +2717,17 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-payment-method-registration">
 <a href="#section-12.1" class="section-number selfRef">12.1. </a><a href="#name-payment-method-registration" class="section-name selfRef">Payment Method Registration</a>
         </h3>
-<p id="section-12.1-1">This specification registers the "stripe" payment method in the Payment Method Registry per Section 13.2 of [I-D.ietf-httpauth-payment]:<a href="#section-12.1-1" class="pilcrow">¶</a></p>
+<p id="section-12.1-1">This specification registers the "stripe" payment method in the Payment
+Method Registry per Section 13.2 of <span>[<a href="#PAYMENT-AUTH" class="cite xref">PAYMENT-AUTH</a>]</span>:<a href="#section-12.1-1" class="pilcrow">¶</a></p>
 <ul class="normal">
 <li class="normal" id="section-12.1-2.1">
-            <strong>Method ID</strong>: stripe<a href="#section-12.1-2.1" class="pilcrow">¶</a>
+            <p id="section-12.1-2.1.1"><strong>Method ID</strong>: stripe<a href="#section-12.1-2.1.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-12.1-2.2">
-            <strong>Specification</strong>: [this document]<a href="#section-12.1-2.2" class="pilcrow">¶</a>
+            <p id="section-12.1-2.2.1"><strong>Specification</strong>: This document<a href="#section-12.1-2.2.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-12.1-2.3">
-            <strong>Intents</strong>: charge, authorize, subscription<a href="#section-12.1-2.3" class="pilcrow">¶</a>
+            <p id="section-12.1-2.3.1"><strong>Intents</strong>: charge, authorize, subscription<a href="#section-12.1-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2654,27 +2737,35 @@ const paymentIntent = await stripe.paymentIntents.create({
         <h3 id="name-business-network-registry">
 <a href="#section-12.2" class="section-number selfRef">12.2. </a><a href="#name-business-network-registry" class="section-name selfRef">Business Network Registry</a>
         </h3>
-<p id="section-12.2-1">This specification requests creation of a "Stripe Business Network" registry for tracking registered Business Network IDs. Registration policy: First Come First Served.<a href="#section-12.2-1" class="pilcrow">¶</a></p>
+<p id="section-12.2-1">This specification requests creation of a "Stripe Business Network"
+registry for tracking registered Business Network IDs. Registration
+policy: First Come First Served.<a href="#section-12.2-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
 </div>
+<div id="sec-combined-references">
 <section id="section-13">
       <h2 id="name-references">
 <a href="#section-13" class="section-number selfRef">13. </a><a href="#name-references" class="section-name selfRef">References</a>
       </h2>
+<div id="sec-normative-references">
 <section id="section-13.1">
         <h3 id="name-normative-references">
 <a href="#section-13.1" class="section-number selfRef">13.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
         </h3>
 <dl class="references">
-<dt id="RFC2119">[RFC2119]</dt>
-        <dd>
-<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
-<dd class="break"></dd>
 <dt id="RFC7235">[RFC7235]</dt>
         <dd>
 <span class="refAuthor">Fielding, R., Ed.</span> and <span class="refAuthor">J. Reschke, Ed.</span>, <span class="refTitle">"Hypertext Transfer Protocol (HTTP/1.1): Authentication"</span>, <span class="seriesInfo">RFC 7235</span>, <span class="seriesInfo">DOI 10.17487/RFC7235</span>, <time datetime="2014-06" class="refDate">June 2014</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc7235">https://www.rfc-editor.org/info/rfc7235</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="PAYMENT-AUTH">[PAYMENT-AUTH]</dt>
+        <dd>
+<span class="refAuthor">Moxey, J.</span>, <span class="refTitle">"The "Payment" HTTP Authentication Scheme"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-httpauth-payment-00</span>, <time datetime="2025" class="refDate">2025</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/draft-httpauth-payment/">https://datatracker.ietf.org/doc/draft-httpauth-payment/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC2119">[RFC2119]</dt>
+        <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
 <dd class="break"></dd>
 <dt id="RFC8174">[RFC8174]</dt>
       <dd>
@@ -2682,7 +2773,22 @@ const paymentIntent = await stripe.paymentIntents.create({
 <dd class="break"></dd>
 </dl>
 </section>
+</div>
+<div id="sec-informative-references">
+<section id="section-13.2">
+        <h3 id="name-informative-references">
+<a href="#section-13.2" class="section-number selfRef">13.2. </a><a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+        </h3>
+<dl class="references">
+<dt id="STRIPE-API">[STRIPE-API]</dt>
+      <dd>
+<span class="refAuthor">Stripe, Inc.</span>, <span class="refTitle">"Stripe API Reference"</span>, <time datetime="2025" class="refDate">2025</time>, <span>&lt;<a href="https://stripe.com/docs/api">https://stripe.com/docs/api</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
 </section>
+</div>
+</section>
+</div>
 <div id="abnf-collected">
 <section id="appendix-A">
       <h2 id="name-abnf-collected">
@@ -2714,14 +2820,14 @@ intent = "charge" / "authorize" / "subscription"
         <h3 id="name-charge-example-http-transpo">
 <a href="#appendix-B.1" class="section-number selfRef">B.1. </a><a href="#name-charge-example-http-transpo" class="section-name selfRef">Charge Example (HTTP Transport)</a>
         </h3>
-<p id="appendix-B.1-1">Step 1: Client requests resource<a href="#appendix-B.1-1" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-1"><strong>Step 1: Client requests resource</strong><a href="#appendix-B.1-1" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-2">
 <pre>
 GET /api/generate HTTP/1.1
 Host: api.example.com
 </pre><a href="#appendix-B.1-2" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.1-3">Step 2: Server issues payment challenge<a href="#appendix-B.1-3" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-3"><strong>Step 2: Server issues payment challenge</strong><a href="#appendix-B.1-3" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-4">
 <pre>
 HTTP/1.1 402 Payment Required
@@ -2749,13 +2855,12 @@ Content-Type: application/json
 }
 </pre><a href="#appendix-B.1-6" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.1-7">Step 3: Client creates SPT and submits credential<a href="#appendix-B.1-7" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-7"><strong>Step 3: Client creates SPT and submits credential</strong><a href="#appendix-B.1-7" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-8">
 <pre>
 GET /api/generate HTTP/1.1
 Host: api.example.com
 Authorization: Payment eyJpZCI6ImNoXzFhMmIzYzRkNWUiLCJwYXlsb2FkIjoiZXlKemNIUWlPaUp6Y0hSZk1VNDBXBLJ9
-
 </pre><a href="#appendix-B.1-8" class="pilcrow">¶</a>
 </div>
 <p id="appendix-B.1-9">Decoded credential:<a href="#appendix-B.1-9" class="pilcrow">¶</a></p>
@@ -2775,7 +2880,7 @@ Authorization: Payment eyJpZCI6ImNoXzFhMmIzYzRkNWUiLCJwYXlsb2FkIjoiZXlKemNIUWlPa
 }
 </pre><a href="#appendix-B.1-12" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.1-13">Step 4: Server processes payment and returns resource<a href="#appendix-B.1-13" class="pilcrow">¶</a></p>
+<p id="appendix-B.1-13"><strong>Step 4: Server processes payment and returns resource</strong><a href="#appendix-B.1-13" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.1-14">
 <pre>
 HTTP/1.1 200 OK
@@ -2804,7 +2909,7 @@ Here is your generated content...
         <h3 id="name-business-network-example">
 <a href="#appendix-B.2" class="section-number selfRef">B.2. </a><a href="#name-business-network-example" class="section-name selfRef">Business Network Example</a>
         </h3>
-<p id="appendix-B.2-1">Payment challenge:<a href="#appendix-B.2-1" class="pilcrow">¶</a></p>
+<p id="appendix-B.2-1"><strong>Payment challenge:</strong><a href="#appendix-B.2-1" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.2-2">
 <pre>
 HTTP/1.1 402 Payment Required
@@ -2827,7 +2932,8 @@ WWW-Authenticate: Payment id="ch_b2b_payment",
 }
 </pre><a href="#appendix-B.2-4" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.2-5">This payment will flow through the specified Business Network, enabling automatic reconciliation and network-specific terms.<a href="#appendix-B.2-5" class="pilcrow">¶</a></p>
+<p id="appendix-B.2-5">This payment will flow through the specified Business Network, enabling
+automatic reconciliation and network-specific terms.<a href="#appendix-B.2-5" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="subscription-example">
@@ -2835,7 +2941,7 @@ WWW-Authenticate: Payment id="ch_b2b_payment",
         <h3 id="name-subscription-example">
 <a href="#appendix-B.3" class="section-number selfRef">B.3. </a><a href="#name-subscription-example" class="section-name selfRef">Subscription Example</a>
         </h3>
-<p id="appendix-B.3-1">Payment challenge:<a href="#appendix-B.3-1" class="pilcrow">¶</a></p>
+<p id="appendix-B.3-1"><strong>Payment challenge:</strong><a href="#appendix-B.3-1" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.3-2">
 <pre>
 HTTP/1.1 402 Payment Required
@@ -2857,7 +2963,7 @@ WWW-Authenticate: Payment id="sub_setup_123",
 }
 </pre><a href="#appendix-B.3-4" class="pilcrow">¶</a>
 </div>
-<p id="appendix-B.3-5">Client response with Setup Intent:<a href="#appendix-B.3-5" class="pilcrow">¶</a></p>
+<p id="appendix-B.3-5"><strong>Client response with Setup Intent:</strong><a href="#appendix-B.3-5" class="pilcrow">¶</a></p>
 <div class="lang-http sourcecode" id="appendix-B.3-6">
 <pre>
 GET /api/subscribe HTTP/1.1
@@ -2878,13 +2984,22 @@ Authorization: Payment eyJpZCI6InN1Yl9zZXR1cF8xMjMiLCJwYXlsb2FkIjoiZXlKelpYUjFjR
 </div>
 </section>
 </div>
-<div id="authors-addresses">
+<div id="acknowledgements">
 <section id="appendix-C">
+      <h2 id="name-acknowledgements">
+<a href="#appendix-C" class="section-number selfRef">Appendix C. </a><a href="#name-acknowledgements" class="section-name selfRef">Acknowledgements</a>
+      </h2>
+<p id="appendix-C-1">TBD<a href="#appendix-C-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-D">
       <h2 id="name-authors-address">
 <a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
       </h2>
 <address class="vcard">
         <div dir="auto" class="left"><span class="fn nameRole">Brendan Ryan</span></div>
+<div dir="auto" class="left"><span class="org">Stripe</span></div>
 <div class="email">
 <span>Email:</span>
 <a href="mailto:brendanryan@stripe.com" class="email">brendanryan@stripe.com</a>

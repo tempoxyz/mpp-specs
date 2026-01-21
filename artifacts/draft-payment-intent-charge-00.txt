@@ -3,8 +3,8 @@
 
 
 Network Working Group                                           J. Moxey
-Internet-Draft                                           21 January 2026
-Intended status: Standards Track                                        
+Internet-Draft                                                Tempo Labs
+Intended status: Standards Track                         21 January 2026
 Expires: 25 July 2026
 
 
@@ -14,10 +14,9 @@ Expires: 25 July 2026
 Abstract
 
    This document defines the "charge" payment intent for use with the
-   Payment HTTP Authentication Scheme [i-d-httpauth-payment].  The
-   "charge" intent represents a one-time payment where the payer
-   provides proof of payment immediately in exchange for resource
-   access.
+   Payment HTTP Authentication Scheme [PAYMENT-AUTH].  The "charge"
+   intent represents a one-time payment where the payer provides proof
+   of payment immediately in exchange for resource access.
 
 Status of This Memo
 
@@ -77,8 +76,8 @@ Table of Contents
      7.4.  Finality
    8.  IANA Considerations
      8.1.  Payment Intent Registration
-   9.  References
-     9.1.  Normative References
+   9.  Normative References
+   Appendix A.  Acknowledgements
    Author's Address
 
 1.  Introduction
@@ -109,8 +108,8 @@ Table of Contents
 
    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
    "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-   "OPTIONAL" in this document are to be interpreted as described in BCP
-   14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
 3.  Intent Semantics
@@ -250,17 +249,14 @@ Table of Contents
 
    Settlement semantics are method-specific:
 
-   *  *Immediate settlement*: Payment is final upon verification
-
-   (e.g., Lightning preimage, confirmed blockchain transaction)
+   *  *Immediate settlement*: Payment is final upon verification (e.g.,
+      Lightning preimage, confirmed blockchain transaction)
 
    *  *Deferred settlement*: Server submits payment after verification
-
-   (e.g., signed authorization submitted to chain)
+      (e.g., signed authorization submitted to chain)
 
    *  *Processor settlement*: External processor handles settlement
-
-   (e.g., Stripe PaymentIntent)
+      (e.g., Stripe PaymentIntent)
 
 7.  Security Considerations
 
@@ -299,7 +295,7 @@ Table of Contents
 8.1.  Payment Intent Registration
 
    This document registers the "charge" intent in the "HTTP Payment
-   Intents" registry established by [i-d-httpauth-payment]:
+   Intents" registry established by [PAYMENT-AUTH]:
 
           +========+============================+===============+
           | Intent | Description                | Reference     |
@@ -309,9 +305,13 @@ Table of Contents
 
                                   Table 5
 
-9.  References
+9.  Normative References
 
-9.1.  Normative References
+   [PAYMENT-AUTH]
+              Moxey, J., "The "Payment" HTTP Authentication Scheme",
+              Work in Progress, Internet-Draft, draft-httpauth-payment-
+              00, 2025, <https://datatracker.ietf.org/doc/draft-
+              httpauth-payment/>.
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -322,10 +322,12 @@ Table of Contents
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/info/rfc8174>.
 
-   [i-d-httpauth-payment]
-              J., M., "The 'Payment' HTTP Authentication Scheme".
+Appendix A.  Acknowledgements
+
+   TBD
 
 Author's Address
 
    Jake Moxey
+   Tempo Labs
    Email: jake@tempo.xyz
