@@ -1,0 +1,96 @@
+name: PR Check
+
+on:
+  pull_request:
+
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+env:
+  WRANGLER_SEND_METRICS: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build-and-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ietf-spec-tools:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and validate specs
+        run: docker run --rm -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy artifacts --project-name=ietf-payment-specs
+
+      - name: Generate spec table
+        id: specs
+        run: |
+          TABLE="| Spec | HTML | TXT | XML | PDF |\n|------|------|-----|-----|-----|\n"
+          BASE_URL="${{ steps.deploy.outputs.deployment-url }}"
+          for file in artifacts/draft-*.html; do
+            name=$(basename "$file" .html)
+            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) |\n"
+          done
+          echo "table<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$TABLE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ github.event.number }}-specs
+          path: artifacts/
+          retention-days: 30
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `<!-- ietf-spec-preview -->
+            ## Spec Preview
+
+            ${{ steps.specs.outputs.table }}
+            `;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c => c.body.includes('<!-- ietf-spec-preview -->'));
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
