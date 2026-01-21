@@ -27,6 +27,8 @@ while read -r md; do
   xml2rfc --html --no-pagination "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.html"
 
   xml2rfc --text --no-pagination "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.txt"
+
+  xml2rfc --pdf "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
 done < <(find "$SPECS_DIR" -name "draft-*.md")
 
 echo "Done. Output in $OUT_DIR/"

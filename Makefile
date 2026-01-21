@@ -13,4 +13,4 @@ shell:
 	docker run --rm -it -v "$$(pwd)":/data ietf-spec-tools bash
 
 clean:
-	rm -f artifacts/*.xml artifacts/*.html artifacts/*.txt
+	rm -f artifacts/*.xml artifacts/*.html artifacts/*.txt artifacts/*.pdf
