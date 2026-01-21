@@ -33,28 +33,6 @@ of BCP 78 and BCP 79.
 Copyright (c) 2025 IETF Trust and the persons identified as the document
 authors. All rights reserved.
 
-## Table of Contents
-
-1. [Introduction](#1-introduction)
-2. [Requirements Language](#2-requirements-language)
-3. [Terminology](#3-terminology)
-4. [Protocol Overview](#4-protocol-overview)
-5. [The Payment Authentication Scheme](#5-the-payment-authentication-scheme)
-6. [Payment Methods](#6-payment-methods)
-7. [Payment Intents](#7-payment-intents)
-8. [Error Handling](#8-error-handling)
-9. [Extensibility](#9-extensibility)
-10. [Internationalization Considerations](#10-internationalization-considerations)
-11. [Security Considerations](#11-security-considerations)
-12. [IANA Considerations](#12-iana-considerations)
-13. [References](#13-references)
-14. [Appendix A: ABNF Collected](#appendix-a-abnf-collected)
-15. [Appendix B: Examples](#appendix-b-examples)
-16. [Acknowledgements](#acknowledgements)
-17. [Authors' Addresses](#authors-addresses)
-
----
-
 ## 1. Introduction
 
 HTTP 402 "Payment Required" was reserved in HTTP/1.1 [RFC9110] for future
@@ -168,6 +146,49 @@ When a client submits an invalid Payment credential, servers MUST return
 401 (Unauthorized) with a `WWW-Authenticate: Payment` header containing a
 fresh challenge.
 
+### 4.4. Usage of 402 Payment Required
+
+The 402 (Payment Required) status code was reserved by [RFC9110] for future
+use. This specification defines semantics for 402 within the context of the
+Payment authentication scheme.
+
+#### 4.4.1. When to Return 402
+
+Servers SHOULD return 402 when:
+
+- The resource requires payment as a precondition for access
+- The server can provide a Payment challenge that the client may fulfill
+- Payment is the primary barrier to access (not authentication or authorization)
+
+Servers MAY return 402 when:
+
+- Offering optional paid features or premium content
+- Indicating that a previously-paid resource requires additional payment
+- The payment requirement applies to a subset of request methods
+
+#### 4.4.2. When NOT to Return 402
+
+Servers SHOULD NOT return 402 when:
+
+- The client lacks authentication credentials (use 401)
+- The client is authenticated but lacks authorization (use 403)
+- The resource does not exist (use 404)
+- No Payment challenge can be constructed for the request
+
+Servers MUST NOT return 402 without including a `WWW-Authenticate` header
+containing at least one Payment challenge.
+
+#### 4.4.3. Interaction with Other Authentication Schemes
+
+When a resource requires both authentication and payment, servers SHOULD:
+
+1. First verify authentication credentials
+2. Return 401 if authentication fails
+3. Return 402 with a Payment challenge only after successful authentication
+
+This ordering prevents information leakage about payment requirements to
+unauthenticated clients.
+
 ---
 
 ## 5. The Payment Authentication Scheme
@@ -259,7 +280,7 @@ containing:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Challenge identifier (must match challenge `id`) |
-| `source` | string | No | Payer identifier as a DID [W3C-DID] |
+| `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
 
 The `payload` field contains the payment-method-specific data needed to
@@ -575,9 +596,16 @@ Implementations MUST treat `Authorization: Payment` headers and
 
 ### 11.8. Caching
 
-Servers SHOULD send `Cache-Control: no-store` with 402 responses.
-Responses with `Payment-Receipt` headers SHOULD include
-`Cache-Control: private`.
+Payment challenges contain unique identifiers and time-sensitive payment
+data that MUST NOT be cached or reused. To prevent challenge replay and
+stale payment information:
+
+Servers MUST send `Cache-Control: no-store` [RFC9111] with 402 responses
+and 401 responses containing `WWW-Authenticate: Payment` headers.
+
+Responses containing `Payment-Receipt` or `Payment-Authorization` headers
+MUST include `Cache-Control: private` to prevent shared caches from
+storing payment receipts or authorization tokens.
 
 ### 11.9. Cross-Origin Considerations
 
@@ -684,6 +712,9 @@ identifiers upon publication.
 
 - **[RFC9110]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Semantics", STD 97, RFC 9110, June 2022.
+
+- **[RFC9111]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+  Ed., "HTTP Caching", STD 98, RFC 9111, June 2022.
 
 ### 13.2. Informative References
 
@@ -905,5 +936,3 @@ Tempo Labs
 Email: jake@tempo.xyz
 
 ---
-
-**License:** This specification is released into the public domain (CC0 1.0 Universal).

@@ -141,6 +141,46 @@ payment methods are defined in separate payment method specifications.</t>
         </ul>
         <t>When a client submits an invalid Payment credential, servers <bcp14>MUST</bcp14> return 401 (Unauthorized) with a <tt>WWW-Authenticate: Payment</tt> header containing a fresh challenge.</t>
       </section>
+      <section anchor="usage-of-402-payment-required">
+        <name>Usage of 402 Payment Required</name>
+        <t>The 402 (Payment Required) status code was reserved by <xref target="RFC9110"/> for future use. This specification defines semantics for 402 within the context of the Payment authentication scheme.</t>
+        <section anchor="when-to-return-402">
+          <name>When to Return 402</name>
+          <t>Servers <bcp14>SHOULD</bcp14> return 402 when:</t>
+          <ul>
+            <li>The resource requires payment as a precondition for access</li>
+            <li>The server can provide a Payment challenge that the client may fulfill</li>
+            <li>Payment is the primary barrier to access (not authentication or authorization)</li>
+          </ul>
+          <t>Servers <bcp14>MAY</bcp14> return 402 when:</t>
+          <ul>
+            <li>Offering optional paid features or premium content</li>
+            <li>Indicating that a previously-paid resource requires additional payment</li>
+            <li>The payment requirement applies to a subset of request methods</li>
+          </ul>
+        </section>
+        <section anchor="when-not-to-return-402">
+          <name>When NOT to Return 402</name>
+          <t>Servers <bcp14>SHOULD NOT</bcp14> return 402 when:</t>
+          <ul>
+            <li>The client lacks authentication credentials (use 401)</li>
+            <li>The client is authenticated but lacks authorization (use 403)</li>
+            <li>The resource does not exist (use 404)</li>
+            <li>No Payment challenge can be constructed for the request</li>
+          </ul>
+          <t>Servers <bcp14>MUST NOT</bcp14> return 402 without including a <tt>WWW-Authenticate</tt> header containing at least one Payment challenge.</t>
+        </section>
+        <section anchor="interaction-with-other-authentication-schemes">
+          <name>Interaction with Other Authentication Schemes</name>
+          <t>When a resource requires both authentication and payment, servers <bcp14>SHOULD</bcp14>:</t>
+          <ol type="1">
+            <li>First verify authentication credentials</li>
+            <li>Return 401 if authentication fails</li>
+            <li>Return 402 with a Payment challenge only after successful authentication</li>
+          </ol>
+          <t>This ordering prevents information leakage about payment requirements to unauthenticated clients.</t>
+        </section>
+      </section>
     </section>
     <section anchor="the-payment-authentication-scheme">
       <name>The Payment Authentication Scheme</name>
@@ -217,7 +257,7 @@ b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
               <td><tt>source</tt></td>
               <td>string</td>
               <td>No</td>
-              <td>Payer identifier as a DID <xref target="w3c-did"/></td>
+              <td>Payer identifier (<bcp14>RECOMMENDED</bcp14>: DID format per <xref target="w3c-did"/>)</td>
             </tr>
             <tr>
               <td><tt>payload</tt></td>
@@ -573,7 +613,9 @@ WWW-Authenticate: Payment ...
       </section>
       <section anchor="caching">
         <name>Caching</name>
-        <t>Servers <bcp14>SHOULD</bcp14> send <tt>Cache-Control: no-store</tt> with 402 responses. Responses with <tt>Payment-Receipt</tt> headers <bcp14>SHOULD</bcp14> include <tt>Cache-Control: private</tt>.</t>
+        <t>Payment challenges contain unique identifiers and time-sensitive payment data that <bcp14>MUST NOT</bcp14> be cached or reused. To prevent challenge replay and stale payment information:</t>
+        <t>Servers <bcp14>MUST</bcp14> send <tt>Cache-Control: no-store</tt> <xref target="RFC9111"/> with 402 responses and 401 responses containing <tt>WWW-Authenticate: Payment</tt> headers.</t>
+        <t>Responses containing <tt>Payment-Receipt</tt> or <tt>Payment-Authorization</tt> headers <bcp14>MUST</bcp14> include <tt>Cache-Control: private</tt> to prevent shared caches from storing payment receipts or authorization tokens.</t>
       </section>
       <section anchor="cross-origin-considerations">
         <name>Cross-Origin Considerations</name>
@@ -669,6 +711,7 @@ WWW-Authenticate: Payment ...
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8259.xml"/>
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8446.xml"/>
         <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9110.xml"/>
+        <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9111.xml"/>
       </references>
       <references>
         <name>Informative References</name>
