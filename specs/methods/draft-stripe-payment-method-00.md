@@ -777,15 +777,17 @@ Authorization: Payment eyJpZCI6ImNoXzFhMmIzYzRkNWUiLCJwYXlsb2FkIjoiZXlKemNIUWlPa
 Decoded credential:
 ```json
 {
-  "id": "ch_1a2b3c4d5e",
-  "payload": "eyJzcHQiOiJzcHRfMU40WnYzMmVadktZbG8yQ1BoVlBrSmxXIn0"
-}
-```
-
-Decoded payload:
-```json
-{
-  "spt": "spt_1N4Zv32eZvKYlo2CPhVPkJlW"
+  "challenge": {
+    "id": "ch_1a2b3c4d5e",
+    "realm": "api.example.com",
+    "method": "stripe",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBSSBnZW5lcmF0aW9uIn0",
+    "expires": "2025-01-15T12:05:00Z"
+  },
+  "payload": {
+    "spt": "spt_1N4Zv32eZvKYlo2CPhVPkJlW"
+  }
 }
 ```
 
@@ -865,14 +867,24 @@ Decoded request:
 ```http
 GET /api/subscribe HTTP/1.1
 Host: saas.example.com
-Authorization: Payment eyJpZCI6InN1Yl9zZXR1cF8xMjMiLCJwYXlsb2FkIjoiZXlKelpYUjFjRWx1ZEdWdWRFbGtJam9pYzJWMGFWOHhUalJhZGpNeVpWcDJTMWxzYnpKRFVHaFdVR3RLYkZjaUxDSndZWGx0Wlc1MFRYV9In0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJzdWJfc2V0dXBfMTIzIiwicmVhbG0iOiJzYWFzLmV4YW1wbGUuY29tIiwibWV0aG9kIjoic3RyaXBlIiwiaW50ZW50Ijoic3Vic2NyaXB0aW9uIiwicmVxdWVzdCI6Ii4uLiIsImV4cGlyZXMiOiIyMDI1LTAxLTE1VDEyOjA1OjAwWiJ9LCJwYXlsb2FkIjp7InNldHVwSW50ZW50SWQiOiJzZXRpXzFONFp2MzJlWnZLWWxvMkNQaFZQa0psVyIsInBheW1lbnRNZXRob2RJZCI6InBtXzFONFp2MzJlWnZLWWxvMkNhQmNEZWZHaCJ9fQ
 ```
 
-Decoded payload:
+Decoded credential:
 ```json
 {
-  "setupIntentId": "seti_1N4Zv32eZvKYlo2CPhVPkJlW",
-  "paymentMethodId": "pm_1N4Zv32eZvKYlo2CaBcDefGh"
+  "challenge": {
+    "id": "sub_setup_123",
+    "realm": "saas.example.com",
+    "method": "stripe",
+    "intent": "subscription",
+    "request": "eyJhbW91bnQiOjk5MDAsImN1cnJlbmN5IjoidXNkIiwiaW50ZXJ2YWwiOiJtb250aCIsImRlc2NyaXB0aW9uIjoiUHJlbWl1bSBBUEkgc3Vic2NyaXB0aW9uIn0",
+    "expires": "2025-01-15T12:05:00Z"
+  },
+  "payload": {
+    "setupIntentId": "seti_1N4Zv32eZvKYlo2CPhVPkJlW",
+    "paymentMethodId": "pm_1N4Zv32eZvKYlo2CaBcDefGh"
+  }
 }
 ```
 

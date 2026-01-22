@@ -207,12 +207,11 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 #### 5.1.1. Required Parameters
 
-**`id`**: Unique identifier for this payment challenge. Servers MUST
-  generate a cryptographically random value with at least 128 bits of
-  entropy for each challenge. Clients MUST include this value in the
-  credential to correlate the response with the challenge. Servers
-  MUST reject credentials with unknown, expired, or already-used `id`
-  values.
+**`id`**: Self-contained challenge identifier that cryptographically binds
+  the challenge to its parameters. Servers MUST generate `id` values as
+  an HMAC of the challenge parameters (Section 5.1.3). Clients MUST
+  include this value unchanged in the credential. Servers MUST reject
+  credentials where the `id` fails HMAC verification.
 
 **`realm`**: Protection space identifier per [RFC7235]. Servers MUST
   include this parameter to define the scope of the payment requirement.
@@ -241,7 +240,79 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 Unknown parameters MUST be ignored by clients.
 
-#### 5.1.3. Example Challenge
+#### 5.1.3. Challenge Binding
+
+The challenge `id` MUST cryptographically bind the challenge to its
+parameters, enabling stateless verification without server-side storage.
+
+##### 5.1.3.1. HMAC Construction
+
+The `id` is computed using HMAC-SHA-256 [RFC2104] over a newline-delimited
+canonical encoding of the challenge parameters, following the conventions
+established by HTTP Message Signatures [RFC9421]:
+
+```
+mac_input = realm        || "\n" ||
+            method       || "\n" ||
+            intent       || "\n" ||
+            request      || "\n" ||
+            expires
+
+id = base64url(HMAC-SHA-256(secret_key, mac_input))
+```
+
+Where:
+
+- `secret_key`: The server's HMAC secret key. Servers SHOULD rotate
+  keys periodically and MUST use keys with at least 256 bits of entropy.
+- `"\n"`: A single newline character (ASCII 0x0A).
+- `base64url`: Base64url encoding without padding per [RFC4648].
+
+Each field is encoded as UTF-8:
+
+- `realm`: ASCII string per [RFC7235]
+- `method`: Lowercase ASCII identifier
+- `intent`: Lowercase ASCII identifier
+- `request`: Base64url-encoded string 
+- `expires`: RFC 3339 timestamp
+
+If `expires` is absent from the challenge, implementations MUST use
+an empty string for the `expires` component.
+
+##### 5.1.3.2. Echoing Requirements
+
+When constructing the credential, clients MUST echo the challenge
+parameters byte-for-byte as received. Specifically:
+
+- The `request` field MUST be echoed as the exact base64url string
+  from the challenge, without decoding and re-encoding.
+- The `expires` field MUST be echoed as the exact string from the
+  challenge, without parsing or reformatting.
+
+Clients MUST NOT normalize, parse, or transform echoed values.
+
+##### 5.1.3.3. Verification Procedure
+
+When a credential is received, the client echoes the challenge parameters
+in the `challenge` object (Section 5.2). Servers MUST:
+
+1. Extract `realm`, `method`, `intent`, `request`, and `expires` from
+   the credential's `challenge` object.
+2. Verify `challenge.realm` matches the expected realm for the resource.
+3. Recompute the HMAC as specified in Section 5.1.3.1 using the
+   extracted values.
+4. Compare the computed HMAC with `challenge.id` using a constant-time
+   comparison function to prevent timing attacks.
+5. Verify `expires` has not passed. If `expires` is absent, servers
+   MUST apply a default expiration policy.
+6. Verify `payload` satisfies the `request` parameters per the payment
+   method specification.
+7. Reject the credential if any verification step fails.
+
+This enables fully stateless challenge verification. The server stores
+only the HMAC secret key.
+
+#### 5.1.4. Example Challenge
 
 ```http
 HTTP/1.1 402 Payment Required
@@ -279,9 +350,21 @@ containing:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Challenge identifier (must match challenge `id`) |
+| `challenge` | object | Yes | Echoed challenge parameters |
 | `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
+
+The `challenge` object contains the parameters from the original challenge,
+enabling stateless server verification:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Challenge identifier |
+| `realm` | string | Protection space |
+| `method` | string | Payment method identifier |
+| `intent` | string | Payment intent type |
+| `request` | string | Base64url-encoded payment request |
+| `expires` | string | Challenge expiration timestamp |
 
 The `payload` field contains the payment-method-specific data needed to
 complete the payment challenge. Payment method specifications define the
@@ -292,14 +375,21 @@ exact structure.
 ```http
 GET /api/data HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJwYXlsb2FkIjp7InByb29mIjoiMHhhYmMxMjMuLi4ifX0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSlZVMFFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
 ```
 
 Decoded credential:
 
 ```json
 {
-  "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+  "challenge": {
+    "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+    "realm": "api.example.com",
+    "method": "example",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "payload": {
     "proof": "0xabc123..."
   }
@@ -494,19 +584,35 @@ MUST NOT send Payment credentials over unencrypted HTTP.
 
 ### 11.3. Challenge Identifier Security
 
-The challenge `id` parameter MUST be:
+The challenge `id` is a self-contained, cryptographically-bound identifier
+(Section 5.1.3). The `id` MUST be:
 
-- **Unpredictable**: Not guessable by clients or attackers
-- **Unique**: Never reused across challenges
-- **Bound**: Each `id` MUST be bound to the origin, realm, and request
+- **Tamper-proof**: The HMAC-SHA-256 construction prevents modification
+  of challenge parameters.
+- **Context-bound**: The identifier is cryptographically bound to `realm`,
+  `method`, `intent`, `request`, and `expires`.
 
-Servers MUST reject credentials containing invalid, expired, or
-previously-used `id` values.
+Servers MUST reject credentials where:
+
+- The `challenge.id` fails HMAC verification.
+- The `challenge.expires` timestamp has passed.
+- The `challenge.realm` does not match the expected realm for the resource.
+
+#### 11.3.1. Delimiter Security
+
+The newline-delimited encoding specified in Section 5.1.3.1 prevents
+concatenation ambiguity attacks. The delimiter is unambiguous because
+none of the challenge parameter fields can contain newline characters.
+
+Implementations MUST use the exact encoding specified in Section 5.1.3.1.
 
 ### 11.4. Replay Protection
 
-Payment methods MUST define their own replay protection mechanisms
-(e.g., nonce consumption, preimage revelation, authorization expiry).
+Payment methods used with this specification MUST provide single-use
+proof semantics. A payment proof MUST be usable exactly once; subsequent
+attempts to use the same proof MUST be rejected by the payment method
+infrastructure.
+
 
 ### 11.5. Amount Verification
 
@@ -613,6 +719,9 @@ identifiers upon publication.
 
 ### 13.1. Normative References
 
+- **[RFC2104]** Krawczyk, H., Bellare, M., and R. Canetti, "HMAC:
+  Keyed-Hashing for Message Authentication", RFC 2104, February 1997.
+
 - **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
   Requirement Levels", BCP 14, RFC 2119, March 1997.
 
@@ -652,6 +761,9 @@ identifiers upon publication.
 
 - **[RFC9111]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Caching", STD 98, RFC 9111, June 2022.
+
+- **[RFC9421]** Backman, A., Ed., Richer, J., Ed., and M. Sporny,
+  "HTTP Message Signatures", RFC 9421, February 2024.
 
 ### 13.2. Informative References
 
@@ -765,7 +877,14 @@ Decoded credential:
 
 ```json
 {
-  "id": "qB3wErTyU7iOpAsD9fGhJk",
+  "challenge": {
+    "id": "qB3wErTyU7iOpAsD9fGhJk",
+    "realm": "api.example.com",
+    "method": "invoice",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "payload": {
     "preimage": "0xabc123..."
   }
@@ -815,7 +934,14 @@ Decoded `request`:
 
 ```json
 {
-  "id": "zL4xCvBnM6kJhGfD8sAaWe",
+  "challenge": {
+    "id": "zL4xCvBnM6kJhGfD8sAaWe",
+    "realm": "api.example.com",
+    "method": "signed",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiI1MDAwIiwiYXNzZXQiOiJVU0QiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJub25jZSI6IjB4MTIzNDU2Nzg5MCJ9",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "source": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
   "payload": {
     "signature": "0x1b2c3d4e5f..."
