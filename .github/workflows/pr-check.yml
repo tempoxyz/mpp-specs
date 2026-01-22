@@ -55,9 +55,9 @@ jobs:
             name=$(basename "$file" .txt)
             base_file="artifacts-base/${name}.txt"
             if [ -f "$base_file" ]; then
-              diff -u "$base_file" "$file" > "artifacts/diffs/${name}.diff" || true
+              diff -u "$base_file" "$file" > "artifacts/diffs/${name}-diff.txt" || true
             else
-              echo "New spec (no base to compare)" > "artifacts/diffs/${name}.diff"
+              echo "New spec (no base to compare)" > "artifacts/diffs/${name}-diff.txt"
             fi
           done
 
@@ -76,7 +76,7 @@ jobs:
           BASE_URL="${{ steps.deploy.outputs.deployment-url }}"
           for file in artifacts/draft-*.html; do
             name=$(basename "$file" .html)
-            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}.diff) |\n"
+            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}-diff.txt) |\n"
           done
           echo "table<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TABLE" >> $GITHUB_OUTPUT
