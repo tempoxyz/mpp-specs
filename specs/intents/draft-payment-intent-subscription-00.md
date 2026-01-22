@@ -124,16 +124,19 @@ amount per billing period.
 
 ## Billing Periods
 
-Standard billing periods:
+The `period` field MUST be specified as an integer number of seconds.
+For interoperability, the following named constants are defined:
 
-| Period | Duration | Seconds |
-|--------|----------|---------|
-| `day` | 1 day | 86400 |
-| `week` | 7 days | 604800 |
-| `month` | ~30 days | 2592000 |
-| `year` | ~365 days | 31536000 |
+| Period Name | Duration | Seconds |
+|-------------|----------|---------|
+| daily | 1 day | 86400 |
+| weekly | 7 days | 604800 |
+| monthly | 30 days | 2592000 |
+| yearly | 365 days | 31536000 |
 
-Payment method specifications MAY define custom period formats.
+These are fixed durations, not calendar periods. A "monthly" period is
+exactly 30 days (2592000 seconds), not a calendar month. Payment method
+specifications SHOULD use these constants for common billing cycles.
 
 # Request Schema
 
@@ -141,8 +144,8 @@ Payment method specifications MAY define custom period formats.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `amount` | string/number | Amount per billing period |
-| `period` | string/number | Billing period (name or seconds) |
+| `amount` | string | Amount per billing period (base units) |
+| `period` | integer | Billing period in seconds |
 
 ## Recommended Fields
 
@@ -158,21 +161,12 @@ Payment method specifications MAY define custom period formats.
 {
   "amount": "10000000",
   "asset": "0x20c0000000000000000000000000000000000001",
-  "period": "month",
+  "period": 2592000,
   "expires": "2026-01-15T00:00:00Z"
 }
 ~~~
 
-Or with explicit period in seconds:
-
-~~~ json
-{
-  "amount": "9900",
-  "currency": "USD",
-  "period": 2592000,
-  "cycles": 12
-}
-~~~
+This example represents a monthly subscription (30 days) for 10.00 units.
 
 # Credential Requirements
 
@@ -271,7 +265,8 @@ Payers MUST have clear cancellation mechanisms. Servers MUST:
 
 ## Failed Payment Handling
 
-Servers SHOULD define clear policies for failed payments:
+Retry policies for failed subscription payments are defined by payment
+method specifications. Servers SHOULD define clear policies including:
 
 - Number of retry attempts
 - Grace period before service suspension

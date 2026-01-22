@@ -193,7 +193,7 @@ When charging against an authorization:
 ## Revocation
 
 Payers SHOULD be able to revoke authorizations before expiry. Revocation
-mechanisms are method-specific:
+mechanisms are defined by payment method specifications.
 
 | Method | Revocation Mechanism |
 |--------|---------------------|
@@ -219,7 +219,10 @@ interaction.
 Clients SHOULD prefer short authorization windows. Long-lived
 authorizations increase risk if credentials are compromised.
 
-Recommended maximum windows:
+Authorization windows SHOULD NOT exceed:
+
+- 7 days for card-based payment methods (due to issuer authorization holds)
+- 30 days for token-based or blockchain payment methods
 
 | Use Case | Recommended Max |
 |----------|-----------------|
