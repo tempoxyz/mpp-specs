@@ -1,0 +1,44 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    certified (1.0.0)
+    connection_pool (2.5.5)
+    differ (0.1.2)
+    json_pure (2.7.6)
+    kramdown (2.4.0)
+      rexml
+    kramdown-parser-gfm (1.1.0)
+      kramdown (~> 2.0)
+    kramdown-rfc (1.7.30)
+      kramdown-rfc2629 (= 1.7.30)
+    kramdown-rfc2629 (1.7.30)
+      base64 (~> 0.2)
+      certified (~> 1.0)
+      differ (~> 0.1)
+      json_pure (~> 2.0)
+      kramdown (~> 2.4.0)
+      kramdown-parser-gfm (~> 1.1)
+      net-http-persistent (~> 4.0)
+      ostruct (~> 0.6)
+      unicode-blocks (~> 1.0)
+      unicode-name (~> 1.0)
+      unicode-scripts (~> 1.0)
+    net-http-persistent (4.0.8)
+      connection_pool (>= 2.2.4, < 4)
+    ostruct (0.6.3)
+    rexml (3.4.4)
+    unicode-blocks (1.11.0)
+    unicode-name (1.14.0)
+      unicode-types (~> 1.11)
+    unicode-scripts (1.12.0)
+    unicode-types (1.11.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  kramdown-rfc (= 1.7.30)
+
+BUNDLED WITH
+   1.17.2

@@ -1,51 +1,40 @@
 ---
-title: "charge" Intent for HTTP Payment Authentication
-docName: draft-payment-intent-charge-00
-version: 00
-category: info
+title: '"charge" Intent for HTTP Payment Authentication'
+abbrev: Payment Charge Intent
+docname: draft-payment-intent-charge-00
+category: std
 ipr: trust200902
-submissionType: IETF
+submissiontype: IETF
 consensus: true
 
 author:
-  - fullname: Jake Moxey
+  - ins: J. Moxey
+    name: Jake Moxey
+    org: Tempo Labs
     email: jake@tempo.xyz
-    organization: Tempo Labs
+
+normative:
+  PAYMENT-AUTH:
+    title: The "Payment" HTTP Authentication Scheme
+    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
+    seriesinfo:
+      Internet-Draft: draft-httpauth-payment-00
+    author:
+      - ins: J. Moxey
+        name: Jake Moxey
+    date: 2025
 ---
 
-## Abstract
+--- abstract
 
 This document defines the "charge" payment intent for use with the Payment
-HTTP Authentication Scheme [I-D.httpauth-payment]. The "charge" intent
+HTTP Authentication Scheme {{PAYMENT-AUTH}}. The "charge" intent
 represents a one-time payment where the payer provides proof of payment
 immediately in exchange for resource access.
 
-## Status of This Memo
+--- middle
 
-This Internet-Draft is submitted in full conformance with the provisions
-of BCP 78 and BCP 79.
-
-## Copyright Notice
-
-Copyright (c) 2025 IETF Trust and the persons identified as the document
-authors. All rights reserved.
-
-## Table of Contents
-
-1. [Introduction](#1-introduction)
-2. [Requirements Language](#2-requirements-language)
-3. [Intent Semantics](#3-intent-semantics)
-4. [Request Schema](#4-request-schema)
-5. [Credential Requirements](#5-credential-requirements)
-6. [Verification](#6-verification)
-7. [Security Considerations](#7-security-considerations)
-8. [IANA Considerations](#8-iana-considerations)
-9. [References](#9-references)
-10. [Authors' Addresses](#authors-addresses)
-
----
-
-## 1. Introduction
+# Introduction
 
 The "charge" intent is the most fundamental payment pattern: a one-time
 exchange of payment for resource access. The payer provides proof of
@@ -60,32 +49,24 @@ verification, including:
 - Token-based payment confirmation
 - Traditional payment processor confirmation
 
-### 1.1. Relationship to Payment Methods
+## Relationship to Payment Methods
 
 This document defines the abstract semantics of the "charge" intent.
 Payment method specifications define how to implement this intent using
 their specific payment infrastructure.
 
----
+# Requirements Language
 
-## 2. Requirements Language
+{::boilerplate bcp14-tagged}
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
-"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-"OPTIONAL" in this document are to be interpreted as described in
-BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
-capitals, as shown here.
+# Intent Semantics
 
----
-
-## 3. Intent Semantics
-
-### 3.1. Definition
+## Definition
 
 The "charge" intent represents a request for immediate, one-time payment
 of a specified amount in exchange for resource access.
 
-### 3.2. Properties
+## Properties
 
 | Property | Value |
 |----------|-------|
@@ -94,7 +75,7 @@ of a specified amount in exchange for resource access.
 | **Idempotency** | Single-use per challenge |
 | **Reversibility** | Method-dependent |
 
-### 3.3. Flow
+## Flow
 
 1. Server issues a 402 response with `intent="charge"`
 2. Client fulfills the payment (method-specific)
@@ -102,28 +83,26 @@ of a specified amount in exchange for resource access.
 4. Server verifies payment and grants access
 5. Server returns `Payment-Receipt` header
 
-### 3.4. Atomicity
+## Atomicity
 
 The "charge" intent implies atomic exchange: the server SHOULD NOT
 provide partial access if payment verification fails. Either the full
 resource is provided (payment succeeded) or access is denied (payment
 failed).
 
----
-
-## 4. Request Schema
+# Request Schema
 
 The `request` parameter for a "charge" intent MUST include sufficient
 information for the client to complete payment. At minimum, payment
 method specifications MUST define:
 
-### 4.1. Required Fields
+## Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `amount` | string/number | Payment amount (method-specific format) |
 
-### 4.2. Recommended Fields
+## Recommended Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -131,25 +110,23 @@ method specifications MUST define:
 | `recipient` | string | Payment recipient (method-specific format) |
 | `expires` | string | Expiry timestamp for this request |
 
-### 4.3. Example
+## Example
 
-```json
+~~~ json
 {
   "amount": "1000",
   "currency": "USD",
   "recipient": "acct_123",
   "expires": "2025-01-15T12:05:00Z"
 }
-```
+~~~
 
 Payment method specifications define the complete schema for their
 implementation of the "charge" intent.
 
----
+# Credential Requirements
 
-## 5. Credential Requirements
-
-### 5.1. Payload
+## Payload
 
 The credential `payload` for a "charge" intent MUST contain proof that
 payment has been made or authorized. The proof type is method-specific:
@@ -161,16 +138,14 @@ payment has been made or authorized. The proof type is method-specific:
 | Confirmation | Payment processor confirmation ID | Stripe |
 | Transaction | Transaction hash on public ledger | Bitcoin, Ethereum |
 
-### 5.2. Single-Use
+## Single-Use
 
 Each credential MUST be usable only once per challenge. Servers MUST
 reject replayed credentials.
 
----
+# Verification
 
-## 6. Verification
-
-### 6.1. Server Responsibilities
+## Server Responsibilities
 
 Servers verifying a "charge" credential MUST:
 
@@ -180,7 +155,7 @@ Servers verifying a "charge" credential MUST:
 4. Verify the payment amount matches the request
 5. Verify the payment recipient matches the request
 
-### 6.2. Settlement
+## Settlement
 
 Settlement semantics are method-specific:
 
@@ -191,28 +166,26 @@ Settlement semantics are method-specific:
 - **Processor settlement**: External processor handles settlement
   (e.g., Stripe PaymentIntent)
 
----
+# Security Considerations
 
-## 7. Security Considerations
-
-### 7.1. Amount Verification
+## Amount Verification
 
 Clients MUST verify the requested amount is appropriate for the resource
 before authorizing payment. Malicious servers could request excessive
 amounts.
 
-### 7.2. Recipient Verification
+## Recipient Verification
 
 Clients SHOULD verify the payment recipient when possible. For methods
 that support recipient verification (e.g., known merchant addresses),
 clients SHOULD warn users about unknown recipients.
 
-### 7.3. Replay Protection
+## Replay Protection
 
 Servers MUST implement replay protection. Each challenge `id` MUST be
 single-use. Servers MUST NOT accept the same credential twice.
 
-### 7.4. Finality
+## Finality
 
 The finality of a "charge" payment depends on the payment method:
 
@@ -223,38 +196,19 @@ The finality of a "charge" payment depends on the payment method:
 Servers SHOULD understand the finality guarantees of their accepted
 payment methods and adjust resource access accordingly.
 
----
+# IANA Considerations
 
-## 8. IANA Considerations
-
-### 8.1. Payment Intent Registration
+## Payment Intent Registration
 
 This document registers the "charge" intent in the "HTTP Payment Intents"
-registry established by [I-D.httpauth-payment]:
+registry established by {{PAYMENT-AUTH}}:
 
 | Intent | Description | Reference |
 |--------|-------------|-----------|
 | `charge` | One-time immediate payment | This document |
 
----
+--- back
 
-## 9. References
+# Acknowledgements
 
-### 9.1. Normative References
-
-- **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
-  Requirement Levels", BCP 14, RFC 2119, March 1997.
-
-- **[RFC8174]** Leiba, B., "Ambiguity of Uppercase vs Lowercase in
-  RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-
-- **[I-D.httpauth-payment]** Moxey, J., "The 'Payment' HTTP Authentication
-  Scheme", draft-httpauth-payment-00.
-
----
-
-## Authors' Addresses
-
-Jake Moxey
-Tempo Labs
-Email: jake@tempo.xyz
+TBD
