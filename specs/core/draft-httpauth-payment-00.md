@@ -232,10 +232,16 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   entropy for each challenge. Clients MUST include this value in the
   credential to correlate the response with the challenge. Servers
   MUST reject credentials with unknown, expired, or already-used `id`
-  values.
+  values. Servers MUST associate each challenge `id` with the specific
+  target URI and HTTP method for which it was issued. Servers MUST
+  reject credentials where the target URI or HTTP method differs from
+  the original challenge.
 
 **`realm`**: Protection space identifier per {{RFC7235}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
+  Servers MUST verify that the credential's challenge `id` was issued
+  for the same realm as the current request. Credentials MUST NOT be
+  accepted across different realms.
 
 **`method`**: Payment method identifier ({{payment-methods}}). MUST be a lowercase
   ASCII string.
