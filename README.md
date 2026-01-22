@@ -123,8 +123,8 @@ make clean
 
 ```bash
 # Install dependencies
-npm install
-pip install -r requirements.txt
+bundle install              # Ruby: kramdown-rfc
+pip install -r requirements.txt  # Python: xml2rfc, rfclint
 
 # Generate artifacts
 ./scripts/gen.sh
