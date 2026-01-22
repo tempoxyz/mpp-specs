@@ -1,52 +1,39 @@
 ---
-title: "authorize" Intent for HTTP Payment Authentication
-docName: draft-payment-intent-authorize-00
-version: 00
+title: authorize Intent for HTTP Payment Authentication
+abbrev: Payment Intent Authorize
+docname: draft-payment-intent-authorize-00
 category: info
 ipr: trust200902
-submissionType: IETF
+submissiontype: IETF
 consensus: true
 
 author:
-  - fullname: Jake Moxey
+  - ins: J. Moxey
+    name: Jake Moxey
+    org: Tempo Labs
     email: jake@tempo.xyz
-    organization: Tempo Labs
+
+normative:
+  RFC2119:
+  RFC8174:
+  I-D.httpauth-payment:
+    title: The "Payment" HTTP Authentication Scheme
+    author:
+      - ins: J. Moxey
+    date: 2025
 ---
 
-## Abstract
+--- abstract
 
 This document defines the "authorize" payment intent for use with the
-Payment HTTP Authentication Scheme [I-D.httpauth-payment]. The "authorize"
+Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}. The "authorize"
 intent represents a pre-authorization where the payer grants the server
 permission to charge up to a specified amount within a time window,
 without immediate payment.
 
-## Status of This Memo
+--- middle
 
-This Internet-Draft is submitted in full conformance with the provisions
-of BCP 78 and BCP 79.
-
-## Copyright Notice
-
-Copyright (c) 2025 IETF Trust and the persons identified as the document
-authors. All rights reserved.
-
-## Table of Contents
-
-1. [Introduction](#1-introduction)
-2. [Requirements Language](#2-requirements-language)
-3. [Intent Semantics](#3-intent-semantics)
-4. [Request Schema](#4-request-schema)
-5. [Credential Requirements](#5-credential-requirements)
-6. [Authorization Lifecycle](#6-authorization-lifecycle)
-7. [Security Considerations](#7-security-considerations)
-8. [IANA Considerations](#8-iana-considerations)
-9. [References](#9-references)
-10. [Authors' Addresses](#authors-addresses)
-
----
-
-## 1. Introduction
+# Introduction
 
 The "authorize" intent enables pre-authorized payments where the payer
 grants the server permission to charge up to a specified amount at a
@@ -59,7 +46,7 @@ later time. This is useful for:
 Unlike the "charge" intent which requires immediate payment, "authorize"
 creates a payment capability that the server can exercise later.
 
-### 1.1. Relationship to Payment Methods
+## Relationship to Payment Methods
 
 Payment methods implement "authorize" using their native authorization
 mechanisms:
@@ -70,27 +57,19 @@ mechanisms:
 | Stripe | SetupIntent + saved PaymentMethod |
 | EVM | ERC-20 `approve()` or EIP-3009 authorization |
 
----
+# Requirements Language
 
-## 2. Requirements Language
+{::boilerplate bcp14-tagged}
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
-"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-"OPTIONAL" in this document are to be interpreted as described in
-BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
-capitals, as shown here.
+# Intent Semantics
 
----
-
-## 3. Intent Semantics
-
-### 3.1. Definition
+## Definition
 
 The "authorize" intent represents a request for the payer to grant
 permission for the server to initiate payments up to a specified limit,
 within a specified time window.
 
-### 3.2. Properties
+## Properties
 
 | Property | Value |
 |----------|-------|
@@ -99,9 +78,9 @@ within a specified time window.
 | **Idempotency** | Reusable within limits |
 | **Reversibility** | Revocable before use |
 
-### 3.3. Flow
+## Flow
 
-```
+~~~
    Client                           Server                    Payment Network
       │                                │                              │
       │  (1) GET /resource             │                              │
@@ -132,9 +111,9 @@ within a specified time window.
       │  (9) 200 OK + Receipt          │                              │
       │<───────────────────────────────┤                              │
       │                                │                              │
-```
+~~~
 
-### 3.4. Non-Atomicity
+## Non-Atomicity
 
 Unlike "charge", the "authorize" intent is non-atomic:
 
@@ -142,39 +121,35 @@ Unlike "charge", the "authorize" intent is non-atomic:
 - Multiple charges may occur against a single authorization
 - Total charges MUST NOT exceed the authorized limit
 
----
+# Request Schema
 
-## 4. Request Schema
-
-### 4.1. Required Fields
+## Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `limit` | string/number | Maximum amount that may be charged |
 | `expires` | string | Authorization expiry timestamp |
 
-### 4.2. Recommended Fields
+## Recommended Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `currency` or `asset` | string | Currency/asset identifier |
 | `recipient` | string | Payment recipient (for methods that require it) |
 
-### 4.3. Example
+## Example
 
-```json
+~~~ json
 {
   "limit": "100000000",
   "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-15T00:00:00Z"
 }
-```
+~~~
 
----
+# Credential Requirements
 
-## 5. Credential Requirements
-
-### 5.1. Payload
+## Payload
 
 The credential `payload` for an "authorize" intent contains the
 authorization grant. The format is method-specific:
@@ -185,7 +160,7 @@ authorization grant. The format is method-specific:
 | Token Approval | On-chain approval | EVM ERC-20 approve |
 | Saved Payment Method | Stored card/account | Stripe SetupIntent |
 
-### 5.2. Reusability
+## Reusability
 
 Unlike "charge" credentials, "authorize" credentials may enable multiple
 subsequent charges. The authorization persists until:
@@ -194,11 +169,9 @@ subsequent charges. The authorization persists until:
 - The spending limit is exhausted
 - The payer explicitly revokes it
 
----
+# Authorization Lifecycle
 
-## 6. Authorization Lifecycle
-
-### 6.1. Registration
+## Registration
 
 When the server receives an "authorize" credential:
 
@@ -207,7 +180,7 @@ When the server receives an "authorize" credential:
 3. Return success (200) to indicate authorization accepted
 4. Optionally return `Payment-Authorization` for session reuse
 
-### 6.2. Charging
+## Charging
 
 When charging against an authorization:
 
@@ -217,7 +190,7 @@ When charging against an authorization:
 4. Decrement the remaining limit
 5. Return `Payment-Receipt` with charge details
 
-### 6.3. Revocation
+## Revocation
 
 Payers SHOULD be able to revoke authorizations before expiry. Revocation
 mechanisms are method-specific:
@@ -228,22 +201,20 @@ mechanisms are method-specific:
 | EVM | Set approval to zero |
 | Stripe | Detach PaymentMethod from Customer |
 
-### 6.4. Expiry
+## Expiry
 
 Servers MUST NOT charge against expired authorizations. Servers SHOULD
 provide a mechanism for payers to query authorization status.
 
----
+# Security Considerations
 
-## 7. Security Considerations
-
-### 7.1. Limit Verification
+## Limit Verification
 
 Clients MUST verify the requested limit is acceptable before signing.
 Authorizations grant future spending capability without further user
 interaction.
 
-### 7.2. Expiry Windows
+## Expiry Windows
 
 Clients SHOULD prefer short authorization windows. Long-lived
 authorizations increase risk if credentials are compromised.
@@ -256,13 +227,13 @@ Recommended maximum windows:
 | Daily usage | 24 hours |
 | Monthly billing | 30 days |
 
-### 7.3. Revocation Capability
+## Revocation Capability
 
 Payment methods implementing "authorize" SHOULD provide revocation
 mechanisms. Payers MUST be able to revoke authorizations if they suspect
 compromise.
 
-### 7.4. Authorization Scope
+## Authorization Scope
 
 Authorizations SHOULD be scoped as narrowly as possible:
 
@@ -270,7 +241,7 @@ Authorizations SHOULD be scoped as narrowly as possible:
 - Specific asset/currency
 - Reasonable limits and expiry
 
-### 7.5. Server Accountability
+## Server Accountability
 
 Servers holding authorizations are responsible for:
 
@@ -279,38 +250,13 @@ Servers holding authorizations are responsible for:
 - Providing transaction records to payers
 - Honoring revocation requests
 
----
+# IANA Considerations
 
-## 8. IANA Considerations
-
-### 8.1. Payment Intent Registration
+## Payment Intent Registration
 
 This document registers the "authorize" intent in the "HTTP Payment
-Intents" registry established by [I-D.httpauth-payment]:
+Intents" registry established by {{I-D.httpauth-payment}}:
 
 | Intent | Description | Reference |
 |--------|-------------|-----------|
 | `authorize` | Pre-authorization for future charges | This document |
-
----
-
-## 9. References
-
-### 9.1. Normative References
-
-- **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
-  Requirement Levels", BCP 14, RFC 2119, March 1997.
-
-- **[RFC8174]** Leiba, B., "Ambiguity of Uppercase vs Lowercase in
-  RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-
-- **[I-D.httpauth-payment]** Moxey, J., "The 'Payment' HTTP Authentication
-  Scheme", draft-httpauth-payment-00.
-
----
-
-## Authors' Addresses
-
-Jake Moxey
-Tempo Labs
-Email: jake@tempo.xyz
