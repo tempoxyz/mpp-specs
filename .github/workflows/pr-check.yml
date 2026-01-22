@@ -33,15 +33,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build base branch specs (for diff)
+      - name: Download base branch artifacts (for diff)
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         run: |
-          git checkout ${{ github.event.pull_request.base.sha }}
-          mkdir -p artifacts-base .cache
-          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh || true
-          cp artifacts/*.txt artifacts-base/ 2>/dev/null || true
-          git checkout ${{ github.event.pull_request.head.sha }}
-          rm -rf artifacts/*
+          mkdir -p artifacts-base
+          # Try to download from GitHub Pages (main branch deployment)
+          BASE_URL="https://tempoxyz.github.io/ietf-paymentauth-spec"
+          for spec in draft-httpauth-payment-00 draft-payment-discovery-00 draft-tempo-payment-method-00 draft-stripe-payment-method-00 draft-payment-intent-charge-00 draft-payment-intent-authorize-00 draft-payment-intent-subscription-00; do
+            curl -sf "${BASE_URL}/${spec}.txt" -o "artifacts-base/${spec}.txt" 2>/dev/null || true
+          done
 
       - name: Build and validate specs
         run: |
