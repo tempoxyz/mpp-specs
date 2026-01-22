@@ -492,6 +492,16 @@ authorization data that could result in financial loss if intercepted.
 Servers MUST NOT issue Payment challenges over unencrypted HTTP. Clients
 MUST NOT send Payment credentials over unencrypted HTTP.
 
+#### 11.2.1. Credential Handling
+
+Payment credentials are bearer tokens that authorize financial transactions.
+Servers and intermediaries MUST NOT log Payment credentials or include them
+in error messages, debugging output, or analytics. Credential exposure could
+enable replay attacks or unauthorized payments.
+
+Implementations SHOULD treat Payment credentials with the same care as
+authentication passwords or session tokens.
+
 ### 11.3. Challenge Identifier Security
 
 The challenge `id` parameter MUST be:
