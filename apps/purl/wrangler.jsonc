@@ -11,5 +11,6 @@
 		"directory": "./public",
 		"binding": "ASSETS"
 	},
+	"r2_buckets": [{ "binding": "BINARIES", "bucket_name": "purl-binaries" }],
 	"routes": [{ "pattern": "purl.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
 }

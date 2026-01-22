@@ -73,7 +73,7 @@ async function rehydrateChannelFromChain(
 
 	try {
 		const { TempoStreamChannelABI } = await import('@tempo/stream-channels')
-		
+
 		const result = await publicClient.readContract({
 			address: streamConfig.escrowContract,
 			abi: TempoStreamChannelABI,
@@ -111,8 +111,8 @@ async function rehydrateChannelFromChain(
 		// See: migrations/0001_create_channels.sql and src/durable-objects/PaymentChannel.ts
 		console.warn(
 			`[streaming] FIXME: Re-hydrating channel ${channelId} from chain. ` +
-			`Voucher history is not persisted - previous vouchers since last settlement may be re-accepted. ` +
-			`Configure Durable Objects + D1 for production use.`
+				`Voucher history is not persisted - previous vouchers since last settlement may be re-accepted. ` +
+				`Configure Durable Objects + D1 for production use.`,
 		)
 		activeChannels.set(channelId, {
 			channelId,
@@ -239,10 +239,15 @@ export async function verifyVoucher(
 
 	// Get current state to calculate delta
 	let currentState = server.getChannelState(credential.channelId)
-	
+
 	// If channel not in memory, try to re-hydrate from chain (happens after worker restart)
 	if (!currentState) {
-		const rehydrated = await rehydrateChannelFromChain(env, partner, credential.channelId, streamConfig)
+		const rehydrated = await rehydrateChannelFromChain(
+			env,
+			partner,
+			credential.channelId,
+			streamConfig,
+		)
 		if (!rehydrated.valid) {
 			return { valid: false, error: rehydrated.error }
 		}
