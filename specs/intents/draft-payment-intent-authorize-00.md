@@ -127,7 +127,7 @@ Unlike "charge", the "authorize" intent is non-atomic:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `limit` | string/number | Maximum amount that may be charged |
+| `limit` | string | Maximum amount that may be charged (base units) |
 | `expires` | string | Authorization expiry timestamp |
 
 ## Recommended Fields
