@@ -33,32 +33,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Download base branch artifacts (for diff)
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          mkdir -p artifacts-base
-          # Try to download from GitHub Pages (main branch deployment)
-          BASE_URL="https://tempoxyz.github.io/ietf-paymentauth-spec"
-          for spec in draft-httpauth-payment-00 draft-payment-discovery-00 draft-tempo-payment-method-00 draft-stripe-payment-method-00 draft-payment-intent-charge-00 draft-payment-intent-authorize-00 draft-payment-intent-subscription-00; do
-            curl -sf "${BASE_URL}/${spec}.txt" -o "artifacts-base/${spec}.txt" 2>/dev/null || true
-          done
-
       - name: Build and validate specs
         run: |
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
-      - name: Generate diffs
+      - name: Generate diffs against main
+        if: github.event_name == 'pull_request'
         run: |
           mkdir -p artifacts/diffs
+          BASE_URL="https://tempoxyz.github.io/ietf-paymentauth-spec"
           for file in artifacts/draft-*.txt; do
             name=$(basename "$file" .txt)
-            base_file="artifacts-base/${name}.txt"
-            if [ -f "$base_file" ]; then
-              diff -u "$base_file" "$file" > "artifacts/diffs/${name}-diff.txt" || true
+            if curl -sf "${BASE_URL}/${name}.txt" -o "/tmp/${name}-base.txt" 2>/dev/null; then
+              diff -u "/tmp/${name}-base.txt" "$file" > "artifacts/diffs/${name}-diff.txt" || true
             else
-              echo "New spec (no base to compare)" > "artifacts/diffs/${name}-diff.txt"
+              echo "New spec (no base on main to compare)" > "artifacts/diffs/${name}-diff.txt"
             fi
           done
 
