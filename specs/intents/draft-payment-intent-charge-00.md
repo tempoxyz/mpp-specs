@@ -1,5 +1,5 @@
 ---
-title: "charge" Intent for HTTP Payment Authentication
+title: charge Intent for HTTP Payment Authentication
 abbrev: Payment Intent Charge
 docname: draft-payment-intent-charge-00
 category: info

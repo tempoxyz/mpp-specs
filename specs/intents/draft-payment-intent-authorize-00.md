@@ -1,5 +1,5 @@
 ---
-title: "authorize" Intent for HTTP Payment Authentication
+title: authorize Intent for HTTP Payment Authentication
 abbrev: Payment Intent Authorize
 docname: draft-payment-intent-authorize-00
 category: info

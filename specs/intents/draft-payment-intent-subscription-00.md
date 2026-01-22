@@ -1,5 +1,5 @@
 ---
-title: "subscription" Intent for HTTP Payment Authentication
+title: subscription Intent for HTTP Payment Authentication
 abbrev: Payment Intent Subscription
 docname: draft-payment-intent-subscription-00
 category: info

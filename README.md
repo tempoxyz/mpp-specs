@@ -107,7 +107,7 @@ The specification is modular, separating stable protocol mechanics from evolving
 make docker-build
 
 # Generate XML, HTML, TXT, and PDF artifacts
-make build
+make build-docker
 
 # Run build + validation
 make check

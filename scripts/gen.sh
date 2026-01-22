@@ -9,8 +9,27 @@ OUT_DIR="$ROOT_DIR/artifacts"
 # Config file path (differs inside Docker vs local)
 if [[ -d /data/specs ]]; then
   CONFIG_FILE="/data/xml2rfc.conf"
+  IN_DOCKER=true
 else
   CONFIG_FILE="$ROOT_DIR/xml2rfc.conf"
+  IN_DOCKER=false
+fi
+
+# Check dependencies when running locally
+if ! $IN_DOCKER; then
+  missing=""
+  if ! command -v kramdown-rfc &>/dev/null; then
+    missing="${missing}  - kramdown-rfc (gem install kramdown-rfc, requires Ruby 3.x)\n"
+  fi
+  if ! command -v xml2rfc &>/dev/null; then
+    missing="${missing}  - xml2rfc (pip install -r requirements.txt)\n"
+  fi
+  if [[ -n "$missing" ]]; then
+    echo "ERROR: Missing dependencies for local build:" >&2
+    echo -e "$missing" >&2
+    echo "TIP: Use 'make build' to build with Docker instead." >&2
+    exit 1
+  fi
 fi
 
 # Parse flags

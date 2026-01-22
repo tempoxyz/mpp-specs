@@ -18,6 +18,11 @@ normative:
   RFC8174:
   RFC8615:
   I-D.httpauth-payment:
+    title: "The 'Payment' HTTP Authentication Scheme"
+    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
+    author:
+      - name: Jake Moxey
+    date: 2026-01
 ---
 
 --- abstract
