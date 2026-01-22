@@ -265,7 +265,30 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see {{amount-verification}}).
 
+**`body_hash`**: For requests with bodies (POST, PUT, PATCH), servers MAY
+  include a SHA-256 hash of the expected request body, encoded as a
+  lowercase hexadecimal string. When present, servers MUST reject
+  credentials submitted with a request body that produces a different
+  hash. This prevents credential substitution attacks where an attacker
+  pays for a cheap operation but uses the credential for an expensive one.
+
 Unknown parameters MUST be ignored by clients.
+
+### Request Body Binding {#body-binding}
+
+Payment credentials are bound to the request that triggered the challenge.
+For non-idempotent methods (POST, PUT, PATCH, DELETE), the credential
+authorizes the specific operation requested, not arbitrary operations.
+
+When a client receives a 402 challenge for a request with a body, the
+client MUST submit the credential with the same request body. Servers
+SHOULD use the `body_hash` parameter to cryptographically bind the
+challenge to the request body.
+
+If a server issues a challenge without `body_hash` for a request with a
+body, the server MUST use other means to ensure the credential is used
+for the intended operation (e.g., storing the body server-side keyed by
+challenge `id`).
 
 ### Example Challenge
 
