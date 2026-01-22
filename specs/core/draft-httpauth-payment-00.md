@@ -516,6 +516,31 @@ previously-used `id` values.
 Payment methods MUST define their own replay protection mechanisms
 (e.g., nonce consumption, preimage revelation, authorization expiry).
 
+## Idempotency and Side Effects
+
+Servers MUST NOT perform side effects (database writes, external API
+calls, resource creation) for requests that have not been paid. The
+unpaid request that triggers a 402 challenge MUST NOT modify server
+state beyond recording the challenge itself.
+
+For non-idempotent methods (POST, PUT, DELETE), servers SHOULD accept
+an `Idempotency-Key` header to enable safe client retries. When a client
+retries a request with the same `Idempotency-Key` and a valid Payment
+credential, the server SHOULD return the same response as the original
+successful request without re-executing the operation.
+
+## Concurrent Request Handling
+
+Servers MUST ensure that concurrent requests with the same Payment
+credential result in at most one successful payment settlement and one
+resource delivery. Race conditions between parallel requests could
+otherwise cause double-payment or double-delivery.
+
+Implementations SHOULD use atomic operations or distributed locks when
+verifying and consuming Payment credentials. The credential verification
+and resource delivery SHOULD be performed as an atomic operation where
+possible.
+
 ## Amount Verification {#amount-verification}
 
 Clients MUST verify before authorizing payment:
