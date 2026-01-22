@@ -201,9 +201,3 @@ URIs" registry established by {{!RFC8615}}:
 - **Related Information**: None
 
 {backmatter}
-
-## Authors' Addresses
-
-Jake Moxey
-Tempo Labs
-Email: jake@tempo.xyz

@@ -877,12 +877,4 @@ challenge for retry.
 
 TBD
 
----
 
-## Authors' Addresses
-
-Jake Moxey
-Tempo Labs
-Email: jake@tempo.xyz
-
----

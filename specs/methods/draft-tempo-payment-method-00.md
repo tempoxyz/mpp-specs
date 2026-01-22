@@ -1251,8 +1251,4 @@ registering the key with the AccountKeychain precompile.
 The authors thank the Tempo community for their feedback on this
 specification.
 
-# Authors' Addresses
 
-Jake Moxey
-Tempo Labs
-Email: jake@tempo.xyz
