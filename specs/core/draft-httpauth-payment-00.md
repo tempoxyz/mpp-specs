@@ -653,6 +653,9 @@ identifiers upon publication.
 - **[RFC9111]** Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
   Ed., "HTTP Caching", STD 98, RFC 9111, June 2022.
 
+- **[RFC9457]** Nottingham, M., Wilde, E., and S. Dalal, "Problem Details
+  for HTTP APIs", RFC 9457, July 2023.
+
 ### 13.2. Informative References
 
 - **[W3C-DID]** W3C, "Decentralized Identifiers (DIDs) v1.0",
