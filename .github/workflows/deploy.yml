@@ -34,7 +34,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Generate artifacts
-        run: docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+        run: |
+          mkdir -p .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

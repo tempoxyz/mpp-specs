@@ -37,14 +37,16 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git checkout ${{ github.event.pull_request.base.sha }}
-          mkdir -p artifacts-base
-          docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh || true
+          mkdir -p artifacts-base .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh || true
           cp artifacts/*.txt artifacts-base/ 2>/dev/null || true
           git checkout ${{ github.event.pull_request.head.sha }}
           rm -rf artifacts/*
 
       - name: Build and validate specs
-        run: docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+        run: |
+          mkdir -p .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
       - name: Generate diffs
         run: |
