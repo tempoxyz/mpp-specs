@@ -229,6 +229,12 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 #### 5.1.2. Optional Parameters
 
+**`digest`**: Content digest of the request body, formatted per [RFC9530].
+  Servers SHOULD include this parameter when the payment challenge applies
+  to a request with a body (e.g., POST, PUT, PATCH). When present, clients
+  MUST submit the credential with a request body whose digest matches this
+  value. See Section 5.1.5 for body binding requirements.
+
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an [RFC3339] date-time string (e.g., `"2025-01-15T12:00:00Z"`).
   Servers SHOULD include this parameter. Clients MUST NOT submit
@@ -256,6 +262,7 @@ mac_input = realm        || "\n" ||
             method       || "\n" ||
             intent       || "\n" ||
             request      || "\n" ||
+            digest       || "\n" ||
             expires
 
 id = base64url(HMAC-SHA-256(secret_key, mac_input))
@@ -273,11 +280,12 @@ Each field is encoded as UTF-8:
 - `realm`: ASCII string per [RFC7235]
 - `method`: Lowercase ASCII identifier
 - `intent`: Lowercase ASCII identifier
-- `request`: Base64url-encoded string 
-- `expires`: RFC 3339 timestamp
+- `request`: Base64url-encoded string
+- `digest`: Content-Digest header field value per [RFC9530], or empty string
+- `expires`: RFC 3339 timestamp, or empty string
 
-If `expires` is absent from the challenge, implementations MUST use
-an empty string for the `expires` component.
+If `digest` or `expires` is absent from the challenge, implementations
+MUST use an empty string for that component.
 
 ##### 5.1.3.2. Echoing Requirements
 
@@ -286,6 +294,8 @@ parameters byte-for-byte as received. Specifically:
 
 - The `request` field MUST be echoed as the exact base64url string
   from the challenge, without decoding and re-encoding.
+- The `digest` field, if present, MUST be echoed as the exact string
+  from the challenge.
 - The `expires` field MUST be echoed as the exact string from the
   challenge, without parsing or reformatting.
 
@@ -296,18 +306,20 @@ Clients MUST NOT normalize, parse, or transform echoed values.
 When a credential is received, the client echoes the challenge parameters
 in the `challenge` object (Section 5.2). Servers MUST:
 
-1. Extract `realm`, `method`, `intent`, `request`, and `expires` from
-   the credential's `challenge` object.
+1. Extract `realm`, `method`, `intent`, `request`, `digest`, and `expires`
+   from the credential's `challenge` object.
 2. Verify `challenge.realm` matches the expected realm for the resource.
 3. Recompute the HMAC as specified in Section 5.1.3.1 using the
    extracted values.
 4. Compare the computed HMAC with `challenge.id` using a constant-time
    comparison function to prevent timing attacks.
-5. Verify `expires` has not passed. If `expires` is absent, servers
+5. If `digest` is present, verify the request body matches the digest
+   per [RFC9530]. Reject the credential if the body digest does not match.
+6. Verify `expires` has not passed. If `expires` is absent, servers
    MUST apply a default expiration policy.
-6. Verify `payload` satisfies the `request` parameters per the payment
+7. Verify `payload` satisfies the `request` parameters per the payment
    method specification.
-7. Reject the credential if any verification step fails.
+8. Reject the credential if any verification step fails.
 
 This enables fully stateless challenge verification. The server stores
 only the HMAC secret key.
@@ -334,6 +346,55 @@ Example decoded `request`:
   "recipient": "acct_123"
 }
 ```
+
+#### 5.1.5. Request Body Binding
+
+When a Payment challenge is issued for a request with a body (e.g., POST,
+PUT, PATCH), servers SHOULD bind the challenge to the request content to
+prevent body substitution attacks.
+
+##### 5.1.5.1. Attack Scenario
+
+Without body binding, an attacker could:
+
+1. Submit a request with a low-cost body (e.g., `{"prompt": "hi"}`)
+2. Receive a payment challenge priced for the low-cost operation
+3. Pay the challenge and obtain a valid credential
+4. Replay the credential with a high-cost body (e.g., `{"prompt": "..."}`)
+
+The credential would be valid because it is not bound to the original body.
+
+##### 5.1.5.2. Mitigation
+
+Servers SHOULD include the `digest` parameter when issuing challenges for
+requests with bodies. The digest value is computed per [RFC9530]:
+
+```http
+WWW-Authenticate: Payment id="...",
+    realm="api.example.com",
+    method="example",
+    intent="charge",
+    digest="sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:",
+    expires="2025-01-15T12:05:00Z",
+    request="..."
+```
+
+When verifying a credential with a `digest` parameter, servers MUST:
+
+1. Compute the digest of the current request body per [RFC9530]
+2. Compare it with the `digest` value from the challenge
+3. Reject the credential if the digests do not match
+
+##### 5.1.5.3. Idempotency Requirements
+
+Servers MUST NOT perform side effects (resource creation, state changes,
+external API calls) when returning a 402 response for an unpaid request.
+The act of issuing a payment challenge MUST be idempotent.
+
+When processing credentials for non-idempotent methods (POST, PUT, PATCH,
+DELETE), servers SHOULD use the challenge `id` as an idempotency key to
+prevent duplicate processing if the same credential is submitted multiple
+times due to network retries.
 
 ### 5.2. Credentials (Authorization)
 
@@ -364,6 +425,7 @@ enabling stateless server verification:
 | `method` | string | Payment method identifier |
 | `intent` | string | Payment intent type |
 | `request` | string | Base64url-encoded payment request |
+| `digest` | string | Content digest (if present in challenge) |
 | `expires` | string | Challenge expiration timestamp |
 
 The `payload` field contains the payment-method-specific data needed to
@@ -764,6 +826,9 @@ identifiers upon publication.
 
 - **[RFC9421]** Backman, A., Ed., Richer, J., Ed., and M. Sporny,
   "HTTP Message Signatures", RFC 9421, February 2024.
+
+- **[RFC9530]** Polli, R. and L. Pardue, "Digest Fields", RFC 9530,
+  February 2024.
 
 ### 13.2. Informative References
 
