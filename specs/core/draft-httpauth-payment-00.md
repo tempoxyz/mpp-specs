@@ -674,11 +674,14 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 ; Required parameters: id, realm, method, intent, request
 ; Optional parameters: expires, description
 
-; HTTP Authorization Credentials (following RFC 6750 b64token)
-payment-credentials   = "Payment" 1*SP b64token
+; HTTP Authorization Credentials
+payment-credentials = "Payment" 1*SP base64url-nopad
 
 ; Payment-Receipt header field value
-Payment-Receipt       = b64token
+Payment-Receipt = base64url-nopad
+
+; Base64url encoding without padding per RFC 4648 Section 5
+base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 
 ; Payment method identifier
 payment-method-id   = method-name [ ":" sub-method ]
