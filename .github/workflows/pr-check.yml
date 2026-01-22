@@ -38,13 +38,13 @@ jobs:
         run: |
           git checkout ${{ github.event.pull_request.base.sha }}
           mkdir -p artifacts-base
-          docker run --rm -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh || true
+          docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh || true
           cp artifacts/*.txt artifacts-base/ 2>/dev/null || true
           git checkout ${{ github.event.pull_request.head.sha }}
           rm -rf artifacts/*
 
       - name: Build and validate specs
-        run: docker run --rm -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+        run: docker run --rm --user $(id -u):$(id -g) -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
       - name: Generate diffs
         run: |
