@@ -8,11 +8,13 @@ from jinja2 import Environment, FileSystemLoader
 
 
 # Domain folder configuration
+# Nested domains use "/" separator (e.g., "methods/stripe")
 DOMAINS = [
     {"folder": "core", "name": "Core"},
     {"folder": "extensions", "name": "Extensions"},
     {"folder": "intents", "name": "Intents"},
-    {"folder": "methods", "name": "Payment Methods"},
+    {"folder": "methods/stripe", "name": "Payment Methods / Stripe"},
+    {"folder": "methods/tempo", "name": "Payment Methods / Tempo"},
 ]
 
 # Category display names (IETF document categories)
