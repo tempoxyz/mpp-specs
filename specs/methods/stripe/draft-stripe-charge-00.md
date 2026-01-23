@@ -256,7 +256,7 @@ const paymentIntent = await stripe.paymentIntents.create({
 ~~~
 
 3. If successful, server returns 200 with `Payment-Receipt` header
-4. If failed, server returns 401 with new challenge
+4. If failed, server returns 402 with new challenge
 
 **Settlement timing:**
 
