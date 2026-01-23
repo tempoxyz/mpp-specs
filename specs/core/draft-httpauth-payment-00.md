@@ -207,11 +207,9 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 #### 5.1.1. Required Parameters
 
-**`id`**: Self-contained challenge identifier that cryptographically binds
-  the challenge to its parameters. Servers MUST generate `id` values as
-  an HMAC of the challenge parameters (Section 5.1.3). Clients MUST
-  include this value unchanged in the credential. Servers MUST reject
-  credentials where the `id` fails HMAC verification.
+**`id`**: Unique challenge identifier. Servers MUST bind this value to the
+  challenge parameters (Section 5.1.3) to enable verification. Clients MUST
+  include this value unchanged in the credential.
 
 **`realm`**: Protection space identifier per [RFC7235]. Servers MUST
   include this parameter to define the scope of the payment requirement.
@@ -248,81 +246,16 @@ Unknown parameters MUST be ignored by clients.
 
 #### 5.1.3. Challenge Binding
 
-The challenge `id` MUST cryptographically bind the challenge to its
-parameters, enabling stateless verification without server-side storage.
+Servers MUST bind the challenge `id` to the challenge parameters to prevent
+request integrity attacks where a client could sign or submit a payment
+different from what the server intended. Servers MUST verify that credentials
+present an `id` matching the expected binding for the echoed parameters:
+`realm`, `method`, `intent`, `request`, `digest` (if present), and `expires`
+(if present).
 
-##### 5.1.3.1. HMAC Construction
-
-The `id` is computed using HMAC-SHA-256 [RFC2104] over a newline-delimited
-canonical encoding of the challenge parameters, following the conventions
-established by HTTP Message Signatures [RFC9421]:
-
-```
-mac_input = realm        || "\n" ||
-            method       || "\n" ||
-            intent       || "\n" ||
-            request      || "\n" ||
-            digest       || "\n" ||
-            expires
-
-id = base64url(HMAC-SHA-256(secret_key, mac_input))
-```
-
-Where:
-
-- `secret_key`: The server's HMAC secret key. Servers SHOULD rotate
-  keys periodically and MUST use keys with at least 256 bits of entropy.
-- `"\n"`: A single newline character (ASCII 0x0A).
-- `base64url`: Base64url encoding without padding per [RFC4648].
-
-Each field is encoded as UTF-8:
-
-- `realm`: ASCII string per [RFC7235]
-- `method`: Lowercase ASCII identifier
-- `intent`: Lowercase ASCII identifier
-- `request`: Base64url-encoded string
-- `digest`: Content-Digest header field value per [RFC9530], or empty string
-- `expires`: RFC 3339 timestamp, or empty string
-
-If `digest` or `expires` is absent from the challenge, implementations
-MUST use an empty string for that component.
-
-##### 5.1.3.2. Echoing Requirements
-
-When constructing the credential, clients MUST echo the challenge
-parameters byte-for-byte as received. Specifically:
-
-- The `request` field MUST be echoed as the exact base64url string
-  from the challenge, without decoding and re-encoding.
-- The `digest` field, if present, MUST be echoed as the exact string
-  from the challenge.
-- The `expires` field MUST be echoed as the exact string from the
-  challenge, without parsing or reformatting.
-
-Clients MUST NOT normalize, parse, or transform echoed values.
-
-##### 5.1.3.3. Verification Procedure
-
-When a credential is received, the client echoes the challenge parameters
-in the `challenge` object (Section 5.2). Servers MUST:
-
-1. Extract `realm`, `method`, `intent`, `request`, `digest`, and `expires`
-   from the credential's `challenge` object.
-2. Verify `challenge.realm` matches the expected realm for the resource.
-3. Recompute the HMAC as specified in Section 5.1.3.1 using the
-   extracted values.
-4. Compare the computed HMAC with `challenge.id` using a constant-time
-   comparison function to prevent timing attacks.
-5. If `digest` is present, verify the request body matches the digest
-   per [RFC9530]. Reject the credential if the body digest does not match.
-6. Verify `expires` has not passed. If `expires` is absent, servers
-   MUST apply a default expiration policy.
-7. Verify `payload` satisfies the `request` parameters per the payment
-   method specification.
-8. Reject the credential if any verification step fails.
-
-This enables fully stateless challenge verification. The server stores
-only the HMAC secret key.
+The binding mechanism is implementation-defined. Servers MAY use stateful
+storage (e.g., database lookup) or stateless verification (e.g., HMAC,
+authenticated encryption) to validate the binding.
 
 #### 5.1.4. Example Challenge
 
@@ -753,9 +686,6 @@ identifiers upon publication.
 ## 13. References
 
 ### 13.1. Normative References
-
-- **[RFC2104]** Krawczyk, H., Bellare, M., and R. Canetti, "HMAC:
-  Keyed-Hashing for Message Authentication", RFC 2104, February 1997.
 
 - **[RFC2119]** Bradner, S., "Key words for use in RFCs to Indicate
   Requirement Levels", BCP 14, RFC 2119, March 1997.
