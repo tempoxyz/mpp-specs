@@ -582,7 +582,7 @@ Decoded receipt:
 {
   "type": "subscription",
   "subscriptionId": "sub_1N4Zv32eZvKYlo2CPhVPkJlW",
-  "amount": 9900,
+  "amount": "9900",
   "currency": "usd",
   "interval": "month",
   "status": "active",

@@ -301,7 +301,7 @@ Example decoded `request`:
 ~~~json
 {
   "amount": "1000",
-  "currency": "USD",
+  "currency": "usd",
   "recipient": "acct_123"
 }
 ~~~
@@ -807,7 +807,7 @@ Decoded `request`:
 ~~~json
 {
   "amount": "1000",
-  "currency": "USD",
+  "currency": "usd",
   "invoice": "inv_12345"
 }
 ~~~
