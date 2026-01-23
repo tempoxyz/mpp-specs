@@ -216,14 +216,9 @@ unauthenticated clients.
 ## Challenge (WWW-Authenticate)
 
 The Payment challenge is sent in the `WWW-Authenticate` header per
-{{RFC7235}}. The challenge uses the auth-param syntax defined in Section 2.1
-of {{RFC7235}}:
-
-~~~abnf
-challenge       = "Payment" [ 1*SP auth-params ]
-auth-params     = auth-param *( OWS "," OWS auth-param )
-auth-param      = token BWS "=" BWS ( token / quoted-string )
-~~~
+{{RFC7235}}, using the challenge syntax defined in Section 11.3 of
+{{RFC9110}}. The scheme name is "Payment" followed by authentication
+parameters in the standard auth-param format.
 
 ### Required Parameters
 
@@ -253,7 +248,10 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an {{RFC3339}} date-time string (e.g., `"2025-01-15T12:00:00Z"`).
   Servers SHOULD include this parameter. Clients MUST NOT submit
-  credentials for expired challenges.
+  credentials for expired challenges. Servers SHOULD allow a clock skew
+  tolerance of up to 60 seconds when validating expiry timestamps.
+  Clients SHOULD submit credentials well before the stated expiry to
+  account for network latency.
 
 **`description`**: Human-readable description of the resource or payment
   purpose. This parameter is for display purposes only and MUST NOT be
@@ -325,6 +323,21 @@ Decoded credential:
   }
 }
 ~~~
+
+### Processing Malformed Credentials
+
+Servers receiving malformed credentials MUST return 402 with a fresh
+challenge and a Problem Details {{RFC9457}} response body. A credential
+is malformed if:
+
+- The base64url encoding is invalid
+- The decoded content is not valid UTF-8
+- The decoded content is not valid JSON
+- Required fields (`id`, `payload`) are missing
+
+Implementations SHOULD limit the `request` parameter to 4096 bytes
+before base64url encoding to prevent denial-of-service attacks via
+oversized challenges.
 
 ## Payment-Receipt Header
 
