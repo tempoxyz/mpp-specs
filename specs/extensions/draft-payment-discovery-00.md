@@ -42,14 +42,13 @@ with `WWW-Authenticate: Payment` header provides all information needed
 to complete a payment, clients may benefit from discovering payment
 capabilities before making requests.
 
-This specification defines two optional discovery mechanisms:
+This specification defines an optional discovery mechanism using a
+well-known HTTP endpoint that returns structured payment capability
+information.
 
-1. **Well-Known Endpoint**: An HTTP endpoint returning structured payment
-   capability information
-2. **DNS Discovery**: DNS TXT records advertising payment support
-
-Discovery is OPTIONAL. Servers MAY implement these mechanisms to improve
-client experience. Clients MUST NOT require discovery to function.
+Discovery is OPTIONAL. Servers MAY implement this mechanism to improve
+client experience. Clients MUST NOT require discovery to function; the
+402 challenge provides all information needed to complete payment.
 
 # Requirements Language
 
@@ -104,7 +103,7 @@ is an object with:
 ~~~http
 HTTP/1.1 200 OK
 Content-Type: application/json
-Cache-Control: max-age=3600
+Cache-Control: max-age=300
 
 {
   "version": 1,
@@ -124,50 +123,24 @@ Cache-Control: max-age=3600
 
 ## Caching
 
-Servers SHOULD include appropriate `Cache-Control` headers. Discovery
-information typically changes infrequently; servers MAY use long cache
-durations (e.g., `max-age=3600`).
+Servers SHOULD include `Cache-Control` headers with short durations to
+allow clients to detect capability changes. A maximum age of 5 minutes
+is RECOMMENDED:
+
+~~~http
+Cache-Control: max-age=300
+~~~
+
+Longer durations (e.g., `max-age=3600`) MAY be used for capabilities that
+change infrequently. Clients SHOULD respect cache headers and refetch
+when capabilities may have changed (e.g., after receiving an unexpected
+402 challenge for a method not in the cached discovery response).
 
 ## Error Handling
 
 If the server does not support discovery, it SHOULD return 404 Not Found.
 Clients MUST NOT treat a 404 response as an error; it simply indicates
 discovery is unavailable.
-
-# DNS Discovery
-
-## TXT Record Format
-
-Servers MAY advertise payment support via DNS TXT records at the
-`_payment` subdomain:
-
-~~~
-_payment.<domain>. TXT "v=payment1; methods=<method-list>"
-~~~
-
-**Parameters:**
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `v` | REQUIRED | Version identifier. MUST be `payment1`. |
-| `methods` | REQUIRED | Comma-separated list of supported method identifiers. |
-
-**Example:**
-
-~~~
-_payment.api.example.com. TXT "v=payment1; methods=tempo,lightning"
-~~~
-
-## Multiple Records
-
-If multiple TXT records exist, clients SHOULD use the first record with
-a valid `v=payment1` prefix.
-
-## Limitations
-
-DNS discovery provides only basic capability advertisement. For detailed
-information (assets, intents), clients SHOULD use the well-known endpoint
-or rely on 402 responses.
 
 # Security Considerations
 
@@ -176,11 +149,6 @@ or rely on 402 responses.
 Discovery information is advisory and not cryptographically authenticated.
 Clients MUST NOT rely on discovery for security decisions. The actual
 payment challenge in the 402 response is authoritative.
-
-## DNS Security
-
-DNS TXT records are subject to DNS spoofing attacks. Clients SHOULD use
-DNSSEC-validated resolvers when available.
 
 ## Well-Known Endpoint Security
 
