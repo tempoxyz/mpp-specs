@@ -2,6 +2,7 @@
 title: Discovery Mechanisms for HTTP Payment Authentication
 abbrev: Payment Discovery
 docname: draft-payment-discovery-00
+version: 00
 category: info
 ipr: trust200902
 submissiontype: IETF

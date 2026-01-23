@@ -2,6 +2,7 @@
 title: Authorize Intent for HTTP Payment Authentication
 abbrev: Payment Intent Authorize
 docname: draft-payment-intent-authorize-00
+version: 00
 category: info
 ipr: trust200902
 submissiontype: IETF
@@ -25,10 +26,11 @@ normative:
   RFC2119:
   RFC8174:
   I-D.httpauth-payment:
-    title: The "Payment" HTTP Authentication Scheme
+    title: "The 'Payment' HTTP Authentication Scheme"
+    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
     author:
-      - ins: J. Moxey
-    date: 2025
+      - name: Jake Moxey
+    date: 2026-01
 ---
 
 --- abstract
