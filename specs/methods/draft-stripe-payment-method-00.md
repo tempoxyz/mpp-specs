@@ -2,6 +2,7 @@
 title: Stripe Payment Method for HTTP Payment Authentication
 abbrev: Stripe Payment Method
 docname: draft-stripe-payment-method-00
+version: 00
 category: info
 ipr: trust200902
 submissiontype: IETF
@@ -22,10 +23,11 @@ normative:
   RFC8174:
   RFC7235:
   I-D.httpauth-payment:
-    title: The "Payment" HTTP Authentication Scheme
+    title: "The 'Payment' HTTP Authentication Scheme"
+    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
     author:
-      - ins: J. Moxey
-    date: 2025
+      - name: Jake Moxey
+    date: 2026-01
 
 informative:
   STRIPE-API:
