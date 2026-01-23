@@ -25,10 +25,6 @@ author:
     ins: J. Weinstein
     email: jweinstein@stripe.com
     organization: Stripe
-  - name: Steve Kaliski
-    ins: S. Kaliski
-    email: stevekaliski@stripe.com
-    organization: Stripe
 
 normative:
   RFC2119:
