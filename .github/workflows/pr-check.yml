@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v3
 
@@ -32,7 +34,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and validate specs
-        run: docker run --rm -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+        run: |
+          mkdir -p .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+
+      - name: Generate diffs against main
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p artifacts/diffs
+          BASE_URL="https://tempoxyz.github.io/ietf-paymentauth-spec"
+          for file in artifacts/draft-*.txt; do
+            name=$(basename "$file" .txt)
+            if curl -sf "${BASE_URL}/${name}.txt" -o "/tmp/${name}-base.txt" 2>/dev/null; then
+              diff -u "/tmp/${name}-base.txt" "$file" > "artifacts/diffs/${name}-diff.txt" || true
+            else
+              echo "New spec (no base on main to compare)" > "artifacts/diffs/${name}-diff.txt"
+            fi
+          done
 
       - name: Deploy to Cloudflare Pages
         id: deploy
@@ -45,11 +63,11 @@ jobs:
       - name: Generate spec table
         id: specs
         run: |
-          TABLE="| Spec | HTML | TXT | XML | PDF |\n|------|------|-----|-----|-----|\n"
+          TABLE="| Spec | HTML | TXT | XML | PDF | Diff |\n|------|------|-----|-----|-----|------|\n"
           BASE_URL="${{ steps.deploy.outputs.deployment-url }}"
           for file in artifacts/draft-*.html; do
             name=$(basename "$file" .html)
-            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) |\n"
+            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}-diff.txt) |\n"
           done
           echo "table<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TABLE" >> $GITHUB_OUTPUT

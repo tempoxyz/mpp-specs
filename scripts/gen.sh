@@ -6,13 +6,30 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SPECS_DIR="$ROOT_DIR/specs"
 OUT_DIR="$ROOT_DIR/artifacts"
 
-# Detect Docker environment
-IN_DOCKER=false
+# Config file path (differs inside Docker vs local)
 if [[ -d /data/specs ]]; then
-  IN_DOCKER=true
   CONFIG_FILE="/data/xml2rfc.conf"
+  IN_DOCKER=true
 else
   CONFIG_FILE="$ROOT_DIR/xml2rfc.conf"
+  IN_DOCKER=false
+fi
+
+# Check dependencies when running locally
+if ! $IN_DOCKER; then
+  missing=""
+  if ! command -v kramdown-rfc &>/dev/null; then
+    missing="${missing}  - kramdown-rfc (gem install kramdown-rfc, requires Ruby 3.x)\n"
+  fi
+  if ! command -v xml2rfc &>/dev/null; then
+    missing="${missing}  - xml2rfc (pip install -r requirements.txt)\n"
+  fi
+  if [[ -n "$missing" ]]; then
+    echo "ERROR: Missing dependencies for local build:" >&2
+    echo -e "$missing" >&2
+    echo "TIP: Use 'make build' to build with Docker instead." >&2
+    exit 1
+  fi
 fi
 
 # Parse flags
@@ -48,15 +65,17 @@ while read -r md; do
 
   echo "==> $name"
 
-  echo "    [md2xml] Converting Markdown to XML..."
-  # Use md2xml directly in Docker (pre-installed), npx locally
-  MD2XML_CMD="npx md2xml"
-  $IN_DOCKER && MD2XML_CMD="md2xml"
-
+  echo "    [kramdown-rfc] Converting Markdown to XML..."
   if $VERBOSE; then
-    $MD2XML_CMD "$md" -o "$OUT_DIR/${name}.xml"
+    if ! kramdown-rfc "$md" > "$OUT_DIR/${name}.xml"; then
+      echo "ERROR: kramdown-rfc failed for $name" >&2
+      exit 1
+    fi
   else
-    $MD2XML_CMD "$md" -o "$OUT_DIR/${name}.xml" 2>/dev/null
+    if ! kramdown-rfc "$md" > "$OUT_DIR/${name}.xml" 2>/dev/null; then
+      echo "ERROR: kramdown-rfc failed for $name" >&2
+      exit 1
+    fi
   fi
 
   echo "    [xml2rfc] Generating HTML..."

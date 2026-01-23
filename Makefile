@@ -1,10 +1,15 @@
-.PHONY: docker-build build check shell clean
+.PHONY: docker-build build build-docker build-local check shell clean
 
 docker-build:
 	docker build -t ietf-spec-tools .
 
-build:
+build: build-docker
+
+build-docker:
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools /data/scripts/gen.sh
+
+build-local:
+	./scripts/gen.sh
 
 check:
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools /data/scripts/check.sh

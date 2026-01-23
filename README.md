@@ -107,7 +107,7 @@ The specification is modular, separating stable protocol mechanics from evolving
 make docker-build
 
 # Generate XML, HTML, TXT, and PDF artifacts
-make build
+make build-docker
 
 # Run build + validation
 make check
@@ -123,8 +123,8 @@ make clean
 
 ```bash
 # Install dependencies
-npm install
-pip install -r requirements.txt
+bundle install              # Ruby: kramdown-rfc
+pip install -r requirements.txt  # Python: xml2rfc, rfclint
 
 # Generate artifacts
 ./scripts/gen.sh
