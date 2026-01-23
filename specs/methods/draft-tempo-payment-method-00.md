@@ -12,7 +12,15 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
+  - name: Brendan Ryan
+    ins: B. Ryan
+    email: brendan@tempo.xyz
+    org: Tempo Labs
+  - name: Tom Meagher
+    ins: T. Meagher
+    email: thomas@tempo.xyz
+    org: Tempo Labs
 
 normative:
   RFC2119:
@@ -216,28 +224,19 @@ approvals do not support periodic limit semantics.
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object. The schema follows the shared intent schema
-defined in the intent specifications, with Tempo-specific extensions in
-the `methodDetails` field.
+base64url-encoded JSON object. The schema uses shared fields defined by
+the intent specifications (charge, authorize, subscription), with
+Tempo-specific extensions in the `methodDetails` field.
 
 Clients parse the request and construct the appropriate Tempo Transaction
-or Key Authorization to fulfill it.
+or Key Authorization to fulfill it. For shared field definitions, see
+the corresponding intent specification.
 
 ## Charge Request
 
-For `intent="charge"`, the request uses the shared charge schema with
-Tempo-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount in base units (stringified number) |
-| `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
-| `recipient` | string | REQUIRED | Recipient address |
-| `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
-
-### Method Details
+For `intent="charge"`, the request uses the shared charge schema
+(see draft-payment-intent-charge) with the following Tempo-specific
+method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -273,18 +272,8 @@ MUST set `fee_token` and pay fees themselves.
 ## Authorize Request
 
 For `intent="authorize"`, the request uses the shared authorize schema
-with Tempo-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Maximum spend amount in base units |
-| `currency` | string | REQUIRED | TIP-20 token address |
-| `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
-| `recipient` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
-
-### Method Details
+(see draft-payment-intent-authorize) with the following Tempo-specific
+method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -325,18 +314,8 @@ client MUST sign a transaction with `fee_token` set to pay fees themselves.
 ## Subscription Request
 
 For `intent="subscription"`, the request uses the shared subscription
-schema with Tempo-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount per period in base units |
-| `currency` | string | REQUIRED | TIP-20 token address |
-| `period` | string | REQUIRED | Billing period (`"day"`, `"week"`, `"month"`, `"year"`, or seconds) |
-| `expires` | string | REQUIRED | Subscription end timestamp in ISO 8601 format |
-
-### Method Details
+schema (see draft-payment-intent-subscription) with the following
+Tempo-specific method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|

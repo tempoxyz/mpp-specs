@@ -1,5 +1,5 @@
 ---
-title: authorize Intent for HTTP Payment Authentication
+title: Authorize Intent for HTTP Payment Authentication
 abbrev: Payment Intent Authorize
 docname: draft-payment-intent-authorize-00
 category: info
@@ -8,10 +8,18 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - ins: J. Moxey
-    name: Jake Moxey
-    org: Tempo Labs
+  - name: Jake Moxey
+    ins: J. Moxey
     email: jake@tempo.xyz
+    org: Tempo Labs
+  - name: Brendan Ryan
+    ins: B. Ryan
+    email: brendan@tempo.xyz
+    org: Tempo Labs
+  - name: Tom Meagher
+    ins: T. Meagher
+    email: thomas@tempo.xyz
+    org: Tempo Labs
 
 normative:
   RFC2119:

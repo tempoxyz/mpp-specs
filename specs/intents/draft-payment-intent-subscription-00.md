@@ -1,5 +1,5 @@
 ---
-title: subscription Intent for HTTP Payment Authentication
+title: Subscription Intent for HTTP Payment Authentication
 abbrev: Payment Intent Subscription
 docname: draft-payment-intent-subscription-00
 category: info
@@ -8,10 +8,18 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - ins: J. Moxey
-    name: Jake Moxey
-    org: Tempo Labs
+  - name: Jake Moxey
+    ins: J. Moxey
     email: jake@tempo.xyz
+    org: Tempo Labs
+  - name: Brendan Ryan
+    ins: B. Ryan
+    email: brendan@tempo.xyz
+    org: Tempo Labs
+  - name: Tom Meagher
+    ins: T. Meagher
+    email: thomas@tempo.xyz
+    org: Tempo Labs
 
 normative:
   RFC2119:
@@ -124,16 +132,7 @@ amount per billing period.
 
 ## Billing Periods
 
-Standard billing periods:
-
-| Period | Duration | Seconds |
-|--------|----------|---------|
-| `day` | 1 day | 86400 |
-| `week` | 7 days | 604800 |
-| `month` | ~30 days | 2592000 |
-| `year` | ~365 days | 31536000 |
-
-Payment method specifications MAY define custom period formats.
+See {{period-formats}} for supported period values and their durations.
 
 # Request Schema
 
@@ -183,7 +182,7 @@ Clients can detect the format:
 - Three lowercase letters: ISO 4217 currency code
 - Otherwise: Well-known symbol or method-specific identifier
 
-## Period Formats
+## Period Formats {#period-formats}
 
 The `period` field supports named periods or explicit durations:
 
