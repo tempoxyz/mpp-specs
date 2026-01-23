@@ -13,25 +13,7 @@
 		"binding": "ASSETS"
 	},
 	"routes": [
-		{ "pattern": "payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "anthropic.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "claude.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{
-			"pattern": "browserbase.payments.tempo.xyz",
-			"zone_name": "tempo.xyz",
-			"custom_domain": true
-		},
-		{ "pattern": "exa.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "firecrawl.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "openai.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "gpt.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "codex.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "openrouter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "llm.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "twitter.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "modal.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "gpu.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "compute.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true },
-		{ "pattern": "rpc.payments.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+		{ "pattern": "payments.tempo.xyz/*", "zone_name": "tempo.xyz" },
+		{ "pattern": "*.payments.tempo.xyz/*", "zone_name": "tempo.xyz" }
 	]
 }
