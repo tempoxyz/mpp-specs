@@ -8,10 +8,14 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - ins: B. Ryan
-    name: Brendan Ryan
-    org: Stripe
-    email: brendanryan@stripe.com
+  - name: Brendan Ryan
+    ins: B. Ryan
+    email: brendan@tempo.xyz
+    organization: Tempo Labs
+  - name: Steve Kaliski
+    ins: S. Kaliski
+    email: stevekaliski@stripe.com
+    organization: Stripe
 
 normative:
   RFC2119:

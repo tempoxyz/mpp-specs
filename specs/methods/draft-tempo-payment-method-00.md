@@ -13,6 +13,14 @@ author:
     ins: J. Moxey
     email: jake@tempo.xyz
     organization: Tempo Labs
+  - name: Brendan Ryan
+    ins: B. Ryan
+    email: brendan@tempo.xyz
+    organization: Tempo Labs
+  - name: Tom Meagher
+    ins: T. Meagher
+    email: thomas@tempo.xyz
+    organization: Tempo Labs
 
 normative:
   RFC2119:
