@@ -135,38 +135,29 @@ Payload
 
 ## Status Codes
 
-The following table defines how servers MUST respond to payment-related
-conditions:
-
-| Condition | Status | Response |
-|-----------|--------|----------|
-| Resource requires payment, no credential provided | 402 | Fresh challenge in `WWW-Authenticate` |
-| Malformed credential (invalid base64url, bad JSON) | 402 | Fresh challenge + `malformed-credential` problem |
-| Unknown, expired, or already-used challenge `id` | 402 | Fresh challenge + `invalid-challenge` problem |
-| Payment proof invalid or verification failed | 402 | Fresh challenge + `verification-failed` problem |
-| Payment verified, access granted | 200 | Resource + optional `Payment-Receipt` |
-| Payment verified, but policy denies access | 403 | No challenge (payment was valid) |
+| Code | Meaning |
+|------|---------|
+| 402  | Resource requires payment; see `WWW-Authenticate` |
+| 200  | Payment verified; resource provided |
+| 400  | Malformed payment credential or proof |
+| 401  | Valid format but payment verification failed |
+| 403  | Payment verified but access denied (policy) |
 
 Servers MUST return 402 with a `WWW-Authenticate: Payment` header when
-payment is required or when a payment credential fails validation.
-Servers SHOULD NOT return 402 without this header.
-
-Error details are provided in the response body using Problem Details
-{{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
+payment is required. Servers SHOULD NOT return 402 without this header.
 
 ## Relationship to 401 Unauthorized
 
-This specification uses 402 (Payment Required) consistently for all
-payment-related challenges, including failed credential validation.
-This diverges from the traditional 401 pattern used by other HTTP
-authentication schemes. The distinction is intentional:
+This specification uses 402 (Payment Required) for the initial payment
+challenge, diverging from the traditional 401 pattern used by other HTTP
+authentication schemes. This distinction is intentional:
 
-- **402** indicates a payment barrier (initial challenge or retry needed)
-- **401** is reserved for authentication failures unrelated to payment
-- **403** indicates the payment succeeded but access is denied by policy
+- **402** indicates the resource requires payment (economic barrier)
+- **401** indicates authentication/authorization failure (credential barrier)
 
-This design ensures clients can distinguish payment requirements from
-other authentication schemes that use 401.
+When a client submits an invalid Payment credential, servers MUST return
+401 (Unauthorized) with a `WWW-Authenticate: Payment` header containing a
+fresh challenge.
 
 ## Usage of 402 Payment Required
 
@@ -232,16 +223,10 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   entropy for each challenge. Clients MUST include this value in the
   credential to correlate the response with the challenge. Servers
   MUST reject credentials with unknown, expired, or already-used `id`
-  values. Servers MUST associate each challenge `id` with the specific
-  target URI and HTTP method for which it was issued. Servers MUST
-  reject credentials where the target URI or HTTP method differs from
-  the original challenge.
+  values.
 
 **`realm`**: Protection space identifier per {{RFC7235}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
-  Servers MUST verify that the credential's challenge `id` was issued
-  for the same realm as the current request. Credentials MUST NOT be
-  accepted across different realms.
 
 **`method`**: Payment method identifier ({{payment-methods}}). MUST be a lowercase
   ASCII string.
@@ -578,25 +563,14 @@ while the actual `request` payload requests a different amount.
 Implementations MUST treat `Authorization: Payment` headers and
 `Payment-Receipt` headers as sensitive data.
 
-## Intermediary Handling of 402
-
-HTTP intermediaries (proxies, caches, CDNs) may not recognize 402 as an
-authentication challenge in the same way they handle 401. While this
-specification uses `WWW-Authenticate` headers with 402 responses following
-the same syntax as {{RFC7235}}, intermediaries that perform special
-processing for 401 (such as stripping credentials or triggering
-authentication prompts) may not apply the same behavior to 402.
-
-Servers SHOULD NOT rely on intermediary-specific handling of 402 responses.
-Clients MUST be prepared to receive 402 responses through any intermediary.
-
 ## Caching
 
 Payment challenges contain unique identifiers and time-sensitive payment
 data that MUST NOT be cached or reused. To prevent challenge replay and
 stale payment information:
 
-Servers MUST send `Cache-Control: no-store` {{RFC9111}} with 402 responses.
+Servers MUST send `Cache-Control: no-store` {{RFC9111}} with 402 responses
+and 401 responses containing `WWW-Authenticate: Payment` headers.
 
 Responses containing `Payment-Receipt` headers MUST include
 `Cache-Control: private` to prevent shared caches from storing
@@ -841,7 +815,7 @@ Client selects preferred method and responds accordingly.
 ## Failed Payment Verification
 
 ~~~http
-HTTP/1.1 402 Payment Required
+HTTP/1.1 401 Unauthorized
 Cache-Control: no-store
 Content-Type: application/problem+json
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
@@ -849,13 +823,13 @@ WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", 
 {
   "type": "https://ietf.org/payment/problems/verification-failed",
   "title": "Payment Verification Failed",
-  "status": 402,
+  "status": 401,
   "detail": "Invalid payment proof."
 }
 ~~~
 
-The server returns 402 with a fresh challenge, allowing the client to
-retry with a new payment credential.
+Note the use of 401 (not 402) for failed verification, with a fresh
+challenge for retry.
 
 # Acknowledgements
 
