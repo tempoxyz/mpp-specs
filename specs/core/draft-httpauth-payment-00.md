@@ -20,6 +20,7 @@ normative:
   RFC3629:
   RFC4648:
   RFC5234:
+  RFC5246:
   RFC6750:
   RFC7235:
   RFC8126:
@@ -483,12 +484,16 @@ This specification assumes:
 
 ## Transport Security
 
-Implementations MUST use TLS 1.2 {{RFC8446}} or later when transmitting
-Payment challenges and credentials. Payment credentials contain sensitive
-authorization data that could result in financial loss if intercepted.
+This specification REQUIRES TLS 1.2 {{!RFC5246}} or later for all Payment
+authentication flows. TLS 1.3 {{RFC8446}} is RECOMMENDED.
+
+Implementations MUST use TLS when transmitting Payment challenges and
+credentials. Payment credentials contain sensitive authorization data
+that could result in financial loss if intercepted.
 
 Servers MUST NOT issue Payment challenges over unencrypted HTTP. Clients
-MUST NOT send Payment credentials over unencrypted HTTP.
+MUST NOT send Payment credentials over unencrypted HTTP. Implementations
+SHOULD reject Payment protocol messages received over non-TLS connections.
 
 ### Credential Handling
 
@@ -497,8 +502,9 @@ Servers and intermediaries MUST NOT log Payment credentials or include them
 in error messages, debugging output, or analytics. Credential exposure could
 enable replay attacks or unauthorized payments.
 
-Implementations SHOULD treat Payment credentials with the same care as
-authentication passwords or session tokens.
+Implementations MUST treat Payment credentials with the same care as
+authentication passwords or session tokens. Credentials SHOULD be stored
+only in memory and cleared after use.
 
 ## Challenge Identifier Security
 
@@ -778,7 +784,8 @@ Decoded `request`:
 
 ## Multiple Payment Options
 
-Server offers multiple payment methods:
+Servers MAY return multiple Payment challenges in a single 402 response,
+each with a different payment method or configuration:
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -787,7 +794,13 @@ WWW-Authenticate: Payment id="pT7yHnKmQ2wErXsZ5vCbNl", realm="api.example.com", 
 WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="signed", intent="charge", request="..."
 ~~~
 
-Client selects preferred method and responds accordingly.
+When a server returns multiple challenges, clients SHOULD select one
+based on their capabilities and user preferences. Clients MUST send
+only one `Authorization: Payment` header in the subsequent request,
+corresponding to the selected challenge.
+
+Servers receiving multiple Payment credentials in a single request
+SHOULD reject with 400 (Bad Request).
 
 ## Failed Payment Verification
 
