@@ -146,4 +146,8 @@ All outputs are written to `artifacts/`:
 
 ## License
 
-These specifications are released into the public domain (CC0 1.0 Universal).
+Specifications: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/) (Public Domain)
+
+Tooling: [Apache 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option
+
+See [LICENSE.md](LICENSE.md) for details.
