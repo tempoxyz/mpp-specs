@@ -12,6 +12,7 @@ env:
   WRANGLER_SEND_METRICS: false
 
 permissions:
+  actions: read
   contents: read
   pull-requests: write
 
