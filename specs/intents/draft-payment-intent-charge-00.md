@@ -1,5 +1,5 @@
 ---
-title: charge Intent for HTTP Payment Authentication
+title: Charge Intent for HTTP Payment Authentication
 abbrev: Payment Intent Charge
 docname: draft-payment-intent-charge-00
 category: info
@@ -11,15 +11,15 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
     email: thomas@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
 
 normative:
   RFC2119:

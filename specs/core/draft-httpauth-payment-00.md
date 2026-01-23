@@ -12,19 +12,19 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
     email: thomas@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Jeff Weinstein
     ins: J. Weinstein
     email: jweinstein@stripe.com
-    organization: Stripe
+    org: Stripe
 
 normative:
   RFC2119:
