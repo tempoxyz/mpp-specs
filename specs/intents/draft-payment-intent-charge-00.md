@@ -90,37 +90,108 @@ failed).
 
 # Request Schema
 
-The `request` parameter for a "charge" intent MUST include sufficient
-information for the client to complete payment. At minimum, payment
-method specifications MUST define:
+The `request` parameter for a "charge" intent is a JSON object with
+shared fields defined by this specification and optional method-specific
+extensions in the `methodDetails` field.
 
-## Required Fields
+## Shared Fields
+
+All payment methods implementing the "charge" intent MUST support these
+shared fields, enabling clients to parse and display payment requests
+consistently across methods.
+
+### Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `amount` | string/number | Payment amount (method-specific format) |
+| `amount` | string | Payment amount in base units (smallest denomination) |
+| `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
 
-## Recommended Fields
+### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
-| `recipient` | string | Payment recipient (method-specific format) |
-| `expires` | string | Expiry timestamp for this request |
+| `recipient` | string | Payment recipient in method-native format |
+| `expires` | string | Expiry timestamp in ISO 8601 format |
+| `description` | string | Human-readable payment description |
+| `externalId` | string | Merchant's reference (order ID, invoice number, etc.) |
+| `methodDetails` | object | Method-specific extension data |
 
-## Example
+## Currency Formats {#currency-formats}
+
+The `currency` field supports multiple formats to accommodate different
+payment networks:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
+| Token address | `"0x20c0..."` | ERC-20, TIP-20, or similar token contracts |
+| Well-known symbol | `"sat"`, `"btc"`, `"eth"` | Native blockchain assets |
+
+Clients can detect the format:
+
+- Starts with `0x`: Token contract address
+- Three lowercase letters: ISO 4217 currency code
+- Otherwise: Well-known symbol or method-specific identifier
+
+Payment method specifications MUST document which currency formats they
+support and how to interpret amounts for each format.
+
+## Method Extensions
+
+Payment methods MAY define additional fields in the `methodDetails` object.
+These fields are method-specific and MUST be documented in the payment
+method specification. Clients that do not recognize a payment method
+SHOULD ignore `methodDetails` but MUST still be able to display the
+shared fields to users.
+
+## Examples
+
+### Traditional Payment Processor (Stripe)
 
 ~~~ json
 {
-  "amount": "1000",
-  "currency": "USD",
-  "recipient": "acct_123",
-  "expires": "2025-01-15T12:05:00Z"
+  "amount": "5000",
+  "currency": "usd",
+  "description": "Premium API access",
+  "externalId": "order_12345",
+  "methodDetails": {
+    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "destination": "acct_1MqE1vKB6gFP3uYw"
+  }
 }
 ~~~
 
-Payment method specifications define the complete schema for their
-implementation of the "charge" intent.
+### Blockchain Payment (Tempo)
+
+~~~ json
+{
+  "amount": "1000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "expires": "2025-01-06T12:00:00Z",
+  "methodDetails": {
+    "chainId": 42431,
+    "feePayer": true
+  }
+}
+~~~
+
+### Lightning Network
+
+~~~ json
+{
+  "amount": "100000",
+  "currency": "sat",
+  "expires": "2025-01-15T12:05:00Z",
+  "methodDetails": {
+    "invoice": "lnbc1000n1pj9..."
+  }
+}
+~~~
+
+Payment method specifications define the complete `methodDetails` schema
+for their implementation of the "charge" intent.
 
 # Credential Requirements
 

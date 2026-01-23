@@ -123,27 +123,82 @@ Unlike "charge", the "authorize" intent is non-atomic:
 
 # Request Schema
 
-## Required Fields
+The `request` parameter for an "authorize" intent is a JSON object with
+shared fields defined by this specification and optional method-specific
+extensions in the `methodDetails` field.
+
+## Shared Fields
+
+All payment methods implementing the "authorize" intent MUST support these
+shared fields, enabling clients to parse and display authorization requests
+consistently across methods.
+
+### Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `limit` | string/number | Maximum amount that may be charged |
-| `expires` | string | Authorization expiry timestamp |
+| `amount` | string | Maximum authorization amount in base units |
+| `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
+| `expires` | string | Authorization expiry timestamp in ISO 8601 format |
 
-## Recommended Fields
+### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
-| `recipient` | string | Payment recipient (for methods that require it) |
+| `recipient` | string | Payment recipient in method-native format |
+| `description` | string | Human-readable authorization description |
+| `externalId` | string | Merchant's reference (order ID, etc.) |
+| `methodDetails` | object | Method-specific extension data |
 
-## Example
+## Currency Formats {#currency-formats}
+
+The `currency` field supports multiple formats to accommodate different
+payment networks:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
+| Token address | `"0x20c0..."` | ERC-20, TIP-20, or similar token contracts |
+| Well-known symbol | `"sat"`, `"btc"`, `"eth"` | Native blockchain assets |
+
+Clients can detect the format:
+
+- Starts with `0x`: Token contract address
+- Three lowercase letters: ISO 4217 currency code
+- Otherwise: Well-known symbol or method-specific identifier
+
+## Method Extensions
+
+Payment methods MAY define additional fields in the `methodDetails` object.
+These fields are method-specific and MUST be documented in the payment
+method specification.
+
+## Examples
+
+### Traditional Payment Processor (Stripe)
 
 ~~~ json
 {
-  "limit": "100000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "expires": "2025-02-15T00:00:00Z"
+  "amount": "100000",
+  "currency": "usd",
+  "expires": "2025-01-22T12:00:00Z",
+  "description": "Pre-authorization for metered API usage",
+  "methodDetails": {
+    "captureMethod": "manual"
+  }
+}
+~~~
+
+### Blockchain Payment (Tempo)
+
+~~~ json
+{
+  "amount": "50000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "expires": "2025-02-05T12:00:00Z",
+  "methodDetails": {
+    "chainId": 42431
+  }
 }
 ~~~
 

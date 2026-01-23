@@ -137,40 +137,112 @@ Payment method specifications MAY define custom period formats.
 
 # Request Schema
 
-## Required Fields
+The `request` parameter for a "subscription" intent is a JSON object with
+shared fields defined by this specification and optional method-specific
+extensions in the `methodDetails` field.
+
+## Shared Fields
+
+All payment methods implementing the "subscription" intent MUST support these
+shared fields, enabling clients to parse and display subscription requests
+consistently across methods.
+
+### Required Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `amount` | string/number | Amount per billing period |
-| `period` | string/number | Billing period (name or seconds) |
+| `amount` | string | Amount per billing period in base units |
+| `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
+| `period` | string | Billing period: `"day"`, `"week"`, `"month"`, `"year"`, or seconds as string |
 
-## Recommended Fields
+### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
-| `expires` | string | Subscription end date (optional) |
+| `recipient` | string | Payment recipient in method-native format |
+| `expires` | string | Subscription end date in ISO 8601 format |
 | `cycles` | number | Maximum number of billing cycles |
+| `description` | string | Human-readable subscription description |
+| `externalId` | string | Merchant's reference (subscription ID, etc.) |
+| `methodDetails` | object | Method-specific extension data |
 
-## Example
+## Currency Formats {#currency-formats}
 
-~~~ json
-{
-  "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "period": "month",
-  "expires": "2026-01-15T00:00:00Z"
-}
-~~~
+The `currency` field supports multiple formats to accommodate different
+payment networks:
 
-Or with explicit period in seconds:
+| Format | Example | Description |
+|--------|---------|-------------|
+| ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
+| Token address | `"0x20c0..."` | ERC-20, TIP-20, or similar token contracts |
+| Well-known symbol | `"sat"`, `"btc"`, `"eth"` | Native blockchain assets |
+
+Clients can detect the format:
+
+- Starts with `0x`: Token contract address
+- Three lowercase letters: ISO 4217 currency code
+- Otherwise: Well-known symbol or method-specific identifier
+
+## Period Formats
+
+The `period` field supports named periods or explicit durations:
+
+| Value | Duration |
+|-------|----------|
+| `"day"` | 1 day (86400 seconds) |
+| `"week"` | 7 days (604800 seconds) |
+| `"month"` | ~30 days (2592000 seconds) |
+| `"year"` | ~365 days (31536000 seconds) |
+| `"86400"` | Explicit seconds as string |
+
+Payment method specifications MAY define additional period formats.
+
+## Method Extensions
+
+Payment methods MAY define additional fields in the `methodDetails` object.
+These fields are method-specific and MUST be documented in the payment
+method specification.
+
+## Examples
+
+### Traditional Payment Processor (Stripe)
 
 ~~~ json
 {
   "amount": "9900",
-  "currency": "USD",
-  "period": 2592000,
-  "cycles": 12
+  "currency": "usd",
+  "period": "month",
+  "description": "Pro Plan",
+  "methodDetails": {
+    "trialDays": 14,
+    "cancelAtPeriodEnd": false
+  }
+}
+~~~
+
+### Blockchain Payment (Tempo)
+
+~~~ json
+{
+  "amount": "10000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "period": "month",
+  "expires": "2026-01-06T00:00:00Z",
+  "methodDetails": {
+    "chainId": 42431
+  }
+}
+~~~
+
+### With Explicit Period and Cycle Limit
+
+~~~ json
+{
+  "amount": "5000",
+  "currency": "usd",
+  "period": "604800",
+  "cycles": 52,
+  "description": "Weekly digest subscription"
 }
 ~~~
 

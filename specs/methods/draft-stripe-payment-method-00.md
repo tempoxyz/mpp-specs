@@ -193,33 +193,47 @@ to charge a specified amount on a recurring basis.
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object. The schema is determined by the `intent`
-parameter in the challenge. Clients parse the request and construct the
-appropriate Stripe Payment Token or Setup Intent to fulfill it.
+base64url-encoded JSON object. The schema follows the shared intent schema
+defined in the intent specifications, with Stripe-specific extensions in
+the `methodDetails` field.
+
+Clients parse the request and construct the appropriate Stripe Payment
+Token or Setup Intent to fulfill it.
 
 ## Charge Request
 
-For `intent="charge"`, the request specifies a one-time payment:
+For `intent="charge"`, the request uses the shared charge schema with
+Stripe-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | number | REQUIRED | Amount in smallest currency unit (e.g., cents) |
-| `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., "usd") |
+| `amount` | string | REQUIRED | Amount in smallest currency unit (e.g., cents) |
+| `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., `"usd"`) |
 | `description` | string | OPTIONAL | Human-readable payment description |
-| `destination` | string | OPTIONAL | Stripe account ID to receive funds (for Connect platforms) |
-| `businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
 | `externalId` | string | OPTIONAL | Merchant's identifier (e.g., order ID, cart ID) |
-| `metadata` | object | OPTIONAL | Key-value pairs for additional context |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.destination` | string | OPTIONAL | Stripe account ID to receive funds (Connect) |
+| `methodDetails.businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
+| `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
 
 ~~~ json
 {
-  "amount": 5000,
+  "amount": "5000",
   "currency": "usd",
   "description": "Premium API access for 1 month",
-  "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-  "externalId": "order_12345"
+  "externalId": "order_12345",
+  "methodDetails": {
+    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "destination": "acct_1MqE1vKB6gFP3uYw"
+  }
 }
 ~~~
 
@@ -235,28 +249,40 @@ const spt = await stripe.createPaymentToken({
 
 ## Authorize Request
 
-For `intent="authorize"`, the request specifies a payment authorization:
+For `intent="authorize"`, the request uses the shared authorize schema
+with Stripe-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | number | REQUIRED | Maximum authorization amount in smallest currency unit |
+| `amount` | string | REQUIRED | Maximum authorization amount in smallest currency unit |
 | `currency` | string | REQUIRED | Three-letter ISO currency code |
+| `expires` | string | OPTIONAL | Authorization expiry in ISO 8601 format |
 | `description` | string | OPTIONAL | Human-readable payment description |
-| `destination` | string | OPTIONAL | Stripe account ID to receive funds |
-| `businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
 | `externalId` | string | OPTIONAL | Merchant's identifier |
-| `expiresAt` | string | OPTIONAL | Authorization expiry in ISO 8601 format |
-| `metadata` | object | OPTIONAL | Key-value pairs for additional context |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.destination` | string | OPTIONAL | Stripe account ID to receive funds |
+| `methodDetails.businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
+| `methodDetails.captureMethod` | string | OPTIONAL | Capture method (default: `"manual"`) |
+| `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
 
 ~~~ json
 {
-  "amount": 100000,
+  "amount": "100000",
   "currency": "usd",
+  "expires": "2025-02-05T12:00:00Z",
   "description": "AI agent compute authorization",
-  "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-  "expiresAt": "2025-02-05T12:00:00Z"
+  "methodDetails": {
+    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "captureMethod": "manual"
+  }
 }
 ~~~
 
@@ -272,30 +298,42 @@ const spt = await stripe.createPaymentToken({
 
 ## Subscription Request
 
-For `intent="subscription"`, the request specifies a recurring payment:
+For `intent="subscription"`, the request uses the shared subscription
+schema with Stripe-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | number | REQUIRED | Amount per billing period in smallest currency unit |
+| `amount` | string | REQUIRED | Amount per billing period in smallest currency unit |
 | `currency` | string | REQUIRED | Three-letter ISO currency code |
-| `interval` | string | REQUIRED | Billing interval: "day", "week", "month", or "year" |
-| `intervalCount` | number | OPTIONAL | Number of intervals between billings (default: 1) |
+| `period` | string | REQUIRED | Billing period: `"day"`, `"week"`, `"month"`, or `"year"` |
+| `cycles` | number | OPTIONAL | Number of billing cycles before subscription ends |
 | `description` | string | OPTIONAL | Human-readable subscription description |
-| `destination` | string | OPTIONAL | Stripe account ID to receive funds |
-| `businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
 | `externalId` | string | OPTIONAL | Merchant's identifier |
-| `billingCycles` | number | OPTIONAL | Number of billing cycles before subscription ends |
-| `metadata` | object | OPTIONAL | Key-value pairs for additional context |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.destination` | string | OPTIONAL | Stripe account ID to receive funds |
+| `methodDetails.businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
+| `methodDetails.intervalCount` | number | OPTIONAL | Number of intervals between billings (default: 1) |
+| `methodDetails.trialDays` | number | OPTIONAL | Number of trial days before first charge |
+| `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
 
 ~~~ json
 {
-  "amount": 9900,
+  "amount": "9900",
   "currency": "usd",
-  "interval": "month",
+  "period": "month",
   "description": "Premium API subscription",
-  "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj"
+  "methodDetails": {
+    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "trialDays": 14
+  }
 }
 ~~~
 
