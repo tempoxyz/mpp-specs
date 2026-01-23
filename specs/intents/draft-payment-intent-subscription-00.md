@@ -151,7 +151,7 @@ specifications SHOULD use these constants for common billing cycles.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
+| `currency` | string | Currency identifier |
 | `expires` | string | Subscription end date (optional) |
 | `cycles` | number | Maximum number of billing cycles |
 
@@ -160,7 +160,7 @@ specifications SHOULD use these constants for common billing cycles.
 ~~~ json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000001",
   "period": 2592000,
   "expires": "2026-01-15T00:00:00Z"
 }

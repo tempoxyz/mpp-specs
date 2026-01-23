@@ -99,11 +99,10 @@ methods SHOULD follow for interoperability.
 ## Amount Representation
 
 The `amount` field MUST be a string containing a non-negative integer
-representing the payment amount in the asset's smallest indivisible unit:
+representing the payment amount in the currency's smallest indivisible unit:
 
 - For fiat currencies: minor units (e.g., cents for USD, pence for GBP)
 - For cryptocurrencies: base units (e.g., wei for ETH, satoshis for BTC)
-- For TIP-20 tokens: base units (6 decimal places, so 1.00 = "1000000")
 
 Implementations MUST NOT use floating-point representations to avoid
 precision loss with large values or decimal arithmetic errors.
@@ -115,7 +114,7 @@ Payment method specifications typically include:
 | Field | Type | Description |
 |-------|------|-------------|
 | `amount` | string | Payment amount in base units (REQUIRED) |
-| `asset` | string | Asset/currency identifier (REQUIRED) |
+| `currency` | string | Currency identifier (REQUIRED) |
 | `recipient` | string | Payment recipient (method-specific format) |
 | `expires` | string | Expiry timestamp (RFC 3339 format) |
 
@@ -124,7 +123,7 @@ Payment method specifications typically include:
 ~~~ json
 {
   "amount": "100000",
-  "asset": "USD",
+  "currency": "USD",
   "recipient": "acct_123",
   "expires": "2025-01-15T12:05:00Z"
 }
