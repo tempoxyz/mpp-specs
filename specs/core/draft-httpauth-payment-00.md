@@ -255,7 +255,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 Unknown parameters MUST be ignored by clients.
 
-#### 5.1.3. Challenge Binding
+#### Challenge Binding
 
 Servers SHOULD bind the challenge `id` to the challenge parameters (Sections
 5.1.1 and 5.1.2) to prevent request integrity attacks where a client could
@@ -266,7 +266,7 @@ The binding mechanism is implementation-defined. Servers MAY use stateful
 storage (e.g., database lookup) or stateless verification (e.g., HMAC,
 authenticated encryption) to validate the binding.
 
-#### 5.1.4. Example Challenge
+#### Example Challenge
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -289,7 +289,7 @@ Example decoded `request`:
 }
 ~~~
 
-#### 5.1.5. Request Body Binding
+### Request Body Binding
 
 Servers SHOULD include the `digest` parameter when issuing challenges for
 requests with bodies. The digest value is computed per [RFC9530]:
@@ -311,7 +311,7 @@ When verifying a credential with a `digest` parameter, servers MUST:
 3. Reject the credential if the digests do not match
 
 
-### 5.2. Credentials (Authorization)
+## Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
 b64token syntax as defined in {{RFC6750}}:
