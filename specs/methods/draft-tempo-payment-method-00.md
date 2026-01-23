@@ -216,108 +216,149 @@ approvals do not support periodic limit semantics.
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object. The schema is determined by the `intent`
-parameter in the challenge. Clients parse the request and construct the
-appropriate Tempo Transaction or Key Authorization to fulfill it.
+base64url-encoded JSON object. The schema follows the shared intent schema
+defined in the intent specifications, with Tempo-specific extensions in
+the `methodDetails` field.
+
+Clients parse the request and construct the appropriate Tempo Transaction
+or Key Authorization to fulfill it.
 
 ## Charge Request
 
-For `intent="charge"`, the request specifies a one-time payment:
+For `intent="charge"`, the request uses the shared charge schema with
+Tempo-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
-| `asset` | string | REQUIRED | TIP-20 token address |
-| `destination` | string | REQUIRED | Recipient address |
+| `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
+| `recipient` | string | REQUIRED | Recipient address |
 | `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
-| `feePayer` | boolean | OPTIONAL | If `true`, server will pay transaction fees (default: `false`) |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 
 **Example:**
 
 ~~~json
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z",
-  "feePayer": true
+  "methodDetails": {
+    "chainId": 42431,
+    "feePayer": true
+  }
 }
 ~~~
 
 The client fulfills this by signing a Tempo Transaction with
-`transfer(destination, amount)` on the specified `asset`, with `validBefore`
-set to `expires`. The client SHOULD use a dedicated `nonceKey` (2D nonce lane)
-for payment transactions to avoid blocking other account activity if the
-transaction is not immediately settled.
+`transfer(recipient, amount)` on the specified `currency` (token address),
+with `validBefore` set to `expires`. The client SHOULD use a dedicated
+`nonceKey` (2D nonce lane) for payment transactions to avoid blocking
+other account activity if the transaction is not immediately settled.
 
-If `feePayer` is `true`, the client signs with `fee_payer_signature` set to
-`0x00` and `fee_token` empty, allowing the server to sponsor fees. If
-`feePayer` is `false` or omitted, the client MUST set `fee_token` and pay
-fees themselves.
+If `methodDetails.feePayer` is `true`, the client signs with
+`fee_payer_signature` set to `0x00` and `fee_token` empty, allowing the
+server to sponsor fees. If `feePayer` is `false` or omitted, the client
+MUST set `fee_token` and pay fees themselves.
 
 ## Authorize Request
 
-For `intent="authorize"`, the request specifies a payment authorization:
+For `intent="authorize"`, the request uses the shared authorize schema
+with Tempo-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `asset` | string | REQUIRED | TIP-20 token address |
-| `destination` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
+| `amount` | string | REQUIRED | Maximum spend amount in base units |
+| `currency` | string | REQUIRED | TIP-20 token address |
 | `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
-| `feePayer` | boolean | OPTIONAL | If `true`, server will pay transaction fees (default: `false`) |
-| `limit` | string | REQUIRED | Maximum spend amount in base units (stringified number) |
-| `validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
+| `recipient` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
+| `methodDetails.validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
 
 **Example:**
 
 ~~~json
 {
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "50000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-05T12:00:00Z",
-  "feePayer": true,
-  "limit": "50000000"
+  "methodDetails": {
+    "chainId": 42431,
+    "feePayer": true
+  }
 }
 ~~~
 
 The client fulfills this by either:
 
-1. Signing a Tempo Transaction with `approve(destination, limit)` on the
-   specified `asset`, with `validBefore` set to `expires` and optionally
-   `validAfter` set to `validFrom`. The `destination` field MUST be present
-   in the request when using transaction fulfillment. The client SHOULD use
-   a dedicated `nonceKey` (2D nonce lane) for payment transactions.
+1. Signing a Tempo Transaction with `approve(recipient, amount)` on the
+   specified `currency` (token address), with `validBefore` set to `expires`
+   and optionally `validAfter` set to `methodDetails.validFrom`. The
+   `recipient` field MUST be present in the request when using transaction
+   fulfillment. The client SHOULD use a dedicated `nonceKey` (2D nonce lane)
+   for payment transactions.
 2. Signing a Key Authorization with expiry = `expires` and a spending limit
-   = `limit` for the specified `asset`
+   = `amount` for the specified token
 
-If `feePayer` is `true`, the client signs with `fee_payer_signature` set to
-`0x00` and `fee_token` empty. If `feePayer` is `false` or omitted, the client
-MUST NOT sign a key authorization; the client MUST sign a transaction with
-`fee_token` set to pay fees themselves.
+If `methodDetails.feePayer` is `true`, the client signs with
+`fee_payer_signature` set to `0x00` and `fee_token` empty. If `feePayer`
+is `false` or omitted, the client MUST NOT sign a key authorization; the
+client MUST sign a transaction with `fee_token` set to pay fees themselves.
 
 ## Subscription Request
 
-For `intent="subscription"`, the request specifies recurring authorization:
+For `intent="subscription"`, the request uses the shared subscription
+schema with Tempo-specific method details:
+
+### Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount per period in base units (stringified number) |
-| `asset` | string | REQUIRED | TIP-20 token address |
-| `expires` | string | REQUIRED | Total expiry timestamp in ISO 8601 format |
-| `period` | string | REQUIRED | Period duration in seconds (stringified number) |
-| `validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
+| `amount` | string | REQUIRED | Amount per period in base units |
+| `currency` | string | REQUIRED | TIP-20 token address |
+| `period` | string | REQUIRED | Billing period (`"day"`, `"week"`, `"month"`, `"year"`, or seconds) |
+| `expires` | string | REQUIRED | Subscription end timestamp in ISO 8601 format |
+
+### Method Details
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
 
 **Example:**
 
 ~~~json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "period": "month",
   "expires": "2026-01-06T00:00:00Z",
-  "period": "2592000"
+  "methodDetails": {
+    "chainId": 42431
+  }
 }
 ~~~
 
-The `period` value `2592000` represents 30 days in seconds.
+The `period` value `"month"` represents approximately 30 days (2592000 seconds).
+Explicit seconds may also be specified as a string (e.g., `"2592000"`).
 
 The client fulfills this by signing a Key Authorization with:
 - Expiry = `expires`
@@ -1030,9 +1071,12 @@ The `request` decodes to:
 ~~~json
 {
   "amount": "1000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "2025-01-06T12:00:00Z"
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "expires": "2025-01-06T12:00:00Z",
+  "methodDetails": {
+    "chainId": 42431
+  }
 }
 ~~~
 
@@ -1066,8 +1110,8 @@ The credential decodes to:
 }
 ~~~
 
-The client constructs a Tempo Transaction calling `transfer(destination, amount)`
-on the asset, fills in `nonce`, `nonceKey`, and `signature`, then RLP-serializes.
+The client constructs a Tempo Transaction calling `transfer(recipient, amount)`
+on the token, fills in `nonce`, `nonceKey`, and `signature`, then RLP-serializes.
 
 **Credential (Transaction Hash):**
 
@@ -1149,9 +1193,12 @@ The `request` decodes to:
 
 ~~~json
 {
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "amount": "50000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-05T12:00:00Z",
-  "limit": "50000000"
+  "methodDetails": {
+    "chainId": 42431
+  }
 }
 ~~~
 
@@ -1179,7 +1226,7 @@ This requests approval for up to 50.00 alphaUSD (50000000 base units).
 
 **Credential (via Transaction):**
 
-Alternatively, when the request includes a `destination` field, the client
+Alternatively, when the request includes a `recipient` field, the client
 may fulfill the approval using a Tempo Transaction with an `approve` call:
 
 ~~~json
@@ -1200,7 +1247,7 @@ may fulfill the approval using a Tempo Transaction with an `approve` call:
 }
 ~~~
 
-The transaction contains `approve(destination, limit)` on the TIP-20 asset.
+The transaction contains `approve(recipient, amount)` on the TIP-20 token.
 The server broadcasts this transaction to register the allowance onchain,
 then later calls `transferFrom` to collect payment.
 
@@ -1278,14 +1325,17 @@ The `request` decodes to:
 ~~~json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "period": "month",
   "expires": "2026-01-06T00:00:00Z",
-  "period": "2592000"
+  "methodDetails": {
+    "chainId": 42431
+  }
 }
 ~~~
 
 This requests a subscription for 10.00 alphaUSD (10000000 base units) per
-30 days (2592000 seconds).
+month.
 
 **Credential:**
 
