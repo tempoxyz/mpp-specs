@@ -197,28 +197,19 @@ to charge a specified amount on a recurring basis.
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object. The schema follows the shared intent schema
-defined in the intent specifications, with Stripe-specific extensions in
-the `methodDetails` field.
+base64url-encoded JSON object. The schema uses shared fields defined by
+the intent specifications (charge, authorize, subscription), with
+Stripe-specific extensions in the `methodDetails` field.
 
 Clients parse the request and construct the appropriate Stripe Payment
-Token or Setup Intent to fulfill it.
+Token or Setup Intent to fulfill it. For shared field definitions, see
+the corresponding intent specification.
 
 ## Charge Request
 
-For `intent="charge"`, the request uses the shared charge schema with
-Stripe-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount in smallest currency unit (e.g., cents) |
-| `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., `"usd"`) |
-| `description` | string | OPTIONAL | Human-readable payment description |
-| `externalId` | string | OPTIONAL | Merchant's identifier (e.g., order ID, cart ID) |
-
-### Method Details
+For `intent="charge"`, the request uses the shared charge schema
+(see draft-payment-intent-charge) with the following Stripe-specific
+method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -254,19 +245,8 @@ const spt = await stripe.createPaymentToken({
 ## Authorize Request
 
 For `intent="authorize"`, the request uses the shared authorize schema
-with Stripe-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Maximum authorization amount in smallest currency unit |
-| `currency` | string | REQUIRED | Three-letter ISO currency code |
-| `expires` | string | OPTIONAL | Authorization expiry in ISO 8601 format |
-| `description` | string | OPTIONAL | Human-readable payment description |
-| `externalId` | string | OPTIONAL | Merchant's identifier |
-
-### Method Details
+(see draft-payment-intent-authorize) with the following Stripe-specific
+method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -303,20 +283,8 @@ const spt = await stripe.createPaymentToken({
 ## Subscription Request
 
 For `intent="subscription"`, the request uses the shared subscription
-schema with Stripe-specific method details:
-
-### Shared Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount per billing period in smallest currency unit |
-| `currency` | string | REQUIRED | Three-letter ISO currency code |
-| `period` | string | REQUIRED | Billing period: `"day"`, `"week"`, `"month"`, or `"year"` |
-| `cycles` | number | OPTIONAL | Number of billing cycles before subscription ends |
-| `description` | string | OPTIONAL | Human-readable subscription description |
-| `externalId` | string | OPTIONAL | Merchant's identifier |
-
-### Method Details
+schema (see draft-payment-intent-subscription) with the following
+Stripe-specific method details:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|

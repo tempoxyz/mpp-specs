@@ -132,16 +132,7 @@ amount per billing period.
 
 ## Billing Periods
 
-Standard billing periods:
-
-| Period | Duration | Seconds |
-|--------|----------|---------|
-| `day` | 1 day | 86400 |
-| `week` | 7 days | 604800 |
-| `month` | ~30 days | 2592000 |
-| `year` | ~365 days | 31536000 |
-
-Payment method specifications MAY define custom period formats.
+See {{period-formats}} for supported period values and their durations.
 
 # Request Schema
 
@@ -191,7 +182,7 @@ Clients can detect the format:
 - Three lowercase letters: ISO 4217 currency code
 - Otherwise: Well-known symbol or method-specific identifier
 
-## Period Formats
+## Period Formats {#period-formats}
 
 The `period` field supports named periods or explicit durations:
 

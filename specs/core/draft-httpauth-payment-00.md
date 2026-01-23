@@ -161,8 +161,8 @@ conditions:
 | Payment verified, but policy denies access | 403 | No challenge (payment was valid) |
 
 Servers MUST return 402 with a `WWW-Authenticate: Payment` header when
-payment is required or when a payment credential fails validation.
-Servers SHOULD NOT return 402 without this header.
+payment is required or when a payment credential fails validation
+(see {{usage-of-402}} for details).
 
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
@@ -181,11 +181,7 @@ authentication schemes. The distinction is intentional:
 This design ensures clients can distinguish payment requirements from
 other authentication schemes that use 401.
 
-## Usage of 402 Payment Required
-
-The 402 (Payment Required) status code was reserved by {{RFC9110}} for future
-use. This specification defines semantics for 402 within the context of the
-Payment authentication scheme.
+## Usage of 402 Payment Required {#usage-of-402}
 
 ### When to Return 402
 
