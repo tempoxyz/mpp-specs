@@ -21,7 +21,7 @@ author:
 normative:
   RFC2119:
   RFC8174:
-  RFC7235:
+  RFC9110:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-httpauth-payment/

@@ -34,7 +34,6 @@ normative:
   RFC5234:
   RFC5246:
   RFC6750:
-  RFC7235:
   RFC8126:
   RFC8174:
   RFC8259:
@@ -225,8 +224,8 @@ unauthenticated clients.
 ## Challenge (WWW-Authenticate)
 
 The Payment challenge is sent in the `WWW-Authenticate` header per
-{{RFC7235}}. The challenge uses the auth-param syntax defined in Section 2.1
-of {{RFC7235}}:
+{{RFC9110}}. The challenge uses the auth-param syntax defined in Section 11
+of {{RFC9110}}:
 
 ~~~abnf
 challenge       = "Payment" [ 1*SP auth-params ]
@@ -240,7 +239,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   challenge parameters (Section 5.1.3) to enable verification. Clients MUST
   include this value unchanged in the credential.
 
-**`realm`**: Protection space identifier per {{RFC7235}}. Servers MUST
+**`realm`**: Protection space identifier per {{RFC9110}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
 
 **`method`**: Payment method identifier ({{payment-methods}}). MUST be a lowercase
@@ -536,7 +535,7 @@ All string values use UTF-8 encoding {{RFC3629}}:
 
 - The `request` and credential payloads are JSON {{RFC8259}}
 - Payment method identifiers are restricted to ASCII lowercase
-- The `realm` parameter SHOULD use ASCII-only values per {{RFC7235}}
+- The `realm` parameter SHOULD use ASCII-only values per {{RFC9110}}
 
 ## Human-Readable Text
 
@@ -641,7 +640,7 @@ Implementations MUST treat `Authorization: Payment` headers and
 HTTP intermediaries (proxies, caches, CDNs) may not recognize 402 as an
 authentication challenge in the same way they handle 401. While this
 specification uses `WWW-Authenticate` headers with 402 responses following
-the same syntax as {{RFC7235}}, intermediaries that perform special
+the same syntax as {{RFC9110}}, intermediaries that perform special
 processing for 401 (such as stripping credentials or triggering
 authentication prompts) may not apply the same behavior to 402.
 
@@ -679,7 +678,7 @@ credential verification attempts.
 
 This document registers the "Payment" authentication scheme in the
 "Hypertext Transfer Protocol (HTTP) Authentication Scheme Registry"
-established by {{RFC7235}}:
+established by {{RFC9110}}:
 
 - **Authentication Scheme Name**: Payment
 - **Reference**: This document, {{the-payment-authentication-scheme}}
