@@ -148,7 +148,7 @@ Payment method specifications MAY define custom period formats.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
+| `currency` | string | Currency/asset identifier |
 | `expires` | string | Subscription end date (optional) |
 | `cycles` | number | Maximum number of billing cycles |
 
@@ -157,7 +157,7 @@ Payment method specifications MAY define custom period formats.
 ~~~ json
 {
   "amount": "10000000",
-  "asset": "0x20c0000000000000000000000000000000000001",
+  "currency": "USD",
   "period": "month",
   "expires": "2026-01-15T00:00:00Z"
 }
