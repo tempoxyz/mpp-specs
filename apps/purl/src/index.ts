@@ -3,7 +3,6 @@ import { Hono } from 'hono'
 export interface Env {
 	ENVIRONMENT: string
 	ASSETS: Fetcher
-	BINARIES: R2Bucket
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -56,7 +55,7 @@ detect_arch() {
 }
 
 install_purl() {
-    local download_url="https://purl.tempo.xyz/purl-\${PLATFORM}-\${ARCH}"
+    local download_url="https://purl-binaries.tempo.xyz/purl-\${PLATFORM}-\${ARCH}"
     local tmp_file="/tmp/\${BINARY_NAME}"
 
     echo ""
@@ -117,26 +116,6 @@ main() {
 
 main
 `
-
-// Serve binary downloads from R2
-app.get('/purl-:platform-:arch', async (c) => {
-	const platform = c.req.param('platform')
-	const arch = c.req.param('arch')
-	const key = `purl-${platform}-${arch}`
-
-	const object = await c.env.BINARIES.get(key)
-	if (!object) {
-		return c.text(`Binary not found: ${key}`, 404)
-	}
-
-	return new Response(object.body, {
-		headers: {
-			'Content-Type': 'application/octet-stream',
-			'Content-Disposition': `attachment; filename="${key}"`,
-			'Cache-Control': 'public, max-age=3600',
-		},
-	})
-})
 
 // Serve install script
 app.get('/install.sh', (_c) => {
