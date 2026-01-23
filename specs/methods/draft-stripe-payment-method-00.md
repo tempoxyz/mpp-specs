@@ -11,11 +11,11 @@ author:
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Steve Kaliski
     ins: S. Kaliski
     email: stevekaliski@stripe.com
-    organization: Stripe
+    org: Stripe
 
 normative:
   RFC2119:
