@@ -38,15 +38,30 @@ jobs:
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
+      - name: Download main branch artifacts
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          workflow: deploy.yml
+          name_is_regexp: true
+          name: ietf-specs-.*
+          path: /tmp/main-artifacts
+        continue-on-error: true
+
       - name: Generate diffs against main
         if: github.event_name == 'pull_request'
         run: |
           mkdir -p artifacts/diffs
-          BASE_URL="https://tempoxyz.github.io/ietf-paymentauth-spec"
+          MAIN_DIR=$(find /tmp/main-artifacts -maxdepth 1 -type d -name "ietf-specs-*" 2>/dev/null | head -1)
+          if [[ -z "$MAIN_DIR" ]]; then
+            MAIN_DIR="/tmp/main-artifacts"
+          fi
           for file in artifacts/draft-*.txt; do
             name=$(basename "$file" .txt)
-            if curl -sf "${BASE_URL}/${name}.txt" -o "/tmp/${name}-base.txt" 2>/dev/null; then
-              diff -u "/tmp/${name}-base.txt" "$file" > "artifacts/diffs/${name}-diff.txt" || true
+            if [[ -f "$MAIN_DIR/${name}.txt" ]]; then
+              diff -u "$MAIN_DIR/${name}.txt" "$file" > "artifacts/diffs/${name}-diff.txt" || true
             else
               echo "New spec (no base on main to compare)" > "artifacts/diffs/${name}-diff.txt"
             fi
