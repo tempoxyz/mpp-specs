@@ -410,7 +410,7 @@ Content-Type: application/json
 Decoded request:
 ~~~ json
 {
-  "amount": 5000,
+  "amount": "5000",
   "currency": "usd",
   "description": "AI generation"
 }
@@ -457,7 +457,7 @@ Decoded receipt:
 {
   "type": "charge",
   "chargeId": "ch_1N4Zv32eZvKYlo2CPhVPkJlW",
-  "amount": 5000,
+  "amount": "5000",
   "currency": "usd",
   "status": "succeeded"
 }
@@ -479,7 +479,7 @@ WWW-Authenticate: Payment id="ch_b2b_payment",
 Decoded request:
 ~~~ json
 {
-  "amount": 250000,
+  "amount": "250000",
   "currency": "usd",
   "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
   "description": "Supplier payment for order #1234",

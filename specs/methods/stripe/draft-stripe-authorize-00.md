@@ -488,7 +488,7 @@ Decoded receipt:
 {
   "type": "authorize",
   "paymentIntentId": "pi_1N4Zv32eZvKYlo2CPhVPkJlW",
-  "amount": 100000,
+  "amount": "100000",
   "currency": "usd",
   "status": "requires_capture",
   "captureBefore": "2025-01-22T12:00:00Z"
