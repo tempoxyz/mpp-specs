@@ -13,3 +13,4 @@ node_modules/
 
 # Generated artifacts
 artifacts/
+__pycache__/
