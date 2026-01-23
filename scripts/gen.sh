@@ -60,8 +60,12 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-while read -r md; do
-  name="$(basename "${md%.md}")"
+# Export for use in subshells
+export OUT_DIR XML2RFC_OPTS VERBOSE
+
+process_spec() {
+  local md="$1"
+  local name="$(basename "${md%.md}")"
 
   echo "==> $name"
 
@@ -69,12 +73,12 @@ while read -r md; do
   if $VERBOSE; then
     if ! kramdown-rfc "$md" > "$OUT_DIR/${name}.xml"; then
       echo "ERROR: kramdown-rfc failed for $name" >&2
-      exit 1
+      return 1
     fi
   else
     if ! kramdown-rfc "$md" > "$OUT_DIR/${name}.xml" 2>/dev/null; then
       echo "ERROR: kramdown-rfc failed for $name" >&2
-      exit 1
+      return 1
     fi
   fi
 
@@ -86,8 +90,11 @@ while read -r md; do
 
   echo "    [xml2rfc] Generating PDF..."
   xml2rfc --pdf $XML2RFC_OPTS "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
+}
+export -f process_spec
 
-done < <(find "$SPECS_DIR" -name "draft-*.md")
+# Process specs in parallel (up to 4 at a time)
+find "$SPECS_DIR" -name "draft-*.md" | xargs -P4 -I{} bash -c 'process_spec "$1"' _ {}
 
 # Generate index.html using Python/Jinja2 templating
 echo "==> Generating index.html"
