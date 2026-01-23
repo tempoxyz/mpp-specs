@@ -33,6 +33,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Lint frontmatter
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_frontmatter.py
+
       - name: Build and validate specs
         run: |
           mkdir -p .cache
