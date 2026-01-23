@@ -23,7 +23,35 @@ Before submitting a PR:
 | New intent | Use [intent template](templates/intent-template.md), add to `specs/intents/` |
 | New method | Use [method template](templates/method-template.md), add to `specs/methods/` |
 | New extension | Use [extension template](templates/extension-template.md), add to `specs/extensions/` |
+| New method with experimental intent | Define intent in method spec, add to `specs/methods/` |
 | Core protocol change | Open an issue first for discussion |
+
+### Experimental Intents
+
+Methods may define new intent types that are not yet formalized in `specs/intents/`. These are considered **experimental intents**.
+
+| Intent Location | Status | Requirements |
+|-----------------|--------|--------------|
+| `specs/intents/` | Standardized | Adopted by 2+ methods |
+| `specs/methods/` only | Experimental | Single method definition |
+
+**Workflow for new intents:**
+
+1. **Propose with method**: Define the intent semantics directly in your method spec (`specs/methods/draft-{network}-{intent}-00.md`). The intent is automatically experimental.
+
+2. **Gain adoption**: Other methods implement the same intent pattern in their own specs.
+
+3. **Formalize**: Once 2+ methods implement the intent, extract common semantics into `specs/intents/draft-payment-intent-{name}-00.md`.
+
+**Example**: A streaming payment method might define:
+
+```
+specs/methods/draft-tempo-stream-00.md     ← defines "stream" intent (experimental)
+specs/methods/draft-lightning-stream-00.md ← second implementation
+specs/intents/draft-payment-intent-stream-00.md ← formalized after adoption
+```
+
+This ensures intents are battle-tested before standardization, preventing premature abstractions.
 
 ### Naming Conventions
 
