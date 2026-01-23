@@ -246,7 +246,7 @@ Unknown parameters MUST be ignored by clients.
 
 #### 5.1.3. Challenge Binding
 
-Servers MUST bind the challenge `id` to the challenge parameters (Sections
+Servers SHOULD bind the challenge `id` to the challenge parameters (Sections
 5.1.1 and 5.1.2) to prevent request integrity attacks where a client could
 sign or submit a payment different from what the server intended. Servers
 MUST verify that credentials present an `id` matching the expected binding.
