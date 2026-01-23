@@ -330,8 +330,7 @@ containing:
 | `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
 
-The `challenge` object contains the parameters from the original challenge,
-enabling stateless server verification:
+The `challenge` object contains the parameters from the original challenge:
 
 | Field | Type | Description |
 |-------|------|-------------|
