@@ -27,6 +27,11 @@ normative:
     date: 2026-01
 
 informative:
+  CAIP-2:
+    title: "CAIP-2: Blockchain ID Specification"
+    target: https://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-2.md
+    author:
+      - org: Chain Agnostic Standards Alliance
   EIP-2718:
     title: "Typed Transaction Envelope"
     target: https://eips.ethereum.org/EIPS/eip-2718
@@ -228,9 +233,14 @@ For `intent="charge"`, the request specifies a one-time payment:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
 | `asset` | string | REQUIRED | TIP-20 token address |
+| `chain` | string | REQUIRED | Chain identifier in CAIP-2 format (e.g., `"eip155:42431"`) |
 | `destination` | string | REQUIRED | Recipient address |
 | `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
 | `feePayer` | boolean | OPTIONAL | If `true`, server will pay transaction fees (default: `false`) |
+
+The `chain` field uses CAIP-2 (Chain Agnostic Improvement Proposal) format
+to identify the Tempo network. For Tempo Moderato (testnet), use
+`"eip155:42431"`. For Tempo mainnet, use the appropriate chain ID.
 
 **Example:**
 
@@ -238,6 +248,7 @@ For `intent="charge"`, the request specifies a one-time payment:
 {
   "amount": "1000000",
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z",
   "feePayer": true
@@ -262,6 +273,7 @@ For `intent="authorize"`, the request specifies a payment authorization:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `asset` | string | REQUIRED | TIP-20 token address |
+| `chain` | string | REQUIRED | Chain identifier in CAIP-2 format |
 | `destination` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
 | `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
 | `feePayer` | boolean | OPTIONAL | If `true`, server will pay transaction fees (default: `false`) |
@@ -273,6 +285,7 @@ For `intent="authorize"`, the request specifies a payment authorization:
 ~~~json
 {
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "expires": "2025-02-05T12:00:00Z",
   "feePayer": true,
   "limit": "50000000"
@@ -302,6 +315,7 @@ For `intent="subscription"`, the request specifies recurring authorization:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount per period in base units (stringified number) |
 | `asset` | string | REQUIRED | TIP-20 token address |
+| `chain` | string | REQUIRED | Chain identifier in CAIP-2 format |
 | `expires` | string | REQUIRED | Total expiry timestamp in ISO 8601 format |
 | `period` | string | REQUIRED | Period duration in seconds (stringified number) |
 | `validFrom` | string | OPTIONAL | Start timestamp in ISO 8601 format |
@@ -312,6 +326,7 @@ For `intent="subscription"`, the request specifies recurring authorization:
 {
   "amount": "10000000",
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
@@ -858,10 +873,23 @@ the `source` does not match the payer address.
 Servers acting as fee payers accept financial risk in exchange for
 providing a seamless payment experience.
 
-**Denial of Service**: Malicious clients could submit valid-looking
-credentials that fail onchain, causing the server to pay fees without
-receiving payment. Servers SHOULD implement rate limiting and MAY require
-client authentication before accepting payment credentials.
+**Validation Before Signing**: Servers offering fee payment MUST validate
+the transaction structure before signing the fee commitment. This includes
+verifying the transaction is well-formed, the amounts match the challenge,
+and the destination is correct.
+
+**Rate Limiting**: Servers SHOULD implement rate limiting per client
+address to prevent griefing attacks. Malicious clients could submit
+valid-looking credentials that fail onchain, causing the server to pay
+fees without receiving payment. Suggested limits: 10 requests per minute
+per client address for new clients, higher limits for known clients.
+
+**Fee Payment Unavailable**: If `feePayer: true` but the server cannot
+pay fees (insufficient balance, rate limited, or validation failure),
+the server MUST return 402 with a Problem Details response using type
+`https://ietf.org/payment/problems/fee-payment-unavailable` and include
+a fresh challenge with `feePayer: false`. This allows the client to
+retry with client-paid fees.
 
 **Fee Token Exhaustion**: Servers MUST monitor their fee token balance
 and reject new payment requests when balance is insufficient. Servers
@@ -1010,6 +1038,7 @@ The `request` decodes to:
 {
   "amount": "1000000",
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z"
 }
@@ -1115,6 +1144,7 @@ The `request` decodes to:
 ~~~json
 {
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "expires": "2025-02-05T12:00:00Z",
   "limit": "50000000"
 }
@@ -1223,6 +1253,7 @@ The `request` decodes to:
 {
   "amount": "10000000",
   "asset": "0x20c0000000000000000000000000000000000001",
+  "chain": "eip155:42431",
   "expires": "2026-01-06T00:00:00Z",
   "period": "2592000"
 }
