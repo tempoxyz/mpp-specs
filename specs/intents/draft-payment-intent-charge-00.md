@@ -104,7 +104,7 @@ method specifications MUST define:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` | string | Currency/asset identifier |
+| `currency` or `asset` | string | Currency/asset identifier |
 | `recipient` | string | Payment recipient (method-specific format) |
 | `expires` | string | Expiry timestamp for this request |
 

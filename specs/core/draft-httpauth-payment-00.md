@@ -778,7 +778,7 @@ Decoded `request`:
 ~~~json
 {
   "amount": "5000",
-  "currency": "USD",
+  "asset": "USD",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "nonce": "0x1234567890"
 }

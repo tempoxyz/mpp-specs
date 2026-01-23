@@ -134,7 +134,7 @@ Unlike "charge", the "authorize" intent is non-atomic:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency` | string | Currency/asset identifier |
+| `currency` or `asset` | string | Currency/asset identifier |
 | `recipient` | string | Payment recipient (for methods that require it) |
 
 ## Example
@@ -142,7 +142,7 @@ Unlike "charge", the "authorize" intent is non-atomic:
 ~~~ json
 {
   "limit": "100000000",
-  "currency": "USD",
+  "asset": "0x20c0000000000000000000000000000000000001",
   "expires": "2025-02-15T00:00:00Z"
 }
 ~~~
