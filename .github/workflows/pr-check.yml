@@ -78,11 +78,17 @@ jobs:
       - name: Generate spec table
         id: specs
         run: |
-          TABLE="| Spec | HTML | TXT | XML | PDF | Diff |\n|------|------|-----|-----|-----|------|\n"
+          TABLE="| Spec | Changed | HTML | TXT | XML | PDF | Diff |\n|------|---------|------|-----|-----|-----|------|\n"
           BASE_URL="${{ steps.deploy.outputs.deployment-url }}"
           for file in artifacts/draft-*.html; do
             name=$(basename "$file" .html)
-            TABLE="${TABLE}| ${name} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}-diff.txt) |\n"
+            diff_file="artifacts/diffs/${name}-diff.txt"
+            if [[ -f "$diff_file" ]] && [[ -s "$diff_file" ]] && ! grep -q "New spec" "$diff_file"; then
+              changed="Yes"
+            else
+              changed="-"
+            fi
+            TABLE="${TABLE}| ${name} | ${changed} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}-diff.txt) |\n"
           done
           echo "table<<EOF" >> $GITHUB_OUTPUT
           echo -e "$TABLE" >> $GITHUB_OUTPUT
