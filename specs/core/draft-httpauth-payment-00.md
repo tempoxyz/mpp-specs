@@ -556,29 +556,6 @@ enable replay attacks or unauthorized payments.
 Implementations SHOULD treat Payment credentials with the same care as
 authentication passwords or session tokens.
 
-## Challenge Identifier Security
-
-The challenge `id` is a self-contained, cryptographically-bound identifier
-(Section 5.1.3). The `id` MUST be:
-
-- **Tamper-proof**: The HMAC-SHA-256 construction prevents modification
-  of challenge parameters.
-- **Context-bound**: The identifier is cryptographically bound to `realm`,
-  `method`, `intent`, `request`, and `expires`.
-
-Servers MUST reject credentials where:
-
-- The `challenge.id` fails HMAC verification.
-- The `challenge.expires` timestamp has passed.
-- The `challenge.realm` does not match the expected realm for the resource.
-
-#### 11.3.1. Delimiter Security
-
-The newline-delimited encoding specified in Section 5.1.3.1 prevents
-concatenation ambiguity attacks. The delimiter is unambiguous because
-none of the challenge parameter fields can contain newline characters.
-
-Implementations MUST use the exact encoding specified in Section 5.1.3.1.
 
 ## Replay Protection
 
