@@ -584,7 +584,7 @@ Decoded receipt:
   "subscriptionId": "sub_1N4Zv32eZvKYlo2CPhVPkJlW",
   "amount": "9900",
   "currency": "usd",
-  "interval": "month",
+  "period": "month",
   "status": "active",
   "currentPeriodEnd": "2025-02-15T12:00:00Z"
 }
