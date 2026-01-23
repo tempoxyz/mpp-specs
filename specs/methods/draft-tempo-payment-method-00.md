@@ -368,7 +368,14 @@ Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
 
 ~~~json
 {
-  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0x76f901...signed transaction bytes...",
     "type": "transaction"
@@ -388,7 +395,14 @@ permission to sign transactions on its behalf.
 
 ~~~json
 {
-  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "subscription",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0xf8...signed authorization bytes...",
     "type": "keyAuthorization"
@@ -421,7 +435,14 @@ a key authorization, not a transaction.
 
 ~~~json
 {
-  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
     "type": "hash"
@@ -1029,7 +1050,14 @@ The credential decodes to:
 
 ~~~json
 {
-  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0x76f901...signed transaction bytes...",
     "type": "transaction"
@@ -1048,7 +1076,14 @@ the hash:
 
 ~~~json
 {
-  "id": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
     "type": "hash"
@@ -1126,7 +1161,14 @@ This requests approval for up to 50.00 alphaUSD (50000000 base units).
 
 ~~~json
 {
-  "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+  "challenge": {
+    "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "authorize",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0xf8b2...signed authorization bytes...",
     "type": "keyAuthorization"
@@ -1142,7 +1184,14 @@ may fulfill the approval using a Tempo Transaction with an `approve` call:
 
 ~~~json
 {
-  "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+  "challenge": {
+    "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "authorize",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0x76f901...signed transaction bytes...",
     "type": "transaction"
@@ -1161,7 +1210,14 @@ The client can also broadcast an `approve` transaction themselves:
 
 ~~~json
 {
-  "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+  "challenge": {
+    "id": "nR5tYuLpS8mWvXzQ1eCgHj",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "authorize",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "hash": "0x9f8e7d6c5b4a3210fedcba0987654321fedcba0987654321fedcba0987654321",
     "type": "hash"
@@ -1235,7 +1291,14 @@ This requests a subscription for 10.00 alphaUSD (10000000 base units) per
 
 ~~~json
 {
-  "id": "qT8wErYuI3oPlKjH6gFdSa",
+  "challenge": {
+    "id": "qT8wErYuI3oPlKjH6gFdSa",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "subscription",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
   "payload": {
     "signature": "0xf8c1...signed authorization bytes...",
     "type": "keyAuthorization"

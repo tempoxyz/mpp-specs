@@ -218,12 +218,9 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 ### Required Parameters
 
-**`id`**: Unique identifier for this payment challenge. Servers MUST
-  generate a cryptographically random value with at least 128 bits of
-  entropy for each challenge. Clients MUST include this value in the
-  credential to correlate the response with the challenge. Servers
-  MUST reject credentials with unknown, expired, or already-used `id`
-  values.
+**`id`**: Unique challenge identifier. Servers MUST bind this value to the
+  challenge parameters (Section 5.1.3) to enable verification. Clients MUST
+  include this value unchanged in the credential.
 
 **`realm`**: Protection space identifier per {{RFC7235}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
@@ -241,6 +238,12 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 ### Optional Parameters
 
+**`digest`**: Content digest of the request body, formatted per [RFC9530].
+  Servers SHOULD include this parameter when the payment challenge applies
+  to a request with a body (e.g., POST, PUT, PATCH). When present, clients
+  MUST submit the credential with a request body whose digest matches this
+  value. See Section 5.1.5 for body binding requirements.
+
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an {{RFC3339}} date-time string (e.g., `"2025-01-15T12:00:00Z"`).
   Servers SHOULD include this parameter. Clients MUST NOT submit
@@ -252,7 +255,18 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 Unknown parameters MUST be ignored by clients.
 
-### Example Challenge
+#### Challenge Binding
+
+Servers SHOULD bind the challenge `id` to the challenge parameters (Sections
+5.1.1 and 5.1.2) to prevent request integrity attacks where a client could
+sign or submit a payment different from what the server intended. Servers
+MUST verify that credentials present an `id` matching the expected binding.
+
+The binding mechanism is implementation-defined. Servers MAY use stateful
+storage (e.g., database lookup) or stateless verification (e.g., HMAC,
+authenticated encryption) to validate the binding.
+
+#### Example Challenge
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -275,6 +289,28 @@ Example decoded `request`:
 }
 ~~~
 
+### Request Body Binding
+
+Servers SHOULD include the `digest` parameter when issuing challenges for
+requests with bodies. The digest value is computed per [RFC9530]:
+
+~~~http
+WWW-Authenticate: Payment id="...",
+    realm="api.example.com",
+    method="example",
+    intent="charge",
+    digest="sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:",
+    expires="2025-01-15T12:05:00Z",
+    request="..."
+~~~
+
+When verifying a credential with a `digest` parameter, servers MUST:
+
+1. Compute the digest of the current request body per [RFC9530]
+2. Compare it with the `digest` value from the challenge
+3. Reject the credential if the digests do not match
+
+
 ## Credentials (Authorization)
 
 The Payment credential is sent in the `Authorization` header using the
@@ -290,9 +326,21 @@ containing:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Challenge identifier (must match challenge `id`) |
-| `source` | string | No | Payer identifier (RECOMMENDED: DID format per {{W3C-DID}}) |
+| `challenge` | object | Yes | Echoed challenge parameters |
+| `source` | string | No | Payer identifier (RECOMMENDED: DID format per [W3C-DID]) |
 | `payload` | object | Yes | Method-specific payment proof |
+
+The `challenge` object contains the parameters from the original challenge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Challenge identifier |
+| `realm` | string | Protection space |
+| `method` | string | Payment method identifier |
+| `intent` | string | Payment intent type |
+| `request` | string | Base64url-encoded payment request |
+| `digest` | string | Content digest  |
+| `expires` | string | Challenge expiration timestamp |
 
 The `payload` field contains the payment-method-specific data needed to
 complete the payment challenge. Payment method specifications define the
@@ -303,14 +351,21 @@ exact structure.
 ~~~http
 GET /api/data HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJpZCI6Ing3VGcycExxUjltS3ZOd1kzaEJjWmEiLCJwYXlsb2FkIjp7InByb29mIjoiMHhhYmMxMjMuLi4ifX0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSlZVMFFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
 ~~~
 
 Decoded credential:
 
 ~~~json
 {
-  "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+  "challenge": {
+    "id": "x7Tg2pLqR9mKvNwY3hBcZa",
+    "realm": "api.example.com",
+    "method": "example",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "payload": {
     "proof": "0xabc123..."
   }
@@ -500,21 +555,14 @@ enable replay attacks or unauthorized payments.
 Implementations SHOULD treat Payment credentials with the same care as
 authentication passwords or session tokens.
 
-## Challenge Identifier Security
-
-The challenge `id` parameter MUST be:
-
-- **Unpredictable**: Not guessable by clients or attackers
-- **Unique**: Never reused across challenges
-- **Bound**: Each `id` MUST be bound to the origin, realm, and request
-
-Servers MUST reject credentials containing invalid, expired, or
-previously-used `id` values.
 
 ## Replay Protection
 
-Payment methods MUST define their own replay protection mechanisms
-(e.g., nonce consumption, preimage revelation, authorization expiry).
+Payment methods used with this specification MUST provide single-use
+proof semantics. A payment proof MUST be usable exactly once; subsequent
+attempts to use the same proof MUST be rejected by the payment method
+infrastructure.
+
 
 ## Amount Verification {#amount-verification}
 
@@ -718,7 +766,14 @@ Decoded credential:
 
 ~~~json
 {
-  "id": "qB3wErTyU7iOpAsD9fGhJk",
+  "challenge": {
+    "id": "qB3wErTyU7iOpAsD9fGhJk",
+    "realm": "api.example.com",
+    "method": "invoice",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "payload": {
     "preimage": "0xabc123..."
   }
@@ -768,7 +823,14 @@ Decoded `request`:
 
 ~~~json
 {
-  "id": "zL4xCvBnM6kJhGfD8sAaWe",
+  "challenge": {
+    "id": "zL4xCvBnM6kJhGfD8sAaWe",
+    "realm": "api.example.com",
+    "method": "signed",
+    "intent": "charge",
+    "request": "eyJhbW91bnQiOiI1MDAwIiwiYXNzZXQiOiJVU0QiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJub25jZSI6IjB4MTIzNDU2Nzg5MCJ9",
+    "expires": "2025-01-15T12:05:00Z"
+  },
   "source": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
   "payload": {
     "signature": "0x1b2c3d4e5f..."
