@@ -49,9 +49,11 @@ verification, including:
 
 ## Relationship to Payment Methods
 
-This document defines the abstract semantics of the "charge" intent.
-Payment method specifications define how to implement this intent using
-their specific payment infrastructure.
+This document defines the flow semantics of the "charge" intent. The
+`request` schema is defined by each payment method specification, not
+by this document. Payment method specifications define how to implement
+this intent using their specific payment infrastructure, including the
+exact fields and formats for payment requests.
 
 # Requirements Language
 
@@ -90,37 +92,44 @@ failed).
 
 # Request Schema
 
-The `request` parameter for a "charge" intent MUST include sufficient
-information for the client to complete payment. At minimum, payment
-method specifications MUST define:
+The `request` parameter schema is defined by each payment method
+specification. This section describes common patterns that payment
+methods SHOULD follow for interoperability.
 
-## Required Fields
+## Amount Representation
+
+The `amount` field MUST be a string containing a non-negative integer
+representing the payment amount in the currency's smallest indivisible unit:
+
+- For fiat currencies: minor units (e.g., cents for USD, pence for GBP)
+- For cryptocurrencies: base units (e.g., wei for ETH, satoshis for BTC)
+
+Implementations MUST NOT use floating-point representations to avoid
+precision loss with large values or decimal arithmetic errors.
+
+## Common Fields
+
+Payment method specifications typically include:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `amount` | string/number | Payment amount (method-specific format) |
-
-## Recommended Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `currency` or `asset` | string | Currency/asset identifier |
+| `amount` | string | Payment amount in base units (REQUIRED) |
+| `currency` | string | Currency identifier (REQUIRED) |
 | `recipient` | string | Payment recipient (method-specific format) |
-| `expires` | string | Expiry timestamp for this request |
+| `expires` | string | Expiry timestamp (RFC 3339 format) |
 
 ## Example
 
 ~~~ json
 {
-  "amount": "1000",
+  "amount": "100000",
   "currency": "USD",
   "recipient": "acct_123",
   "expires": "2025-01-15T12:05:00Z"
 }
 ~~~
 
-Payment method specifications define the complete schema for their
-implementation of the "charge" intent.
+This example represents a payment of 1000.00 USD (100000 cents).
 
 # Credential Requirements
 

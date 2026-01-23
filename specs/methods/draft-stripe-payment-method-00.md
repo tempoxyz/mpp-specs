@@ -53,6 +53,10 @@ which are single-use tokens that represent payment authorization. SPTs
 abstract away the complexity of payment method details (cards, bank accounts,
 wallets) and provide a unified interface for payment acceptance.
 
+Note: This payment method relies on Stripe's proprietary APIs and Stripe.js
+for payment token creation. Implementations require a Stripe account and
+API keys. See {{STRIPE-API}} for complete API documentation.
+
 This specification supports three payment intents:
 
 - **charge**: One-time payment via Stripe Payment Token
@@ -109,9 +113,10 @@ Stripe Payment Token (SPT)
   or the Stripe API and consumed by servers to process payments.
 
 Business Network
-: A Stripe-managed network of connected accounts that can transact with
-  each other. Business Networks enable payments between merchants and
-  their suppliers, partners, or service providers.
+: A Stripe-specific identifier for merchant networks participating in
+  Stripe's business payment programs. This is a Stripe-internal concept
+  and the `businessNetwork` field is OPTIONAL, applicable only to Stripe
+  business accounts enrolled in specific programs.
 
 Connected Account
 : A Stripe account connected to a platform account, enabling the platform
@@ -168,9 +173,10 @@ permission to charge up to the specified amount at a later time.
 
 1. **Stripe Payment Token with Authorization**: The payer creates an SPT,
    which the server uses to create a PaymentIntent with
-   `capture_method=manual`. The server can capture the authorized funds
-   within 7 days (for cards) or according to the payment method's
-   authorization window.
+   `capture_method=manual`. Authorization validity periods vary by payment
+   method: card authorizations typically expire after 7 days; bank transfers
+   and other methods may have different windows. Servers SHOULD consult
+   Stripe documentation for method-specific authorization periods.
 
 ## Intent: "subscription"
 
@@ -635,12 +641,6 @@ Method Registry per Section 13.2 of {{I-D.httpauth-payment}}:
 - **Method ID**: stripe
 - **Specification**: [this document]
 - **Intents**: charge, authorize, subscription
-
-## Business Network Registry
-
-This specification requests creation of a "Stripe Business Network"
-registry for tracking registered Business Network IDs. Registration
-policy: First Come First Served.
 
 --- back
 
