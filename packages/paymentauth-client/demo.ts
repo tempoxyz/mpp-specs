@@ -21,7 +21,7 @@ import {
 	type PaymentCredential,
 	parseReceipt,
 	parseWwwAuthenticate,
-} from '@tempo/paymentauth-protocol'
+} from '@tempo/paymentauth-protocol-legacy'
 import { createClient, encodeFunctionData, type Hex, http, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { prepareTransactionRequest, signTransaction } from 'viem/actions'

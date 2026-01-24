@@ -2,123 +2,123 @@ import type { Address, Hex } from 'viem'
 
 /**
  * Payment method identifier.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-6
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md
  */
-export type PaymentMethod = 'tempo' | 'x402' | (string & {})
+export type PaymentMethod = 'tempo' | 'stripe' | 'invoice' | (string & {})
 
 /**
  * Payment intent type.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-7
- *
- * Note: 'approve' is DEPRECATED and will be removed in a future version.
- * Use 'authorize' instead. Servers MUST accept both during the transition period.
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/intents/
  */
-export type PaymentIntent =
-	| 'charge'
-	| 'authorize'
-	| 'approve' // DEPRECATED: use 'authorize'
-	| 'subscription'
-	| 'stream'
-	| (string & {})
-
-/**
- * Normalize payment intent, converting deprecated names to current ones.
- * @param intent - The intent from client request
- * @returns The normalized intent name
- */
-export function normalizeIntent(intent: PaymentIntent): PaymentIntent {
-	if (intent === 'approve') {
-		console.warn('[DEPRECATED] intent="approve" is deprecated, use "authorize" instead')
-		return 'authorize'
-	}
-	return intent
-}
+export type PaymentIntent = 'charge' | 'authorize' | 'subscription' | 'stream' | (string & {})
 
 /**
  * Payment challenge sent in WWW-Authenticate header.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-5.1
+ *
+ * Format: Payment id="...", realm="...", method="...", intent="...", request="<base64url>"
+ *
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md#51-www-authenticate-challenge
  */
 export interface PaymentChallenge<TRequest = unknown> {
 	/** Unique identifier for this payment challenge (128+ bits entropy) */
 	id: string
-	/** Protection space identifier */
+	/** Protection space identifier (e.g., domain name) */
 	realm: string
 	/** Payment method identifier */
 	method: PaymentMethod
 	/** Payment intent type */
 	intent: PaymentIntent
-	/** Base64url-encoded JSON payment request (decoded here) */
+	/** Payment request (decoded from base64url JSON) */
 	request: TRequest
-	/** Optional expiry timestamp (ISO 8601) */
+	/** Optional expiry timestamp (ISO 8601 / RFC 3339) */
 	expires?: string
-	/** Optional human-readable description */
+	/** Optional human-readable description (display only, not for verification) */
 	description?: string
+	/** Optional content digest for POST/PUT/PATCH requests (RFC 9530) */
+	digest?: string
 }
 
 /**
- * Charge request for tempo method with intent="charge".
- * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.1
+ * Method-specific details for Tempo payments.
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/methods/tempo/
+ */
+export interface TempoMethodDetails {
+	/** Chain ID for the Tempo network */
+	chainId: number
+	/** If true, server will pay transaction fees */
+	feePayer?: boolean
+}
+
+/**
+ * Charge request for intent="charge".
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/intents/draft-charge-intent-00.md
  */
 export interface ChargeRequest {
-	/** Amount in base units (stringified number, e.g., "10000" = 0.01 with 6 decimals) */
+	/** Amount in base units (stringified number, e.g., "1000000" = 1.00 with 6 decimals) */
 	amount: string
-	/** TIP-20 token address */
-	asset: Address
-	/** Recipient address */
-	destination: Address
-	/** Expiry timestamp (ISO 8601) */
+	/** Currency identifier (ISO 4217 code or token address) */
+	currency: string | Address
+	/** Payment recipient address or account ID */
+	recipient: string | Address
+	/** Expiry timestamp (ISO 8601 / RFC 3339) */
 	expires: string
-	/** If true, server will pay transaction fees */
-	feePayer?: boolean
+	/** Optional human-readable description */
+	description?: string
+	/** Optional merchant reference ID */
+	externalId?: string
+	/** Method-specific details */
+	methodDetails?: TempoMethodDetails
 }
 
 /**
- * Authorize request for tempo method with intent="authorize".
- * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.2
+ * Authorize request for intent="authorize".
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/intents/draft-authorize-intent-00.md
  */
 export interface AuthorizeRequest {
-	/** TIP-20 token address */
-	asset: Address
-	/** Authorized spender address (required for transaction fulfillment) */
-	destination?: Address
-	/** Expiry timestamp (ISO 8601) */
+	/** Maximum authorization amount in base units */
+	amount: string
+	/** Currency identifier (ISO 4217 code or token address) */
+	currency: string | Address
+	/** Authorized spender address */
+	recipient?: string | Address
+	/** Authorization window expiry (ISO 8601 / RFC 3339) */
 	expires: string
-	/** Maximum spend amount in base units */
-	limit: string
-	/** Optional start timestamp (ISO 8601) */
-	validFrom?: string
-	/** If true, server will pay transaction fees */
-	feePayer?: boolean
+	/** Optional human-readable description */
+	description?: string
+	/** Method-specific details */
+	methodDetails?: TempoMethodDetails
 }
 
 /**
- * Subscription request for tempo method with intent="subscription".
- * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.3
+ * Subscription request for intent="subscription".
  */
 export interface SubscriptionRequest {
 	/** Amount per period in base units */
 	amount: string
-	/** TIP-20 token address */
-	asset: Address
+	/** Currency identifier (ISO 4217 code or token address) */
+	currency: string | Address
+	/** Payment recipient */
+	recipient: string | Address
 	/** Total expiry timestamp (ISO 8601) */
 	expires: string
 	/** Period duration in seconds (stringified number) */
 	period: string
 	/** Optional start timestamp (ISO 8601) */
 	validFrom?: string
+	/** Method-specific details */
+	methodDetails?: TempoMethodDetails
 }
 
 /**
- * Stream request for tempo method with intent="stream".
- * @see https://datatracker.ietf.org/doc/html/draft-tempo-stream-extension-00#section-5
+ * Stream request for intent="stream".
  */
 export interface StreamRequest {
 	/** Address of the channel escrow contract */
 	escrowContract: Address
-	/** TIP-20 token address */
-	asset: Address
+	/** Currency identifier (token address) */
+	currency: Address
 	/** Payee address (server's address for withdrawals) */
-	destination: Address
+	recipient: Address
 	/** Required deposit amount in base units */
 	deposit: string
 	/** Channel expiry (ISO 8601) */
@@ -131,75 +131,75 @@ export interface StreamRequest {
 	voucherEndpoint: string
 	/** Minimum amount increase between vouchers (default: "1") */
 	minVoucherDelta?: string
-}
-
-/**
- * Stream credential payload for intent="stream".
- */
-export interface StreamCredentialPayload {
-	type: 'stream'
-	action: 'open' | 'voucher' | 'close'
-	channelId: Hex
-	openTxHash?: Hex
-	voucher: {
-		payload: {
-			primaryType: 'Voucher'
-			domain: {
-				name: string
-				version: string
-				chainId: number
-				verifyingContract: Address
-			}
-			types: Record<string, Array<{ name: string; type: string }>>
-			message: {
-				channelId: Hex
-				cumulativeAmount: string
-				validUntil: string
-			}
-		}
-		signature: Hex
-	}
+	/** Method-specific details */
+	methodDetails?: TempoMethodDetails
 }
 
 /**
  * Payload type in payment credential.
  */
-export type PayloadType = 'transaction' | 'keyAuthorization' | 'stream'
+export type PayloadType = 'transaction' | 'hash' | 'keyAuthorization' | 'stream'
 
 /**
  * Payment credential payload.
- * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-7.2
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md#52-authorization-credential
  */
 export interface PaymentPayload {
 	/** Fulfillment type */
 	type: PayloadType
-	/** Hex-encoded RLP-serialized signed data */
+	/** Hex-encoded signed data (transaction bytes or hash) */
 	signature: Hex
 }
 
 /**
- * Payment credential sent in Authorization header.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-5.2
+ * Echoed challenge in the credential.
+ * Client MUST echo all challenge parameters for server verification.
  */
-export interface PaymentCredential {
-	/** Challenge ID from the server's WWW-Authenticate header */
+export interface EchoedChallenge<_TRequest = unknown> {
+	/** Challenge ID from WWW-Authenticate */
 	id: string
-	/** Optional payer identifier as a DID */
+	/** Echoed realm */
+	realm: string
+	/** Echoed method */
+	method: PaymentMethod
+	/** Echoed intent */
+	intent: PaymentIntent
+	/** Echoed request (base64url-encoded in wire format) */
+	request: string
+	/** Echoed expiry if present */
+	expires?: string
+	/** Echoed digest if present */
+	digest?: string
+}
+
+/**
+ * Payment credential sent in Authorization header.
+ *
+ * Format: Payment <base64url-encoded JSON>
+ *
+ * The credential includes the full echoed challenge for server verification.
+ *
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md#52-authorization-credential
+ */
+export interface PaymentCredential<TRequest = unknown> {
+	/** Echoed challenge from WWW-Authenticate header */
+	challenge: EchoedChallenge<TRequest>
+	/** Optional payer identifier (recommended: DID format, e.g., did:pkh:eip155:42431:0x...) */
 	source?: string
-	/** Tempo-specific payload */
+	/** Payment proof payload */
 	payload: PaymentPayload
 }
 
 /**
  * Payment receipt returned in Payment-Receipt header.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-5.3
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md#53-payment-receipt
  */
 export interface PaymentReceipt {
 	/** Payment status */
 	status: 'success' | 'failed'
 	/** Payment method used */
 	method: PaymentMethod
-	/** ISO 8601 settlement time */
+	/** ISO 8601 settlement timestamp */
 	timestamp: string
 	/** Method-specific reference (e.g., transaction hash) */
 	reference: string
@@ -210,22 +210,28 @@ export interface PaymentReceipt {
 }
 
 /**
+ * Error types for 402 responses.
+ * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/core/draft-core-protocol-00.md#8-error-handling
+ */
+export type PaymentErrorType =
+	| 'payment_required'
+	| 'payment_insufficient'
+	| 'payment_expired'
+	| 'payment_verification_failed'
+	| 'payment_method_unsupported'
+	| 'malformed_credential'
+	| 'invalid_challenge'
+	| 'fee_unavailable'
+	| 'fee_token_rejected'
+	| 'fee_limit_exceeded'
+	| 'fee_slippage_exceeded'
+	| 'fee_payer_overloaded'
+
+/**
  * Error response body for 402 responses.
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpauth-payment-01#section-8
  */
 export interface PaymentError {
-	error:
-		| 'payment_required'
-		| 'payment_insufficient'
-		| 'payment_expired'
-		| 'payment_verification_failed'
-		| 'payment_method_unsupported'
-		| 'malformed_proof'
-		| 'fee_unavailable'
-		| 'fee_token_rejected'
-		| 'fee_limit_exceeded'
-		| 'fee_slippage_exceeded'
-		| 'fee_payer_overloaded'
+	error: PaymentErrorType
 	message: string
 	/** Seconds to wait before retry (for 429/503 errors) */
 	retry_after?: number

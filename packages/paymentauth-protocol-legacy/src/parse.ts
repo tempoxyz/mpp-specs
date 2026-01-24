@@ -41,58 +41,25 @@ export function parseWwwAuthenticate<TRequest = unknown>(
 		request: decodeJson<TRequest>(params.request),
 		expires: params.expires,
 		description: params.description,
-		digest: params.digest,
 	}
 }
 
 /**
  * Parse an Authorization header value into a PaymentCredential.
  *
- * The new spec requires the credential to echo the full challenge object.
- *
  * @example
  * ```
- * const header = 'Payment eyJjaGFsbGVuZ2UiOnsi...fQ'
+ * const header = 'Payment eyJpZCI6ImFiYzEyMyIsInBheWxvYWQiOnsiLi4uIn19'
  * const credential = parseAuthorization(header)
  * ```
  */
-export function parseAuthorization<TRequest = unknown>(
-	header: string,
-): PaymentCredential<TRequest> {
+export function parseAuthorization(header: string): PaymentCredential {
 	if (!header.startsWith('Payment ')) {
 		throw new Error('Invalid Authorization header: must start with "Payment "')
 	}
 
 	const token = header.slice('Payment '.length)
-	const parsed = decodeJson<PaymentCredential<TRequest>>(token)
-
-	// Validate required fields
-	if (!parsed.challenge) {
-		throw new Error('Invalid credential: missing "challenge" field')
-	}
-	if (!parsed.challenge.id) {
-		throw new Error('Invalid credential: missing "challenge.id" field')
-	}
-	if (!parsed.payload) {
-		throw new Error('Invalid credential: missing "payload" field')
-	}
-
-	return parsed
-}
-
-/**
- * Extract the challenge ID from a credential for backward compatibility.
- * New code should use credential.challenge.id directly.
- */
-export function getChallengeId<T>(credential: PaymentCredential<T>): string {
-	return credential.challenge.id
-}
-
-/**
- * Decode the request from an echoed challenge.
- */
-export function decodeEchoedRequest<TRequest>(credential: PaymentCredential<TRequest>): TRequest {
-	return decodeJson<TRequest>(credential.challenge.request)
+	return decodeJson<PaymentCredential>(token)
 }
 
 /**

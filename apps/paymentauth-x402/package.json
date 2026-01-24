@@ -14,7 +14,7 @@
 		"deploy:presto": "wrangler deploy --env presto"
 	},
 	"dependencies": {
-		"@tempo/paymentauth-protocol": "workspace:*",
+		"@tempo/paymentauth-protocol-legacy": "workspace:*",
 		"@tempo/paymentauth-x402-compat": "workspace:*",
 		"hono": "^4.6.0",
 		"tempo.ts": "^0.13.0",

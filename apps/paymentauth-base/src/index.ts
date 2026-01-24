@@ -1,5 +1,5 @@
 import { type PaymentAuthContext, paymentAuth } from '@tempo/paymentauth-hono'
-import type { ChargeRequest } from '@tempo/paymentauth-protocol'
+import type { ChargeRequest } from '@tempo/paymentauth-protocol-legacy'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {

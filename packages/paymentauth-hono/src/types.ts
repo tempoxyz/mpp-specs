@@ -1,4 +1,4 @@
-import type { ChargeRequest, PaymentReceipt } from '@tempo/paymentauth-protocol'
+import type { ChargeRequest, PaymentReceipt } from '@tempo/paymentauth-protocol-legacy'
 import type { Address, Hex } from 'viem'
 
 /**

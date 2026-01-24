@@ -3,7 +3,9 @@ import {
 	formatReceipt,
 	formatWwwAuthenticate,
 	generateChallengeId,
-	MalformedProofError,
+	getChallengeId,
+	InvalidChallengeError,
+	MalformedCredentialError,
 	type PaymentChallenge,
 	type PaymentCredential,
 	PaymentExpiredError,
@@ -45,6 +47,8 @@ interface Env {
 	PAYMENT_AMOUNT?: string
 	/** Challenge validity in seconds (default: 300 = 5 minutes) */
 	CHALLENGE_VALIDITY_SECONDS?: string
+	/** Chain ID (default: 42431 for Tempo Moderato) */
+	CHAIN_ID?: string
 }
 
 /** Get fee token address from env or use default AlphaUSD */
@@ -63,6 +67,11 @@ function getChallengeValidityMs(env: Env): number {
 	return seconds * 1000
 }
 
+/** Get chain ID from env or use default (42431 for Tempo Moderato) */
+function getChainId(env: Env): number {
+	return Number(env.CHAIN_ID ?? '42431')
+}
+
 const challengeStore = new Map<
 	string,
 	{ challenge: PaymentChallenge<ChargeRequest>; used: boolean }
@@ -75,14 +84,18 @@ function createChallenge(
 	env: Env,
 	options?: { description?: string },
 ): PaymentChallenge<ChargeRequest> {
-	const destinationAddress = env.DESTINATION_ADDRESS as Address
+	const recipientAddress = env.DESTINATION_ADDRESS as Address
 	const expiresAt = new Date(Date.now() + getChallengeValidityMs(env))
 
 	const request: ChargeRequest = {
 		amount: getPaymentAmount(env),
-		asset: getFeeTokenAddress(env),
-		destination: destinationAddress,
+		currency: getFeeTokenAddress(env),
+		recipient: recipientAddress,
 		expires: expiresAt.toISOString(),
+		methodDetails: {
+			chainId: getChainId(env),
+			feePayer: false,
+		},
 	}
 
 	const challenge: PaymentChallenge<ChargeRequest> = {
@@ -192,10 +205,10 @@ async function verifyTempoTransaction(
 			return { valid: false, error: 'Transaction call missing "to" field' }
 		}
 
-		if (!isAddressEqual(call.to, challenge.asset)) {
+		if (!isAddressEqual(call.to, challenge.currency as Address)) {
 			return {
 				valid: false,
-				error: `Transaction target ${call.to} does not match asset ${challenge.asset}`,
+				error: `Transaction target ${call.to} does not match currency ${challenge.currency}`,
 			}
 		}
 
@@ -218,10 +231,10 @@ async function verifyTempoTransaction(
 
 			const [recipient, amount] = decoded.args as [Address, bigint]
 
-			if (!isAddressEqual(recipient, challenge.destination)) {
+			if (!isAddressEqual(recipient, challenge.recipient as Address)) {
 				return {
 					valid: false,
-					error: `Transfer recipient ${recipient} does not match destination ${challenge.destination}`,
+					error: `Transfer recipient ${recipient} does not match expected ${challenge.recipient}`,
 				}
 			}
 
@@ -270,10 +283,10 @@ async function verifyStandardTransaction(
 			return { valid: false, error: 'Transaction missing "to" field' }
 		}
 
-		if (!isAddressEqual(parsed.to, challenge.asset)) {
+		if (!isAddressEqual(parsed.to, challenge.currency as Address)) {
 			return {
 				valid: false,
-				error: `Transaction target ${parsed.to} does not match asset ${challenge.asset}`,
+				error: `Transaction target ${parsed.to} does not match currency ${challenge.currency}`,
 			}
 		}
 
@@ -296,10 +309,10 @@ async function verifyStandardTransaction(
 
 			const [recipient, amount] = decoded.args as [Address, bigint]
 
-			if (!isAddressEqual(recipient, challenge.destination)) {
+			if (!isAddressEqual(recipient, challenge.recipient as Address)) {
 				return {
 					valid: false,
-					error: `Transfer recipient ${recipient} does not match destination ${challenge.destination}`,
+					error: `Transfer recipient ${recipient} does not match expected ${challenge.recipient}`,
 				}
 			}
 
@@ -430,7 +443,7 @@ async function getTransactionReceipt(
  * Flow:
  * 1. Client requests without Authorization header -> 402 with WWW-Authenticate
  * 2. Client signs payment and retries with Authorization: Payment <credential>
- * 3. Server verifies, adds fee payer signature, broadcasts, and returns Payment-Receipt
+ * 3. Server verifies, broadcasts, and returns Payment-Receipt
  */
 app.get('/ping/paid', async (c) => {
 	const authHeader = c.req.header('Authorization')
@@ -453,40 +466,35 @@ app.get('/ping/paid', async (c) => {
 	try {
 		credential = parseAuthorization(authHeader)
 	} catch {
-		return c.json(new MalformedProofError('Invalid Authorization header format').toJSON(), 400)
+		return c.json(new MalformedCredentialError('Invalid Authorization header format').toJSON(), 400)
 	}
 
-	const storedChallenge = challengeStore.get(credential.id)
+	const challengeId = getChallengeId(credential)
+	const storedChallenge = challengeStore.get(challengeId)
 	if (!storedChallenge) {
 		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
-		return c.json(
-			new PaymentVerificationFailedError('Unknown or expired challenge ID').toJSON(),
-			401,
-		)
+		return c.json(new InvalidChallengeError('Unknown or expired challenge ID').toJSON(), 402)
 	}
 
 	if (storedChallenge.used) {
 		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
-		return c.json(
-			new PaymentVerificationFailedError('Challenge has already been used').toJSON(),
-			401,
-		)
+		return c.json(new InvalidChallengeError('Challenge has already been used').toJSON(), 402)
 	}
 
 	if (
 		storedChallenge.challenge.expires &&
 		new Date(storedChallenge.challenge.expires) < new Date()
 	) {
-		challengeStore.delete(credential.id)
+		challengeStore.delete(challengeId)
 		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
 		return c.json(new PaymentExpiredError('Challenge has expired').toJSON(), 402)
 	}
 
 	if (
 		!credential.payload ||
-		!['transaction', 'keyAuthorization'].includes(credential.payload.type)
+		!['transaction', 'hash', 'keyAuthorization'].includes(credential.payload.type)
 	) {
-		return c.json(new MalformedProofError('Invalid payload type').toJSON(), 400)
+		return c.json(new MalformedCredentialError('Invalid payload type').toJSON(), 400)
 	}
 
 	const signedTx = credential.payload.signature as Hex

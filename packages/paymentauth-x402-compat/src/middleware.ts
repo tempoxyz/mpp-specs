@@ -9,7 +9,7 @@ import {
 	type PaymentCredential,
 	type PaymentReceipt,
 	parseAuthorization,
-} from '@tempo/paymentauth-protocol'
+} from '@tempo/paymentauth-protocol-legacy'
 import type { MiddlewareHandler } from 'hono'
 import type { Address } from 'viem'
 import type { X402PaymentPayload, X402PaymentReceipt, X402PaymentRequirements } from './types.js'

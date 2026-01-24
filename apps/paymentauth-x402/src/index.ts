@@ -11,7 +11,7 @@ import {
 	PaymentRequiredError,
 	PaymentVerificationFailedError,
 	parseAuthorization,
-} from '@tempo/paymentauth-protocol'
+} from '@tempo/paymentauth-protocol-legacy'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {

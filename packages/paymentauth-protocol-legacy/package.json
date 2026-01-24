@@ -1,5 +1,5 @@
 {
-	"name": "@tempo/paymentauth-hono",
+	"name": "@tempo/paymentauth-protocol-legacy",
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
@@ -13,17 +13,12 @@
 		"lint": "eslint src",
 		"test": "vitest run --passWithNoTests"
 	},
-	"dependencies": {
-		"@tempo/paymentauth-protocol-legacy": "workspace:*",
-		"hono": "^4.6.0",
-		"viem": "^2.21.0"
-	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250115.0",
 		"typescript": "^5.7.3",
 		"vitest": "^2.1.0"
 	},
-	"peerDependencies": {
-		"hono": ">=4.0.0"
+	"dependencies": {
+		"viem": "^2.21.0"
 	}
 }

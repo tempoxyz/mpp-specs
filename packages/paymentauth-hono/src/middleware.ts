@@ -11,7 +11,7 @@ import {
 	PaymentRequiredError,
 	PaymentVerificationFailedError,
 	parseAuthorization,
-} from '@tempo/paymentauth-protocol'
+} from '@tempo/paymentauth-protocol-legacy'
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Hex } from 'viem'
 import type { PaymentAuthConfig, PaymentAuthContext } from './types.js'

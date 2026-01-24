@@ -8,7 +8,7 @@
 	"workers_dev": true,
 	"preview_urls": true,
 	"vars": {
-		"TEMPO_RPC_URL": "https://rpc.tempo.xyz",
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"
 	},
 	"routes": [

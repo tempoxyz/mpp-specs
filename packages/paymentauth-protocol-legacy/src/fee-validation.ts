@@ -3,6 +3,7 @@ import { isAddressEqual } from 'viem'
 
 /**
  * Fee token whitelist configuration.
+ * @see draft-tempo-payment-method-00 §9.1.6
  */
 export interface FeeTokenConfig {
 	/** Token address */

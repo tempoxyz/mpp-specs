@@ -1,9 +1,4 @@
-import type {
-	EchoedChallenge,
-	PaymentChallenge,
-	PaymentCredential,
-	PaymentReceipt,
-} from './types.js'
+import type { PaymentChallenge, PaymentCredential, PaymentReceipt } from './types.js'
 
 /**
  * Encode a string to base64url (no padding).
@@ -28,7 +23,7 @@ export function base64urlDecode(input: string): string {
 /**
  * Encode an object to base64url JSON.
  */
-export function encodeJson<T>(obj: T): string {
+function encodeJson<T>(obj: T): string {
 	return base64urlEncode(JSON.stringify(obj))
 }
 
@@ -53,7 +48,7 @@ export function generateChallengeId(): string {
  *
  * @example
  * ```
- * Payment id="abc123", realm="api.example.com", method="tempo", intent="charge", request="eyJ...", expires="2025-01-15T12:05:00Z"
+ * Payment id="abc123", realm="api.example.com", method="tempo", intent="charge", request="eyJ..."
  * ```
  */
 export function formatWwwAuthenticate<T>(challenge: PaymentChallenge<T>): string {
@@ -75,28 +70,8 @@ export function formatWwwAuthenticate<T>(challenge: PaymentChallenge<T>): string
 		params.push(`description="${challenge.description}"`)
 	}
 
-	if (challenge.digest) {
-		params.push(`digest="${challenge.digest}"`)
-	}
-
 	parts.push(params.join(', '))
 	return parts.join(' ')
-}
-
-/**
- * Create an echoed challenge object from a parsed challenge.
- * The request is kept as base64url-encoded string for the credential.
- */
-export function createEchoedChallenge<T>(challenge: PaymentChallenge<T>): EchoedChallenge<T> {
-	return {
-		id: challenge.id,
-		realm: challenge.realm,
-		method: challenge.method,
-		intent: challenge.intent,
-		request: encodeJson(challenge.request),
-		...(challenge.expires && { expires: challenge.expires }),
-		...(challenge.digest && { digest: challenge.digest }),
-	}
 }
 
 /**
@@ -104,10 +79,10 @@ export function createEchoedChallenge<T>(challenge: PaymentChallenge<T>): Echoed
  *
  * @example
  * ```
- * Payment eyJjaGFsbGVuZ2UiOnsi...fQ
+ * Payment eyJpZCI6ImFiYzEyMyIsInBheWxvYWQiOnsiLi4uIn19
  * ```
  */
-export function formatAuthorization<T>(credential: PaymentCredential<T>): string {
+export function formatAuthorization(credential: PaymentCredential): string {
 	return `Payment ${encodeJson(credential)}`
 }
 

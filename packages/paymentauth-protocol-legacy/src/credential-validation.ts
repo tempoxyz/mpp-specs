@@ -2,6 +2,7 @@ import type { Address, Hex } from 'viem'
 
 /**
  * Fee payment field validation result.
+ * @see draft-tempo-payment-method-00 §8.3
  */
 export interface FeePaymentValidationResult {
 	valid: boolean
@@ -10,13 +11,13 @@ export interface FeePaymentValidationResult {
 
 /**
  * Placeholder value for fee_payer_signature when server will sponsor fees.
- * Must be exactly "0x00" (single zero byte, hex-encoded)
+ * Per spec §8.3: must be exactly "0x00" (single zero byte, hex-encoded)
  */
 export const FEE_PAYER_SIGNATURE_PLACEHOLDER = '0x00' as Hex
 
 /**
  * Valid values for fee_token when server will sponsor fees.
- * Missing, RLP null (0x80), or zero address
+ * Per spec §8.3: missing, RLP null (0x80), or zero address
  */
 export const VALID_FEE_TOKEN_PLACEHOLDERS: readonly (Hex | Address | undefined)[] = [
 	undefined,
@@ -27,7 +28,7 @@ export const VALID_FEE_TOKEN_PLACEHOLDERS: readonly (Hex | Address | undefined)[
 /**
  * Validate fee payment fields for feePayer=true credentials.
  *
- * When server sponsors fees:
+ * Per spec §8.3:
  * - fee_payer_signature MUST be exactly "0x00"
  * - fee_token MUST be missing, RLP null (0x80), or zero address
  *

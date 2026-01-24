@@ -10,7 +10,7 @@ import {
 	PaymentRequiredError,
 	PaymentVerificationFailedError,
 	parseAuthorization,
-} from '@tempo/paymentauth-protocol'
+} from '@tempo/paymentauth-protocol-legacy'
 import { calculateRequestPrice } from '@tempo/shared'
 import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'

@@ -1,20 +1,18 @@
 // Types
 
-// Credential validation
 export type { FeePaymentValidationResult } from './credential-validation.js'
+// Credential validation
 export {
 	FEE_PAYER_SIGNATURE_PLACEHOLDER,
 	VALID_FEE_TOKEN_PLACEHOLDERS,
 	validateFeePaymentFields,
 	validateSignatureDomain,
 } from './credential-validation.js'
+
 // Encoding utilities
 export {
 	base64urlDecode,
 	base64urlEncode,
-	createEchoedChallenge,
-	decodeJson,
-	encodeJson,
 	formatAuthorization,
 	formatReceipt,
 	formatWwwAuthenticate,
@@ -27,9 +25,7 @@ export {
 	FeeSlippageExceededError,
 	FeeTokenRejectedError,
 	FeeUnavailableError,
-	InvalidChallengeError,
-	MalformedCredentialError,
-	MalformedProofError, // Legacy alias
+	MalformedProofError,
 	PaymentAuthError,
 	PaymentExpiredError,
 	PaymentInsufficientError,
@@ -37,12 +33,12 @@ export {
 	PaymentRequiredError,
 	PaymentVerificationFailedError,
 } from './errors.js'
-// Fee validation utilities
 export type {
 	FeeTokenConfig,
 	FeeValidationConfig,
 	FeeValidationResult,
 } from './fee-validation.js'
+// Fee validation utilities
 export {
 	DEFAULT_FEE_VALIDATION_CONFIG,
 	MODERATO_FEE_TOKENS,
@@ -51,8 +47,6 @@ export {
 } from './fee-validation.js'
 // Parsing utilities
 export {
-	decodeEchoedRequest,
-	getChallengeId,
 	parseAuthorization,
 	parseReceipt,
 	parseWwwAuthenticate,
@@ -60,17 +54,13 @@ export {
 export type {
 	AuthorizeRequest,
 	ChargeRequest,
-	EchoedChallenge,
 	PayloadType,
 	PaymentChallenge,
 	PaymentCredential,
 	PaymentError,
-	PaymentErrorType,
 	PaymentIntent,
 	PaymentMethod,
 	PaymentPayload,
 	PaymentReceipt,
-	StreamRequest,
 	SubscriptionRequest,
-	TempoMethodDetails,
 } from './types.js'

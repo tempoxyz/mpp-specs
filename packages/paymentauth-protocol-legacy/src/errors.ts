@@ -1,11 +1,11 @@
-import type { PaymentError, PaymentErrorType } from './types.js'
+import type { PaymentError } from './types.js'
 
 /**
  * Base class for Payment Auth errors.
  * Provides a consistent interface for creating error responses.
  */
 export abstract class PaymentAuthError extends Error {
-	abstract readonly code: PaymentErrorType
+	abstract readonly code: PaymentError['error']
 
 	constructor(message: string) {
 		super(message)
@@ -79,23 +79,12 @@ export class PaymentMethodUnsupportedError extends PaymentAuthError {
 }
 
 /**
- * 400 Bad Request - Malformed payment credential.
+ * 400 Bad Request - Malformed payment proof/credential.
  */
-export class MalformedCredentialError extends PaymentAuthError {
-	readonly code = 'malformed_credential' as const
+export class MalformedProofError extends PaymentAuthError {
+	readonly code = 'malformed_proof' as const
 
-	constructor(message = 'Malformed payment credential') {
-		super(message)
-	}
-}
-
-/**
- * 402 Payment Required - Invalid or expired challenge ID.
- */
-export class InvalidChallengeError extends PaymentAuthError {
-	readonly code = 'invalid_challenge' as const
-
-	constructor(message = 'Invalid or expired challenge') {
+	constructor(message = 'Malformed payment proof') {
 		super(message)
 	}
 }
@@ -174,7 +163,3 @@ export class FeePayerOverloadedError extends PaymentAuthError {
 		}
 	}
 }
-
-// Legacy aliases for backward compatibility
-/** @deprecated Use MalformedCredentialError instead */
-export const MalformedProofError = MalformedCredentialError
