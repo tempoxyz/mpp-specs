@@ -94,7 +94,8 @@ process_spec() {
 export -f process_spec
 
 # Process specs in parallel (up to 4 at a time)
-find "$SPECS_DIR" -name "draft-*.md" | xargs -P4 -I{} bash -c 'process_spec "$1"' _ {}
+# Find all markdown files (not just draft-*) to support various naming conventions
+find "$SPECS_DIR" -name "*.md" -type f | xargs -P4 -I{} bash -c 'process_spec "$1"' _ {}
 
 # Generate index.html using Python/Jinja2 templating
 echo "==> Generating index.html"
