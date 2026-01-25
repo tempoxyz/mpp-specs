@@ -67,6 +67,17 @@ their specific payment infrastructure.
 
 {::boilerplate bcp14-tagged}
 
+# Terminology
+
+Charge
+: A one-time payment where the payer provides proof of payment
+  immediately in exchange for resource access.
+
+Base Units
+: The smallest denomination of a currency or asset. For USD, this is
+  cents (1/100). For tokens, this is the smallest transferable unit
+  defined by the token's decimal precision.
+
 # Intent Semantics
 
 ## Definition

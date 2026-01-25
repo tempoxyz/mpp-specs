@@ -102,15 +102,6 @@ Never leave this section empty. Address at minimum:
 
 ## Formatting
 
-### Headers in Examples
-
-Use lowercase header names per HTTP/2+ conventions:
-
-```bash
-✓ authorization: Payment ...
-✗ Authorization: Payment ...
-```
-
 ### JSON
 
 Use 2-space indentation, no trailing commas:

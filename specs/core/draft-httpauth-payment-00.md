@@ -741,10 +741,11 @@ Payment-Receipt = base64url-nopad
 ; Base64url encoding without padding per RFC 4648 Section 5
 base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 
-; Payment method identifier
+; Payment method identifier (lowercase only)
 payment-method-id   = method-name [ ":" sub-method ]
-method-name         = 1*ALPHA
-sub-method          = 1*( ALPHA / DIGIT / "-" )
+method-name         = 1*LOWERALPHA
+sub-method          = 1*( LOWERALPHA / DIGIT / "-" )
+LOWERALPHA          = %x61-7A  ; a-z
 
 ; Payment intent
 intent = 1*( ALPHA / DIGIT / "-" )
