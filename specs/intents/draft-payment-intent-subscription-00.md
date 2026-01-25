@@ -82,6 +82,28 @@ payment mechanisms:
 
 {::boilerplate bcp14-tagged}
 
+# Terminology
+
+Subscription
+: A recurring payment authorization where the payer grants the server
+  permission to charge a specified amount on a periodic basis.
+
+Billing Period
+: The interval at which subscription charges occur (e.g., daily,
+  weekly, monthly, yearly).
+
+Billing Cycle
+: A single instance of a billing period. A subscription with 12 monthly
+  cycles runs for one year.
+
+Renewal
+: The automatic continuation of a subscription into a new billing
+  period, typically accompanied by a charge.
+
+Cancellation
+: The act of ending a subscription, stopping future charges while
+  typically allowing access through the current billing period.
+
 # Intent Semantics
 
 ## Definition

@@ -71,6 +71,21 @@ mechanisms:
 
 {::boilerplate bcp14-tagged}
 
+# Terminology
+
+Authorization
+: A grant of permission for a server to initiate payments up to a
+  specified limit within a specified time window, without requiring
+  immediate payment.
+
+Spending Limit
+: The maximum amount that can be charged against an authorization
+  before it is exhausted.
+
+Revocation
+: The act of canceling an authorization before its natural expiry,
+  preventing further charges.
+
 # Intent Semantics
 
 ## Definition

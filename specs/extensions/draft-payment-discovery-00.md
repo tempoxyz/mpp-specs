@@ -63,6 +63,16 @@ client experience. Clients MUST NOT require discovery to function; the
 
 {::boilerplate bcp14-tagged}
 
+# Terminology
+
+Discovery
+: The process by which a client learns a server's payment capabilities
+  before initiating a request that may require payment.
+
+Payment Capabilities
+: The set of payment methods, intents, and assets that a server
+  accepts for payment.
+
 # Well-Known Endpoint
 
 ## Endpoint
