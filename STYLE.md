@@ -15,7 +15,7 @@ Any payment method specific details should only live in the `Methods` layer, out
 
 ### 2. Layered Architecture
 
-Protocol mechanics are seperate from the evolving payment ecosystems:
+Protocol mechanics are separate from the evolving payment ecosystems:
 
 - **`Core`**: HTTP 402 semantics, headers, registries (rarely changes)
 - **`Intents`**: Abstract payment patterns like charge, authorize, subscription (occasionally extended)
