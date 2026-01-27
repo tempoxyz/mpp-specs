@@ -42,27 +42,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for relevant changes
-        id: changes
-        run: |
-          if [[ ${{ github.event_name }} == 'workflow_dispatch' ]]; then
-            echo "relevant=true" >> $GITHUB_OUTPUT
-          elif git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -qE "^(apps/${{ matrix.app }}/|packages/|pnpm-lock.yaml)"; then
-            echo "relevant=true" >> $GITHUB_OUTPUT
-          else
-            echo "relevant=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Install dependencies
-        if: steps.changes.outputs.relevant == 'true'
         uses: ./.github/actions/install-dependencies
 
       - name: Build
-        if: steps.changes.outputs.relevant == 'true'
         run: pnpm build
 
       - name: Build presto wheel
-        if: steps.changes.outputs.relevant == 'true' && matrix.build_wheel
+        if: matrix.build_wheel
         env:
           GH_TOKEN: ${{ secrets.PRESTO_CLONE_TOKEN }}
         run: |
@@ -84,7 +71,6 @@ jobs:
           ls -la ${{ github.workspace }}/apps/presto/public/
 
       - name: Deploy Workers
-        if: steps.changes.outputs.relevant == 'true'
         uses: cloudflare/wrangler-action@v3
         env:
           NODE_ENV: production
