@@ -1,0 +1,1 @@
+../../artifacts/draft-stripe-charge-00.txt

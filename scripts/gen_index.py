@@ -162,6 +162,7 @@ def main():
         specs_dir = Path("/data/specs")
         output_dir = Path("/data/artifacts")
         template_dir = Path("/data/scripts/templates")
+        site_public_dir = Path("/data/site/public")
     else:
         # Local environment
         script_dir = Path(__file__).parent
@@ -169,8 +170,10 @@ def main():
         specs_dir = root_dir / "specs"
         output_dir = root_dir / "artifacts"
         template_dir = script_dir / "templates"
+        site_public_dir = root_dir / "site" / "public"
 
     output_dir.mkdir(exist_ok=True)
+    site_public_dir.mkdir(exist_ok=True)
 
     # Collect spec metadata
     domains = collect_specs(specs_dir)
@@ -185,6 +188,12 @@ def main():
     output_path = output_dir / "index.html"
     output_path.write_text(html)
     print(f"Generated {output_path}")
+
+    # Create symlink in site/public
+    site_link = site_public_dir / "index.html"
+    site_link.unlink(missing_ok=True)
+    site_link.symlink_to("../../artifacts/index.html")
+    print(f"Linked {site_link} -> ../../artifacts/index.html")
 
 
 if __name__ == "__main__":
