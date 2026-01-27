@@ -726,7 +726,9 @@ app.post('/:partner/voucher', async (c) => {
 		})
 	}
 
-	throw new HTTPException(400, { message: `Unsupported action: ${(credential as { action: string }).action}` })
+	throw new HTTPException(400, {
+		message: `Unsupported action: ${(credential as { action: string }).action}`,
+	})
 })
 
 // Partner proxy routes (subdomain-based only)

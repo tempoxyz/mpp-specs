@@ -7,6 +7,13 @@
 	"observability": { "enabled": true },
 	"workers_dev": true,
 	"preview_urls": true,
+	"kv_namespaces": [
+		{
+			"binding": "CHALLENGE_STORE",
+			"id": "88d4073c8a3d4cfea66980b9ef7c4cb2",
+			"preview_id": "4c8d5620a722423cb73c54782cf9eaa9"
+		}
+	],
 	"vars": {
 		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
 		"DESTINATION_ADDRESS": "0x8b43944C33489Bdf4b7CaD67045741Cd23e2f2c2"

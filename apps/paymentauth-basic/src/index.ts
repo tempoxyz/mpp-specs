@@ -49,6 +49,8 @@ interface Env {
 	CHALLENGE_VALIDITY_SECONDS?: string
 	/** Chain ID (default: 42431 for Tempo Moderato) */
 	CHAIN_ID?: string
+	/** KV namespace for challenge storage */
+	CHALLENGE_STORE: KVNamespace
 }
 
 /** Get fee token address from env or use default AlphaUSD */
@@ -72,20 +74,21 @@ function getChainId(env: Env): number {
 	return Number(env.CHAIN_ID ?? '42431')
 }
 
-const challengeStore = new Map<
-	string,
-	{ challenge: PaymentChallenge<ChargeRequest>; used: boolean }
->()
+interface StoredChallenge {
+	challenge: PaymentChallenge<ChargeRequest>
+	used: boolean
+}
 
 /**
- * Create a new payment challenge and store it.
+ * Create a new payment challenge and store it in KV.
  */
-function createChallenge(
+async function createChallenge(
 	env: Env,
 	options?: { description?: string },
-): PaymentChallenge<ChargeRequest> {
+): Promise<PaymentChallenge<ChargeRequest>> {
 	const recipientAddress = env.DESTINATION_ADDRESS as Address
-	const expiresAt = new Date(Date.now() + getChallengeValidityMs(env))
+	const validityMs = getChallengeValidityMs(env)
+	const expiresAt = new Date(Date.now() + validityMs)
 
 	const request: ChargeRequest = {
 		amount: getPaymentAmount(env),
@@ -108,15 +111,41 @@ function createChallenge(
 		description: options?.description,
 	}
 
-	challengeStore.set(challenge.id, { challenge, used: false })
-
-	for (const [id, entry] of challengeStore) {
-		if (entry.challenge.expires && new Date(entry.challenge.expires) < new Date()) {
-			challengeStore.delete(id)
-		}
-	}
+	const stored: StoredChallenge = { challenge, used: false }
+	await env.CHALLENGE_STORE.put(`challenge:${challenge.id}`, JSON.stringify(stored), {
+		expirationTtl: Math.ceil(validityMs / 1000) + 60,
+	})
 
 	return challenge
+}
+
+/**
+ * Get a stored challenge from KV.
+ */
+async function getStoredChallenge(env: Env, challengeId: string): Promise<StoredChallenge | null> {
+	const data = await env.CHALLENGE_STORE.get(`challenge:${challengeId}`)
+	if (!data) return null
+	return JSON.parse(data) as StoredChallenge
+}
+
+/**
+ * Mark a challenge as used in KV.
+ */
+async function markChallengeUsed(env: Env, challengeId: string, used: boolean): Promise<void> {
+	const stored = await getStoredChallenge(env, challengeId)
+	if (!stored) return
+	stored.used = used
+	const validityMs = getChallengeValidityMs(env)
+	await env.CHALLENGE_STORE.put(`challenge:${challengeId}`, JSON.stringify(stored), {
+		expirationTtl: Math.ceil(validityMs / 1000) + 60,
+	})
+}
+
+/**
+ * Delete a challenge from KV.
+ */
+async function deleteChallenge(env: Env, challengeId: string): Promise<void> {
+	await env.CHALLENGE_STORE.delete(`challenge:${challengeId}`)
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -449,7 +478,7 @@ app.get('/ping/paid', async (c) => {
 	const authHeader = c.req.header('Authorization')
 
 	if (!authHeader || !authHeader.startsWith('Payment ')) {
-		const challenge = createChallenge(c.env, {
+		const challenge = await createChallenge(c.env, {
 			description: 'Pay 0.01 USD to access the paid ping endpoint',
 		})
 
@@ -470,14 +499,14 @@ app.get('/ping/paid', async (c) => {
 	}
 
 	const challengeId = getChallengeId(credential)
-	const storedChallenge = challengeStore.get(challengeId)
+	const storedChallenge = await getStoredChallenge(c.env, challengeId)
 	if (!storedChallenge) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env)))
 		return c.json(new InvalidChallengeError('Unknown or expired challenge ID').toJSON(), 402)
 	}
 
 	if (storedChallenge.used) {
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env)))
 		return c.json(new InvalidChallengeError('Challenge has already been used').toJSON(), 402)
 	}
 
@@ -485,8 +514,8 @@ app.get('/ping/paid', async (c) => {
 		storedChallenge.challenge.expires &&
 		new Date(storedChallenge.challenge.expires) < new Date()
 	) {
-		challengeStore.delete(challengeId)
-		c.header('WWW-Authenticate', formatWwwAuthenticate(createChallenge(c.env)))
+		await deleteChallenge(c.env, challengeId)
+		c.header('WWW-Authenticate', formatWwwAuthenticate(await createChallenge(c.env)))
 		return c.json(new PaymentExpiredError('Challenge has expired').toJSON(), 402)
 	}
 
@@ -510,12 +539,12 @@ app.get('/ping/paid', async (c) => {
 		)
 	}
 
-	storedChallenge.used = true
+	await markChallengeUsed(c.env, challengeId, true)
 
 	const broadcastResult = await broadcastTransaction(signedTx, c.env)
 
 	if (!broadcastResult.success) {
-		storedChallenge.used = false
+		await markChallengeUsed(c.env, challengeId, false)
 		return c.json(
 			new PaymentVerificationFailedError(`Broadcast failed: ${broadcastResult.error}`).toJSON(),
 			500,
