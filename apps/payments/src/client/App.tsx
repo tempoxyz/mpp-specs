@@ -23,7 +23,6 @@ interface Service {
 		supported: boolean
 		escrowContract?: string
 		defaultDeposit?: string
-		defaultExpirySeconds?: number
 	}
 }
 

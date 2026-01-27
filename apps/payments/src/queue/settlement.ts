@@ -33,7 +33,6 @@ interface SettlementJob {
 	voucher: {
 		channelId: Hex
 		cumulativeAmount: bigint
-		validUntil: bigint
 		signature: Hex
 	}
 	payee: Address
@@ -88,12 +87,7 @@ export async function processSettlementBatch(
 			const data = encodeFunctionData({
 				abi: TempoStreamChannelABI,
 				functionName: 'settle',
-				args: [
-					job.channelId,
-					job.voucher.cumulativeAmount,
-					job.voucher.validUntil,
-					job.voucher.signature,
-				],
+				args: [job.channelId, job.voucher.cumulativeAmount, job.voucher.signature],
 			})
 
 			// Send transaction

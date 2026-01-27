@@ -8,7 +8,14 @@ import {
 	type WalletClient,
 } from 'viem'
 import { TempoStreamChannelABI } from './abi.js'
-import type { Channel, OpenChannelParams, SignedVoucher, StreamRequest } from './types.js'
+import { closeRequestTypes, createCloseRequestTypedData } from './close-request.js'
+import type {
+	Channel,
+	OpenChannelParams,
+	SignedCloseRequest,
+	SignedVoucher,
+	StreamRequest,
+} from './types.js'
 import { createVoucherTypedData, getVoucherDomain, voucherTypes } from './voucher.js'
 
 /**
@@ -39,15 +46,7 @@ export class StreamChannelClient {
 			address: escrowContract,
 			abi: TempoStreamChannelABI,
 			functionName: 'computeChannelId',
-			args: [
-				payer,
-				params.payee,
-				params.token,
-				params.deposit,
-				params.expiry,
-				params.salt,
-				authorizedSigner,
-			],
+			args: [payer, params.payee, params.token, params.deposit, params.salt, authorizedSigner],
 		})
 	}
 
@@ -94,14 +93,7 @@ export class StreamChannelClient {
 		const openData = encodeFunctionData({
 			abi: TempoStreamChannelABI,
 			functionName: 'open',
-			args: [
-				params.payee,
-				params.token,
-				params.deposit,
-				params.expiry,
-				params.salt,
-				authorizedSigner,
-			],
+			args: [params.payee, params.token, params.deposit, params.salt, authorizedSigner],
 		})
 
 		const txHash = await this.walletClient.sendTransaction({
@@ -124,13 +116,10 @@ export class StreamChannelClient {
 			throw new Error('Stream request must include salt for new channel')
 		}
 
-		const expiry = BigInt(Math.floor(new Date(request.expires).getTime() / 1000))
-
 		return this.openChannel(request.escrowContract, {
 			payee: request.destination,
 			token: request.asset,
 			deposit: BigInt(request.deposit),
-			expiry,
 			salt: request.salt,
 		})
 	}
@@ -153,7 +142,6 @@ export class StreamChannelClient {
 			authorizedSigner: result.authorizedSigner,
 			deposit: result.deposit,
 			settled: result.settled,
-			expiry: result.expiry,
 			closeRequestedAt: result.closeRequestedAt,
 			finalized: result.finalized,
 		}
@@ -166,7 +154,6 @@ export class StreamChannelClient {
 		escrowContract: Address,
 		channelId: Hex,
 		cumulativeAmount: bigint,
-		validUntil: bigint,
 	): Promise<SignedVoucher> {
 		const chainId = await this.getChainId()
 
@@ -178,14 +165,34 @@ export class StreamChannelClient {
 			message: {
 				channelId,
 				cumulativeAmount,
-				validUntil,
 			},
 		})
 
 		return {
 			channelId,
 			cumulativeAmount,
-			validUntil,
+			signature,
+		}
+	}
+
+	/**
+	 * Create a signed close request.
+	 */
+	async signCloseRequest(escrowContract: Address, channelId: Hex): Promise<SignedCloseRequest> {
+		const chainId = await this.getChainId()
+
+		const signature = await this.walletClient.signTypedData({
+			account: this.account,
+			domain: getVoucherDomain(escrowContract, chainId),
+			types: closeRequestTypes,
+			primaryType: 'CloseRequest',
+			message: {
+				channelId,
+			},
+		})
+
+		return {
+			channelId,
 			signature,
 		}
 	}
@@ -193,18 +200,12 @@ export class StreamChannelClient {
 	/**
 	 * Create a signed voucher with typed data for transmission.
 	 */
-	async createVoucherCredential(
-		escrowContract: Address,
-		channelId: Hex,
-		cumulativeAmount: bigint,
-		validUntil: bigint,
-	) {
+	async createVoucherCredential(escrowContract: Address, channelId: Hex, cumulativeAmount: bigint) {
 		const chainId = await this.getChainId()
-		const voucher = await this.signVoucher(escrowContract, channelId, cumulativeAmount, validUntil)
+		const voucher = await this.signVoucher(escrowContract, channelId, cumulativeAmount)
 		const typedData = createVoucherTypedData(escrowContract, chainId, {
 			channelId,
 			cumulativeAmount,
-			validUntil,
 		})
 
 		return {
@@ -214,14 +215,25 @@ export class StreamChannelClient {
 	}
 
 	/**
-	 * Top up a channel with more funds and/or extend expiry.
+	 * Create a signed close request with typed data for transmission.
 	 */
-	async topUp(
-		escrowContract: Address,
-		channelId: Hex,
-		additionalDeposit: bigint,
-		newExpiry: bigint,
-	): Promise<Hex> {
+	async createCloseRequestCredential(escrowContract: Address, channelId: Hex) {
+		const chainId = await this.getChainId()
+		const closeRequest = await this.signCloseRequest(escrowContract, channelId)
+		const typedData = createCloseRequestTypedData(escrowContract, chainId, {
+			channelId,
+		})
+
+		return {
+			closeRequest,
+			typedData,
+		}
+	}
+
+	/**
+	 * Top up a channel with more funds.
+	 */
+	async topUp(escrowContract: Address, channelId: Hex, additionalDeposit: bigint): Promise<Hex> {
 		// Approve additional deposit if needed
 		if (additionalDeposit > 0n) {
 			const channel = await this.getChannel(escrowContract, channelId)
@@ -254,7 +266,7 @@ export class StreamChannelClient {
 		const data = encodeFunctionData({
 			abi: TempoStreamChannelABI,
 			functionName: 'topUp',
-			args: [channelId, additionalDeposit, newExpiry],
+			args: [channelId, additionalDeposit],
 		})
 
 		const txHash = await this.walletClient.sendTransaction({
@@ -290,7 +302,7 @@ export class StreamChannelClient {
 	}
 
 	/**
-	 * Withdraw remaining funds after expiry.
+	 * Withdraw remaining funds after close grace period.
 	 */
 	async withdraw(escrowContract: Address, channelId: Hex): Promise<Hex> {
 		const data = encodeFunctionData({

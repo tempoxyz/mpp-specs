@@ -1,12 +1,14 @@
 import {
 	createStreamChannelServer,
+	recoverCloseRequestSigner,
 	type ServerChannelState,
 	type SignedVoucher,
 	type StreamChannelServer,
 	type StreamCredentialPayload,
 	type StreamRequest,
 } from '@tempo/stream-channels'
-import { type Address, createPublicClient, type Hex, http } from 'viem'
+import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
 import type { Env, PartnerConfig, StreamingConfig } from './config.js'
 
@@ -42,9 +44,17 @@ function getStreamServer(env: Env, serverAddress: Address): StreamChannelServer 
 		transport: http(env.TEMPO_RPC_URL),
 	})
 
+	const walletClient = env.SETTLER_PRIVATE_KEY
+		? createWalletClient({
+				account: privateKeyToAccount(env.SETTLER_PRIVATE_KEY as Hex),
+				chain: tempoModerato,
+				transport: http(env.TEMPO_RPC_URL),
+			})
+		: null
+
 	serverInstance = createStreamChannelServer(
 		publicClient as Parameters<typeof createStreamChannelServer>[0],
-		null, // No wallet client for now (settlement is separate)
+		walletClient,
 		serverAddress,
 		tempoModerato.id,
 		tempoModerato,
@@ -99,7 +109,6 @@ async function rehydrateChannelFromChain(
 			authorizedSigner: result.authorizedSigner,
 			deposit: result.deposit,
 			settled: result.settled,
-			expiry: result.expiry,
 			highestVoucherAmount: result.settled, // Start from settled amount
 			highestVoucher: null,
 		}
@@ -145,13 +154,10 @@ export function createStreamChallenge(
 ): StreamRequest {
 	const server = getStreamServer(env, partner.destination)
 
-	const expiresAt = new Date(Date.now() + streamConfig.defaultExpirySeconds * 1000)
-
 	const request = server.createStreamRequest({
 		escrowContract: streamConfig.escrowContract,
 		asset: partner.asset,
 		deposit: BigInt(streamConfig.defaultDeposit),
-		expiresAt,
 		voucherEndpoint: `${voucherEndpointBase}/${partner.slug}/voucher`,
 		minVoucherDelta: BigInt(streamConfig.minVoucherDelta),
 	})
@@ -174,17 +180,12 @@ export async function verifyChannelOpen(
 		return { valid: false, error: 'Expected action=open for channel opening' }
 	}
 
-	if (!credential.openTxHash) {
-		return { valid: false, error: 'Missing openTxHash in credential' }
-	}
-
 	const server = getStreamServer(env, partner.destination)
 
 	// Convert voucher from credential format to SignedVoucher
 	const voucher: SignedVoucher = {
 		channelId: credential.channelId,
 		cumulativeAmount: BigInt(credential.voucher.payload.message.cumulativeAmount),
-		validUntil: BigInt(credential.voucher.payload.message.validUntil),
 		signature: credential.voucher.signature,
 	}
 
@@ -233,7 +234,6 @@ export async function verifyVoucher(
 	const voucher: SignedVoucher = {
 		channelId: credential.channelId,
 		cumulativeAmount: BigInt(credential.voucher.payload.message.cumulativeAmount),
-		validUntil: BigInt(credential.voucher.payload.message.validUntil),
 		signature: credential.voucher.signature,
 	}
 
@@ -288,6 +288,89 @@ export async function verifyVoucher(
 }
 
 /**
+ * Verify a close request voucher (allows reusing the current highest voucher).
+ */
+export async function verifyCloseRequest(
+	env: Env,
+	partner: PartnerConfig,
+	credential: StreamCredentialPayload,
+	streamConfig: StreamingConfig,
+): Promise<{ valid: true; state: ServerChannelState } | { valid: false; error: string }> {
+	if (credential.action !== 'close') {
+		return { valid: false, error: 'Expected action=close' }
+	}
+
+	const server = getStreamServer(env, partner.destination)
+
+	let currentState = server.getChannelState(credential.channelId)
+
+	if (!currentState) {
+		const rehydrated = await rehydrateChannelFromChain(
+			env,
+			partner,
+			credential.channelId,
+			streamConfig,
+		)
+		if (!rehydrated.valid) {
+			return { valid: false, error: rehydrated.error }
+		}
+		currentState = rehydrated.state
+	}
+
+	try {
+		const closeRequest = credential.closeRequest
+		if (closeRequest.payload.message.channelId !== credential.channelId) {
+			return { valid: false, error: 'Close request channelId mismatch' }
+		}
+		const signer = await recoverCloseRequestSigner(streamConfig.escrowContract, tempoModerato.id, {
+			channelId: closeRequest.payload.message.channelId,
+			signature: closeRequest.signature,
+		})
+		const expectedSigner =
+			currentState.authorizedSigner !== '0x0000000000000000000000000000000000000000'
+				? currentState.authorizedSigner
+				: currentState.payer
+		if (signer.toLowerCase() !== expectedSigner.toLowerCase()) {
+			return {
+				valid: false,
+				error: 'Close request signer must be authorizedSigner (or payer if not set)',
+			}
+		}
+	} catch {
+		return { valid: false, error: 'Invalid close request signature' }
+	}
+
+	const activeChannel = activeChannels.get(credential.channelId)
+	if (activeChannel) {
+		activeChannel.state = currentState
+	}
+
+	return { valid: true, state: currentState }
+}
+
+/**
+ * Close a channel on-chain (server-side).
+ */
+export async function closeChannel(
+	env: Env,
+	partner: PartnerConfig,
+	streamConfig: StreamingConfig,
+	channelId: Hex,
+): Promise<
+	| {
+			success: true
+			txHash: Hex
+			settledToPayee: bigint
+			refundedToPayer: bigint
+			alreadyClosed?: boolean
+	  }
+	| { success: false; error: string }
+> {
+	const server = getStreamServer(env, partner.destination)
+	return server.close(streamConfig.escrowContract, channelId)
+}
+
+/**
  * Get active channel state.
  */
 export function getActiveChannel(channelId: Hex): ActiveChannel | undefined {
@@ -332,7 +415,11 @@ export function parseStreamCredential(credential: unknown): StreamCredentialPayl
 		return null
 	}
 
-	if (!cred.voucher || typeof cred.voucher !== 'object') {
+	if (cred.action === 'close') {
+		if (!cred.closeRequest || typeof cred.closeRequest !== 'object') {
+			return null
+		}
+	} else if (!cred.voucher || typeof cred.voucher !== 'object') {
 		return null
 	}
 
@@ -351,7 +438,6 @@ export function formatStreamChallenge(request: StreamRequest): string {
 		`asset="${request.asset}"`,
 		`destination="${request.destination}"`,
 		`deposit="${request.deposit}"`,
-		`expires="${request.expires}"`,
 		`voucherEndpoint="${request.voucherEndpoint}"`,
 	]
 
@@ -385,18 +471,4 @@ export function formatStreamReceipt(
 		remaining: remaining.toString(),
 		timestamp: new Date().toISOString(),
 	})
-}
-
-/**
- * Clean up expired channels.
- */
-export function cleanupExpiredChannels(): void {
-	const now = Date.now()
-	for (const [channelId, channel] of activeChannels) {
-		// Channels expire based on their on-chain expiry
-		const expiryMs = Number(channel.state.expiry) * 1000
-		if (expiryMs < now) {
-			activeChannels.delete(channelId)
-		}
-	}
 }

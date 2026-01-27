@@ -285,7 +285,7 @@ async function main() {
 		const data = encodeFunctionData({
 			abi: TempoStreamChannelABI,
 			functionName: 'settle',
-			args: [channelId, voucher.cumulativeAmount, voucher.validUntil, voucher.signature],
+			args: [channelId, voucher.cumulativeAmount, voucher.signature],
 		})
 		try {
 			const txHash = await serverWallet.sendTransaction({
@@ -312,7 +312,6 @@ async function main() {
 	log.info('AI agent starts a coding session, deposits $50 into streaming channel')
 
 	const initialDeposit = parseUnits('50', 6) // $50
-	const expiryTime = BigInt(Math.floor(Date.now() / 1000) + 7200) // 2 hours
 	const salt = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
 		.map((b) => b.toString(16).padStart(2, '0'))
 		.join('')}` as Hex
@@ -323,14 +322,12 @@ async function main() {
 		payee: serverAccount.address,
 		token: ALPHA_USD,
 		deposit: formatUSD(initialDeposit),
-		expiry: new Date(Number(expiryTime) * 1000).toISOString(),
 	})
 
 	const { channelId, txHash: openTxHash } = await clientSDK.openChannel(ESCROW_CONTRACT, {
 		payee: serverAccount.address,
 		token: ALPHA_USD,
 		deposit: initialDeposit,
-		expiry: expiryTime,
 		salt,
 	})
 
@@ -339,7 +336,7 @@ async function main() {
 	log.balance('Initial deposit', initialDeposit)
 
 	// Server acknowledges channel
-	const initialVoucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, 0n, expiryTime)
+	const initialVoucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, 0n)
 	const openResult = await serverSDK.verifyChannelOpen(
 		ESCROW_CONTRACT,
 		channelId,
@@ -376,12 +373,7 @@ async function main() {
 		log.api(call.model, call.tokens, call.cost)
 
 		// Client signs voucher
-		const voucher = await clientSDK.signVoucher(
-			ESCROW_CONTRACT,
-			channelId,
-			cumulativeAmount,
-			expiryTime,
-		)
+		const voucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, cumulativeAmount)
 
 		// Server verifies voucher
 		const result = await serverSDK.verifyVoucher(ESCROW_CONTRACT, voucher)
@@ -433,12 +425,7 @@ async function main() {
 
 		log.api(call.model, call.tokens, call.cost)
 
-		const voucher = await clientSDK.signVoucher(
-			ESCROW_CONTRACT,
-			channelId,
-			cumulativeAmount,
-			expiryTime,
-		)
+		const voucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, cumulativeAmount)
 		const result = await serverSDK.verifyVoucher(ESCROW_CONTRACT, voucher)
 		if (!result.valid) throw new Error(result.error)
 
@@ -453,16 +440,15 @@ async function main() {
 	// Phase 5: Top up the channel
 	// =========================================================================
 	log.phase(5, 'Channel Top-Up')
-	log.info('Agent adds more funds and extends expiry')
+	log.info('Agent adds more funds')
 
 	const topUpAmount = parseUnits('25', 6) // $25 more
-	const newExpiry = BigInt(Math.floor(Date.now() / 1000) + 14400) // 4 more hours
 
 	const channelBefore = await clientSDK.getChannel(ESCROW_CONTRACT, channelId)
 	log.step(`Current deposit: ${formatUSD(channelBefore.deposit)}`)
 	log.step(`Adding: ${formatUSD(topUpAmount)}`)
 
-	const topUpTxHash = await clientSDK.topUp(ESCROW_CONTRACT, channelId, topUpAmount, newExpiry)
+	const topUpTxHash = await clientSDK.topUp(ESCROW_CONTRACT, channelId, topUpAmount)
 	log.tx('Top-up tx', topUpTxHash)
 
 	// Refresh server state
@@ -491,12 +477,7 @@ async function main() {
 
 		log.api(call.model, call.tokens, call.cost)
 
-		const voucher = await clientSDK.signVoucher(
-			ESCROW_CONTRACT,
-			channelId,
-			cumulativeAmount,
-			expiryTime,
-		)
+		const voucher = await clientSDK.signVoucher(ESCROW_CONTRACT, channelId, cumulativeAmount)
 		const result = await serverSDK.verifyVoucher(ESCROW_CONTRACT, voucher)
 		if (!result.valid) throw new Error(result.error)
 

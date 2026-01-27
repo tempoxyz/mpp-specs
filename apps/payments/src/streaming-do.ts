@@ -47,7 +47,6 @@ export function createStreamChallenge(
 	streamConfig: StreamingConfig,
 	voucherEndpointBase: string,
 ): StreamRequest {
-	const expiresAt = new Date(Date.now() + streamConfig.defaultExpirySeconds * 1000)
 	const salt = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)))
 		.map((b) => b.toString(16).padStart(2, '0'))
 		.join('')}` as Hex
@@ -57,7 +56,6 @@ export function createStreamChallenge(
 		asset: partner.asset,
 		destination: partner.destination,
 		deposit: streamConfig.defaultDeposit,
-		expires: expiresAt.toISOString(),
 		salt,
 		voucherEndpoint: `${voucherEndpointBase}/${partner.slug}/voucher`,
 		minVoucherDelta: streamConfig.minVoucherDelta,
@@ -78,10 +76,6 @@ export async function verifyChannelOpen(
 		return { valid: false, error: 'Expected action=open for channel opening' }
 	}
 
-	if (!credential.openTxHash) {
-		return { valid: false, error: 'Missing openTxHash in credential' }
-	}
-
 	// Get the DO for this channel
 	const channelDO = getChannelDO(env, credential.channelId)
 
@@ -95,7 +89,6 @@ export async function verifyChannelOpen(
 		escrowContract: streamConfig.escrowContract,
 		chainId,
 		deposit: BigInt(streamConfig.defaultDeposit),
-		expiry: BigInt(credential.voucher.payload.message.validUntil),
 		openTxHash: credential.openTxHash,
 	})
 
@@ -128,7 +121,6 @@ export async function verifyVoucher(
 	const voucher: SignedVoucher = {
 		channelId: credential.channelId,
 		cumulativeAmount: BigInt(credential.voucher.payload.message.cumulativeAmount),
-		validUntil: BigInt(credential.voucher.payload.message.validUntil),
 		signature: credential.voucher.signature,
 	}
 
@@ -165,7 +157,6 @@ export async function getChannelState(
 	spent: bigint
 	settled: bigint
 	remaining: bigint
-	expiry: bigint
 } | null> {
 	const channelDO = getChannelDO(env, channelId)
 	const state = await channelDO.getState()
@@ -177,7 +168,6 @@ export async function getChannelState(
 		spent: state.highestVoucherAmount,
 		settled: state.settled,
 		remaining: state.deposit - state.highestVoucherAmount,
-		expiry: state.expiry,
 	}
 }
 
@@ -238,7 +228,6 @@ export function formatStreamChallenge(request: StreamRequest): string {
 		`asset="${request.asset}"`,
 		`destination="${request.destination}"`,
 		`deposit="${request.deposit}"`,
-		`expires="${request.expires}"`,
 		`voucherEndpoint="${request.voucherEndpoint}"`,
 	]
 
@@ -298,7 +287,7 @@ export async function listChannelsForPayer(
 	env: EnvWithDO,
 	payer: Address,
 	options?: { limit?: number; offset?: number },
-): Promise<Array<{ channelId: Hex; deposit: string; settled: string; expiry: string }>> {
+): Promise<Array<{ channelId: Hex; deposit: string; settled: string }>> {
 	if (!env.CHANNELS_DB) {
 		return []
 	}
@@ -307,7 +296,7 @@ export async function listChannelsForPayer(
 	const offset = options?.offset ?? 0
 
 	const result = await env.CHANNELS_DB.prepare(
-		`SELECT channel_id, deposit, settled, expiry
+		`SELECT channel_id, deposit, settled
 		 FROM channels
 		 WHERE payer = ?
 		 ORDER BY created_at DESC
@@ -320,7 +309,6 @@ export async function listChannelsForPayer(
 		channelId: row.channel_id as Hex,
 		deposit: row.deposit as string,
 		settled: row.settled as string,
-		expiry: row.expiry as string,
 	}))
 }
 
@@ -345,18 +333,16 @@ export async function getPayeeAnalytics(
 		}
 	}
 
-	const now = Math.floor(Date.now() / 1000).toString()
-
 	const result = await env.CHANNELS_DB.prepare(
 		`SELECT
 			COUNT(*) as total_channels,
 			COALESCE(SUM(CAST(deposit AS INTEGER)), 0) as total_deposited,
 			COALESCE(SUM(CAST(settled AS INTEGER)), 0) as total_settled,
-			SUM(CASE WHEN expiry > ? AND finalized_at IS NULL THEN 1 ELSE 0 END) as active_channels
+			SUM(CASE WHEN finalized_at IS NULL THEN 1 ELSE 0 END) as active_channels
 		 FROM channels
 		 WHERE payee = ?`,
 	)
-		.bind(now, payee)
+		.bind(payee)
 		.first()
 
 	return {

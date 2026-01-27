@@ -31,7 +31,6 @@ export class StreamChannelServer {
 		escrowContract: Address
 		asset: Address
 		deposit: bigint
-		expiresAt: Date
 		voucherEndpoint: string
 		minVoucherDelta?: bigint
 	}): StreamRequest {
@@ -44,7 +43,6 @@ export class StreamChannelServer {
 			asset: params.asset,
 			destination: this.serverAddress,
 			deposit: params.deposit.toString(),
-			expires: params.expiresAt.toISOString(),
 			salt,
 			voucherEndpoint: params.voucherEndpoint,
 			minVoucherDelta: params.minVoucherDelta?.toString(),
@@ -87,7 +85,6 @@ export class StreamChannelServer {
 				authorizedSigner: result.authorizedSigner,
 				deposit: result.deposit,
 				settled: result.settled,
-				expiry: result.expiry,
 				closeRequestedAt: result.closeRequestedAt,
 				finalized: result.finalized,
 			}
@@ -143,7 +140,6 @@ export class StreamChannelServer {
 			authorizedSigner: channel.authorizedSigner,
 			deposit: channel.deposit,
 			settled: 0n,
-			expiry: channel.expiry,
 			highestVoucherAmount: 0n,
 			highestVoucher: initialVoucher,
 		}
@@ -181,11 +177,6 @@ export class StreamChannelServer {
 			return { valid: false, error: 'Voucher amount exceeds deposit' }
 		}
 
-		// Verify voucher hasn't expired
-		if (voucher.validUntil < BigInt(Math.floor(Date.now() / 1000))) {
-			return { valid: false, error: 'Voucher has expired' }
-		}
-
 		// Verify signature - contract checks against authorizedSigner if set, otherwise payer
 		try {
 			const signer = await recoverVoucherSigner(escrowContract, this.chainId, voucher)
@@ -211,7 +202,7 @@ export class StreamChannelServer {
 	}
 
 	/**
-	 * Settle the channel using the highest voucher.
+	 * Settle the channel using the highest voucher (without closing).
 	 */
 	async settle(
 		escrowContract: Address,
@@ -239,7 +230,7 @@ export class StreamChannelServer {
 		const data = encodeFunctionData({
 			abi: TempoStreamChannelABI,
 			functionName: 'settle',
-			args: [channelId, voucher.cumulativeAmount, voucher.validUntil, voucher.signature],
+			args: [channelId, voucher.cumulativeAmount, voucher.signature],
 		})
 
 		try {
@@ -258,6 +249,91 @@ export class StreamChannelServer {
 			return { success: true, txHash, settled: delta }
 		} catch (e) {
 			return { success: false, error: `Settlement failed: ${e}` }
+		}
+	}
+
+	/**
+	 * Close the channel, settling any outstanding voucher and refunding the payer.
+	 * This is the cooperative close path - server SHOULD call this promptly when
+	 * a client requests closure.
+	 */
+	async close(
+		escrowContract: Address,
+		channelId: Hex,
+	): Promise<
+		| {
+				success: true
+				txHash: Hex
+				settledToPayee: bigint
+				refundedToPayer: bigint
+				alreadyClosed?: boolean
+		  }
+		| { success: false; error: string }
+	> {
+		if (!this.walletClient) {
+			return { success: false, error: 'No wallet client configured for closing' }
+		}
+
+		const state = this.channels.get(channelId)
+		if (!state) {
+			return { success: false, error: 'Channel not found in server state' }
+		}
+
+		try {
+			const result = await this.publicClient.readContract({
+				address: escrowContract,
+				abi: TempoStreamChannelABI,
+				functionName: 'getChannel',
+				args: [channelId],
+			})
+
+			if (result.payer === '0x0000000000000000000000000000000000000000') {
+				return { success: false, error: 'Channel not found on-chain' }
+			}
+
+			if (result.finalized) {
+				this.channels.delete(channelId)
+				return {
+					success: true,
+					txHash: '0x0',
+					settledToPayee: result.settled,
+					refundedToPayer: result.deposit - result.settled,
+					alreadyClosed: true,
+				}
+			}
+		} catch (e) {
+			return { success: false, error: `Close precheck failed: ${e}` }
+		}
+
+		const voucher = state.highestVoucher
+		const cumulativeAmount = voucher ? voucher.cumulativeAmount : 0n
+		const signature = voucher ? voucher.signature : '0x'
+
+		const data = encodeFunctionData({
+			abi: TempoStreamChannelABI,
+			functionName: 'close',
+			args: [channelId, cumulativeAmount, signature],
+		})
+
+		try {
+			const txHash = await this.walletClient.sendTransaction({
+				account: this.serverAddress,
+				chain: this.chain,
+				to: escrowContract,
+				data,
+			})
+
+			await this.publicClient.waitForTransactionReceipt({ hash: txHash })
+
+			const settledToPayee = cumulativeAmount
+			const refundedToPayer = state.deposit - cumulativeAmount
+
+			// Remove from local state after successful close
+			this.channels.delete(channelId)
+
+			return { success: true, txHash, settledToPayee, refundedToPayer }
+		} catch (e) {
+			return { success: false, error: `Close failed: ${e}` }
 		}
 	}
 
@@ -284,7 +360,6 @@ export class StreamChannelServer {
 
 		state.deposit = result.deposit
 		state.settled = result.settled
-		state.expiry = result.expiry
 	}
 
 	/**

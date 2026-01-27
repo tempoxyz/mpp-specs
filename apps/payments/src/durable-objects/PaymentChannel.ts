@@ -15,7 +15,6 @@ interface ChannelState {
 	chainId: number
 	deposit: bigint
 	settled: bigint
-	expiry: bigint
 	highestVoucherAmount: bigint
 	highestVoucher: SignedVoucher | null
 	createdAt: number
@@ -29,7 +28,6 @@ interface ChannelState {
 interface SignedVoucher {
 	channelId: Hex
 	cumulativeAmount: bigint
-	validUntil: bigint
 	signature: Hex
 }
 
@@ -90,13 +88,11 @@ export class PaymentChannel extends DurableObject<Env> {
 				...stored,
 				deposit: BigInt(stored.deposit),
 				settled: BigInt(stored.settled),
-				expiry: BigInt(stored.expiry),
 				highestVoucherAmount: BigInt(stored.highestVoucherAmount),
 				highestVoucher: stored.highestVoucher
 					? {
 							...stored.highestVoucher,
 							cumulativeAmount: BigInt(stored.highestVoucher.cumulativeAmount),
-							validUntil: BigInt(stored.highestVoucher.validUntil),
 						}
 					: null,
 			}
@@ -115,13 +111,11 @@ export class PaymentChannel extends DurableObject<Env> {
 			...this.state,
 			deposit: this.state.deposit.toString(),
 			settled: this.state.settled.toString(),
-			expiry: this.state.expiry.toString(),
 			highestVoucherAmount: this.state.highestVoucherAmount.toString(),
 			highestVoucher: this.state.highestVoucher
 				? {
 						...this.state.highestVoucher,
 						cumulativeAmount: this.state.highestVoucher.cumulativeAmount.toString(),
-						validUntil: this.state.highestVoucher.validUntil.toString(),
 					}
 				: null,
 		}
@@ -141,7 +135,6 @@ export class PaymentChannel extends DurableObject<Env> {
 		escrowContract: Address
 		chainId: number
 		deposit: bigint
-		expiry: bigint
 		openTxHash: Hex
 	}): Promise<{ success: boolean; error?: string }> {
 		const existing = await this.loadState()
@@ -158,7 +151,6 @@ export class PaymentChannel extends DurableObject<Env> {
 			chainId: params.chainId,
 			deposit: params.deposit,
 			settled: 0n,
-			expiry: params.expiry,
 			highestVoucherAmount: 0n,
 			highestVoucher: null,
 			createdAt: Date.now(),
@@ -171,8 +163,8 @@ export class PaymentChannel extends DurableObject<Env> {
 		// Index in D1 if available
 		if (this.env.CHANNELS_DB) {
 			await this.env.CHANNELS_DB.prepare(
-				`INSERT INTO channels (channel_id, payer, payee, token, escrow_contract, chain_id, deposit, expiry, created_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO channels (channel_id, payer, payee, token, escrow_contract, chain_id, deposit, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 				.bind(
 					params.channelId,
@@ -182,7 +174,6 @@ export class PaymentChannel extends DurableObject<Env> {
 					params.escrowContract,
 					params.chainId,
 					params.deposit.toString(),
-					params.expiry.toString(),
 					new Date().toISOString(),
 				)
 				.run()
@@ -216,11 +207,6 @@ export class PaymentChannel extends DurableObject<Env> {
 			return { valid: false, error: 'Voucher amount exceeds deposit' }
 		}
 
-		// Check voucher hasn't expired
-		if (voucher.validUntil < BigInt(Math.floor(Date.now() / 1000))) {
-			return { valid: false, error: 'Voucher has expired' }
-		}
-
 		// Verify signature
 		const isValid = await verifyTypedData({
 			address: state.payer,
@@ -230,7 +216,6 @@ export class PaymentChannel extends DurableObject<Env> {
 			message: {
 				channelId: voucher.channelId,
 				cumulativeAmount: voucher.cumulativeAmount,
-				validUntil: voucher.validUntil,
 			},
 			signature: voucher.signature,
 		})
@@ -292,14 +277,11 @@ export class PaymentChannel extends DurableObject<Env> {
 	/**
 	 * Top up the channel (called after on-chain topUp confirmed).
 	 */
-	async topUp(additionalDeposit: bigint, newExpiry?: bigint): Promise<void> {
+	async topUp(additionalDeposit: bigint): Promise<void> {
 		const state = await this.loadState()
 		if (!state) return
 
 		state.deposit += additionalDeposit
-		if (newExpiry && newExpiry > state.expiry) {
-			state.expiry = newExpiry
-		}
 
 		await this.saveState()
 		this.broadcastBalance()
@@ -398,7 +380,6 @@ export class PaymentChannel extends DurableObject<Env> {
 						spent: state.highestVoucherAmount.toString(),
 						settled: state.settled.toString(),
 						remaining: (state.deposit - state.highestVoucherAmount).toString(),
-						expiry: state.expiry.toString(),
 					}),
 				)
 			}
@@ -418,7 +399,6 @@ export class PaymentChannel extends DurableObject<Env> {
 				escrowContract: Address
 				chainId: number
 				deposit: string
-				expiry: string
 				openTxHash: Hex
 			}
 
@@ -430,7 +410,6 @@ export class PaymentChannel extends DurableObject<Env> {
 				escrowContract: body.escrowContract,
 				chainId: body.chainId,
 				deposit: BigInt(body.deposit),
-				expiry: BigInt(body.expiry),
 				openTxHash: body.openTxHash,
 			})
 
@@ -453,7 +432,6 @@ export class PaymentChannel extends DurableObject<Env> {
 					spent: state.highestVoucherAmount.toString(),
 					settled: state.settled.toString(),
 					remaining: (state.deposit - state.highestVoucherAmount).toString(),
-					expiry: state.expiry.toString(),
 				}),
 			)
 		}
@@ -463,7 +441,6 @@ export class PaymentChannel extends DurableObject<Env> {
 			const voucher: SignedVoucher = {
 				...body.voucher,
 				cumulativeAmount: BigInt(body.voucher.cumulativeAmount),
-				validUntil: BigInt(body.voucher.validUntil),
 			}
 			const minDelta = body.minDelta ? BigInt(body.minDelta) : undefined
 			const result = await this.verifyVoucher(voucher, minDelta)

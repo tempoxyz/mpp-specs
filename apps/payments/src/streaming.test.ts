@@ -11,7 +11,6 @@ vi.mock('@tempo/stream-channels', () => ({
 				escrowContract: Address
 				asset: Address
 				deposit: bigint
-				expiresAt: Date
 				voucherEndpoint: string
 				minVoucherDelta: bigint
 			}) => ({
@@ -19,7 +18,6 @@ vi.mock('@tempo/stream-channels', () => ({
 				asset: params.asset,
 				destination: '0x0aA342d6e4e45D1F6eAE721c4fEf2f61B82f8581' as Address,
 				deposit: params.deposit.toString(),
-				expires: params.expiresAt.toISOString(),
 				salt: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as Hex,
 				voucherEndpoint: params.voucherEndpoint,
 				minVoucherDelta: params.minVoucherDelta.toString(),
@@ -87,6 +85,16 @@ describe('streaming', () => {
 			).toBeNull()
 		})
 
+		it('should return null for missing closeRequest', () => {
+			expect(
+				parseStreamCredential({
+					type: 'stream',
+					action: 'close',
+					channelId: '0x1234',
+				}),
+			).toBeNull()
+		})
+
 		it('should parse valid stream credential', () => {
 			const credential = {
 				type: 'stream',
@@ -105,7 +113,6 @@ describe('streaming', () => {
 						message: {
 							channelId: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
 							cumulativeAmount: '100000',
-							validUntil: '1737100000',
 						},
 					},
 					signature: '0xsig' as Hex,
@@ -120,6 +127,34 @@ describe('streaming', () => {
 				'0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
 			)
 		})
+
+		it('should parse valid close request credential', () => {
+			const credential = {
+				type: 'stream',
+				action: 'close',
+				channelId: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+				closeRequest: {
+					payload: {
+						primaryType: 'CloseRequest',
+						domain: {
+							name: 'Tempo Stream Channel',
+							version: '1',
+							chainId: 42431,
+							verifyingContract: '0x5678' as Address,
+						},
+						types: {},
+						message: {
+							channelId: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+						},
+					},
+					signature: '0xsig' as Hex,
+				},
+			}
+
+			const result = parseStreamCredential(credential)
+			expect(result).not.toBeNull()
+			expect(result?.action).toBe('close')
+		})
 	})
 
 	describe('formatStreamChallenge', () => {
@@ -129,7 +164,6 @@ describe('streaming', () => {
 				asset: '0xAsset' as Address,
 				destination: '0xDest' as Address,
 				deposit: '1000000',
-				expires: '2026-01-17T12:00:00.000Z',
 				voucherEndpoint: 'https://example.com/voucher',
 			}
 
@@ -150,7 +184,6 @@ describe('streaming', () => {
 				asset: '0xAsset' as Address,
 				destination: '0xDest' as Address,
 				deposit: '1000000',
-				expires: '2026-01-17T12:00:00.000Z',
 				voucherEndpoint: 'https://example.com/voucher',
 				salt: '0xSalt123' as Hex,
 			}
@@ -165,7 +198,6 @@ describe('streaming', () => {
 				asset: '0xAsset' as Address,
 				destination: '0xDest' as Address,
 				deposit: '1000000',
-				expires: '2026-01-17T12:00:00.000Z',
 				voucherEndpoint: 'https://example.com/voucher',
 				channelId: '0xChannel' as Hex,
 			}
@@ -180,7 +212,6 @@ describe('streaming', () => {
 				asset: '0xAsset' as Address,
 				destination: '0xDest' as Address,
 				deposit: '1000000',
-				expires: '2026-01-17T12:00:00.000Z',
 				voucherEndpoint: 'https://example.com/voucher',
 				minVoucherDelta: '1000',
 			}
@@ -220,7 +251,6 @@ describe('streaming', () => {
 				streaming: {
 					escrowContract: '0x5678' as Address,
 					defaultDeposit: '10000000', // $10
-					defaultExpirySeconds: 3600, // 1 hour
 					minVoucherDelta: '10000', // $0.01
 				},
 			})
@@ -228,7 +258,6 @@ describe('streaming', () => {
 			expect(partner.streaming).toBeDefined()
 			expect(partner.streaming?.escrowContract).toBe('0x5678')
 			expect(partner.streaming?.defaultDeposit).toBe('10000000')
-			expect(partner.streaming?.defaultExpirySeconds).toBe(3600)
 			expect(partner.streaming?.minVoucherDelta).toBe('10000')
 		})
 	})

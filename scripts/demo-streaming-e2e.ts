@@ -140,13 +140,11 @@ async function main() {
 	)
 
 	const deposit = parseUnits('10', 6) // $10 deposit
-	const expiresAt = new Date(Date.now() + 3600 * 1000) // 1 hour
 
 	const streamRequest = server.createStreamRequest({
 		escrowContract: ESCROW_CONTRACT,
 		asset: ALPHA_USD,
 		deposit,
-		expiresAt,
 		voucherEndpoint: 'https://payments.tempo.xyz/openrouter/voucher',
 		minVoucherDelta: parseUnits('0.001', 6), // $0.001 minimum
 	})
@@ -155,7 +153,7 @@ async function main() {
 		status: 402,
 		statusText: 'Payment Required',
 		headers: {
-			'WWW-Authenticate': `Payment realm="payments/stream", method="tempo", intent="stream", escrowContract="${streamRequest.escrowContract}", asset="${streamRequest.asset}", destination="${streamRequest.destination}", deposit="${streamRequest.deposit}", expires="${streamRequest.expires}", voucherEndpoint="${streamRequest.voucherEndpoint}", salt="${streamRequest.salt}", minVoucherDelta="${streamRequest.minVoucherDelta}"`,
+			'WWW-Authenticate': `Payment realm="payments/stream", method="tempo", intent="stream", escrowContract="${streamRequest.escrowContract}", asset="${streamRequest.asset}", destination="${streamRequest.destination}", deposit="${streamRequest.deposit}", voucherEndpoint="${streamRequest.voucherEndpoint}", salt="${streamRequest.salt}", minVoucherDelta="${streamRequest.minVoucherDelta}"`,
 			'Cache-Control': 'no-store',
 		},
 	})
@@ -169,7 +167,6 @@ async function main() {
 		'  - deposit',
 		`${streamRequest.deposit} base units ($${formatUnits(BigInt(streamRequest.deposit), 6)})`,
 	)
-	log.code('  - expires', streamRequest.expires)
 	log.code('  - salt', streamRequest.salt)
 
 	// =========================================================================
@@ -177,7 +174,7 @@ async function main() {
 	// =========================================================================
 	log.step(2, 'Client opens payment channel on-chain')
 	log.ietf('Client deposits funds into escrow smart contract')
-	log.ietf('Channel is identified by hash of (payer, payee, token, deposit, expiry, salt)')
+	log.ietf('Channel is identified by hash of (payer, payee, token, deposit, salt)')
 
 	const _client = new StreamChannelClient(publicClient, walletClient, account, tempoModerato)
 
@@ -185,7 +182,6 @@ async function main() {
 		payee: serverAddress,
 		token: ALPHA_USD,
 		deposit,
-		expiry: BigInt(Math.floor(expiresAt.getTime() / 1000)),
 		salt: streamRequest.salt as Hex,
 	}
 
@@ -194,7 +190,6 @@ async function main() {
 		payee: openParams.payee,
 		token: openParams.token,
 		deposit: openParams.deposit.toString(),
-		expiry: openParams.expiry.toString(),
 		salt: openParams.salt,
 	})
 
@@ -210,7 +205,6 @@ async function main() {
 	log.code('Channel opened', {
 		channelId: simulatedChannelId,
 		deposit: `$${formatUnits(deposit, 6)}`,
-		expiry: expiresAt.toISOString(),
 	})
 
 	// =========================================================================
@@ -234,13 +228,11 @@ async function main() {
 			Voucher: [
 				{ name: 'channelId', type: 'bytes32' },
 				{ name: 'cumulativeAmount', type: 'uint256' },
-				{ name: 'validUntil', type: 'uint256' },
 			],
 		},
 		message: {
 			channelId: simulatedChannelId,
 			cumulativeAmount: paymentAmount.toString(),
-			validUntil: Math.floor(Date.now() / 1000) + 300, // Valid for 5 minutes
 		},
 	}
 
@@ -292,21 +284,19 @@ async function main() {
 	// Step 5: Server verifies voucher and authorizes request
 	// =========================================================================
 	log.step(5, 'Server verifies voucher signature and authorizes request')
-	log.ietf('Server MUST verify: signature, cumulative amount increase, expiry, channel state')
+	log.ietf('Server MUST verify: signature, cumulative amount increase, channel state')
 
 	log.info('Server verification steps:')
 	log.code('1. Parse credential', 'Extract type, action, channelId, voucher')
 	log.code('2. Recover signer', 'Use ecrecover on EIP-712 typed data hash')
 	log.code('3. Verify signer', 'Signer must match channel payer from on-chain state')
 	log.code('4. Check amount', 'cumulativeAmount must exceed previous highest voucher')
-	log.code('5. Check expiry', 'validUntil must be in the future')
-	log.code('6. Check channel', 'Channel must be open and not expired')
+	log.code('5. Check channel', 'Channel must be open')
 
 	// Simulate successful verification
 	log.success('Voucher signature verified ✓')
 	log.success('Signer matches channel payer ✓')
 	log.success('Cumulative amount increased ✓')
-	log.success('Voucher not expired ✓')
 	log.success('Channel is open ✓')
 
 	// =========================================================================

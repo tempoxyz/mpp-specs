@@ -121,8 +121,6 @@ export interface StreamRequest {
 	destination: Address
 	/** Required deposit amount in base units */
 	deposit: string
-	/** Channel expiry (ISO 8601) */
-	expires: string
 	/** Channel ID if channel already exists */
 	channelId?: Hex
 	/** Random salt for new channel; server-generated */
@@ -133,33 +131,74 @@ export interface StreamRequest {
 	minVoucherDelta?: string
 }
 
+/** EIP-712 domain for stream channel signatures */
+interface StreamDomain {
+	name: string
+	version: string
+	chainId: number
+	verifyingContract: Address
+}
+
+/** Signed voucher payload */
+export interface SignedVoucherPayload {
+	payload: {
+		primaryType: 'Voucher'
+		domain: StreamDomain
+		types: Record<string, Array<{ name: string; type: string }>>
+		message: {
+			channelId: Hex
+			cumulativeAmount: string
+		}
+	}
+	signature: Hex
+}
+
+/** Signed close request payload */
+export interface SignedCloseRequestPayload {
+	payload: {
+		primaryType: 'CloseRequest'
+		domain: StreamDomain
+		types: Record<string, Array<{ name: string; type: string }>>
+		message: {
+			channelId: Hex
+		}
+	}
+	signature: Hex
+}
+
+/** Open action: client opened a channel on-chain and provides first voucher */
+interface StreamCredentialOpen {
+	type: 'stream'
+	action: 'open'
+	channelId: Hex
+	openTxHash: Hex
+	voucher: SignedVoucherPayload
+}
+
+/** Voucher action: client submits a new cumulative payment voucher */
+interface StreamCredentialVoucher {
+	type: 'stream'
+	action: 'voucher'
+	channelId: Hex
+	voucher: SignedVoucherPayload
+}
+
+/** Close action: client requests channel closure */
+interface StreamCredentialClose {
+	type: 'stream'
+	action: 'close'
+	channelId: Hex
+	closeRequest: SignedCloseRequestPayload
+}
+
 /**
  * Stream credential payload for intent="stream".
+ * Discriminated union on `action` field.
  */
-export interface StreamCredentialPayload {
-	type: 'stream'
-	action: 'open' | 'voucher' | 'close'
-	channelId: Hex
-	openTxHash?: Hex
-	voucher: {
-		payload: {
-			primaryType: 'Voucher'
-			domain: {
-				name: string
-				version: string
-				chainId: number
-				verifyingContract: Address
-			}
-			types: Record<string, Array<{ name: string; type: string }>>
-			message: {
-				channelId: Hex
-				cumulativeAmount: string
-				validUntil: string
-			}
-		}
-		signature: Hex
-	}
-}
+export type StreamCredentialPayload =
+	| StreamCredentialOpen
+	| StreamCredentialVoucher
+	| StreamCredentialClose
 
 /**
  * Payload type in payment credential.

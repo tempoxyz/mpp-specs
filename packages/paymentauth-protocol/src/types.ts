@@ -121,8 +121,6 @@ export interface StreamRequest {
 	recipient: Address
 	/** Required deposit amount in base units */
 	deposit: string
-	/** Channel expiry (ISO 8601) */
-	expires: string
 	/** Channel ID if channel already exists */
 	channelId?: Hex
 	/** Random salt for new channel; server-generated */

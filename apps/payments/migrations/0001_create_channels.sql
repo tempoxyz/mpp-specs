@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS channels (
     chain_id INTEGER NOT NULL,
     deposit TEXT NOT NULL,
     settled TEXT DEFAULT '0',
-    expiry TEXT NOT NULL,
     created_at TEXT NOT NULL,
     last_settlement_at TEXT,
     finalized_at TEXT
@@ -20,7 +19,6 @@ CREATE TABLE IF NOT EXISTS channels (
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_channels_payer ON channels(payer);
 CREATE INDEX IF NOT EXISTS idx_channels_payee ON channels(payee);
-CREATE INDEX IF NOT EXISTS idx_channels_expiry ON channels(expiry);
 CREATE INDEX IF NOT EXISTS idx_channels_created_at ON channels(created_at);
 
 -- Settlements table - audit log of all settlements
@@ -42,7 +40,6 @@ CREATE TABLE IF NOT EXISTS vouchers (
     channel_id TEXT NOT NULL,
     cumulative_amount TEXT NOT NULL,
     delta TEXT NOT NULL,
-    valid_until TEXT NOT NULL,
     received_at TEXT NOT NULL,
     request_path TEXT,
     FOREIGN KEY (channel_id) REFERENCES channels(channel_id)

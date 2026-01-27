@@ -38,7 +38,6 @@ export const openrouter: PartnerConfig = {
 	streaming: {
 		escrowContract: CONTRACTS.STREAM_ESCROW_MODERATO,
 		defaultDeposit: STREAMING_DEFAULTS.DEFAULT_DEPOSIT,
-		defaultExpirySeconds: STREAMING_DEFAULTS.DEFAULT_EXPIRY_SECONDS,
 		minVoucherDelta: STREAMING_DEFAULTS.MIN_VOUCHER_DELTA,
 	},
 }

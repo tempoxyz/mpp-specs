@@ -22,8 +22,6 @@ export interface StreamingConfig {
 	escrowContract: Address
 	/** Default deposit amount in base units */
 	defaultDeposit: string
-	/** Default channel expiry in seconds from now */
-	defaultExpirySeconds: number
 	/** Minimum voucher delta (minimum payment increment) */
 	minVoucherDelta: string
 }
@@ -98,6 +96,8 @@ export interface Env {
 	CHANNELS_DB?: D1Database
 	/** Queue for settlement jobs */
 	SETTLEMENT_QUEUE?: Queue
+	/** Private key for server-initiated streaming settlements/close */
+	SETTLER_PRIVATE_KEY?: string
 	/** Dynamic API keys - accessed via partner config apiKeyEnvVar */
 	BROWSERBASE_API_KEY?: string
 	EXA_API_KEY?: string

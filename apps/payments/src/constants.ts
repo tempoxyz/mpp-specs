@@ -57,8 +57,6 @@ export const CONTRACTS = {
 export const STREAMING_DEFAULTS = {
 	/** Default deposit: $10 */
 	DEFAULT_DEPOSIT: '10000000',
-	/** Default expiry: 1 hour */
-	DEFAULT_EXPIRY_SECONDS: 3600,
 	/** Minimum voucher delta: $0.001 */
 	MIN_VOUCHER_DELTA: '1000',
 } as const

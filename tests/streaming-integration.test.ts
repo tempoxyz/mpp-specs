@@ -105,13 +105,11 @@ describe('Streaming Payment Integration', () => {
 				Voucher: [
 					{ name: 'channelId', type: 'bytes32' },
 					{ name: 'cumulativeAmount', type: 'uint256' },
-					{ name: 'validUntil', type: 'uint256' },
 				],
 			},
 			message: {
 				channelId: validChannelId,
 				cumulativeAmount,
-				validUntil: String(Math.floor(Date.now() / 1000) + 3600),
 			},
 		},
 		signature:
@@ -416,7 +414,6 @@ describe('Streaming Payment Integration', () => {
 			expect(wwwAuth).toContain('asset=')
 			expect(wwwAuth).toContain('destination=')
 			expect(wwwAuth).toContain('deposit=')
-			expect(wwwAuth).toContain('expires=')
 			expect(wwwAuth).toContain('voucherEndpoint=')
 		})
 

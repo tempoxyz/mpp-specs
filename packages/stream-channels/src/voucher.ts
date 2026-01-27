@@ -21,7 +21,6 @@ export const voucherTypes = {
 	Voucher: [
 		{ name: 'channelId', type: 'bytes32' },
 		{ name: 'cumulativeAmount', type: 'uint128' },
-		{ name: 'validUntil', type: 'uint64' },
 	],
 } as const
 
@@ -51,13 +50,11 @@ export function createVoucherTypedData(
 			Voucher: [
 				{ name: 'channelId', type: 'bytes32' },
 				{ name: 'cumulativeAmount', type: 'uint128' },
-				{ name: 'validUntil', type: 'uint64' },
 			],
 		},
 		message: {
 			channelId: message.channelId,
 			cumulativeAmount: message.cumulativeAmount.toString(),
-			validUntil: message.validUntil.toString(),
 		},
 	}
 }
@@ -77,7 +74,6 @@ export function hashVoucher(
 		message: {
 			channelId: message.channelId,
 			cumulativeAmount: message.cumulativeAmount,
-			validUntil: message.validUntil,
 		},
 	})
 }
@@ -97,7 +93,6 @@ export async function recoverVoucherSigner(
 		message: {
 			channelId: voucher.channelId,
 			cumulativeAmount: voucher.cumulativeAmount,
-			validUntil: voucher.validUntil,
 		},
 		signature: voucher.signature,
 	})

@@ -103,9 +103,8 @@ contract StreamChannelHandler is Test {
     
     // --- Handler Functions ---
     
-    function openChannel(uint128 deposit, uint64 expiryDelta, bytes32 salt) external {
+    function openChannel(uint128 deposit, bytes32 salt) external {
         deposit = uint128(bound(deposit, MIN_DEPOSIT, MAX_DEPOSIT));
-        expiryDelta = uint64(bound(expiryDelta, 1 hours, 30 days));
         
         // Mint tokens
         token.mint(payer, deposit);
@@ -113,10 +112,9 @@ contract StreamChannelHandler is Test {
         vm.startPrank(payer);
         token.approve(address(channel), deposit);
         
-        uint64 expiry = uint64(block.timestamp) + expiryDelta;
         address authorizedSigner = address(0); // Use payer as signer
         bytes32 channelId = channel.computeChannelId(
-            payer, payee, address(token), deposit, expiry, salt, authorizedSigner
+            payer, payee, address(token), deposit, salt, authorizedSigner
         );
         
         // Skip if channel already exists
@@ -125,7 +123,7 @@ contract StreamChannelHandler is Test {
             return;
         }
         
-        channel.open(payee, address(token), deposit, expiry, salt, authorizedSigner);
+        channel.open(payee, address(token), deposit, salt, authorizedSigner);
         vm.stopPrank();
         
         openChannels.push(channelId);
@@ -144,30 +142,27 @@ contract StreamChannelHandler is Test {
         
         TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
         
-        // Skip if channel is finalized or expired
+        // Skip if channel is finalized
         if (ch.finalized) return;
-        if (block.timestamp >= ch.expiry) return;
         
         // Bound amount to valid range
         amount = uint128(bound(amount, ch.settled + 1, ch.deposit));
         if (amount <= ch.settled) return;
         
-        uint64 validUntil = uint64(block.timestamp) + 30 minutes;
-        
         // Sign voucher
-        bytes32 digest = channel.getVoucherDigest(channelId, amount, validUntil);
+        bytes32 digest = channel.getVoucherDigest(channelId, amount);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
         
         uint128 delta = amount - ch.settled;
         
         vm.prank(payee);
-        try channel.settle(channelId, amount, validUntil, sig) {
+        try channel.settle(channelId, amount, sig) {
             ghostSettled[channelId] += delta;
         } catch {}
     }
     
-    function topUp(uint256 channelIndex, uint128 additionalDeposit, uint64 expiryExtension) external {
+    function topUp(uint256 channelIndex, uint128 additionalDeposit) external {
         if (openChannels.length == 0) return;
         
         channelIndex = channelIndex % openChannels.length;
@@ -184,13 +179,8 @@ contract StreamChannelHandler is Test {
             token.approve(address(channel), additionalDeposit);
         }
         
-        uint64 newExpiry = 0;
-        if (expiryExtension > 0) {
-            newExpiry = ch.expiry + uint64(bound(expiryExtension, 1 hours, 30 days));
-        }
-        
         vm.prank(payer);
-        try channel.topUp(channelId, additionalDeposit, newExpiry) {
+        try channel.topUp(channelId, additionalDeposit) {
             ghostDeposit[channelId] += additionalDeposit;
         } catch {}
     }
@@ -206,6 +196,36 @@ contract StreamChannelHandler is Test {
         
         vm.prank(payer);
         try channel.requestClose(channelId) {} catch {}
+    }
+    
+    function close(uint256 channelIndex, uint128 amount) external {
+        if (openChannels.length == 0) return;
+        
+        channelIndex = channelIndex % openChannels.length;
+        bytes32 channelId = openChannels[channelIndex];
+        
+        TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
+        if (ch.finalized) return;
+        
+        // Bound amount to valid range
+        amount = uint128(bound(amount, ch.settled, ch.deposit));
+        
+        bytes memory sig;
+        if (amount > ch.settled) {
+            bytes32 digest = channel.getVoucherDigest(channelId, amount);
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerKey, digest);
+            sig = abi.encodePacked(r, s, v);
+        }
+        
+        uint128 delta = amount > ch.settled ? amount - ch.settled : 0;
+        uint128 refund = ch.deposit - amount;
+        
+        vm.prank(payee);
+        try channel.close(channelId, amount, sig) {
+            ghostSettled[channelId] += delta;
+            ghostWithdrawn[channelId] = refund;
+            ghostFinalized[channelId] = true;
+        } catch {}
     }
     
     function withdraw(uint256 channelIndex) external {
@@ -242,23 +262,21 @@ contract StreamChannelHandler is Test {
         bytes32 channelId = openChannels[channelIndex];
         
         TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
-        if (ch.finalized || block.timestamp >= ch.expiry) return;
+        if (ch.finalized) return;
         
         amount = uint128(bound(amount, ch.settled + 1, ch.deposit));
         if (amount <= ch.settled) return;
         
-        uint64 validUntil = uint64(block.timestamp) + 30 minutes;
-        
         // Generate a different key
         (, uint256 wrongKey) = makeAddrAndKey(string(abi.encodePacked("wrong", wrongKeyIndex)));
         
-        bytes32 digest = channel.getVoucherDigest(channelId, amount, validUntil);
+        bytes32 digest = channel.getVoucherDigest(channelId, amount);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
         
         // This should ALWAYS revert with InvalidSignature
         vm.prank(payee);
-        try channel.settle(channelId, amount, validUntil, sig) {
+        try channel.settle(channelId, amount, sig) {
             revert("SECURITY: Invalid signature accepted!");
         } catch {}
     }
@@ -273,12 +291,10 @@ contract StreamChannelHandler is Test {
         bytes32 channelId = openChannels[channelIndex];
         
         TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
-        if (ch.finalized || block.timestamp >= ch.expiry) return;
+        if (ch.finalized) return;
         
         amount = uint128(bound(amount, ch.settled + 1, ch.deposit));
         if (amount <= ch.settled) return;
-        
-        uint64 validUntil = uint64(block.timestamp) + 30 minutes;
         
         // Create malformed signature (not 65 bytes)
         sigLength = uint8(bound(sigLength, 0, 64)); // Never 65
@@ -288,37 +304,8 @@ contract StreamChannelHandler is Test {
         }
         
         vm.prank(payee);
-        try channel.settle(channelId, amount, validUntil, malformedSig) {
+        try channel.settle(channelId, amount, malformedSig) {
             revert("SECURITY: Malformed signature accepted!");
-        } catch {}
-    }
-
-    /**
-     * @notice Attempt to settle with expired validUntil
-     */
-    function settleWithExpiredVoucher(uint256 channelIndex, uint128 amount, uint64 expiredBy) external {
-        if (openChannels.length == 0) return;
-        
-        channelIndex = channelIndex % openChannels.length;
-        bytes32 channelId = openChannels[channelIndex];
-        
-        TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
-        if (ch.finalized || block.timestamp >= ch.expiry) return;
-        
-        amount = uint128(bound(amount, ch.settled + 1, ch.deposit));
-        if (amount <= ch.settled) return;
-        
-        // Create expired voucher
-        expiredBy = uint64(bound(expiredBy, 1, 1 days));
-        uint64 validUntil = uint64(block.timestamp) - expiredBy;
-        
-        bytes32 digest = channel.getVoucherDigest(channelId, amount, validUntil);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerKey, digest);
-        bytes memory sig = abi.encodePacked(r, s, v);
-        
-        vm.prank(payee);
-        try channel.settle(channelId, amount, validUntil, sig) {
-            revert("SECURITY: Expired voucher accepted!");
         } catch {}
     }
 
@@ -332,19 +319,18 @@ contract StreamChannelHandler is Test {
         bytes32 channelId = openChannels[channelIndex];
         
         TempoStreamChannel.Channel memory ch = channel.getChannel(channelId);
-        if (ch.finalized || block.timestamp >= ch.expiry) return;
+        if (ch.finalized) return;
         if (ch.settled == 0) return; // Need something settled first
         
         // Try to settle with same or lower amount
         uint128 lowerAmount = ch.settled; // Same as current (should fail)
-        uint64 validUntil = uint64(block.timestamp) + 30 minutes;
         
-        bytes32 digest = channel.getVoucherDigest(channelId, lowerAmount, validUntil);
+        bytes32 digest = channel.getVoucherDigest(channelId, lowerAmount);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerKey, digest);
         bytes memory sig = abi.encodePacked(r, s, v);
         
         vm.prank(payee);
-        try channel.settle(channelId, lowerAmount, validUntil, sig) {
+        try channel.settle(channelId, lowerAmount, sig) {
             revert("SECURITY: Voucher replay with same/lower amount accepted!");
         } catch {}
     }
@@ -576,7 +562,6 @@ contract TempoStreamChannelAccessControlInvariantTest is StdInvariant, Test {
             payee,
             address(token),
             1_000_000,
-            uint64(block.timestamp) + 1 hours,
             bytes32(uint256(1)),
             address(0)
         );

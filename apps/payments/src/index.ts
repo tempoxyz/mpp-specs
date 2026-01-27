@@ -33,11 +33,13 @@ import { debug, getPriceForRequest } from './config.js'
 import { getPartner, partners } from './partners/index.js'
 import { proxyRequest } from './proxy.js'
 import {
+	closeChannel,
 	createStreamChallenge,
 	formatStreamChallenge,
 	formatStreamReceipt,
 	parseStreamCredential,
 	verifyChannelOpen,
+	verifyCloseRequest,
 	verifyVoucher,
 } from './streaming.js'
 
@@ -583,7 +585,6 @@ const discoverHandler = (c: Context<{ Bindings: Env }>) => {
 						supported: true,
 						escrowContract: partner.streaming.escrowContract,
 						defaultDeposit: partner.streaming.defaultDeposit,
-						defaultExpirySeconds: partner.streaming.defaultExpirySeconds,
 					}
 				: { supported: false },
 		}
@@ -639,7 +640,6 @@ const discoverSlugHandler = (c: Context<{ Bindings: Env }>) => {
 					supported: true,
 					escrowContract: partner.streaming.escrowContract,
 					defaultDeposit: partner.streaming.defaultDeposit,
-					defaultExpirySeconds: partner.streaming.defaultExpirySeconds,
 					minVoucherDelta: partner.streaming.minVoucherDelta,
 				}
 			: { supported: false },
@@ -701,6 +701,28 @@ app.post('/:partner/voucher', async (c) => {
 			cumulativeAmount: result.state.highestVoucherAmount.toString(),
 			remaining: remaining.toString(),
 			newPayment: result.newPayment.toString(),
+		})
+	}
+
+	// Handle close requests
+	if (credential.action === 'close') {
+		const verifyResult = await verifyCloseRequest(c.env, partner, credential, partner.streaming)
+		if (!verifyResult.valid) {
+			throw new HTTPException(400, { message: verifyResult.error })
+		}
+
+		const closeResult = await closeChannel(c.env, partner, partner.streaming, credential.channelId)
+		if (!closeResult.success) {
+			throw new HTTPException(503, { message: closeResult.error })
+		}
+
+		return c.json({
+			status: 'ok',
+			channelId: credential.channelId,
+			txHash: closeResult.txHash,
+			settledToPayee: closeResult.settledToPayee.toString(),
+			refundedToPayer: closeResult.refundedToPayer.toString(),
+			...(closeResult.alreadyClosed ? { alreadyClosed: true } : {}),
 		})
 	}
 

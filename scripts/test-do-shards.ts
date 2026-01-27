@@ -84,11 +84,9 @@ class ShardTest {
 	async signVoucher(amount: bigint): Promise<{
 		channelId: Hex
 		cumulativeAmount: bigint
-		validUntil: bigint
 		signature: Hex
 	}> {
 		this.cumulativeAmount += amount
-		const validUntil = BigInt(Math.floor(Date.now() / 1000) + 3600)
 
 		const signature = await this.walletClient.signTypedData({
 			domain: {
@@ -101,14 +99,12 @@ class ShardTest {
 				Voucher: [
 					{ name: 'channelId', type: 'bytes32' },
 					{ name: 'cumulativeAmount', type: 'uint128' },
-					{ name: 'validUntil', type: 'uint64' },
 				],
 			},
 			primaryType: 'Voucher',
 			message: {
 				channelId: this.channelId,
 				cumulativeAmount: this.cumulativeAmount,
-				validUntil,
 			},
 		})
 
@@ -117,7 +113,6 @@ class ShardTest {
 		return {
 			channelId: this.channelId,
 			cumulativeAmount: this.cumulativeAmount,
-			validUntil,
 			signature,
 		}
 	}
@@ -139,7 +134,6 @@ class ShardTest {
 					voucher: {
 						channelId: voucher.channelId,
 						cumulativeAmount: voucher.cumulativeAmount.toString(),
-						validUntil: voucher.validUntil.toString(),
 						signature: voucher.signature,
 					},
 					minDelta: VOUCHER_AMOUNT.toString(),
