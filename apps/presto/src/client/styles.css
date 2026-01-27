@@ -359,7 +359,7 @@ pre {
 .install-subtitle {
 	font-size: 12px;
 	color: var(--muted);
-	white-space: nowrap;
+	max-width: 600px;
 }
 
 .install-command {
