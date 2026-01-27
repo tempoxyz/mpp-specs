@@ -63,6 +63,9 @@ fi
 mkdir -p "$OUT_DIR"
 mkdir -p "$SITE_PUBLIC_DIR"
 
+# Clean up stale symlinks in site/public (removes symlinks to deleted specs)
+find "$SITE_PUBLIC_DIR" -maxdepth 1 -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
 # Export for use in subshells
 export OUT_DIR SITE_PUBLIC_DIR XML2RFC_OPTS VERBOSE
 

@@ -1,1 +1,0 @@
-../../artifacts/draft-payment-intent-authorize-00.txt
