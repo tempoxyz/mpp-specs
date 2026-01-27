@@ -12,54 +12,33 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>()
 
-const WHEEL_VERSION = '0.1.0'
+const R2_BASE_URL = 'https://presto-binaries.tempo.xyz'
 
-function getInstallScript(): string {
-	const buildTime = Date.now()
-	return `#!/bin/bash
-set -e
-
-# Presto installer - installs presto CLI from presto.tempo.xyz
-
-WHEEL_URL="https://presto.tempo.xyz/presto_tempo-${WHEEL_VERSION}-py3-none-any.whl?v=${buildTime}"
-
-echo "Installing presto..."
-
-# Try uv first (faster), fall back to pipx
-if command -v uv &> /dev/null; then
-    uv tool install --force "$WHEEL_URL"
-elif command -v pipx &> /dev/null; then
-    pipx install --force "$WHEEL_URL"
-else
-    # Install uv and use it
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
-    uv tool install "$WHEEL_URL"
-fi
-
-# Check for Foundry (cast) - required for signing transactions
-if ! command -v cast &> /dev/null; then
-    echo ""
-    echo "⚠️  Foundry (cast) not found. Install it:"
-    echo "   curl -L https://foundry.paradigm.xyz | bash"
-    echo "   foundryup"
-    echo ""
-fi
-
-echo ""
-echo "✓ Installed presto"
-echo ""
-echo "Run 'presto' to start!"
-`
-}
-
-// Serve install script
-app.get('/install.sh', (_c) => {
-	return new Response(getInstallScript(), {
+// Proxy install script from R2 (single source of truth in presto repo)
+app.get('/install.sh', async (_c) => {
+	const response = await fetch(`${R2_BASE_URL}/install.sh`)
+	if (!response.ok) {
+		return new Response('Failed to fetch install script', { status: 502 })
+	}
+	return new Response(response.body, {
 		headers: {
 			'Content-Type': 'text/plain; charset=utf-8',
-			'Cache-Control': 'no-cache',
+			'Cache-Control': 'public, max-age=60',
+		},
+	})
+})
+
+// Proxy wheel from R2
+app.get('/presto_tempo-:version.whl', async (c) => {
+	const version = c.req.param('version')
+	const response = await fetch(`${R2_BASE_URL}/presto_tempo-${version}.whl`)
+	if (!response.ok) {
+		return new Response('Wheel not found', { status: 404 })
+	}
+	return new Response(response.body, {
+		headers: {
+			'Content-Type': 'application/zip',
+			'Cache-Control': 'public, max-age=3600',
 		},
 	})
 })
