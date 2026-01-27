@@ -4,7 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SPECS_DIR="$ROOT_DIR/specs"
-OUT_DIR="$ROOT_DIR/artifacts"
+ARTIFACTS_DIR="$ROOT_DIR/artifacts"
+SITE_PUBLIC_DIR="$ROOT_DIR/site/public"
+OUT_DIR="$ARTIFACTS_DIR"
 
 # Config file path (differs inside Docker vs local)
 if [[ -d /data/specs ]]; then
@@ -59,9 +61,10 @@ elif $VERBOSE; then
 fi
 
 mkdir -p "$OUT_DIR"
+mkdir -p "$SITE_PUBLIC_DIR"
 
 # Export for use in subshells
-export OUT_DIR XML2RFC_OPTS VERBOSE
+export OUT_DIR SITE_PUBLIC_DIR XML2RFC_OPTS VERBOSE
 
 process_spec() {
   local md="$1"
@@ -90,6 +93,12 @@ process_spec() {
 
   echo "    [xml2rfc] Generating PDF..."
   xml2rfc --pdf $XML2RFC_OPTS "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
+
+  # Create symlinks in site/public for easy web serving
+  echo "    [symlink] Linking to site/public..."
+  for ext in xml html txt pdf; do
+    ln -sf "../../artifacts/${name}.${ext}" "$SITE_PUBLIC_DIR/${name}.${ext}"
+  done
 }
 export -f process_spec
 
