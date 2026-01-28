@@ -27,7 +27,7 @@ export function InstallPage() {
 		<div className="page">
 			<main>
 				<h1>pget</h1>
-				<p className="tagline">curl for payments</p>
+				<p className="tagline">wget for payments</p>
 
 				<p className="description">
 					A command-line tool for making HTTP requests with automatic payment support.
@@ -56,7 +56,7 @@ pget method new my-wallet --generate`}</pre>
 						github
 					</a>
 					<a
-						href="https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/"
+						href="https://paymentauth.tempo.xyz"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
