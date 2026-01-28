@@ -29,8 +29,13 @@ import {
 import { tempoModerato } from 'viem/chains'
 import { Abis, Transaction as TempoTransaction } from 'viem/tempo'
 import type { Env, PartnerConfig } from './config.js'
-import { debug, getPriceForRequest } from './config.js'
+import { debug, formatApiKey, getApiKey, getPriceForRequest } from './config.js'
 import { getPartner, partners } from './partners/index.js'
+import {
+	calculateStoragePrice,
+	STORAGE_BASE_FEE,
+	STORAGE_MAX_UPLOAD_BYTES,
+} from './partners/storage.js'
 import { proxyRequest } from './proxy.js'
 import {
 	closeChannel,
@@ -417,6 +422,103 @@ async function broadcastTransaction(
 }
 
 /**
+ * Calculate storage price for a request by checking content size.
+ * - For downloads (GET): Do HEAD request to get Content-Length
+ * - For uploads (PUT): Read Content-Length from request header
+ * Throws HTTPException if upload exceeds max size.
+ */
+async function calculateStoragePriceForRequest(
+	c: Context<{ Bindings: Env }>,
+	partner: PartnerConfig,
+	forwardPath: string,
+): Promise<string> {
+	const method = c.req.method.toUpperCase()
+
+	if (method === 'PUT') {
+		// Upload: get size from Content-Length header
+		const contentLength = c.req.header('Content-Length')
+		if (!contentLength) {
+			// No Content-Length header - use base fee only
+			return STORAGE_BASE_FEE
+		}
+
+		const sizeBytes = parseInt(contentLength, 10)
+		if (Number.isNaN(sizeBytes) || sizeBytes < 0) {
+			return STORAGE_BASE_FEE
+		}
+
+		// Check max upload size
+		if (sizeBytes > STORAGE_MAX_UPLOAD_BYTES) {
+			throw new HTTPException(413, {
+				message: `Upload size ${Math.round(sizeBytes / (1024 * 1024))}MB exceeds maximum allowed size of ${Math.round(STORAGE_MAX_UPLOAD_BYTES / (1024 * 1024))}MB`,
+			})
+		}
+
+		return calculateStoragePrice(sizeBytes)
+	}
+
+	if (method === 'GET') {
+		// Download: do HEAD request to get Content-Length from upstream
+		try {
+			const upstreamBase = partner.upstream.startsWith('ENV:')
+				? ((c.env as unknown as Record<string, string | undefined>)[partner.upstream.slice(4)] ??
+					'')
+				: partner.upstream
+
+			if (!upstreamBase) {
+				return STORAGE_BASE_FEE
+			}
+
+			const baseUrl = new URL(upstreamBase)
+			const fullPath =
+				baseUrl.pathname.replace(/\/$/, '') +
+				(forwardPath.startsWith('/') ? forwardPath : `/${forwardPath}`)
+			const headUrl = new URL(fullPath, baseUrl.origin)
+
+			// Copy query params
+			const requestUrl = new URL(c.req.url)
+			headUrl.search = requestUrl.search
+
+			// Build headers for HEAD request
+			const headers = new Headers()
+			const apiKey = getApiKey(partner, c.env)
+			if (apiKey) {
+				headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
+			}
+
+			const headResponse = await fetch(headUrl.toString(), {
+				method: 'HEAD',
+				headers,
+			})
+
+			if (!headResponse.ok) {
+				// Object doesn't exist or other error - use base fee
+				// The actual GET will fail later with proper error
+				return STORAGE_BASE_FEE
+			}
+
+			const contentLength = headResponse.headers.get('Content-Length')
+			if (!contentLength) {
+				return STORAGE_BASE_FEE
+			}
+
+			const sizeBytes = parseInt(contentLength, 10)
+			if (Number.isNaN(sizeBytes) || sizeBytes < 0) {
+				return STORAGE_BASE_FEE
+			}
+
+			return calculateStoragePrice(sizeBytes)
+		} catch {
+			// If HEAD fails, fall back to base fee
+			return STORAGE_BASE_FEE
+		}
+	}
+
+	// Other methods (DELETE, POST, etc.) - use base fee
+	return STORAGE_BASE_FEE
+}
+
+/**
  * Wait for transaction confirmation and get block number.
  */
 async function getTransactionReceipt(
@@ -799,9 +901,14 @@ app.all('/*', async (c) => {
 	let price: string
 	const { description } = priceInfo
 	if (priceInfo.dynamicPricing) {
-		// Dynamic pricing based on model and token estimation
-		const dynamicPrice = calculateRequestPrice(requestBody)
-		price = dynamicPrice.toString()
+		// Storage partner: price based on content size
+		if (partner.slug === 'storage') {
+			price = await calculateStoragePriceForRequest(c, partner, forwardPath)
+		} else {
+			// LLM partners: dynamic pricing based on model and token estimation
+			const dynamicPrice = calculateRequestPrice(requestBody)
+			price = dynamicPrice.toString()
+		}
 	} else {
 		// Static pricing from endpoint config
 		price = priceInfo.price ?? partner.defaultPrice
