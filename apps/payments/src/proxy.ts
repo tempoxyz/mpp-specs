@@ -8,6 +8,7 @@ import {
 } from './adapters/openai-to-anthropic.js'
 import type { Env, PartnerConfig } from './config.js'
 import { formatApiKey, getApiKey } from './config.js'
+import { signS3Request } from './s3-signer.js'
 
 /**
  * Resolve the upstream URL for a partner.
@@ -145,6 +146,10 @@ export async function proxyRequest(
 		}
 	}
 
+	// Track if we need S3 signing (deferred until after body is ready)
+	let needsS3Signing = false
+	let s3Credentials: { accessKeyId: string; secretAccessKey: string } | null = null
+
 	// In paid mode, set the partner's API key
 	// In passthrough mode, the client's auth header is preserved (if any)
 	if (!preserveClientAuth) {
@@ -162,6 +167,15 @@ export async function proxyRequest(
 			}
 			headers.set('Modal-Key', modalKey)
 			headers.set('Modal-Secret', modalSecret)
+		} else if (partner.apiKeySecretEnvVar) {
+			// S3-style auth with separate access key ID and secret
+			const envRecord = c.env as unknown as Record<string, string | undefined>
+			const secretKey = envRecord[partner.apiKeySecretEnvVar]
+			if (!secretKey) {
+				throw new Error(`Secret key not configured: ${partner.apiKeySecretEnvVar}`)
+			}
+			needsS3Signing = true
+			s3Credentials = { accessKeyId: apiKey, secretAccessKey: secretKey }
 		} else {
 			headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
 		}
@@ -208,12 +222,20 @@ export async function proxyRequest(
 
 	let upstreamResponse: Response
 	try {
-		upstreamResponse = await fetch(upstreamUrl.toString(), {
+		// Build the request
+		let upstreamRequest = new Request(upstreamUrl.toString(), {
 			method: c.req.method,
 			headers,
 			body,
 			signal: controller.signal,
 		})
+
+		// Apply S3 signing if needed
+		if (needsS3Signing && s3Credentials) {
+			upstreamRequest = await signS3Request(upstreamRequest, s3Credentials)
+		}
+
+		upstreamResponse = await fetch(upstreamRequest)
 	} finally {
 		clearTimeout(timeoutId)
 	}

@@ -15,7 +15,7 @@
 		"deploy": "wrangler deploy"
 	},
 	"dependencies": {
-		"@tempo/paymentauth-protocol-legacy": "workspace:*",
+		"@tempo/paymentauth-protocol": "workspace:*",
 		"@tempo/shared": "workspace:*",
 		"@tempo/stream-channels": "workspace:*",
 		"hono": "^4.6.0",

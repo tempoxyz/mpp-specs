@@ -39,20 +39,13 @@ describe('proxyRequest', () => {
 		expect(result.response.status).toBe(200)
 		expect(result.upstreamLatencyMs).toBeGreaterThanOrEqual(0)
 
-		// Verify fetch was called with correct URL
-		expect(global.fetch).toHaveBeenCalledWith(
-			'https://api.test.com/v1/data?foo=bar',
-			expect.objectContaining({
-				method: 'GET',
-			}),
-		)
-
-		// Verify API key was set
+		// Verify fetch was called with correct Request
 		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
 		expect(fetchCall).toBeDefined()
-		const fetchOptions = fetchCall![1] as RequestInit
-		const headers = fetchOptions.headers as Headers
-		expect(headers.get('Authorization')).toBe('Bearer test-api-key-123')
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.url).toBe('https://api.test.com/v1/data?foo=bar')
+		expect(upstreamRequest.method).toBe('GET')
+		expect(upstreamRequest.headers.get('Authorization')).toBe('Bearer test-api-key-123')
 	})
 
 	it('should proxy POST request with body', async () => {
@@ -73,9 +66,10 @@ describe('proxyRequest', () => {
 
 		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
 		expect(fetchCall).toBeDefined()
-		const fetchOptions = fetchCall![1] as RequestInit
-		expect(fetchOptions.method).toBe('POST')
-		expect(fetchOptions.body).toBeDefined()
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.method).toBe('POST')
+		const upstreamBody = await upstreamRequest.text()
+		expect(upstreamBody).toBe(body)
 	})
 
 	it('should preserve client Authorization header in passthrough mode', async () => {
@@ -94,9 +88,8 @@ describe('proxyRequest', () => {
 
 		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
 		expect(fetchCall).toBeDefined()
-		const fetchOptions = fetchCall![1] as RequestInit
-		const headers = fetchOptions.headers as Headers
-		expect(headers.get('Authorization')).toBe('Bearer client-token')
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.headers.get('Authorization')).toBe('Bearer client-token')
 	})
 
 	it('should block sensitive headers', async () => {
@@ -118,16 +111,15 @@ describe('proxyRequest', () => {
 
 		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
 		expect(fetchCall).toBeDefined()
-		const fetchOptions = fetchCall![1] as RequestInit
-		const headers = fetchOptions.headers as Headers
+		const upstreamRequest = fetchCall![0] as Request
 
 		// Blocked headers should not be present
-		expect(headers.get('Host')).toBeNull()
-		expect(headers.get('X-Forwarded-For')).toBeNull()
-		expect(headers.get('CF-Ray')).toBeNull()
+		expect(upstreamRequest.headers.get('Host')).toBeNull()
+		expect(upstreamRequest.headers.get('X-Forwarded-For')).toBeNull()
+		expect(upstreamRequest.headers.get('CF-Ray')).toBeNull()
 
 		// Custom header should pass through
-		expect(headers.get('Custom-Header')).toBe('should-pass')
+		expect(upstreamRequest.headers.get('Custom-Header')).toBe('should-pass')
 	})
 
 	it('should add proxy metadata headers to response', async () => {
@@ -158,10 +150,10 @@ describe('proxyRequest', () => {
 
 		await proxyRequest(c, partner, '/v1/data')
 
-		expect(global.fetch).toHaveBeenCalledWith(
-			'https://api.test.com/base/v1/data',
-			expect.any(Object),
-		)
+		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
+		expect(fetchCall).toBeDefined()
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.url).toBe('https://api.test.com/base/v1/data')
 	})
 
 	it('should handle upstream URL with trailing slash', async () => {
@@ -177,10 +169,10 @@ describe('proxyRequest', () => {
 
 		await proxyRequest(c, partner, '/v1/data')
 
-		expect(global.fetch).toHaveBeenCalledWith(
-			'https://api.test.com/base/v1/data',
-			expect.any(Object),
-		)
+		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
+		expect(fetchCall).toBeDefined()
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.url).toBe('https://api.test.com/base/v1/data')
 	})
 
 	it('should throw error when API key is missing', async () => {
@@ -210,9 +202,8 @@ describe('proxyRequest', () => {
 
 		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
 		expect(fetchCall).toBeDefined()
-		const fetchOptions = fetchCall![1] as RequestInit
-		const headers = fetchOptions.headers as Headers
-		expect(headers.get('X-API-Key')).toBe('test-api-key-123')
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.headers.get('X-API-Key')).toBe('test-api-key-123')
 	})
 
 	it('should preserve query parameters', async () => {
@@ -226,10 +217,10 @@ describe('proxyRequest', () => {
 
 		await proxyRequest(c, mockPartner, '/v1/data')
 
-		expect(global.fetch).toHaveBeenCalledWith(
-			'https://api.test.com/v1/data?foo=bar&baz=qux',
-			expect.any(Object),
-		)
+		const fetchCall = vi.mocked(global.fetch).mock.calls[0]
+		expect(fetchCall).toBeDefined()
+		const upstreamRequest = fetchCall![0] as Request
+		expect(upstreamRequest.url).toBe('https://api.test.com/v1/data?foo=bar&baz=qux')
 	})
 
 	it('should block response headers correctly', async () => {

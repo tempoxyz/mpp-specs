@@ -58,6 +58,8 @@ export interface PartnerConfig {
 	upstream: string
 	/** Environment variable name containing the API key */
 	apiKeyEnvVar: string
+	/** Environment variable name containing the API key secret (for S3-style auth) */
+	apiKeySecretEnvVar?: string
 	/** Header name to use for the API key (e.g., "Authorization", "X-API-Key") */
 	apiKeyHeader: string
 	/** Format string for the API key value (use {key} as placeholder, e.g., "Bearer {key}") */

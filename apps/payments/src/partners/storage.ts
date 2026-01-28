@@ -56,9 +56,10 @@ export const storage: PartnerConfig = {
 	slug: 'storage',
 	aliases: ['s3', 'r2', 'object-storage'],
 	upstream: 'ENV:STORAGE_ENDPOINT', // Set via env var, e.g., https://bucket.s3.amazonaws.com or R2 URL
-	apiKeyEnvVar: 'STORAGE_ACCESS_KEY',
+	apiKeyEnvVar: 'STORAGE_ACCESS_KEY_ID', // Used with STORAGE_ACCESS_KEY_SECRET for S3 signing
+	apiKeySecretEnvVar: 'STORAGE_ACCESS_KEY_SECRET', // Secret key for S3 signing
 	apiKeyHeader: 'Authorization',
-	apiKeyFormat: '{key}', // Pre-formatted AWS SigV4 or R2 auth header
+	apiKeyFormat: '{key}',
 	defaultPrice: STORAGE_BASE_FEE,
 	defaultRequiresPayment: true,
 	asset: TOKENS.ALPHA_USD,

@@ -1,8 +1,8 @@
 import {
-	type ChargeRequest,
 	formatReceipt,
 	formatWwwAuthenticate,
-	MalformedProofError,
+	getChallengeId,
+	MalformedCredentialError,
 	type PaymentChallenge,
 	type PaymentCredential,
 	PaymentExpiredError,
@@ -10,7 +10,7 @@ import {
 	PaymentRequiredError,
 	PaymentVerificationFailedError,
 	parseAuthorization,
-} from '@tempo/paymentauth-protocol-legacy'
+} from '@tempo/paymentauth-protocol'
 import { calculateRequestPrice } from '@tempo/shared'
 import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -51,6 +51,14 @@ import {
 // Stateless challenge: encode challenge data + HMAC in the ID itself
 // Replay protection comes from on-chain tx nonce uniqueness
 const CHALLENGE_SECRET = 'tempo-payments-challenge-v1' // Could move to env var
+
+// Modern ChargeRequest type matching mpay-rs / IETF spec
+interface MppChargeRequest {
+	amount: string
+	currency: Address
+	recipient: Address
+	expires: string
+}
 
 async function signChallenge(data: string): Promise<string> {
 	const encoder = new TextEncoder()
@@ -126,14 +134,14 @@ async function createChallenge(
 	partner: PartnerConfig,
 	price: string,
 	description?: string,
-): Promise<PaymentChallenge<ChargeRequest>> {
+): Promise<PaymentChallenge<MppChargeRequest>> {
 	const validityMs = 300_000 // 5 minutes
 	const expiresAt = new Date(Date.now() + validityMs)
 
-	const request: ChargeRequest = {
+	const request = {
 		amount: price,
-		asset: partner.asset,
-		destination: partner.destination,
+		currency: partner.asset,
+		recipient: partner.destination,
 		expires: expiresAt.toISOString(),
 	}
 
@@ -156,7 +164,7 @@ async function createChallenge(
 	const sig = await signChallenge(dataPart)
 	const statelessId = `${dataPart}.${sig}`
 
-	const challenge: PaymentChallenge<ChargeRequest> = {
+	const challenge: PaymentChallenge<MppChargeRequest> = {
 		id: statelessId,
 		realm: `payments/${partner.slug}`,
 		method: 'tempo',
@@ -174,7 +182,7 @@ async function createChallenge(
  */
 async function verifyTransaction(
 	signedTx: Hex,
-	challenge: ChargeRequest,
+	challenge: MppChargeRequest,
 ): Promise<{
 	valid: boolean
 	error?: string
@@ -200,7 +208,7 @@ async function verifyTransaction(
  */
 async function verifyTempoTransaction(
 	signedTx: Hex,
-	challenge: ChargeRequest,
+	challenge: MppChargeRequest,
 ): Promise<{
 	valid: boolean
 	error?: string
@@ -224,10 +232,10 @@ async function verifyTempoTransaction(
 			return { valid: false, error: 'Transaction call missing "to" field' }
 		}
 
-		if (!isAddressEqual(call.to, challenge.asset)) {
+		if (!isAddressEqual(call.to, challenge.currency)) {
 			return {
 				valid: false,
-				error: `Transaction target ${call.to} does not match asset ${challenge.asset}`,
+				error: `Transaction target ${call.to} does not match currency ${challenge.currency}`,
 			}
 		}
 
@@ -250,10 +258,10 @@ async function verifyTempoTransaction(
 
 			const [recipient, amount] = decoded.args as [Address, bigint]
 
-			if (!isAddressEqual(recipient, challenge.destination)) {
+			if (!isAddressEqual(recipient, challenge.recipient)) {
 				return {
 					valid: false,
-					error: `Transfer recipient ${recipient} does not match destination ${challenge.destination}`,
+					error: `Transfer recipient ${recipient} does not match destination ${challenge.recipient}`,
 				}
 			}
 
@@ -289,7 +297,7 @@ async function verifyTempoTransaction(
  */
 async function verifyStandardTransaction(
 	signedTx: Hex,
-	challenge: ChargeRequest,
+	challenge: MppChargeRequest,
 ): Promise<{
 	valid: boolean
 	error?: string
@@ -302,10 +310,10 @@ async function verifyStandardTransaction(
 			return { valid: false, error: 'Transaction missing "to" field' }
 		}
 
-		if (!isAddressEqual(parsed.to, challenge.asset)) {
+		if (!isAddressEqual(parsed.to, challenge.currency)) {
 			return {
 				valid: false,
-				error: `Transaction target ${parsed.to} does not match asset ${challenge.asset}`,
+				error: `Transaction target ${parsed.to} does not match asset ${challenge.currency}`,
 			}
 		}
 
@@ -328,10 +336,10 @@ async function verifyStandardTransaction(
 
 			const [recipient, amount] = decoded.args as [Address, bigint]
 
-			if (!isAddressEqual(recipient, challenge.destination)) {
+			if (!isAddressEqual(recipient, challenge.recipient)) {
 				return {
 					valid: false,
-					error: `Transfer recipient ${recipient} does not match destination ${challenge.destination}`,
+					error: `Transfer recipient ${recipient} does not match destination ${challenge.recipient}`,
 				}
 			}
 
@@ -952,11 +960,11 @@ app.all('/*', async (c) => {
 	try {
 		credential = parseAuthorization(authHeader)
 	} catch {
-		return c.json(new MalformedProofError('Invalid Authorization header format').toJSON(), 400)
+		return c.json(new MalformedCredentialError('Invalid Authorization header format').toJSON(), 400)
 	}
 
 	// Validate challenge (stateless - decode and verify signature from ID)
-	const challengeResult = await verifyChallenge(credential.id)
+	const challengeResult = await verifyChallenge(getChallengeId(credential))
 	if (!challengeResult.valid) {
 		c.header(
 			'WWW-Authenticate',
@@ -988,7 +996,7 @@ app.all('/*', async (c) => {
 
 	// Validate payload type
 	if (!credential.payload) {
-		return c.json(new MalformedProofError('Missing payload').toJSON(), 400)
+		return c.json(new MalformedCredentialError('Missing payload').toJSON(), 400)
 	}
 
 	// Handle stream voucher payments
@@ -1052,17 +1060,17 @@ app.all('/*', async (c) => {
 
 	// Handle transaction-based payments
 	if (!['transaction', 'keyAuthorization'].includes(credential.payload.type)) {
-		return c.json(new MalformedProofError('Invalid payload type').toJSON(), 400)
+		return c.json(new MalformedCredentialError('Invalid payload type').toJSON(), 400)
 	}
 
 	const signedTx = credential.payload.signature as Hex
 	const timestamp = new Date().toISOString()
 
 	// Reconstruct challenge request from stateless data for verification
-	const expectedRequest: ChargeRequest = {
+	const expectedRequest = {
 		amount: challengeResult.data.price,
-		asset: partner.asset,
-		destination: partner.destination,
+		currency: partner.asset,
+		recipient: partner.destination,
 		expires: challengeResult.data.expires,
 	}
 
