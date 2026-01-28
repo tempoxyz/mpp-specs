@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const INSTALL_COMMAND = 'curl -fsSL https://purl.tempo.xyz/install.sh | bash'
+const INSTALL_COMMAND = 'curl -fsSL https://pget.tempo.xyz/install.sh | bash'
 
 export function InstallPage() {
 	const [copied, setCopied] = useState(false)
@@ -26,7 +26,7 @@ export function InstallPage() {
 	return (
 		<div className="page">
 			<main>
-				<h1>purl</h1>
+				<h1>pget</h1>
 				<p className="tagline">curl for payments</p>
 
 				<p className="description">
@@ -42,17 +42,17 @@ export function InstallPage() {
 
 				<div className="examples">
 					<pre>{`# make a request to a paid API
-purl https://api.example.com/data
+pget https://api.example.com/data
 
 # preview payment without executing
-purl --dry-run https://api.example.com/data
+pget --dry-run https://api.example.com/data
 
 # create a new payment method
-purl method new my-wallet --generate`}</pre>
+pget method new my-wallet --generate`}</pre>
 				</div>
 
 				<div className="links">
-					<a href="https://github.com/tempoxyz/purl" target="_blank" rel="noopener noreferrer">
+					<a href="https://github.com/tempoxyz/pget" target="_blank" rel="noopener noreferrer">
 						github
 					</a>
 					<a

@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "purl",
+	"name": "pget",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-15",
 	"compatibility_flags": ["nodejs_compat"],
@@ -10,5 +10,5 @@
 	"assets": {
 		"binding": "ASSETS"
 	},
-	"routes": [{ "pattern": "purl.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
+	"routes": [{ "pattern": "pget.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
 }

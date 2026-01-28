@@ -32,7 +32,7 @@ jobs:
           - app: paymentauth-basic
           - app: paymentauth-tetris
           - app: paymentauth-x402
-          - app: purl
+          - app: pget
           - app: reth-snapshots
           - app: presto
             build_wheel: true

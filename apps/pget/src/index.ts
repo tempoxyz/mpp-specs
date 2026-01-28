@@ -9,7 +9,7 @@ const app = new Hono<{ Bindings: Env }>()
 
 const R2_INSTALL_SCRIPT_URL = 'https://purl-binaries.tempo.xyz/install.sh'
 
-// Proxy install script from R2 (single source of truth in purl repo)
+// Proxy install script from R2 (single source of truth in pget repo)
 app.get('/install.sh', async (_c) => {
 	const response = await fetch(R2_INSTALL_SCRIPT_URL)
 	if (!response.ok) {
