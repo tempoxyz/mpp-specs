@@ -7,6 +7,8 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>()
 
+// Purl binary bucket name used for back compat 
+// This binary is really named pget.
 const R2_INSTALL_SCRIPT_URL = 'https://purl-binaries.tempo.xyz/install.sh'
 
 // Proxy install script from R2 (single source of truth in pget repo)
