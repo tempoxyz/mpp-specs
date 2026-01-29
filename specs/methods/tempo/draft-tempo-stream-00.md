@@ -111,11 +111,11 @@ The following diagram illustrates the Tempo stream flow:
       |  (5) 200 OK (SSE stream)    |                             |
       |<--------------------------  |                             |
       |                             |                             |
-      |  (6) POST /voucher          |                             |
+      |  (6) POST /stream           |                             |
       |      (updated vouchers)     |                             |
       |-------------------------->  |                             |
       |                             |                             |
-      |  (7) POST /voucher          |                             |
+      |  (7) POST /stream           |                             |
       |      action="close"         |                             |
       |-------------------------->  |                             |
       |                             |  (8) close(voucher)         |
@@ -153,6 +153,10 @@ Settlement
 Authorized Signer
 : An address delegated to sign vouchers on behalf of the payer.
   Defaults to the payer if not specified.
+
+Signature Scheme
+: The cryptographic signature algorithm used for voucher signing.
+  Defaults to ECDSA/secp256k1. EdDSA is reserved for future use.
 
 # Channel Escrow Contract
 
@@ -211,7 +215,7 @@ Channels have no expiry—they remain open until explicitly closed.
 ┌─────────────────────────┐     ┌─────────────────────────────────┐
 │    COOPERATIVE CLOSE    │     │        FORCED CLOSE             │
 │  Server calls close()   │     │  1. Client calls requestClose() │
-│  with final voucher     │     │  2. Wait 15 min grace period    │
+│  with final voucher     │     │  2. Wait grace period (>=15m)   │
 │                         │     │  3. Client calls withdraw()     │
 └─────────────────────────┘     └─────────────────────────────────┘
               │                               │
@@ -277,7 +281,9 @@ function close(
 
 ### requestClose
 
-User requests channel closure, starting a 15-minute grace period.
+User requests channel closure, starting a grace period. The grace period
+SHOULD be 15 minutes but MAY be any value >= 15 minutes as configured by
+the escrow contract deployment.
 
 ~~~solidity
 function requestClose(bytes32 channelId) external;
@@ -301,20 +307,24 @@ base64url-encoded JSON object.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `escrowContract` | string | REQUIRED | Address of the channel escrow contract |
-| `asset` | string | REQUIRED | TIP-20 token address |
-| `destination` | string | REQUIRED | Payee address (server's withdrawal address) |
-| `deposit` | string | REQUIRED | Required deposit amount in base units |
+| `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
+| `recipient` | string | REQUIRED | Payee address (server's withdrawal address) |
+| `amount` | string | REQUIRED | Required deposit amount in base units |
+| `expires` | string | REQUIRED | Expiry timestamp for this challenge in ISO 8601 format |
 | `channelId` | string | CONDITIONAL | Channel ID if channel already exists |
 | `salt` | string | CONDITIONAL | Random salt for new channel |
-| `voucherEndpoint` | string | REQUIRED | HTTPS URL for voucher submission |
+| `streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission. WebSocket and SSE transports are out of scope for this version. |
 | `minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
 
 Either `channelId` or `salt` MUST be provided, but not both:
 
-- **New channel**: Server provides `salt`; client computes `channelId`
-  and opens channel on-chain.
-- **Existing channel**: Server provides `channelId`; client verifies
-  the channel exists and has sufficient remaining deposit.
+- **New channel**: Server provides `salt`. Client computes `channelId`
+  using the formula in Section 4.1, opens the channel on-chain, and
+  returns the `channelId` in the credential.
+- **Existing channel**: Server provides `channelId`. Client MUST verify
+  `channel.deposit - channel.settled >= amount` before resuming. If
+  insufficient, client SHOULD either call `topUp()` with the difference
+  or request a new channel.
 
 Servers SHOULD prefer reusing existing channels when the client has an
 open channel with sufficient remaining deposit. This reduces on-chain
@@ -325,17 +335,19 @@ transactions and improves user experience.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.signatureScheme` | string | OPTIONAL | Signature algorithm: `"ecdsa"` (default) or `"eddsa"` (reserved) |
 
 **Example (new channel):**
 
 ~~~json
 {
   "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "deposit": "10000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "amount": "10000000",
+  "expires": "2025-01-06T12:05:00Z",
   "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "voucherEndpoint": "https://api.example.com/payments/voucher",
+  "streamEndpoint": "https://api.example.com/payments/stream",
   "minVoucherDelta": "1000",
   "methodDetails": {
     "chainId": 42431
@@ -348,11 +360,12 @@ transactions and improves user experience.
 ~~~json
 {
   "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "deposit": "10000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "amount": "10000000",
+  "expires": "2025-01-06T12:05:00Z",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-  "voucherEndpoint": "https://api.example.com/payments/voucher",
+  "streamEndpoint": "https://api.example.com/payments/stream",
   "minVoucherDelta": "1000",
   "methodDetails": {
     "chainId": 42431
@@ -375,7 +388,7 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 
 ## Payload Actions
 
-The `payload` object uses `type="stream"` with an `action` discriminator:
+The `payload` object uses an `action` discriminator:
 
 | Action | Description |
 |--------|-------------|
@@ -387,49 +400,40 @@ The `payload` object uses `type="stream"` with an `action` discriminator:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"stream"` |
 | `action` | string | REQUIRED | `"open"` |
 | `channelId` | string | REQUIRED | Channel ID (computed from request) |
 | `authorizedSigner` | string | OPTIONAL | Delegated signer address |
 | `openTxHash` | string | REQUIRED | Transaction hash of channel open |
 | `voucher` | object | REQUIRED | Initial signed voucher (amount=0) |
 
-The `voucher` object contains:
+The initial zero-amount voucher proves the client controls the signing key
+and establishes the voucher chain.
+
+The `voucher` object contains only the minimal fields required for
+on-chain verification. The contract reconstructs the EIP-712 digest:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `payload` | object | REQUIRED | EIP-712 typed data |
+| `channelId` | string | REQUIRED | Channel ID (bytes32) |
+| `cumulativeAmount` | string | REQUIRED | Cumulative amount authorized |
 | `signature` | string | REQUIRED | Hex-encoded signature |
 
 **Example:**
 
 ~~~json
 {
-  "challenge": { "id": "str_abc123", ... },
+  "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
   "payload": {
-    "type": "stream",
     "action": "open",
-    "channelId": "0x6d0f4fdf...",
-    "openTxHash": "0xabcd1234...",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "openTxHash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
     "voucher": {
-      "payload": {
-        "primaryType": "Voucher",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x1234..."
-        },
-        "types": { ... },
-        "message": {
-          "channelId": "0x6d0f4fdf...",
-          "cumulativeAmount": "0"
-        }
-      },
-      "signature": "0x..."
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "cumulativeAmount": "0",
+      "signature": "0x1234567890abcdef..."
     }
   },
-  "source": "did:pkh:eip155:42431:0x1234..."
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -437,7 +441,6 @@ The `voucher` object contains:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"stream"` |
 | `action` | string | REQUIRED | `"voucher"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `voucher` | object | REQUIRED | Signed voucher with higher amount |
@@ -446,12 +449,18 @@ The `voucher` object contains:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"stream"` |
 | `action` | string | REQUIRED | `"close"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `closeRequest` | object | REQUIRED | Signed close request |
 
-The `closeRequest` uses EIP-712 with type `CloseRequest(bytes32 channelId)`.
+The `closeRequest` uses EIP-712 with type
+`CloseRequest(bytes32 channelId, uint64 requestedAt)`. The `requestedAt`
+timestamp prevents replay attacks; servers SHOULD reject requests older
+than 5 minutes.
+
+Note: CloseRequest is an off-chain signal only. The contract's
+`requestClose()` function does not verify this signature; it is called
+directly by the payer when cooperative close fails.
 
 # EIP-712 Voucher Format
 
@@ -495,8 +504,8 @@ On `action="open"`, servers MUST:
 2. Query the escrow contract to verify channel state:
    - Channel exists with matching `channelId`
    - `channel.payee` matches server's address
-   - `channel.token` matches `request.asset`
-   - `channel.deposit >= request.deposit`
+   - `channel.token` matches `request.currency`
+   - `channel.deposit >= request.amount`
    - `channel.settled == 0` (fresh channel)
 3. Verify the initial voucher:
    - Recover signer from EIP-712 signature
@@ -515,11 +524,63 @@ On `action="voucher"`, servers MUST:
    - `cumulativeAmount > highestVoucherAmount`
    - `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
 4. Verify `cumulativeAmount <= channel.deposit`
-5. Update `highestVoucherAmount = cumulativeAmount`
+5. Persist voucher to durable storage before providing service
+6. Update `highestVoucherAmount = cumulativeAmount`
 
-## Rejection
+Servers MUST persist the highest voucher to durable storage before
+providing the corresponding service. Failure to do so may result in
+unrecoverable fund loss if the server crashes after service delivery.
 
-If verification fails, servers MUST return 401 with error details.
+## Rejection and Error Responses
+
+If verification fails, servers MUST return an appropriate HTTP status
+code with a JSON error response:
+
+| Status | When |
+|--------|------|
+| 400 Bad Request | Malformed payload or missing fields |
+| 401 Unauthorized | Invalid signature or signer mismatch |
+| 409 Conflict | Stale voucher (amount not increasing) |
+| 410 Gone | Channel finalized or not found |
+
+Error response format:
+
+~~~json
+{
+  "error": "Human-readable error message",
+  "code": "ERROR_CODE",
+  "channelId": "0x..."
+}
+~~~
+
+Error codes:
+
+| Code | Description |
+|------|-------------|
+| `INVALID_SIGNATURE` | Voucher or close request signature invalid |
+| `SIGNER_MISMATCH` | Signer is not authorized for this channel |
+| `AMOUNT_NOT_INCREASING` | Voucher amount not higher than previous |
+| `AMOUNT_EXCEEDS_DEPOSIT` | Voucher amount exceeds channel deposit |
+| `DELTA_TOO_SMALL` | Amount increase below `minVoucherDelta` |
+| `CHANNEL_NOT_FOUND` | No channel with this ID exists |
+| `CHANNEL_FINALIZED` | Channel has been closed |
+
+## Stream Endpoint Responses
+
+Successful voucher submissions to `streamEndpoint` MUST return:
+
+~~~
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "accepted": true,
+  "highestAmount": "250000"
+}
+~~~
+
+Servers SHOULD limit voucher submissions to 10 per second per channel.
+Servers MAY implement IP-based rate limiting for unauthenticated requests.
 
 # Settlement Procedure
 
@@ -533,6 +594,11 @@ Servers MAY settle at any time using their own criteria:
 - Based on gas cost optimization
 
 Settlement frequency is an implementation detail left to servers.
+
+The `close()` function settles any delta between the provided
+`cumulativeAmount` and `channel.settled`. If the server has already
+settled the highest voucher via `settle()`, calling `close()` with the
+same amount will only refund the payer the remaining deposit.
 
 ## Cooperative Close
 
@@ -551,15 +617,38 @@ incentive is to claim earned funds immediately.
 If the server does not respond to close requests:
 
 1. Client calls `requestClose(channelId)` on-chain
-2. 15-minute grace period begins
+2. Grace period begins (wall-clock time via `block.timestamp`). The
+   grace period SHOULD be 15 minutes but MAY be >= 15 minutes.
 3. Server can still `settle()` or `close()` during grace period
 4. After grace period, client calls `withdraw(channelId)`
 5. Client receives all remaining (unsettled) funds
+
+Clients SHOULD wait at least 1 minute beyond the configured grace period
+after `requestClose()` before calling `withdraw()` to account for block
+time variance. For the default 15-minute grace period, this means waiting
+at least 16 minutes.
+
+## Concurrent Streams
+
+A single channel MAY be used for multiple sequential or concurrent
+streams. The cumulative voucher semantics ensure correctness regardless
+of stream count—each voucher authorizes a total amount, and the
+contract tracks cumulative settlements.
+
+## Voucher Submission Transport
+
+Vouchers MUST be submitted via separate HTTP requests to `streamEndpoint`,
+independent of any SSE connection used for streaming content. Clients
+SHOULD use HTTP/2 multiplexing or maintain separate connections for
+voucher submission and content streaming.
 
 ## Receipt Generation
 
 Upon successful settlement or close, servers MUST return a `Payment-Receipt`
 header per Section 5.3 of {{I-D.httpauth-payment}}.
+
+The base Payment Auth spec defines core receipt fields. The stream intent
+extends the receipt with additional fields in the `streamFields` object:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -567,8 +656,8 @@ header per Section 5.3 of {{I-D.httpauth-payment}}.
 | `reference` | string | Transaction hash of settlement/close |
 | `status` | string | `"success"` or `"failed"` |
 | `timestamp` | string | ISO 8601 settlement time |
-| `channelId` | string | The channel identifier |
-| `settledAmount` | string | Total amount settled to payee |
+| `streamFields.channelId` | string | The channel identifier |
+| `streamFields.settledAmount` | string | Total amount settled to payee |
 
 # Security Considerations
 
@@ -600,8 +689,42 @@ simplifies the protocol:
 To mitigate voucher flooding:
 
 - Enforce `minVoucherDelta` to prevent tiny increments
-- Rate-limit voucher submissions per channel
+- Rate-limit voucher submissions per channel (SHOULD limit to 10/second)
 - Reject vouchers that don't advance state
+
+To mitigate channel griefing via dust deposits:
+
+- Servers SHOULD enforce a minimum deposit (e.g., 1 USD equivalent)
+- Servers MAY reject channels below this threshold
+
+## Front-Running Protection
+
+Cumulative voucher semantics prevent front-running attacks. If a client
+submits a higher voucher while a server's `settle()` transaction is
+pending, the settlement will still succeed—it merely leaves additional
+unsettled funds that the server can claim later.
+
+## Cross-Contract Replay Prevention
+
+The EIP-712 domain includes `verifyingContract`, binding vouchers to a
+specific escrow contract address. This prevents replay of vouchers
+across different escrow contract deployments.
+
+## Escrow Contract Trust
+
+Clients MUST verify that the `escrowContract` address in the challenge
+is trustworthy before depositing funds. Two approaches are defined:
+
+1. **Factory verification** (RECOMMENDED): The escrow contract is deployed
+   via a canonical factory contract at a well-known address. Clients verify
+   the escrow was created by the factory using `factory.isDeployed(escrow)`.
+
+2. **Codehash verification**: Clients verify the deployed bytecode matches
+   a known-good codehash: `keccak256(escrow.code) == expectedCodehash`.
+
+The canonical factory addresses and expected codehashes are published in
+the Reference Implementation appendix. Clients SHOULD reject challenges
+with unrecognized escrow contracts.
 
 ## Escrow Guarantees
 
@@ -609,13 +732,22 @@ The escrow contract provides:
 
 - **Payer protection**: Funds only withdrawn with valid voucher signature
 - **Payee protection**: Deposited funds guaranteed (cannot be drained)
-- **Forced close**: 15-minute grace period protects both parties
+- **Forced close**: Configurable grace period (>= 15 minutes) protects both parties
 
 ## Authorized Signer
 
 The `authorizedSigner` field allows delegation of signing authority
 to a hot wallet while the main wallet only deposits funds. This reduces
 exposure of the primary key during streaming sessions.
+
+**Security considerations for delegated signing:**
+
+- Clients using `authorizedSigner` delegation SHOULD limit channel
+  deposits to acceptable loss amounts
+- Clients SHOULD rotate authorized signers periodically
+- Clients SHOULD NOT reuse signers across multiple high-value channels
+- If the authorized signer key is compromised, an attacker can drain
+  the entire channel deposit
 
 # IANA Considerations
 
@@ -636,59 +768,54 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 ~~~http
 HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="str_kM9xPqWvT2nJrHsY4aDfEb",
+WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.ai-service.com",
   method="tempo",
   intent="stream",
-  request="eyJlc2Nyb3dDb250cmFjdCI6IjB4MTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3OCIsImFzc2V0IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwiZGVzdGluYXRpb24iOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJkZXBvc2l0IjoiMTAwMDAwMDAiLCJzYWx0IjoiMHhhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwIiwidm91Y2hlckVuZHBvaW50IjoiaHR0cHM6Ly9hcGkuYWktc2VydmljZS5jb20vcGF5bWVudHMvdm91Y2hlciIsIm1pblZvdWNoZXJEZWx0YSI6IjEwMDAifQ"
+  request="eyJlc2Nyb3dDb250cmFjdCI6IjB4N2E2MzU3ZGIzMzczMWNmYjdiOWQ1NGFjYTc1MDUwN2YxM2EzZmVjMCIsImN1cnJlbmN5IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwicmVjaXBpZW50IjoiMHg3NDJkMzVDYzY2MzRDMDUzMjkyNWEzYjg0NEJjOWU3NTk1ZjhmRTAwIiwiYW1vdW50IjoiMTAwMDAwMDAiLCJleHBpcmVzIjoiMjAyNS0wMS0wNlQxMjowNTowMFoiLCJzYWx0IjoiMHhhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwIiwic3RyZWFtRW5kcG9pbnQiOiJodHRwczovL2FwaS5haS1zZXJ2aWNlLmNvbS9wYXltZW50cy9zdHJlYW0iLCJtaW5Wb3VjaGVyRGVsdGEiOiIxMDAwIn0"
 ~~~
 
 The `request` decodes to:
 
 ~~~json
 {
-  "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-  "asset": "0x20c0000000000000000000000000000000000001",
-  "destination": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "deposit": "10000000",
+  "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "amount": "10000000",
+  "expires": "2025-01-06T12:05:00Z",
   "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "voucherEndpoint": "https://api.ai-service.com/payments/voucher",
+  "streamEndpoint": "https://api.ai-service.com/payments/stream",
   "minVoucherDelta": "1000"
 }
 ~~~
+
+This requests a deposit of 10.00 alphaUSD (10000000 base units).
 
 ## Open Credential
 
 ~~~http
 GET /api/stream HTTP/1.1
 Host: api.ai-service.com
-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJzdHJfa005eFBxV3ZUMm5KckhzWTRhRGZFYiJ9LCJwYXlsb2FkIjp7InR5cGUiOiJzdHJlYW0iLCJhY3Rpb24iOiJvcGVuIiwiY2hhbm5lbElkIjoiMHg2ZDBmNGZkZi4uLiIsIm9wZW5UeEhhc2giOiIweGFiY2QxMjM0Li4uIiwidm91Y2hlciI6eyJwYXlsb2FkIjp7fSwic2lnbmF0dXJlIjoiMHguLi4ifX0sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyNDMxOjB4MTIzNC4uLiJ9
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsiYWN0aW9uIjoib3BlbiIsImNoYW5uZWxJZCI6IjB4NmQwZjRmZGYxZjJmNmExZjZjMWIwZmJkNmE3ZDVjMmMwYThkM2Q3YjFmNmE5YzFiM2UyZDRhNWI2YzdkOGU5ZiIsIm9wZW5UeEhhc2giOiIweGFiY2QxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWIiLCJ2b3VjaGVyIjp7InBheWxvYWQiOnt9LCJzaWduYXR1cmUiOiIweDEyMzQ1Njc4OTBhYmNkZWYuLi4ifX0sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyNDMxOjB4MTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3OCJ9
 ~~~
 
 ## Voucher Submission
 
-During streaming, clients POST updated vouchers to the `voucherEndpoint`:
+During streaming, clients POST updated vouchers to the `streamEndpoint`:
 
 ~~~http
-POST /payments/voucher HTTP/1.1
+POST /payments/stream HTTP/1.1
 Host: api.ai-service.com
 Content-Type: application/json
 
 {
-  "type": "stream",
   "action": "voucher",
-  "channelId": "0x6d0f4fdf...",
+  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "voucher": {
-    "payload": {
-      "primaryType": "Voucher",
-      "domain": { ... },
-      "types": { ... },
-      "message": {
-        "channelId": "0x6d0f4fdf...",
-        "cumulativeAmount": "250000"
-      }
-    },
-    "signature": "0x..."
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "cumulativeAmount": "250000",
+    "signature": "0x1234567890abcdef..."
   }
 }
 ~~~
@@ -696,28 +823,17 @@ Content-Type: application/json
 ## Close Request
 
 ~~~http
-POST /payments/voucher HTTP/1.1
+POST /payments/stream HTTP/1.1
 Host: api.ai-service.com
 Content-Type: application/json
 
 {
-  "type": "stream",
   "action": "close",
-  "channelId": "0x6d0f4fdf...",
+  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "closeRequest": {
-    "payload": {
-      "primaryType": "CloseRequest",
-      "domain": { ... },
-      "types": {
-        "CloseRequest": [
-          { "name": "channelId", "type": "bytes32" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf..."
-      }
-    },
-    "signature": "0x..."
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "requestedAt": "1736165100",
+    "signature": "0x1234567890abcdef..."
   }
 }
 ~~~
@@ -761,6 +877,7 @@ interface ITempoStreamChannel {
 
     function CLOSE_GRACE_PERIOD() external view returns (uint64);
     function VOUCHER_TYPEHASH() external view returns (bytes32);
+    function CLOSE_REQUEST_TYPEHASH() external view returns (bytes32);
 
     function open(
         address payee,
@@ -794,6 +911,9 @@ interface ITempoStreamChannel {
     function getChannel(bytes32 channelId)
         external view returns (Channel memory);
 
+    function getChannelsBatch(bytes32[] calldata channelIds)
+        external view returns (Channel[] memory);
+
     function computeChannelId(
         address payer,
         address payee,
@@ -806,6 +926,11 @@ interface ITempoStreamChannel {
     function getVoucherDigest(
         bytes32 channelId,
         uint128 cumulativeAmount
+    ) external view returns (bytes32);
+
+    function getCloseRequestDigest(
+        bytes32 channelId,
+        uint64 requestedAt
     ) external view returns (bytes32);
 
     function domainSeparator() external view returns (bytes32);
@@ -929,18 +1054,24 @@ const signer = await recoverTypedDataAddress({
 const closeRequestTypes = {
   CloseRequest: [
     { name: 'channelId', type: 'bytes32' },
+    { name: 'requestedAt', type: 'uint64' },
   ],
 } as const
 
-// Sign a close request
+// Sign a close request with timestamp for replay protection
+const requestedAt = BigInt(Math.floor(Date.now() / 1000))
+
 const signature = await walletClient.signTypedData({
   domain: getVoucherDomain(escrowContract, 42431),
   types: closeRequestTypes,
   primaryType: 'CloseRequest',
   message: {
-    channelId: '0x...',
+    channelId: '0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f',
+    requestedAt,
   },
 })
+
+// Server should reject if requestedAt is older than 5 minutes
 ~~~
 
 # Acknowledgements
