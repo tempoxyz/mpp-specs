@@ -413,7 +413,10 @@ app.get('/ping/paid', async (c) => {
 	const receiptData = await getTransactionReceipt(txHash, c.env)
 	if (receiptData.status === 'reverted') {
 		return c.json(
-			new PaymentVerificationFailedError(`Transaction reverted: ${receiptData.status}`).toJSON(),
+			{
+				...new PaymentVerificationFailedError(`Transaction reverted`).toJSON(),
+				hash: txHash,
+			},
 			500,
 		)
 	}
