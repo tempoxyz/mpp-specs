@@ -318,6 +318,32 @@ The escrow contract MUST enforce the following access control:
 | `requestClose` | Payer only | Initiates forced close |
 | `withdraw` | Payer only | Withdraws after grace period |
 
+## Signature Verification
+
+The escrow contract MUST perform the following signature verification for
+all functions that accept voucher signatures (`settle`, `close`):
+
+1. **Canonical signatures**: The contract MUST reject ECDSA signatures
+   with non-canonical (high-s) values. Signatures MUST have
+   `s <= secp256k1_order / 2` where the half-order is
+   `0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0`.
+   See {{signature-malleability}} for rationale.
+
+2. **Authorized signer verification**: The contract MUST recover the
+   signer address from the EIP-712 signature and verify it matches the
+   expected signer for the channel:
+   - If `channel.authorizedSigner` is non-zero, the recovered signer
+     MUST equal `channel.authorizedSigner`
+   - Otherwise, the recovered signer MUST equal `channel.payer`
+
+3. **Domain binding**: The contract MUST use its own address as the
+   `verifyingContract` in the EIP-712 domain separator, ensuring
+   vouchers cannot be replayed across different escrow deployments.
+
+Failure to enforce these requirements on-chain would allow attackers to
+bypass server-side validation by submitting transactions directly to
+the contract.
+
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
@@ -616,7 +642,6 @@ code with a Problem Details {{RFC9457}} response body:
 |--------|------|
 | 400 Bad Request | Malformed payload or missing fields |
 | 402 Payment Required | Invalid signature or signer mismatch |
-| 409 Conflict | Stale voucher (amount not increasing) |
 | 410 Gone | Channel finalized or not found |
 
 For the `streamEndpoint` API, error responses use Problem Details format:
@@ -637,7 +662,6 @@ Problem type URIs:
 |----------|-------------|
 | `https://tempo.xyz/stream/errors/invalid-signature` | Voucher or close request signature invalid |
 | `https://tempo.xyz/stream/errors/signer-mismatch` | Signer is not authorized for this channel |
-| `https://tempo.xyz/stream/errors/amount-not-increasing` | Voucher amount not higher than previous |
 | `https://tempo.xyz/stream/errors/amount-exceeds-deposit` | Voucher amount exceeds channel deposit |
 | `https://tempo.xyz/stream/errors/delta-too-small` | Amount increase below `minVoucherDelta` |
 | `https://tempo.xyz/stream/errors/channel-not-found` | No channel with this ID exists |
