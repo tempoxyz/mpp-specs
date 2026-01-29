@@ -437,7 +437,7 @@ async function broadcastTransaction(
 async function getTransactionReceipt(
 	txHash: Hex,
 	env: Env,
-): Promise<{ blockNumber: bigint | null }> {
+): Promise<{ blockNumber: bigint | null, status: 'success' | 'reverted' | null }> {
 	try {
 		let rpcUrl = env.TEMPO_RPC_URL
 		if (env.TEMPO_RPC_USERNAME && env.TEMPO_RPC_PASSWORD) {
@@ -457,9 +457,9 @@ async function getTransactionReceipt(
 			timeout: 30_000,
 		})
 
-		return { blockNumber: receipt.blockNumber }
+		return { blockNumber: receipt.blockNumber, status: receipt.status }
 	} catch {
-		return { blockNumber: null }
+		return { blockNumber: null, status: null }
 	}
 }
 
@@ -550,6 +550,13 @@ app.get('/ping/paid', async (c) => {
 
 	const txHash = broadcastResult.transactionHash
 	const receiptData = await getTransactionReceipt(txHash, c.env)
+	if (receiptData.status === 'reverted') {
+		return c.json(
+			new PaymentVerificationFailedError(`Transaction reverted: ${receiptData.status}`).toJSON(),
+			500,
+		)
+	}
+	
 	const blockNumber = receiptData.blockNumber
 
 	const receipt: PaymentReceipt & { blockNumber?: string } = {
