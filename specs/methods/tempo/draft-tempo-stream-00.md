@@ -158,6 +158,11 @@ Signature Scheme
 : The cryptographic signature algorithm used for voucher signing.
   Defaults to ECDSA/secp256k1. EdDSA is reserved for future use.
 
+Highest Voucher Amount
+: The highest `cumulativeAmount` from any voucher the server has received
+  and persisted for a given channel. Servers MUST store this value in
+  durable storage (e.g., database) to survive crashes and restarts.
+
 # Channel Escrow Contract
 
 Streaming payment channels require an on-chain escrow contract that holds
@@ -313,7 +318,7 @@ base64url-encoded JSON object.
 | `expires` | string | REQUIRED | Expiry timestamp for this challenge in ISO 8601 format |
 | `channelId` | string | CONDITIONAL | Channel ID if channel already exists |
 | `salt` | string | CONDITIONAL | Random salt for new channel |
-| `streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission. WebSocket and SSE transports are out of scope for this version. |
+| `streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission. Servers MUST include appropriate CORS headers to allow browser-based clients. WebSocket and SSE transports are out of scope for this version. |
 | `minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
 
 Either `channelId` or `salt` MUST be provided, but not both:
@@ -393,6 +398,7 @@ The `payload` object uses an `action` discriminator:
 | Action | Description |
 |--------|-------------|
 | `open` | Confirms channel is open on-chain; begins streaming |
+| `resume` | Resumes an existing channel without opening a new one |
 | `voucher` | Submits an updated cumulative voucher |
 | `close` | Requests server to close the channel |
 
@@ -430,6 +436,39 @@ on-chain verification. The contract reconstructs the EIP-712 digest:
     "voucher": {
       "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
       "cumulativeAmount": "0",
+      "signature": "0x1234567890abcdef..."
+    }
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+~~~
+
+### Resume Payload
+
+When the server provides `channelId` in the challenge (existing channel),
+clients use `action="resume"` instead of `action="open"`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | REQUIRED | `"resume"` |
+| `channelId` | string | REQUIRED | Channel ID from challenge |
+| `voucher` | object | REQUIRED | Signed voucher proving control of signing key |
+
+The voucher amount MUST be >= `channel.settled` (the highest amount already
+settled on-chain). Clients SHOULD query the channel state to determine
+the current settled amount before resuming.
+
+**Example:**
+
+~~~json
+{
+  "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
+  "payload": {
+    "action": "resume",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "voucher": {
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "cumulativeAmount": "500000",
       "signature": "0x1234567890abcdef..."
     }
   },
@@ -605,12 +644,14 @@ same amount will only refund the payer the remaining deposit.
 When the client sends `action="close"`:
 
 1. Server receives the signed close request
-2. Server calls `close(channelId, cumulativeAmount, signature)` on-chain
+2. Server MUST call `close(channelId, cumulativeAmount, signature)` on-chain
 3. Contract settles any delta and refunds remainder to payer
 4. Server returns receipt with transaction hash
 
-Servers SHOULD close promptly when clients request—the economic
-incentive is to claim earned funds immediately.
+Servers MUST close the channel when clients request cooperative close.
+The economic incentive aligns: servers claim earned funds immediately,
+and clients receive their refund. Failure to close forces clients to
+use the forced close path, which delays fund recovery.
 
 ## Forced Close
 
@@ -713,17 +754,19 @@ across different escrow contract deployments.
 ## Escrow Contract Trust
 
 Clients MUST verify that the `escrowContract` address in the challenge
-is trustworthy before depositing funds. Two approaches are defined:
+is trustworthy before depositing funds. Two equivalent approaches are
+defined; clients MUST use one of them:
 
-1. **Factory verification** (RECOMMENDED): The escrow contract is deployed
-   via a canonical factory contract at a well-known address. Clients verify
-   the escrow was created by the factory using `factory.isDeployed(escrow)`.
+1. **Factory verification**: The escrow contract is deployed via a
+   canonical factory contract at a well-known address. Clients MUST
+   verify the escrow was created by the factory using
+   `factory.isDeployed(escrow)`.
 
-2. **Codehash verification**: Clients verify the deployed bytecode matches
-   a known-good codehash: `keccak256(escrow.code) == expectedCodehash`.
+2. **Codehash verification**: Clients MUST verify the deployed bytecode
+   matches a known-good codehash: `keccak256(escrow.code) == expectedCodehash`.
 
 The canonical factory addresses and expected codehashes are published in
-the Reference Implementation appendix. Clients SHOULD reject challenges
+the Reference Implementation appendix. Clients MUST reject challenges
 with unrecognized escrow contracts.
 
 ## Escrow Guarantees
