@@ -225,57 +225,54 @@ async function verifyTempoTransaction(
 
 		const tempoTx = parsed as TempoTransaction.TransactionSerializableTempo
 
-		const call = tempoTx.calls?.[0]
-		if (!call) {
+		if (!tempoTx.calls || tempoTx.calls.length === 0) {
 			return { valid: false, error: 'Transaction has no calls' }
 		}
 
-		if (!call.to) {
-			return { valid: false, error: 'Transaction call missing "to" field' }
+		// Find a call that matches the payment criteria (supports multi-call txs like [swap, transfer])
+		const expectedAmount = BigInt(challenge.amount)
+		let matchingCallFound = false
+
+		for (const call of tempoTx.calls) {
+			if (!call.to || !call.data) {
+				continue
+			}
+
+			if (!isAddressEqual(call.to, challenge.currency as Address)) {
+				continue
+			}
+
+			try {
+				const decoded = decodeFunctionData({
+					abi: Abis.tip20,
+					data: call.data,
+				})
+
+				if (decoded.functionName !== 'transfer') {
+					continue
+				}
+
+				const [recipient, amount] = decoded.args as [Address, bigint]
+
+				if (!isAddressEqual(recipient, challenge.recipient as Address)) {
+					continue
+				}
+
+				if (amount !== expectedAmount) {
+					continue
+				}
+
+				// Found a matching transfer call
+				matchingCallFound = true
+				break
+			} catch {}
 		}
 
-		if (!isAddressEqual(call.to, challenge.currency as Address)) {
+		if (!matchingCallFound) {
 			return {
 				valid: false,
-				error: `Transaction target ${call.to} does not match currency ${challenge.currency}`,
+				error: `No matching transfer found: expected ${challenge.amount} to ${challenge.recipient} on ${challenge.currency}`,
 			}
-		}
-
-		if (!call.data) {
-			return { valid: false, error: 'Transaction call missing data' }
-		}
-
-		try {
-			const decoded = decodeFunctionData({
-				abi: Abis.tip20,
-				data: call.data,
-			})
-
-			if (decoded.functionName !== 'transfer') {
-				return {
-					valid: false,
-					error: 'Transaction does not call transfer function',
-				}
-			}
-
-			const [recipient, amount] = decoded.args as [Address, bigint]
-
-			if (!isAddressEqual(recipient, challenge.recipient as Address)) {
-				return {
-					valid: false,
-					error: `Transfer recipient ${recipient} does not match expected ${challenge.recipient}`,
-				}
-			}
-
-			const expectedAmount = BigInt(challenge.amount)
-			if (amount !== expectedAmount) {
-				return {
-					valid: false,
-					error: `Transfer amount ${amount} does not match expected ${expectedAmount}`,
-				}
-			}
-		} catch (e) {
-			return { valid: false, error: `Failed to decode transfer data: ${e}` }
 		}
 
 		let from: Address | undefined
