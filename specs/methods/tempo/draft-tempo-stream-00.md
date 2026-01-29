@@ -1,5 +1,5 @@
 ---
-title: Tempo stream Intent for HTTP Payment Authentication
+title: Tempo Stream Intent for HTTP Payment Authentication
 abbrev: Tempo Stream
 docname: draft-tempo-stream-00
 version: 00
@@ -9,6 +9,10 @@ submissiontype: IETF
 consensus: true
 
 author:
+  - name: Dan Robinson
+    ins: D. Robinson
+    email: dan@tempo.xyz
+    organization: Tempo Labs
   - name: Georgios Konstantopoulos
     ins: G. Konstantopoulos
     email: georgios@tempo.xyz
@@ -16,10 +20,6 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
-  - name: Brendan Ryan
-    ins: B. Ryan
-    email: brendan@tempo.xyz
     organization: Tempo Labs
 
 normative:
@@ -51,6 +51,11 @@ informative:
     target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
     author:
       - org: Tempo Labs
+  TIP-20:
+    title: "TIP-20 Token Standard"
+    target: https://docs.tempo.xyz/protocol/tip20/spec
+    author:
+      - org: Tempo Labs
 ---
 
 --- abstract
@@ -58,15 +63,14 @@ informative:
 This document defines the "stream" intent for the "tempo" payment method
 in the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}. It
 specifies unidirectional streaming payment channels for incremental,
-voucher-based payments suitable for metered services such as AI token
-streaming.
+voucher-based payments suitable for metered services.
 
 --- middle
 
 # Introduction
 
 The `stream` intent establishes a unidirectional streaming payment channel
-using on-chain escrow and off-chain EIP-712 vouchers. This enables high-
+using on-chain escrow and off-chain {{EIP-712}} vouchers. This enables high-
 frequency, low-cost payments by batching many off-chain voucher signatures
 into periodic on-chain settlements.
 
@@ -74,9 +78,9 @@ Unlike the `charge` intent which requires the payment amount upfront, the
 `stream` intent allows clients to pay incrementally as they consume
 services, paying exactly for resources received.
 
-## Use Case: AI Token Streaming
+## Use Case: LLM Token Streaming
 
-Consider an AI API that charges per output token:
+Consider an LLM API that charges per output token:
 
 1. Client requests a streaming completion (SSE response)
 2. Server returns 402 with a `stream` challenge
@@ -138,7 +142,7 @@ Streaming Payment Channel
   increasing payment amounts.
 
 Voucher
-: An EIP-712 signed message authorizing a cumulative payment amount for
+: An {{EIP-712}} signed message authorizing a cumulative payment amount for
   a specific channel. Vouchers are monotonically increasing in amount.
 
 Channel
@@ -147,7 +151,7 @@ Channel
   cumulative settlements.
 
 Settlement
-: The on-chain TIP-20 transfer that converts off-chain voucher
+: The on-chain {{TIP-20}} transfer that converts off-chain voucher
   authorizations into actual token movement.
 
 Authorized Signer
@@ -167,7 +171,7 @@ Each channel is identified by a unique `channelId` and stores:
 |-------|------|-------------|
 | `payer` | address | User who deposited funds |
 | `payee` | address | Server authorized to withdraw |
-| `token` | address | TIP-20 token address |
+| `token` | address | {{TIP-20}} token address |
 | `authorizedSigner` | address | Address authorized to sign vouchers (0 = payer) |
 | `deposit` | uint128 | Total amount deposited |
 | `settled` | uint128 | Cumulative amount already withdrawn by payee |
@@ -300,17 +304,27 @@ base64url-encoded JSON object.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `escrowContract` | string | REQUIRED | Address of the channel escrow contract |
-| `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
-| `recipient` | string | REQUIRED | Payee address (server's withdrawal address) |
 | `amount` | string | REQUIRED | Required deposit amount in base units |
+| `currency` | string | REQUIRED | {{TIP-20}} token address (e.g., `"0x20c0..."`) |
+| `recipient` | string | REQUIRED | Payee address (server's withdrawal address) |
 | `expires` | string | REQUIRED | Expiry timestamp for this challenge in ISO 8601 format |
-| `channelId` | string | CONDITIONAL | Channel ID if channel already exists |
-| `salt` | string | CONDITIONAL | Random salt for new channel |
-| `streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission |
-| `minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
 
-Either `channelId` or `salt` MUST be provided, but not both:
+## Method Details
+
+As of version 00, stream-specific request fields are placed in
+`methodDetails`. A future high-level "stream" intent definition may
+promote common fields to the core schema.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `methodDetails.escrowContract` | string | REQUIRED | Address of the channel escrow contract |
+| `methodDetails.channelId` | string | CONDITIONAL | Channel ID if channel already exists |
+| `methodDetails.salt` | string | CONDITIONAL | Random salt for new channel |
+| `methodDetails.streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission |
+| `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+
+Either `channelId` or `salt` MUST be provided in `methodDetails`, but not both:
 
 - **New channel**: Server provides `salt`. Client computes `channelId`
   using the formula in Section 4.1, opens the channel on-chain, and
@@ -324,25 +338,19 @@ Servers SHOULD prefer reusing existing channels when the client has an
 open channel with sufficient remaining deposit. This reduces on-chain
 transactions and improves user experience.
 
-## Method Details
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
-
 **Example (new channel):**
 
 ~~~json
 {
-  "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
+  "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "amount": "10000000",
   "expires": "2025-01-06T12:05:00Z",
-  "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "streamEndpoint": "https://api.example.com/payments/stream",
-  "minVoucherDelta": "1000",
   "methodDetails": {
+    "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
+    "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "streamEndpoint": "https://api.example.com/payments/stream",
+    "minVoucherDelta": "1000",
     "chainId": 42431
   }
 }
@@ -352,15 +360,15 @@ transactions and improves user experience.
 
 ~~~json
 {
-  "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
+  "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "amount": "10000000",
   "expires": "2025-01-06T12:05:00Z",
-  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-  "streamEndpoint": "https://api.example.com/payments/stream",
-  "minVoucherDelta": "1000",
   "methodDetails": {
+    "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "streamEndpoint": "https://api.example.com/payments/stream",
+    "minVoucherDelta": "1000",
     "chainId": 42431
   }
 }
@@ -547,7 +555,7 @@ code with a JSON error response:
 | Status | When |
 |--------|------|
 | 400 Bad Request | Malformed payload or missing fields |
-| 401 Unauthorized | Invalid signature or signer mismatch |
+| 402 Payment Required | Invalid signature or signer mismatch |
 | 409 Conflict | Stale voucher (amount not increasing) |
 | 410 Gone | Channel finalized or not found |
 
@@ -758,7 +766,7 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 ~~~http
 HTTP/1.1 402 Payment Required
 WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
-  realm="api.ai-service.com",
+  realm="api.llm-service.com",
   method="tempo",
   intent="stream",
   request="eyJlc2Nyb3dDb250cmFjdCI6IjB4N2E2MzU3ZGIzMzczMWNmYjdiOWQ1NGFjYTc1MDUwN2YxM2EzZmVjMCIsImN1cnJlbmN5IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwicmVjaXBpZW50IjoiMHg3NDJkMzVDYzY2MzRDMDUzMjkyNWEzYjg0NEJjOWU3NTk1ZjhmRTAwIiwiYW1vdW50IjoiMTAwMDAwMDAiLCJleHBpcmVzIjoiMjAyNS0wMS0wNlQxMjowNTowMFoiLCJzYWx0IjoiMHhhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwIiwic3RyZWFtRW5kcG9pbnQiOiJodHRwczovL2FwaS5haS1zZXJ2aWNlLmNvbS9wYXltZW50cy9zdHJlYW0iLCJtaW5Wb3VjaGVyRGVsdGEiOiIxMDAwIn0"
@@ -768,14 +776,17 @@ The `request` decodes to:
 
 ~~~json
 {
-  "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
+  "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "amount": "10000000",
   "expires": "2025-01-06T12:05:00Z",
-  "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-  "streamEndpoint": "https://api.ai-service.com/payments/stream",
-  "minVoucherDelta": "1000"
+  "methodDetails": {
+    "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
+    "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "streamEndpoint": "https://api.llm-service.com/payments/stream",
+    "minVoucherDelta": "1000",
+    "chainId": 42431
+  }
 }
 ~~~
 
@@ -785,7 +796,7 @@ This requests a deposit of 10.00 alphaUSD (10000000 base units).
 
 ~~~http
 GET /api/stream HTTP/1.1
-Host: api.ai-service.com
+Host: api.llm-service.com
 Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsiYWN0aW9uIjoib3BlbiIsImNoYW5uZWxJZCI6IjB4NmQwZjRmZGYxZjJmNmExZjZjMWIwZmJkNmE3ZDVjMmMwYThkM2Q3YjFmNmE5YzFiM2UyZDRhNWI2YzdkOGU5ZiIsIm9wZW5UeEhhc2giOiIweGFiY2QxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWIiLCJ2b3VjaGVyIjp7InBheWxvYWQiOnt9LCJzaWduYXR1cmUiOiIweDEyMzQ1Njc4OTBhYmNkZWYuLi4ifX0sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyNDMxOjB4MTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3OCJ9
 ~~~
 
@@ -795,7 +806,7 @@ During streaming, clients POST updated vouchers to the `streamEndpoint`:
 
 ~~~http
 POST /payments/stream HTTP/1.1
-Host: api.ai-service.com
+Host: api.llm-service.com
 Content-Type: application/json
 
 {
@@ -830,7 +841,7 @@ Content-Type: application/json
 
 ~~~http
 POST /payments/stream HTTP/1.1
-Host: api.ai-service.com
+Host: api.llm-service.com
 Content-Type: application/json
 
 {
