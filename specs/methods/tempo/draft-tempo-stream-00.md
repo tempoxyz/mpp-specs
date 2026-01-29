@@ -67,9 +67,9 @@ informative:
 --- abstract
 
 This document defines the "stream" intent for the "tempo" payment method
-in the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}. It
-specifies unidirectional streaming payment channels for incremental,
-voucher-based payments suitable for metered services.
+in the Payment HTTP Authentication Scheme. It specifies unidirectional
+streaming payment channels for incremental, voucher-based payments
+suitable for metered services.
 
 --- middle
 
@@ -163,6 +163,10 @@ Settlement
 Authorized Signer
 : An address delegated to sign vouchers on behalf of the payer.
   Defaults to the payer if not specified.
+
+Base Units
+: The smallest indivisible unit of a TIP-20 token. TIP-20 tokens use
+  6 decimal places; 1,000,000 base units equals 1.00 tokens.
 
 # Channel Escrow Contract
 
@@ -437,6 +441,9 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 | `payload` | object | REQUIRED | Stream-specific payload object |
 | `source` | string | OPTIONAL | Payer identifier as a DID |
 
+The `source` field, if present, SHOULD use the `did:pkh` method with the
+Tempo chain ID (42431 for Moderato testnet) and the payer's address.
+
 ## Payload Actions
 
 The `payload` object uses an `action` discriminator:
@@ -576,6 +583,46 @@ When settling, the contract computes: `delta = cumulativeAmount - settled`
 
 This allows partial settlement while the channel remains usable.
 
+# EIP-712 CloseRequest Format
+
+The CloseRequest type enables authenticated close intent with replay
+protection via timestamp. Unlike vouchers, CloseRequest is an off-chain
+signal only—the contract's `requestClose()` function does not verify
+this signature.
+
+## Type Definition
+
+~~~
+CloseRequest(bytes32 channelId, uint64 requestedAt)
+~~~
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `channelId` | bytes32 | The channel to close |
+| `requestedAt` | uint64 | Unix timestamp of the request (seconds since epoch) |
+
+## Domain Parameters
+
+CloseRequest uses the same domain parameters as Voucher (Section 6.2):
+
+| Field | Value |
+|-------|-------|
+| `name` | `"Tempo Stream Channel"` |
+| `version` | `"1"` |
+| `chainId` | Tempo chain ID (e.g., 42431) |
+| `verifyingContract` | `request.escrowContract` |
+
+## Replay Protection
+
+Servers SHOULD reject CloseRequest signatures where `requestedAt` is
+more than 300 seconds (5 minutes) in the past relative to server time.
+This prevents replay of old close requests while allowing reasonable
+clock skew between client and server.
+
+The escrow contract MUST expose a `CLOSE_REQUEST_TYPEHASH()` view
+function returning the keccak256 hash of the type string for
+implementer convenience.
+
 # Verification Procedure
 
 ## Open Verification
@@ -606,7 +653,7 @@ On `action="voucher"`, servers MUST:
 
 1. Verify voucher signature using EIP-712 recovery
 2. Verify signature uses canonical low-s values (see Section 10.7)
-3. Recover signer and verify it matches expected signer from on-chain state
+3. Recover signer and MUST verify it matches expected signer from on-chain state
 4. Verify monotonicity:
    - `cumulativeAmount > highestVoucherAmount`
    - `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
