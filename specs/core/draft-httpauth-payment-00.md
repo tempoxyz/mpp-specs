@@ -389,7 +389,7 @@ Decoded credential:
 }
 ~~~
 
-## Payment-Receipt Header
+## Payment-Receipt Header {#payment-receipt-header}
 
 Servers SHOULD include a `Payment-Receipt` header on successful responses:
 
@@ -407,6 +407,24 @@ The decoded JSON object contains:
 | `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
 
 Payment method specifications MAY define additional fields for receipts.
+
+### Receipt Status Semantics
+
+The `status` field indicates the final settlement status of the payment:
+
+- **"success"**: The payment was verified and settled successfully.
+- **"failed"**: The payment was submitted but failed during settlement.
+
+Servers MUST NOT return a 200 response with a `status: "failed"` receipt
+for synchronous payment flows. When verification determines that a payment
+failed, servers MUST return 402 with a `verification-failed` problem
+(see {{response-status-codes}}).
+
+The `status: "failed"` value is intended for asynchronous notification
+channels where the client has already received a 200 response but the
+payment subsequently failed during settlement. Payment method specifications
+that support asynchronous settlement MUST define how clients are notified
+of failed payments.
 
 # Payment Methods {#payment-methods}
 
