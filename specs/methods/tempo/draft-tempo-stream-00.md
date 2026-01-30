@@ -164,6 +164,18 @@ Authorized Signer
 : An address delegated to sign vouchers on behalf of the payer.
   Defaults to the payer if not specified.
 
+Signature Type
+: The cryptographic signature algorithm used for voucher signing. Tempo
+  supports four types per {{TEMPO-TX-SPEC}}: `secp256k1` (65 bytes),
+  `p256` (130 bytes), `webauthn` (variable), and `keychain` (variable).
+  The signature is passed as opaque bytes; the verification precompile
+  dispatches based on length and type prefix.
+
+Highest Voucher Amount
+: The highest `cumulativeAmount` from any voucher the server has received
+  and persisted for a given channel. Servers MUST store this value in
+  durable storage (e.g., database) to survive crashes and restarts.
+
 Base Units
 : The smallest indivisible unit of a TIP-20 token. TIP-20 tokens use
   6 decimal places; 1,000,000 base units equals 1.00 tokens.
@@ -183,8 +195,9 @@ Each channel is identified by a unique `channelId` and stores:
 | `payee` | address | Server authorized to withdraw |
 | `token` | address | {{TIP-20}} token address |
 | `authorizedSigner` | address | Address authorized to sign vouchers (0 = payer) |
-| `deposit` | uint128 | Total amount deposited |
-| `settled` | uint128 | Cumulative amount already withdrawn by payee |
+| `deposit` | uint256 | Total amount deposited |
+| `settled` | uint256 | Cumulative amount already withdrawn by payee |
+| `expiresAt` | uint64 | Optional expiry timestamp (0 = no expiry) |
 | `closeRequestedAt` | uint64 | Timestamp when close was requested (0 if not) |
 | `finalized` | bool | Whether channel is closed |
 
@@ -209,7 +222,10 @@ ensure interoperability.
 
 ## Channel Lifecycle
 
-Channels have no expiry—they remain open until explicitly closed.
+Channels may optionally have an expiry timestamp. If `expiresAt` is set
+(non-zero), the channel automatically becomes closeable after that time
+without requiring user interaction. This enables subscription-style
+use cases (e.g., monthly streaming budgets).
 
 ~~~
 ┌─────────────────────────────────────────────────────────────────┐
@@ -251,11 +267,16 @@ Opens a new channel with escrowed funds.
 function open(
     address payee,
     address token,
-    uint128 deposit,
+    uint256 deposit,
     bytes32 salt,
-    address authorizedSigner
+    address authorizedSigner,
+    uint64 expiresAt
 ) external returns (bytes32 channelId);
 ~~~
+
+The `expiresAt` parameter is optional (pass 0 for no expiry). If set,
+the channel can be closed by anyone after the expiry time without
+requiring the grace period flow.
 
 ### settle
 
@@ -264,10 +285,25 @@ Server withdraws funds using a signed voucher without closing.
 ~~~solidity
 function settle(
     bytes32 channelId,
-    uint128 cumulativeAmount,
+    uint256 cumulativeAmount,
     bytes calldata signature
 ) external;
 ~~~
+
+### settleBatch
+
+Server settles multiple channels in a single transaction for efficiency.
+
+~~~solidity
+function settleBatch(
+    bytes32[] calldata channelIds,
+    uint256[] calldata cumulativeAmounts,
+    bytes[] calldata signatures
+) external;
+~~~
+
+All arrays MUST have the same length. Each settlement is processed
+independently; a failure in one does not revert the others.
 
 ### topUp
 
@@ -276,7 +312,7 @@ User adds more funds to an existing channel.
 ~~~solidity
 function topUp(
     bytes32 channelId,
-    uint128 additionalDeposit
+    uint256 additionalDeposit
 ) external;
 ~~~
 
@@ -288,14 +324,16 @@ the remainder to the payer. Only callable by the payee.
 ~~~solidity
 function close(
     bytes32 channelId,
-    uint128 cumulativeAmount,
+    uint256 cumulativeAmount,
     bytes calldata signature
 ) external;
 ~~~
 
 ### requestClose
 
-User requests channel closure, starting a 15-minute grace period.
+User requests channel closure, starting a grace period. The grace period
+SHOULD be 15 minutes but MAY be any value >= 15 minutes as configured by
+the escrow contract deployment.
 
 ~~~solidity
 function requestClose(bytes32 channelId) external;
@@ -325,11 +363,30 @@ The escrow contract MUST enforce the following access control:
 ## Signature Verification
 
 The escrow contract MUST perform the following signature verification for
-all functions that accept voucher signatures (`settle`, `close`):
+all functions that accept voucher signatures (`settle`, `close`).
 
-1. **Canonical signatures**: The contract MUST reject ECDSA signatures
-   with non-canonical (high-s) values. Signatures MUST have
-   `s <= secp256k1_order / 2` where the half-order is
+### Signature Type Detection
+
+Signatures are passed as opaque bytes. The signature type is determined
+by length and type prefix per {{TEMPO-TX-SPEC}}:
+
+| Type | Detection | Length |
+|------|-----------|--------|
+| `secp256k1` | Exactly 65 bytes, no prefix | 65 bytes |
+| `p256` | First byte `0x01` | 130 bytes |
+| `webauthn` | First byte `0x02` | 129-2049 bytes |
+| `keychain` | First byte `0x03` + 20 bytes address + inner sig | Variable |
+
+The escrow contract (or future signature verification precompile)
+dispatches to the appropriate verification logic based on these rules.
+This enables support for passkey accounts (P256/WebAuthn) and delegated
+access keys (Keychain) without protocol changes.
+
+### Verification Requirements
+
+1. **Canonical signatures**: For secp256k1 signatures, the contract MUST
+   reject signatures with non-canonical (high-s) values. Signatures MUST
+   have `s <= secp256k1_order / 2` where the half-order is
    `0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0`.
    See {{signature-malleability}} for rationale.
 
@@ -376,7 +433,8 @@ promote common fields to the core schema.
 | `methodDetails.escrowContract` | string | REQUIRED | Address of the channel escrow contract |
 | `methodDetails.channelId` | string | CONDITIONAL | Channel ID if channel already exists |
 | `methodDetails.salt` | string | CONDITIONAL | Random salt for new channel |
-| `methodDetails.streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission |
+| `methodDetails.channelExpiresAt` | string | OPTIONAL | Channel expiry timestamp in {{RFC3339}} format (for new channels). Enables auto-close after expiry without user tx. |
+| `methodDetails.streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission. Servers MUST include appropriate CORS headers to allow browser-based clients. |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 
@@ -451,6 +509,7 @@ The `payload` object uses an `action` discriminator:
 | Action | Description |
 |--------|-------------|
 | `open` | Confirms channel is open on-chain; begins streaming |
+| `resume` | Resumes an existing channel without opening a new one |
 | `voucher` | Submits an updated cumulative voucher |
 | `close` | Requests server to close the channel |
 
@@ -520,6 +579,21 @@ The `voucher` object contains:
 The `challenge` object MUST echo all parameters from the server's
 `WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
 
+### Resume Payload
+
+When the server provides `channelId` in the challenge (existing channel),
+clients use `action="resume"` instead of `action="open"`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | REQUIRED | `"resume"` |
+| `channelId` | string | REQUIRED | Channel ID from challenge |
+| `voucher` | object | REQUIRED | Signed voucher proving control of signing key |
+
+The voucher amount MUST be >= `channel.settled` (the highest amount already
+settled on-chain). Clients SHOULD query the channel state to determine
+the current settled amount before resuming.
+
 ### Voucher Payload
 
 | Field | Type | Required | Description |
@@ -559,7 +633,7 @@ authorizes a cumulative total amount, not an incremental delta.
 ## Type Definitions
 
 ~~~
-Voucher(bytes32 channelId, uint128 cumulativeAmount)
+Voucher(bytes32 channelId, uint256 cumulativeAmount)
 ~~~
 
 ## Domain Parameters
@@ -758,25 +832,30 @@ same amount will only refund the payer the remaining deposit.
 When the client sends `action="close"`:
 
 1. Server receives the signed close request
-2. Server calls `close(channelId, cumulativeAmount, signature)` on-chain
+2. Server MUST call `close(channelId, cumulativeAmount, signature)` on-chain
 3. Contract settles any delta and refunds remainder to payer
 4. Server returns receipt with transaction hash
 
-Servers SHOULD close promptly when clients request—the economic
-incentive is to claim earned funds immediately.
+Servers MUST close the channel when clients request cooperative close.
+The economic incentive aligns: servers claim earned funds immediately,
+and clients receive their refund. Failure to close forces clients to
+use the forced close path, which delays fund recovery.
 
 ## Forced Close
 
 If the server does not respond to close requests:
 
 1. Client calls `requestClose(channelId)` on-chain
-2. 15-minute grace period begins (wall-clock time via `block.timestamp`)
+2. Grace period begins (wall-clock time via `block.timestamp`). The
+   grace period SHOULD be 15 minutes but MAY be >= 15 minutes.
 3. Server can still `settle()` or `close()` during grace period
 4. After grace period, client calls `withdraw(channelId)`
 5. Client receives all remaining (unsettled) funds
 
-Clients SHOULD wait at least 16 minutes after `requestClose()` before
-calling `withdraw()` to account for block time variance.
+Clients SHOULD wait at least 1 minute beyond the configured grace period
+after `requestClose()` before calling `withdraw()` to account for block
+time variance. For the default 15-minute grace period, this means waiting
+at least 16 minutes.
 
 ## Concurrent Streams
 
@@ -1153,8 +1232,9 @@ interface ITempoStreamChannel {
         address payee;
         address token;
         address authorizedSigner;
-        uint128 deposit;
-        uint128 settled;
+        uint256 deposit;
+        uint256 settled;
+        uint64 expiresAt;
         uint64 closeRequestedAt;
         bool finalized;
     }
@@ -1166,25 +1246,32 @@ interface ITempoStreamChannel {
     function open(
         address payee,
         address token,
-        uint128 deposit,
+        uint256 deposit,
         bytes32 salt,
-        address authorizedSigner
+        address authorizedSigner,
+        uint64 expiresAt
     ) external returns (bytes32 channelId);
 
     function settle(
         bytes32 channelId,
-        uint128 cumulativeAmount,
+        uint256 cumulativeAmount,
         bytes calldata signature
+    ) external;
+
+    function settleBatch(
+        bytes32[] calldata channelIds,
+        uint256[] calldata cumulativeAmounts,
+        bytes[] calldata signatures
     ) external;
 
     function topUp(
         bytes32 channelId,
-        uint128 additionalDeposit
+        uint256 additionalDeposit
     ) external;
 
     function close(
         bytes32 channelId,
-        uint128 cumulativeAmount,
+        uint256 cumulativeAmount,
         bytes calldata signature
     ) external;
 
@@ -1202,14 +1289,14 @@ interface ITempoStreamChannel {
         address payer,
         address payee,
         address token,
-        uint128 deposit,
+        uint256 deposit,
         bytes32 salt,
         address authorizedSigner
     ) external view returns (bytes32);
 
     function getVoucherDigest(
         bytes32 channelId,
-        uint128 cumulativeAmount
+        uint256 cumulativeAmount
     ) external view returns (bytes32);
 
     function getCloseRequestDigest(
@@ -1279,83 +1366,12 @@ interface ITempoStreamChannel {
 }
 ~~~
 
-## TypeScript SDK
+## SDK
 
-A TypeScript SDK is available at:
+A TypeScript SDK with voucher signing examples is available at:
 
 ~~~
 https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels/src
-~~~
-
-### Voucher Signing
-
-~~~typescript
-import { hashTypedData, recoverTypedDataAddress } from 'viem'
-
-const voucherTypes = {
-  Voucher: [
-    { name: 'channelId', type: 'bytes32' },
-    { name: 'cumulativeAmount', type: 'uint128' },
-  ],
-} as const
-
-function getVoucherDomain(escrowContract: Address, chainId: number) {
-  return {
-    name: 'Tempo Stream Channel',
-    version: '1',
-    chainId,
-    verifyingContract: escrowContract,
-  } as const
-}
-
-// Sign a voucher
-const signature = await walletClient.signTypedData({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: voucherTypes,
-  primaryType: 'Voucher',
-  message: {
-    channelId: '0x...',
-    cumulativeAmount: 250000n,
-  },
-})
-
-// Recover signer from voucher
-const signer = await recoverTypedDataAddress({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: voucherTypes,
-  primaryType: 'Voucher',
-  message: {
-    channelId: '0x...',
-    cumulativeAmount: 250000n,
-  },
-  signature,
-})
-~~~
-
-### Close Request Signing
-
-~~~typescript
-const closeRequestTypes = {
-  CloseRequest: [
-    { name: 'channelId', type: 'bytes32' },
-    { name: 'requestedAt', type: 'uint64' },
-  ],
-} as const
-
-// Sign a close request with timestamp for replay protection
-const requestedAt = BigInt(Math.floor(Date.now() / 1000))
-
-const signature = await walletClient.signTypedData({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: closeRequestTypes,
-  primaryType: 'CloseRequest',
-  message: {
-    channelId: '0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f',
-    requestedAt,
-  },
-})
-
-// Server should reject if requestedAt is older than 5 minutes
 ~~~
 
 # Acknowledgements
