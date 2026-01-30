@@ -146,14 +146,7 @@ payment networks:
 | Format | Example | Description |
 |--------|---------|-------------|
 | ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
-| Token address | `"0x20c0..."` | ERC-20, TIP-20, or similar token contracts |
-| Well-known symbol | `"sat"`, `"btc"`, `"eth"` | Native blockchain assets |
-
-Clients can detect the format:
-
-- Starts with `0x`: Token contract address
-- Three lowercase letters: ISO 4217 currency code
-- Otherwise: Well-known symbol or method-specific identifier
+| Method-defined | (varies) | Payment method-specific currency identifiers |
 
 Payment method specifications MUST document which currency formats they
 support and how to interpret amounts for each format.
