@@ -7,7 +7,7 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>()
 
-// Purl binary bucket name used for back compat 
+// Purl binary bucket name used for back compat
 // This binary is really named pget.
 const R2_INSTALL_SCRIPT_URL = 'https://pget-binaries.tempo.xyz/install.sh'
 
