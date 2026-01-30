@@ -25,7 +25,7 @@ export const temporpc: PartnerConfig = {
 	destination: WALLETS.TEST_RECEIVER,
 	endpoints: [
 		{
-			path: '/',
+			path: '/rpc',
 			methods: ['POST'],
 			price: '1000',
 			dynamicPricing: false,
