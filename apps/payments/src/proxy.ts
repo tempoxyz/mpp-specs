@@ -154,30 +154,32 @@ export async function proxyRequest(
 	// In passthrough mode, the client's auth header is preserved (if any)
 	if (!preserveClientAuth) {
 		const apiKey = getApiKey(partner, c.env)
-		if (!apiKey) {
+		// Skip API key setup if partner doesn't require one (e.g., RPC)
+		if (!apiKey && partner.apiKeyEnvVar) {
 			throw new Error(`API key not configured for partner: ${partner.slug}`)
 		}
-
-		// Modal uses dual-header auth: Modal-Key and Modal-Secret
-		// Credentials are stored as "key:secret" format
-		if (partner.slug === 'modal') {
-			const [modalKey, modalSecret] = apiKey.split(':')
-			if (!modalKey || !modalSecret) {
-				throw new Error('Modal credentials must be in "key:secret" format')
+		if (apiKey) {
+			// Modal uses dual-header auth: Modal-Key and Modal-Secret
+			// Credentials are stored as "key:secret" format
+			if (partner.slug === 'modal') {
+				const [modalKey, modalSecret] = apiKey.split(':')
+				if (!modalKey || !modalSecret) {
+					throw new Error('Modal credentials must be in "key:secret" format')
+				}
+				headers.set('Modal-Key', modalKey)
+				headers.set('Modal-Secret', modalSecret)
+			} else if (partner.apiKeySecretEnvVar) {
+				// S3-style auth with separate access key ID and secret
+				const envRecord = c.env as unknown as Record<string, string | undefined>
+				const secretKey = envRecord[partner.apiKeySecretEnvVar]
+				if (!secretKey) {
+					throw new Error(`Secret key not configured: ${partner.apiKeySecretEnvVar}`)
+				}
+				needsS3Signing = true
+				s3Credentials = { accessKeyId: apiKey, secretAccessKey: secretKey }
+			} else {
+				headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
 			}
-			headers.set('Modal-Key', modalKey)
-			headers.set('Modal-Secret', modalSecret)
-		} else if (partner.apiKeySecretEnvVar) {
-			// S3-style auth with separate access key ID and secret
-			const envRecord = c.env as unknown as Record<string, string | undefined>
-			const secretKey = envRecord[partner.apiKeySecretEnvVar]
-			if (!secretKey) {
-				throw new Error(`Secret key not configured: ${partner.apiKeySecretEnvVar}`)
-			}
-			needsS3Signing = true
-			s3Credentials = { accessKeyId: apiKey, secretAccessKey: secretKey }
-		} else {
-			headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
 		}
 	}
 
