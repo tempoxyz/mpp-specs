@@ -530,8 +530,13 @@ The `voucher` object contains:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `payload` | object | REQUIRED | EIP-712 typed data |
-| `signature` | string | REQUIRED | Hex-encoded signature |
+| `channelId` | string | REQUIRED | Channel ID (bytes32 hex) |
+| `cumulativeAmount` | string | REQUIRED | Cumulative amount in base units |
+| `signature` | string | REQUIRED | Hex-encoded EIP-712 signature |
+
+The signature is computed over the EIP-712 typed data with domain bound to
+the escrow contract. The contract reconstructs the signing payload from
+`channelId` and `cumulativeAmount`.
 
 **Example:**
 
@@ -550,25 +555,8 @@ The `voucher` object contains:
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "openTxHash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
     "voucher": {
-      "payload": {
-        "primaryType": "Voucher",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
-        },
-        "types": {
-          "Voucher": [
-            { "name": "channelId", "type": "bytes32" },
-            { "name": "cumulativeAmount", "type": "uint128" }
-          ]
-        },
-        "message": {
-          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "0"
-        }
-      },
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "cumulativeAmount": "0",
       "signature": "0x1234567890abcdef..."
     }
   },
@@ -1116,25 +1104,8 @@ Content-Type: application/json
   "action": "voucher",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "voucher": {
-    "payload": {
-      "primaryType": "Voucher",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
-      },
-      "types": {
-        "Voucher": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "cumulativeAmount", "type": "uint128" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "cumulativeAmount": "250000"
-      }
-    },
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "cumulativeAmount": "250000",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -1151,47 +1122,13 @@ Content-Type: application/json
   "action": "close",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "voucher": {
-    "payload": {
-      "primaryType": "Voucher",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
-      },
-      "types": {
-        "Voucher": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "cumulativeAmount", "type": "uint128" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "cumulativeAmount": "500000"
-      }
-    },
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "cumulativeAmount": "500000",
     "signature": "0xabcdef1234567890..."
   },
   "closeRequest": {
-    "payload": {
-      "primaryType": "CloseRequest",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
-      },
-      "types": {
-        "CloseRequest": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "requestedAt", "type": "uint64" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "requestedAt": "1736165100"
-      }
-    },
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "requestedAt": "1736165100",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -1364,14 +1301,6 @@ interface ITempoStreamChannel {
     error TransferFailed();
     error CloseNotReady();
 }
-~~~
-
-## SDK
-
-A TypeScript SDK with voucher signing examples is available at:
-
-~~~
-https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels/src
 ~~~
 
 # Acknowledgements
