@@ -69,7 +69,7 @@ informative:
 This document defines the "stream" intent for the "tempo" payment method
 in the Payment HTTP Authentication Scheme. It specifies unidirectional
 streaming payment channels for incremental, voucher-based payments
-suitable for metered services.
+suitable for low-cost metered services.
 
 --- middle
 
@@ -80,13 +80,13 @@ using on-chain escrow and off-chain {{EIP-712}} vouchers. This enables high-
 frequency, low-cost payments by batching many off-chain voucher signatures
 into periodic on-chain settlements.
 
-Unlike the `charge` intent which requires the payment amount upfront, the
+Unlike the `charge` intent which requires the full payment amount upfront, the
 `stream` intent allows clients to pay incrementally as they consume
 services, paying exactly for resources received.
 
 ## Use Case: LLM Token Streaming
 
-Consider an LLM API that charges per output token:
+Consider an LLM inference API that charges per output token:
 
 1. Client requests a streaming completion (SSE response)
 2. Server returns 402 with a `stream` challenge
@@ -243,9 +243,24 @@ Channels have no expiry—they remain open until explicitly closed.
 
 ## Contract Functions
 
+Compliant escrow contracts MUST implement the following functions. The
+signatures shown are a reference implementation; alternative implementations
+MAY use different parameter types (e.g., `uint256` instead of `uint128`)
+as long as the semantics are preserved.
+
 ### open
 
 Opens a new channel with escrowed funds.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `payee` | address | Server's address authorized to withdraw funds |
+| `token` | address | {{TIP-20}} token contract address |
+| `deposit` | uint128 | Amount to deposit in base units (6 decimals) |
+| `salt` | bytes32 | Random value for deterministic channelId computation |
+| `authorizedSigner` | address | Address delegated to sign vouchers; use `0x0` to default to payer |
+
+Returns the computed `channelId`.
 
 ~~~solidity
 function open(
@@ -259,7 +274,16 @@ function open(
 
 ### settle
 
-Server withdraws funds using a signed voucher without closing.
+Server withdraws funds using a signed voucher without closing the channel.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Unique channel identifier |
+| `cumulativeAmount` | uint128 | Cumulative total authorized (not delta) |
+| `signature` | bytes | EIP-712 signature from authorized signer |
+
+The contract computes `delta = cumulativeAmount - channel.settled` and
+transfers `delta` tokens to the payee.
 
 ~~~solidity
 function settle(
@@ -273,6 +297,11 @@ function settle(
 
 User adds more funds to an existing channel.
 
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Existing channel identifier |
+| `additionalDeposit` | uint128 | Additional amount to deposit in base units |
+
 ~~~solidity
 function topUp(
     bytes32 channelId,
@@ -285,6 +314,15 @@ function topUp(
 Server closes the channel, settling any outstanding voucher and refunding
 the remainder to the payer. Only callable by the payee.
 
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Channel to close |
+| `cumulativeAmount` | uint128 | Final cumulative amount for settlement |
+| `signature` | bytes | EIP-712 signature from authorized signer |
+
+Transfers `cumulativeAmount - channel.settled` to payee, refunds
+`channel.deposit - cumulativeAmount` to payer, and marks channel finalized.
+
 ~~~solidity
 function close(
     bytes32 channelId,
@@ -295,7 +333,14 @@ function close(
 
 ### requestClose
 
-User requests channel closure, starting a 15-minute grace period.
+User requests channel closure, starting a grace period of at least 15 minutes.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Channel for which to request closure |
+
+Sets `channel.closeRequestedAt` to current block timestamp. The grace period
+allows the payee time to submit any outstanding vouchers before forced closure.
 
 ~~~solidity
 function requestClose(bytes32 channelId) external;
@@ -303,7 +348,14 @@ function requestClose(bytes32 channelId) external;
 
 ### withdraw
 
-User withdraws remaining funds after the grace period.
+User withdraws remaining funds after the grace period expires.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Channel to withdraw from |
+
+Requires `block.timestamp >= channel.closeRequestedAt + CLOSE_GRACE_PERIOD`.
+Refunds all remaining deposit to payer and marks channel finalized.
 
 ~~~solidity
 function withdraw(bytes32 channelId) external;
@@ -444,9 +496,34 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 The `source` field, if present, SHOULD use the `did:pkh` method with the
 Tempo chain ID (42431 for Moderato testnet) and the payer's address.
 
+## Credential Lifecycle
+
+A streaming payment session progresses through distinct phases, each
+corresponding to a payload action:
+
+1. **Open**: Client deposits funds on-chain and presents the `open` action
+   to begin the session. The server verifies the on-chain deposit and
+   validates the initial zero-amount voucher.
+
+2. **Streaming**: Client submits `voucher` actions with increasing
+   cumulative amounts as service is consumed. The server may periodically
+   settle vouchers on-chain.
+
+3. **Close**: Client sends the `close` action with the final voucher. The
+   server settles on-chain and returns a receipt.
+
+Each action carries action-specific details in the `actionDetails` object,
+while the `action` field discriminates between phases.
+
 ## Payload Actions
 
-The `payload` object uses an `action` discriminator:
+The `payload` object uses an `action` discriminator with action-specific
+details nested in `actionDetails`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | REQUIRED | One of `"open"`, `"voucher"`, `"close"` |
+| `actionDetails` | object | REQUIRED | Action-specific parameters |
 
 | Action | Description |
 |--------|-------------|
@@ -456,9 +533,13 @@ The `payload` object uses an `action` discriminator:
 
 ### Open Payload
 
+The `open` action confirms an on-chain channel opening and begins the
+streaming session.
+
+**actionDetails fields:**
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `action` | string | REQUIRED | `"open"` |
 | `channelId` | string | REQUIRED | Channel ID (computed from request) |
 | `authorizedSigner` | string | OPTIONAL | Delegated signer address |
 | `openTxHash` | string | REQUIRED | Transaction hash of channel open |
@@ -488,29 +569,31 @@ The `voucher` object contains:
   },
   "payload": {
     "action": "open",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "openTxHash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
-    "voucher": {
-      "payload": {
-        "primaryType": "Voucher",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+    "actionDetails": {
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "openTxHash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+      "voucher": {
+        "payload": {
+          "primaryType": "Voucher",
+          "domain": {
+            "name": "Tempo Stream Channel",
+            "version": "1",
+            "chainId": 42431,
+            "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+          },
+          "types": {
+            "Voucher": [
+              { "name": "channelId", "type": "bytes32" },
+              { "name": "cumulativeAmount", "type": "uint128" }
+            ]
+          },
+          "message": {
+            "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+            "cumulativeAmount": "0"
+          }
         },
-        "types": {
-          "Voucher": [
-            { "name": "channelId", "type": "bytes32" },
-            { "name": "cumulativeAmount", "type": "uint128" }
-          ]
-        },
-        "message": {
-          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "0"
-        }
-      },
-      "signature": "0x1234567890abcdef..."
+        "signature": "0x1234567890abcdef..."
+      }
     }
   },
   "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
@@ -522,24 +605,50 @@ The `challenge` object MUST echo all parameters from the server's
 
 ### Voucher Payload
 
+The `voucher` action submits an updated cumulative voucher during streaming.
+
+**actionDetails fields:**
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `action` | string | REQUIRED | `"voucher"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `voucher` | object | REQUIRED | Signed voucher with higher amount |
 
+**Example:**
+
+~~~json
+{
+  "action": "voucher",
+  "actionDetails": {
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "voucher": {
+      "payload": {
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "cumulativeAmount": "250000"
+        }
+      },
+      "signature": "0xabcdef1234567890..."
+    }
+  }
+}
+~~~
+
 ### Close Payload
+
+The `close` action requests the server to close the channel and settle
+on-chain.
+
+**actionDetails fields:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `action` | string | REQUIRED | `"close"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `voucher` | object | REQUIRED | Final signed voucher for settlement |
 | `closeRequest` | object | OPTIONAL | Signed close request for authentication |
 
 The `voucher` field contains the final cumulative voucher that the server
 will use to call `close(channelId, cumulativeAmount, signature)` on-chain.
-This is the same voucher format used in `action="voucher"` payloads.
 
 The optional `closeRequest` uses EIP-712 with type
 `CloseRequest(bytes32 channelId, uint64 requestedAt)`. The `requestedAt`
@@ -550,6 +659,31 @@ the highest previously-received voucher.
 Note: CloseRequest is an off-chain signal only. The contract's
 `requestClose()` function does not verify this signature; it is called
 directly by the payer when cooperative close fails.
+
+**Example:**
+
+~~~json
+{
+  "action": "close",
+  "actionDetails": {
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "voucher": {
+      "payload": {
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "cumulativeAmount": "500000"
+        }
+      },
+      "signature": "0xabcdef1234567890..."
+    },
+    "closeRequest": {
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "requestedAt": "1736165100",
+      "signature": "0x1234567890abcdef..."
+    }
+  }
+}
+~~~
 
 # EIP-712 Voucher Format
 
@@ -842,8 +976,7 @@ The escrow contract enforces:
 
 ## No Voucher Expiry
 
-Unlike the original proposal, vouchers have no `validUntil` field. This
-simplifies the protocol:
+Vouchers have no `validUntil` field. This simplifies the protocol:
 
 - Channels have no expiry—they are closed explicitly
 - Vouchers remain valid until the channel closes
@@ -1035,28 +1168,30 @@ Content-Type: application/json
 
 {
   "action": "voucher",
-  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-  "voucher": {
-    "payload": {
-      "primaryType": "Voucher",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+  "actionDetails": {
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "voucher": {
+      "payload": {
+        "primaryType": "Voucher",
+        "domain": {
+          "name": "Tempo Stream Channel",
+          "version": "1",
+          "chainId": 42431,
+          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+        },
+        "types": {
+          "Voucher": [
+            { "name": "channelId", "type": "bytes32" },
+            { "name": "cumulativeAmount", "type": "uint128" }
+          ]
+        },
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "cumulativeAmount": "250000"
+        }
       },
-      "types": {
-        "Voucher": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "cumulativeAmount", "type": "uint128" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "cumulativeAmount": "250000"
-      }
-    },
-    "signature": "0x1234567890abcdef..."
+      "signature": "0x1234567890abcdef..."
+    }
   }
 }
 ~~~
@@ -1070,50 +1205,52 @@ Content-Type: application/json
 
 {
   "action": "close",
-  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-  "voucher": {
-    "payload": {
-      "primaryType": "Voucher",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+  "actionDetails": {
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "voucher": {
+      "payload": {
+        "primaryType": "Voucher",
+        "domain": {
+          "name": "Tempo Stream Channel",
+          "version": "1",
+          "chainId": 42431,
+          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+        },
+        "types": {
+          "Voucher": [
+            { "name": "channelId", "type": "bytes32" },
+            { "name": "cumulativeAmount", "type": "uint128" }
+          ]
+        },
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "cumulativeAmount": "500000"
+        }
       },
-      "types": {
-        "Voucher": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "cumulativeAmount", "type": "uint128" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "cumulativeAmount": "500000"
-      }
+      "signature": "0xabcdef1234567890..."
     },
-    "signature": "0xabcdef1234567890..."
-  },
-  "closeRequest": {
-    "payload": {
-      "primaryType": "CloseRequest",
-      "domain": {
-        "name": "Tempo Stream Channel",
-        "version": "1",
-        "chainId": 42431,
-        "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+    "closeRequest": {
+      "payload": {
+        "primaryType": "CloseRequest",
+        "domain": {
+          "name": "Tempo Stream Channel",
+          "version": "1",
+          "chainId": 42431,
+          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+        },
+        "types": {
+          "CloseRequest": [
+            { "name": "channelId", "type": "bytes32" },
+            { "name": "requestedAt", "type": "uint64" }
+          ]
+        },
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "requestedAt": "1736165100"
+        }
       },
-      "types": {
-        "CloseRequest": [
-          { "name": "channelId", "type": "bytes32" },
-          { "name": "requestedAt", "type": "uint64" }
-        ]
-      },
-      "message": {
-        "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-        "requestedAt": "1736165100"
-      }
-    },
-    "signature": "0x1234567890abcdef..."
+      "signature": "0x1234567890abcdef..."
+    }
   }
 }
 ~~~
