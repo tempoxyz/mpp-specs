@@ -1,3 +1,19 @@
+@font-face {
+	font-family: 'Commit Mono';
+	src: url('/fonts/CommitMono-400-Regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Commit Mono';
+	src: url('/fonts/CommitMono-700-Regular.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
 * {
 	margin: 0;
 	padding: 0;
@@ -10,7 +26,7 @@ body {
 }
 
 body {
-	font-family: "IBM Plex Mono", monospace;
+	font-family: "Commit Mono", monospace;
 	background: #fff;
 	color: #000;
 	font-size: 15px;
@@ -64,7 +80,7 @@ h1 {
 
 .install {
 	display: flex;
-	align-items: center;
+	align-items: stretch;
 	gap: 12px;
 	margin-bottom: 48px;
 	max-width: 600px;
@@ -100,7 +116,7 @@ h1 {
 
 .examples pre {
 	margin: 0;
-	font-family: "IBM Plex Mono", monospace;
+	font-family: "Commit Mono", monospace;
 	font-size: 13px;
 	line-height: 1.8;
 	white-space: pre-wrap;
