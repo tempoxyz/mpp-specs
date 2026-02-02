@@ -12,5 +12,15 @@
 		"binding": "ASSETS",
 		"run_worker_first": true
 	},
-	"routes": [{ "pattern": "paymentauth.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }]
+	"routes": [{ "pattern": "paymentauth.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }],
+	"vars": {
+		"ENVIRONMENT": "development"
+	},
+	"env": {
+		"production": {
+			"vars": {
+				"ENVIRONMENT": "production"
+			}
+		}
+	}
 }

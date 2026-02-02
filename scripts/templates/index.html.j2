@@ -5,17 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment Authentication Specifications</title>
   <style>
+    @font-face {
+      font-family: 'Commit Mono';
+      src: url('/fonts/CommitMono-400-Regular.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'Commit Mono';
+      src: url('/fonts/CommitMono-700-Regular.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
     :root {
       --color-link: #0066cc;
       --color-text: #333;
     }
 
     body {
+      font-family: "Commit Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 10px;
       max-width: 900px;
       margin: 2rem auto;
       padding: 0 1rem;
       line-height: 1.6;
       color: var(--color-text);
+      -webkit-font-smoothing: antialiased;
     }
 
     h1 {
@@ -24,13 +43,13 @@
     }
 
     .tree {
-      font-size: 0.9rem;
+      font-size: 0.8rem;
     }
 
     .folder {
       margin: 1.5rem 0 0.5rem 0;
       font-weight: 600;
-      font-size: 1.1rem;
+      font-size: 1rem;
     }
 
     .folder-icon {
@@ -49,20 +68,24 @@
 
     .spec-title {
       font-weight: 500;
+      color: #000;
     }
 
     .maturity {
       padding: 0.1rem 0.4rem;
       border-radius: 3px;
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       margin-left: 0.5rem;
       font-weight: 500;
       background: #e7f3ff;
       color: #0066cc;
+      text-align: center;
+      display: inline-block;
+      vertical-align: middle;
     }
 
     .category {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       color: #666;
       margin-left: 0.5rem;
     }
@@ -70,7 +93,7 @@
     .formats {
       display: block;
       padding-left: 2.5rem;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
     }
 
     .formats a {
@@ -87,10 +110,35 @@
       color: #999;
       margin: 0 0.25rem;
     }
+
+    @media (max-width: 600px) {
+      .spec-entry {
+        padding-left: 0.5rem;
+      }
+
+      .spec-title {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+
+      .maturity, .category {
+        margin-left: 0;
+        margin-right: 0.5rem;
+      }
+
+      .formats {
+        padding-left: 0;
+        margin-top: 0.25rem;
+      }
+
+      .branch {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Payment Authentication Specifications</h1>
+  <h1>HTTP <code>Payment</code> Auth Specifications</h1>
 
   <div class="tree">
 {%- for domain in domains %}

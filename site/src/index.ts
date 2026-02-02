@@ -4,14 +4,15 @@ import { basicAuth } from 'hono/basic-auth'
 interface Env {
 	AUTH_USER: string
 	AUTH_PASS: string
+	ENVIRONMENT: string
 	ASSETS: Fetcher
 }
 
 const app = new Hono<{ Bindings: Env }>()
 
 app.use('*', async (c, next) => {
-	// Skip auth in local dev (no credentials configured)
-	if (!c.env.AUTH_USER || !c.env.AUTH_PASS) {
+	// Skip auth in development
+	if (c.env.ENVIRONMENT === 'development') {
 		return next()
 	}
 
