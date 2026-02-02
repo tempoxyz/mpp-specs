@@ -1,4 +1,4 @@
-# The "Payment" HTTP Authentication Scheme
+# HTTP Payment Authentication Specifications
 
 An internet-native payments protocol which enables HTTP resources to require payment before granting access.
 
