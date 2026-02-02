@@ -63,8 +63,8 @@ fi
 mkdir -p "$OUT_DIR"
 mkdir -p "$SITE_PUBLIC_DIR"
 
-# Clean up stale symlinks in site/public (removes symlinks to deleted specs)
-find "$SITE_PUBLIC_DIR" -maxdepth 1 -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+# Clean up stale spec files in site/public (keeps fonts/ and other static assets)
+find "$SITE_PUBLIC_DIR" -maxdepth 1 -type f \( -name "*.xml" -o -name "*.html" -o -name "*.txt" -o -name "*.pdf" \) -delete 2>/dev/null || true
 
 # Export for use in subshells
 export OUT_DIR SITE_PUBLIC_DIR XML2RFC_OPTS VERBOSE
@@ -97,10 +97,10 @@ process_spec() {
   echo "    [xml2rfc] Generating PDF..."
   xml2rfc --pdf $XML2RFC_OPTS "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
 
-  # Create symlinks in site/public for easy web serving
-  echo "    [symlink] Linking to site/public..."
+  # Copy to site/public for web serving
+  echo "    [copy] Copying to site/public..."
   for ext in xml html txt pdf; do
-    ln -sf "../../artifacts/${name}.${ext}" "$SITE_PUBLIC_DIR/${name}.${ext}"
+    cp "$OUT_DIR/${name}.${ext}" "$SITE_PUBLIC_DIR/${name}.${ext}"
   done
 }
 export -f process_spec
