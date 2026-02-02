@@ -19,3 +19,6 @@ site/public/*.html
 site/public/*.txt
 site/public/*.pdf
 __pycache__/
+
+# Wrangler
+.wrangler/
