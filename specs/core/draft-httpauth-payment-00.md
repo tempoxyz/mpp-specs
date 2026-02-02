@@ -145,7 +145,7 @@ Payload
       │                                                 │
 ~~~
 
-## Status Codes
+## Status Codes {#response-status-codes}
 
 The following table defines how servers MUST respond to payment-related
 conditions:
