@@ -269,7 +269,7 @@ seconds as decimal strings.
 Streaming payment channels require an on-chain escrow contract that holds
 user deposits and enforces voucher-based withdrawals.
 
-## Channel State
+## Channel State {#channel-state}
 
 Each channel is identified by a unique `channelId` and stores:
 
@@ -553,7 +553,7 @@ Channel reuse is OPTIONAL. Servers MAY include `channelId` to suggest
 resuming an existing channel:
 
 - **New channel** (no `channelId`): Client generates a random salt locally,
-  computes `channelId` using the formula in Section 4.1, opens the channel
+  computes `channelId` using the formula in {{channel-state}}, opens the channel
   on-chain, and returns the `channelId` in the credential.
 - **Existing channel** (`channelId` provided): Client MUST verify
   `channel.deposit - channel.settled >= amount` before resuming. If
@@ -1036,7 +1036,7 @@ On `action="open"`, servers MUST:
 1. **Transaction verification** (depends on `type`):
    - If `type="hash"`: Verify the `hash` references a finalized transaction.
      On Tempo networks, finality is achieved within approximately 500ms.
-   - If `type="transaction"`: Decode the signed transaction from `signature`,
+   - If `type="transaction"`: Decode the signed transaction from `transaction`,
       verify it calls `open()` on the expected escrow contract with correct
       parameters. If `feePayer: true`, add fee payer signature using domain
       `0x78` (see {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
@@ -1061,7 +1061,7 @@ On `action="topUp"`, servers MUST:
 1. **Transaction verification** (depends on `type`):
    - If `type="hash"`: Verify the `hash` references a finalized `topUp()`
      transaction for the specified `channelId`.
-   - If `type="transaction"`: Decode the signed transaction from `signature`,
+   - If `type="transaction"`: Decode the signed transaction from `transaction`,
       verify it calls `topUp()` on the expected escrow contract. If
       `feePayer: true`, add fee payer signature using domain `0x78` (see
       {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
@@ -1071,7 +1071,7 @@ On `action="topUp"`, servers MUST:
 3. Update server-side accounting:
    - Increase available balance by `additionalDeposit`
 
-## Voucher Verification
+## Voucher Verification {#voucher-verification}
 
 On `action="voucher"`, servers MUST:
 
@@ -1104,7 +1104,7 @@ Servers MUST treat voucher submissions idempotently:
   MUST return 200 OK with the current `highestAmount` (not an error)
 - Clients MAY safely retry voucher submissions after network failures
 
-## Rejection and Error Responses
+## Rejection and Error Responses {#error-responses}
 
 If verification fails, servers MUST return an appropriate HTTP status
 code with a Problem Details {{RFC9457}} response body:
@@ -1173,13 +1173,13 @@ For each request carrying a Payment credential with `intent="stream"`,
 servers MUST follow this procedure:
 
 1. **Voucher acceptance** (if a voucher is provided in the credential):
-   - Verify signature and monotonicity per Section 9.2
+   - Verify signature and monotonicity per {{voucher-verification}}
    - If valid, persist the new `acceptedCumulative` value to durable storage
    - If invalid, return 402 with a fresh challenge
 
 2. **Balance check**:
    - Compute `available = acceptedCumulative - spent`
-   - Compute `cost` for this request (see Section 10.4)
+   - Compute `cost` for this request (see {{cost-calculation}})
    - If `available < cost`: return 402 with Problem Details including
      `requiredTopUp = cost - available`
 
@@ -1190,7 +1190,7 @@ servers MUST follow this procedure:
    - Return `Payment-Receipt` header with current balance state
 
 4. **Receipt generation**:
-   - Include balance state in receipt (see Section 10.5)
+   - Include balance state in receipt (see {{receipt-generation}})
 
 ## Crash Safety
 
@@ -1635,11 +1635,15 @@ Problem Types" registry established by {{RFC9457}}:
 | `https://paymentauth.org/problems/stream/challenge-not-found` | Challenge Not Found | 410 | This document |
 | `https://paymentauth.org/problems/stream/insufficient-balance` | Insufficient Balance | 402 | This document |
 
-Each problem type is defined in Section 9.4 of this document.
+Each problem type is defined in {{error-responses}}.
 
 --- back
 
 # Example
+
+Note: In examples throughout this appendix, hex values shown with `...`
+(e.g., `"0x6d0f4fdf..."`) are abbreviated for readability. Actual values
+MUST be full-length as specified in {{encoding}}.
 
 ## Challenge
 
