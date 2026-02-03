@@ -1667,6 +1667,23 @@ Host: api.llm-service.com
 Authorization: Payment <base64url-encoded credential>
 ~~~
 
+The credential payload for an open action:
+
+~~~json
+{
+  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "payload": {
+    "action": "open",
+    "type": "hash",
+    "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "cumulativeAmount": "0",
+    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
+    "signature": "0x1234567890abcdef..."
+  }
+}
+~~~
+
 ## Voucher Top-Up (Same Resource URI)
 
 During streaming, clients submit updated vouchers to the **same resource
