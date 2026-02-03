@@ -24,6 +24,7 @@ author:
 
 normative:
   RFC2119:
+  RFC3339:
   RFC4648:
   RFC8174:
   RFC8259:
@@ -137,7 +138,7 @@ base64url-encoded JSON object.
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
 | `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Recipient address |
-| `expires` | string | REQUIRED | Expiry timestamp in ISO 8601 format |
+| `expires` | string | REQUIRED | Expiry timestamp in {{RFC3339}} format |
 
 ## Method Details
 
@@ -377,7 +378,9 @@ the transaction. The server verifies the transaction onchain:
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}.
+per Section 5.3 of {{I-D.httpauth-payment}}. Servers MUST NOT include a
+`Payment-Receipt` header on error responses; failures are communicated via
+HTTP status codes and Problem Details.
 
 The receipt payload for Tempo charge:
 
@@ -385,8 +388,8 @@ The receipt payload for Tempo charge:
 |-------|------|-------------|
 | `method` | string | `"tempo"` |
 | `reference` | string | Transaction hash of the settlement transaction |
-| `status` | string | `"success"` or `"failed"` |
-| `timestamp` | string | ISO 8601 settlement time |
+| `status` | string | `"success"` |
+| `timestamp` | string | {{RFC3339}} settlement time |
 
 # Security Considerations
 
@@ -421,6 +424,17 @@ client authentication before accepting payment credentials.
 and reject new payment requests when balance is insufficient.
 
 # IANA Considerations
+
+## Payment Method Registration
+
+This document registers the following payment method in the "HTTP Payment
+Methods" registry established by {{I-D.httpauth-payment}}:
+
+| Method Identifier | Description | Reference |
+|-------------------|-------------|-----------|
+| `tempo` | Tempo blockchain TIP-20 token payments | This document |
+
+Contact: Tempo Labs (<contact@tempo.xyz>)
 
 ## Payment Intent Registration
 
