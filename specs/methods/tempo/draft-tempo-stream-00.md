@@ -9,22 +9,26 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - name: Dan Robinson
-    ins: D. Robinson
-    email: dan@tempo.xyz
-    organization: Tempo Labs
+  - name: Liam Horne
+    ins: L. Horne
+    email: liam@tempo.xyz
+    org: Tempo Labs
   - name: Georgios Konstantopoulos
     ins: G. Konstantopoulos
     email: georgios@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
+  - name: Dan Robinson
+    ins: D. Robinson
+    email: dan@tempo.xyz
+    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
 
 normative:
   RFC2119:
@@ -32,6 +36,8 @@ normative:
   RFC4648:
   RFC8174:
   RFC8259:
+  RFC9110:
+  RFC9111:
   RFC9457:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
@@ -39,14 +45,15 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+
+informative:
+  RFC8610:
   EIP-712:
     title: "Typed structured data hashing and signing"
     target: https://eips.ethereum.org/EIPS/eip-712
     author:
       - name: Remco Bloemen
     date: 2017-09
-
-informative:
   SSE:
     title: "Server-Sent Events"
     target: https://html.spec.whatwg.org/multipage/server-sent-events.html
@@ -75,6 +82,8 @@ suitable for low-cost metered services.
 
 # Introduction
 
+This document is published as Informational but contains normative requirements using BCP 14 keywords {{RFC2119}} {{RFC8174}} to ensure interoperability between implementations. Payment method specifications that reference this document inherit these requirements.
+
 The `stream` intent establishes a unidirectional streaming payment channel
 using on-chain escrow and off-chain {{EIP-712}} vouchers. This enables high-
 frequency, low-cost payments by batching many off-chain voucher signatures
@@ -99,42 +108,81 @@ The client pays exactly for tokens received, with no worst-case reservation.
 
 ## Stream Flow
 
-The following diagram illustrates the Tempo stream flow:
+The following diagram illustrates the Tempo stream flow. Crucially, all
+interactions occur on the **same resource URI**—there is no separate
+stream endpoint:
 
 ~~~
    Client                        Server                     Tempo Network
       |                             |                             |
-      |  (1) GET /api/stream        |                             |
+      |  (1) GET /api/resource      |                             |
       |-------------------------->  |                             |
       |                             |                             |
       |  (2) 402 Payment Required   |                             |
       |      intent="stream"        |                             |
+      |      (includes sessionId)   |                             |
       |<--------------------------  |                             |
       |                             |                             |
       |  (3) Open channel on-chain  |                             |
       |------------------------------------------------------>    |
       |                             |                             |
-      |  (4) Authorization: Payment |                             |
+      |  (4) GET /api/resource      |                             |
+      |      Authorization: Payment |                             |
       |      action="open"          |                             |
       |-------------------------->  |                             |
       |                             |                             |
-      |  (5) 200 OK (SSE stream)    |                             |
+      |  (5) 200 OK + Receipt       |                             |
+      |      (streaming response)   |                             |
       |<--------------------------  |                             |
       |                             |                             |
-      |  (6) POST /stream           |                             |
-      |      (updated vouchers)     |                             |
+      |  (6) GET /api/resource      |                             |
+      |      action="voucher"       |                             |
+      |      (top-up, same URI)     |                             |
       |-------------------------->  |                             |
       |                             |                             |
-      |  (7) POST /stream           |                             |
+      |  (7) 200 OK + Receipt       |                             |
+      |<--------------------------  |                             |
+      |                             |                             |
+      |  (8) GET /api/resource      |                             |
       |      action="close"         |                             |
       |-------------------------->  |                             |
-      |                             |  (8) close(voucher)         |
+      |                             |  (9) close(voucher)         |
       |                             |-------------------------->  |
       |                             |                             |
-      |  (9) 200 OK + Receipt       |                             |
+      |  (10) 200 OK + Receipt      |                             |
+      |       (includes closeTxHash)|                             |
       |<--------------------------  |                             |
       |                             |                             |
 ~~~
+
+Voucher updates and close requests are submitted to the **same resource
+URI** that requires payment. This allows streams to work on any endpoint
+without dedicated payment control plane routes. Servers SHOULD support
+voucher updates via any HTTP method; clients MAY use `HEAD` for pure
+voucher top-ups when no response body is needed.
+
+## Concurrency Model {#concurrency}
+
+A streaming session consists of:
+
+- **At most one active streaming response** per `(sessionId, channelId)`
+  pair. If a client initiates a new streaming request with the same
+  session, servers SHOULD either:
+  - Reject with 409 Conflict if the previous stream is still active
+  - Terminate the previous stream and start a new one
+
+- **Zero or more concurrent voucher update requests** that reference
+  the same `sessionId`. These requests:
+  - MAY arrive on separate HTTP connections (including HTTP/2 streams)
+  - MUST be processed atomically with respect to balance updates
+  - MUST NOT block the streaming response delivery
+
+When using HTTP/2 or HTTP/3, clients SHOULD use separate streams for
+voucher updates and content consumption to avoid head-of-line blocking.
+
+Servers MUST ensure that voucher acceptance and balance deduction are
+serialized per session to prevent race conditions between concurrent
+requests.
 
 # Requirements Language
 
@@ -164,9 +212,56 @@ Authorized Signer
 : An address delegated to sign vouchers on behalf of the payer.
   Defaults to the payer if not specified.
 
+Session Identifier (sessionId)
+: An opaque string of at least 128 bits of entropy, generated by the
+  server and included in the challenge. Used to correlate credentials
+  within a streaming session. The format is implementation-defined but
+  MUST be unique per challenge and unpredictable.
+
 Base Units
 : The smallest indivisible unit of a TIP-20 token. TIP-20 tokens use
   6 decimal places; 1,000,000 base units equals 1.00 tokens.
+
+# Encoding Conventions {#encoding}
+
+This section defines normative encoding rules for interoperability.
+
+## Hexadecimal Values
+
+All byte arrays (addresses, hashes, signatures, channelId) use:
+
+- Lowercase hexadecimal encoding
+- `0x` prefix
+- No padding or truncation
+
+| Type | Length | Example |
+|------|--------|---------|
+| address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
+| bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
+| signature | 132 chars (0x + 130 hex) | 65-byte (r‖s‖v) ECDSA signature |
+
+Implementations MUST use lowercase hex. Implementations SHOULD accept
+mixed-case input but normalize to lowercase before comparison.
+
+## Numeric Values
+
+Integer values (amounts, timestamps) are encoded as decimal strings in
+JSON to avoid precision loss with large numbers:
+
+| Field | Encoding | Example |
+|-------|----------|---------|
+| `cumulativeAmount` | Decimal string | `"250000"` |
+| `requestedAt` | Decimal string (Unix seconds) | `"1736165100"` |
+| `chainId` | JSON number | `42431` |
+
+The `chainId` uses JSON number encoding as values are small enough to
+avoid precision issues.
+
+## Timestamps
+
+Timestamps in HTTP headers and receipt fields use {{RFC3339}} format:
+`2025-01-06T12:05:00Z`. Timestamps in EIP-712 signed data use Unix
+seconds as decimal strings.
 
 # Channel Escrow Contract
 
@@ -409,13 +504,28 @@ base64url-encoded JSON object.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Required deposit amount in base units |
+| `amount` | string | REQUIRED | Price per unit in base units (see note below) |
+| `unitType` | string | REQUIRED | Unit being priced (e.g., `"llm_token"`, `"byte"`, `"request"`) |
+| `suggestedDeposit` | string | OPTIONAL | Suggested channel deposit amount in base units |
 | `currency` | string | REQUIRED | {{TIP-20}} token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Payee address (server's withdrawal address)—equivalent to the on-chain `payee` |
 
+For the `stream` intent, `amount` specifies the price per unit of service
+in base units (6 decimals), not a total charge. Combined with `unitType`,
+this allows clients to estimate costs before streaming begins. The total
+cost depends on consumption: `total = amount × units_consumed`.
+
+The optional `suggestedDeposit` indicates the server's recommended
+channel deposit for typical usage. Clients MAY deposit less (if they
+expect limited usage) or more (for extended sessions). The minimum
+viable deposit is implementation-defined but SHOULD be at least
+`amount` to cover one unit of service.
+
 Challenge expiry is specified via the `expires` auth-param in the
 `WWW-Authenticate` header per {{I-D.httpauth-payment}}, using {{RFC3339}}
-timestamp format.
+timestamp format. Unlike the `charge` intent, the stream request JSON
+does not include an `expires` field—expiry is conveyed solely via the
+HTTP header.
 
 ## Method Details
 
@@ -428,8 +538,10 @@ promote common fields to the core schema.
 | `methodDetails.escrowContract` | string | REQUIRED | Address of the channel escrow contract |
 | `methodDetails.channelId` | string | CONDITIONAL | Channel ID if channel already exists |
 | `methodDetails.salt` | string | CONDITIONAL | Random salt for new channel |
-| `methodDetails.streamEndpoint` | string | REQUIRED | HTTPS URL for voucher and close request submission |
+| `methodDetails.sessionId` | string | REQUIRED | Opaque session identifier for correlating requests |
+| `methodDetails.scope` | string | OPTIONAL | Session scope: `"resource"` (default) or `"realm"` |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
+| `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 
 Either `channelId` or `salt` MUST be provided in `methodDetails`, but not both:
@@ -446,39 +558,62 @@ Servers SHOULD prefer reusing existing channels when the client has an
 open channel with sufficient remaining deposit. This reduces on-chain
 transactions and improves user experience.
 
+**Implementation note**: To support channel reuse, servers MUST maintain
+a persistent mapping of `(payer address, payee address, token) → channelId`
+for open channels. Servers SHOULD query on-chain state to verify channel
+validity before including a `channelId` in challenges.
+
+The `scope` field controls session applicability:
+
+- **`resource`** (default): The session and channel are valid only for
+  the specific resource URI that returned the 402 challenge.
+- **`realm`**: The session and channel may be used across any resource
+  within the same realm, allowing clients to pay for multiple endpoints
+  with a single channel.
+
 **Example (new channel):**
 
 ~~~json
 {
-  "amount": "10000000",
+  "amount": "25",
+  "unitType": "llm_token",
+  "suggestedDeposit": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "streamEndpoint": "https://api.example.com/payments/stream",
+    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "scope": "realm",
     "minVoucherDelta": "1000",
     "chainId": 42431
   }
 }
 ~~~
+
+This requests a price of 0.000025 tokens per LLM token, with a suggested
+deposit of 10.00 tokens.
 
 **Example (existing channel):**
 
 ~~~json
 {
-  "amount": "10000000",
+  "amount": "25",
+  "unitType": "llm_token",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "streamEndpoint": "https://api.example.com/payments/stream",
+    "sessionId": "s_7c9f2a4b8e1d3f5a",
     "minVoucherDelta": "1000",
     "chainId": 42431
   }
 }
 ~~~
+
+For existing channels, `suggestedDeposit` is omitted since the channel
+already has funds.
 
 # Credential Schema
 
@@ -495,6 +630,12 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 
 The `source` field, if present, SHOULD use the `did:pkh` method with the
 Tempo chain ID (42431 for Moderato testnet) and the payer's address.
+The `source` is an informational payer identifier; the authoritative signer
+for voucher verification is derived from on-chain channel state
+(`authorizedSigner` if non-zero, otherwise `payer`).
+
+Implementations MUST ignore unknown fields in credential payloads, request
+objects, and receipts to allow forward-compatible extensions.
 
 ## Credential Lifecycle
 
@@ -522,28 +663,47 @@ details nested in `actionDetails`:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `action` | string | REQUIRED | One of `"open"`, `"voucher"`, `"close"` |
+| `action` | string | REQUIRED | One of `"open"`, `"topUp"`, `"voucher"`, `"close"` |
+| `sessionId` | string | REQUIRED | Session identifier from the challenge |
 | `actionDetails` | object | REQUIRED | Action-specific parameters |
+
+The `sessionId` MUST match the value provided in the challenge's
+`methodDetails.sessionId`. This enables the server to correlate the
+credential with the correct session accounting state.
 
 | Action | Description |
 |--------|-------------|
 | `open` | Confirms channel is open on-chain; begins streaming |
+| `topUp` | Adds funds to an existing channel |
 | `voucher` | Submits an updated cumulative voucher |
 | `close` | Requests server to close the channel |
 
-### Open Payload
+### Open Payload {#open-payload}
 
 The `open` action confirms an on-chain channel opening and begins the
-streaming session.
+streaming session. The client may either submit the transaction themselves
+and provide the hash, or provide a signed transaction for the server to
+broadcast.
 
 **actionDetails fields:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"transaction"` or `"hash"` |
 | `channelId` | string | REQUIRED | Channel ID (computed from request) |
+| `signature` | string | CONDITIONAL | Signed transaction bytes (if `type="transaction"`) |
+| `hash` | string | CONDITIONAL | Transaction hash (if `type="hash"`) |
 | `authorizedSigner` | string | OPTIONAL | Delegated signer address |
-| `openTxHash` | string | REQUIRED | Transaction hash of channel open |
 | `voucher` | object | REQUIRED | Initial signed voucher (amount=0) |
+
+When `type` is `"transaction"`, the `signature` field contains the complete
+signed Tempo Transaction (type 0x76) serialized as RLP and hex-encoded.
+The server broadcasts the transaction, optionally adding a fee payer
+signature if `feePayer: true` was specified in the challenge.
+
+When `type` is `"hash"`, the client has already broadcast the transaction.
+The `hash` field contains the transaction hash for the server to verify
+on-chain.
 
 The initial zero-amount voucher proves the client controls the signing key
 and establishes the voucher chain.
@@ -555,7 +715,7 @@ The `voucher` object contains:
 | `payload` | object | REQUIRED | EIP-712 typed data |
 | `signature` | string | REQUIRED | Hex-encoded signature |
 
-**Example:**
+**Example (type="hash", client submitted):**
 
 ~~~json
 {
@@ -564,14 +724,16 @@ The `voucher` object contains:
     "realm": "api.llm-service.com",
     "method": "tempo",
     "intent": "stream",
-    "request": "eyJhbW91bnQiOiIxMDAwMDAwMCIsImN1cnJlbmN5IjoiMHgyMGMw...",
+    "request": "eyJhbW91bnQiOiIyNSIsInVuaXRUeXBlIjoibGxtX3Rva2VuIi4uLg",
     "expires": "2025-01-06T12:05:00Z"
   },
   "payload": {
     "action": "open",
+    "sessionId": "s_7c9f2a4b8e1d3f5a",
     "actionDetails": {
+      "type": "hash",
       "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-      "openTxHash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+      "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
       "voucher": {
         "payload": {
           "primaryType": "Voucher",
@@ -584,12 +746,14 @@ The `voucher` object contains:
           "types": {
             "Voucher": [
               { "name": "channelId", "type": "bytes32" },
-              { "name": "cumulativeAmount", "type": "uint128" }
+              { "name": "cumulativeAmount", "type": "uint128" },
+              { "name": "sessionHash", "type": "bytes32" }
             ]
           },
           "message": {
             "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-            "cumulativeAmount": "0"
+            "cumulativeAmount": "0",
+            "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b"
           }
         },
         "signature": "0x1234567890abcdef..."
@@ -600,10 +764,64 @@ The `voucher` object contains:
 }
 ~~~
 
+**Example (type="transaction", server submits):**
+
+~~~json
+{
+  "payload": {
+    "action": "open",
+    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "actionDetails": {
+      "type": "transaction",
+      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "signature": "0x76f901...signed transaction bytes...",
+      "voucher": { "...": "..." }
+    }
+  }
+}
+~~~
+
+Note: Signatures are 65 bytes (r‖s‖v) hex-encoded with 0x prefix (132 characters
+total). Examples use abbreviated signatures for brevity.
+
 The `challenge` object MUST echo all parameters from the server's
 `WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
 
-### Voucher Payload
+### TopUp Payload {#topup-payload}
+
+The `topUp` action adds funds to an existing channel during a streaming
+session. Like `open`, the client may submit the transaction themselves
+or provide a signed transaction for the server to broadcast.
+
+**actionDetails fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"transaction"` or `"hash"` |
+| `channelId` | string | REQUIRED | Channel ID |
+| `signature` | string | CONDITIONAL | Signed transaction bytes (if `type="transaction"`) |
+| `hash` | string | CONDITIONAL | Transaction hash (if `type="hash"`) |
+| `additionalDeposit` | string | REQUIRED | Amount added in base units |
+
+**Example:**
+
+~~~json
+{
+  "action": "topUp",
+  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "actionDetails": {
+    "type": "hash",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "hash": "0x5678abcd1234567890abcdef1234567890abcdef1234567890abcdef12345678",
+    "additionalDeposit": "5000000"
+  }
+}
+~~~
+
+Upon successful verification, the server updates the channel's available
+balance. The new deposit is immediately available for voucher authorization.
+
+### Voucher Payload {#voucher-payload}
 
 The `voucher` action submits an updated cumulative voucher during streaming.
 
@@ -619,13 +837,15 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 ~~~json
 {
   "action": "voucher",
+  "sessionId": "s_7c9f2a4b8e1d3f5a",
   "actionDetails": {
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "voucher": {
       "payload": {
         "message": {
           "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "250000"
+          "cumulativeAmount": "250000",
+          "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b"
         }
       },
       "signature": "0xabcdef1234567890..."
@@ -634,7 +854,12 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 }
 ~~~
 
-### Close Payload
+Note: This example shows only the `message` field for brevity. The full
+`voucher.payload` structure includes `primaryType`, `domain`, and `types`
+as shown in the Open Payload example (Section 5.5.1). The `sessionHash`
+binds the voucher to this specific session and resource (see {{session-binding}}).
+
+### Close Payload {#close-payload}
 
 The `close` action requests the server to close the channel and settle
 on-chain.
@@ -665,45 +890,125 @@ directly by the payer when cooperative close fails.
 ~~~json
 {
   "action": "close",
+  "sessionId": "s_7c9f2a4b8e1d3f5a",
   "actionDetails": {
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "voucher": {
       "payload": {
         "message": {
           "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "500000"
+          "cumulativeAmount": "500000",
+          "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b"
         }
       },
       "signature": "0xabcdef1234567890..."
     },
     "closeRequest": {
-      "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-      "requestedAt": "1736165100",
+      "payload": {
+        "message": {
+          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+          "requestedAt": "1736165100"
+        }
+      },
       "signature": "0x1234567890abcdef..."
     }
   }
 }
 ~~~
 
-# EIP-712 Voucher Format
+# Voucher Signing Format {#voucher-format}
 
-Vouchers use EIP-712 typed data with cumulative semantics: each voucher
-authorizes a cumulative total amount, not an incremental delta.
+Vouchers use typed structured data signing compatible with {{EIP-712}}.
+This section normatively defines the signing procedure; {{EIP-712}} is
+referenced for background only.
+
+## Wire Format
+
+The `voucher` object in credentials MUST include the complete typed
+data structure:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `payload` | object | REQUIRED | Complete typed data for signing |
+| `payload.types` | object | REQUIRED | Type definitions |
+| `payload.primaryType` | string | REQUIRED | `"Voucher"` |
+| `payload.domain` | object | REQUIRED | Domain separator fields |
+| `payload.message` | object | REQUIRED | The voucher data |
+| `signature` | string | REQUIRED | Hex-encoded signature |
 
 ## Type Definitions
 
-~~~
-Voucher(bytes32 channelId, uint128 cumulativeAmount)
+The `types` object MUST contain exactly:
+
+~~~json
+{
+  "Voucher": [
+    { "name": "channelId", "type": "bytes32" },
+    { "name": "cumulativeAmount", "type": "uint128" },
+    { "name": "sessionHash", "type": "bytes32" }
+  ]
+}
 ~~~
 
-## Domain Parameters
+Note: The `EIP712Domain` type is implicit per EIP-712 and SHOULD NOT be
+included in the `types` object. The domain separator is computed from
+the `domain` object using the canonical type string
+`EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)`.
 
-| Field | Value |
-|-------|-------|
-| `name` | `"Tempo Stream Channel"` |
-| `version` | `"1"` |
-| `chainId` | Tempo chain ID (e.g., 42431) |
-| `verifyingContract` | `request.escrowContract` |
+The `sessionHash` field provides cryptographic binding to the session
+and resource (see {{session-binding}}).
+
+## Domain Separator
+
+The `domain` object MUST contain:
+
+| Field | Type | Value |
+|-------|------|-------|
+| `name` | string | `"Tempo Stream Channel"` |
+| `version` | string | `"1"` |
+| `chainId` | number | Tempo chain ID (e.g., `42431`) |
+| `verifyingContract` | string | Escrow contract address from challenge |
+
+## Signing Procedure
+
+To sign a voucher, implementations MUST:
+
+1. Construct the domain separator hash:
+
+   ~~~
+   domainSeparator = keccak256(
+     abi.encode(
+       keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+       keccak256(bytes(name)),
+       keccak256(bytes(version)),
+       chainId,
+       verifyingContract
+     )
+   )
+   ~~~
+
+2. Construct the struct hash:
+
+   ~~~
+   structHash = keccak256(
+     abi.encode(
+       keccak256("Voucher(bytes32 channelId,uint128 cumulativeAmount,bytes32 sessionHash)"),
+       channelId,
+       cumulativeAmount,
+       sessionHash
+     )
+   )
+   ~~~
+
+3. Compute the signing hash:
+
+   ~~~
+   signingHash = keccak256("\x19\x01" || domainSeparator || structHash)
+   ~~~
+
+4. Sign with ECDSA using secp256k1 curve
+
+5. Encode signature as 65-byte `r || s || v` where `v` is 27 or 28
 
 ## Cumulative Semantics
 
@@ -715,43 +1020,93 @@ Vouchers specify cumulative totals, not incremental deltas:
 
 When settling, the contract computes: `delta = cumulativeAmount - settled`
 
-This allows partial settlement while the channel remains usable.
-
-# EIP-712 CloseRequest Format
+# CloseRequest Signing Format {#closerequest-format}
 
 The CloseRequest type enables authenticated close intent with replay
 protection via timestamp. Unlike vouchers, CloseRequest is an off-chain
 signal only—the contract's `requestClose()` function does not verify
 this signature.
 
-## Type Definition
+## Wire Format
 
-~~~
-CloseRequest(bytes32 channelId, uint64 requestedAt)
+The `closeRequest` object in credentials MUST include the complete typed
+data structure:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `payload` | object | REQUIRED | Complete typed data for signing |
+| `payload.types` | object | REQUIRED | Type definitions |
+| `payload.primaryType` | string | REQUIRED | `"CloseRequest"` |
+| `payload.domain` | object | REQUIRED | Domain separator fields |
+| `payload.message` | object | REQUIRED | The close request data |
+| `signature` | string | REQUIRED | Hex-encoded signature |
+
+## Type Definitions
+
+The `types` object MUST contain exactly:
+
+~~~json
+{
+  "CloseRequest": [
+    { "name": "channelId", "type": "bytes32" },
+    { "name": "requestedAt", "type": "uint64" }
+  ]
+}
 ~~~
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `channelId` | bytes32 | The channel to close |
-| `requestedAt` | uint64 | Unix timestamp of the request (seconds since epoch) |
+| `requestedAt` | uint64 | Unix timestamp of the request (seconds since epoch); serialized as a decimal string in JSON |
 
-## Domain Parameters
+## Domain Separator
 
-CloseRequest uses the same domain parameters as Voucher (Section 6.2):
+CloseRequest uses the same domain parameters as Voucher:
 
-| Field | Value |
-|-------|-------|
-| `name` | `"Tempo Stream Channel"` |
-| `version` | `"1"` |
-| `chainId` | Tempo chain ID (e.g., 42431) |
-| `verifyingContract` | `request.escrowContract` |
+| Field | Type | Value |
+|-------|------|-------|
+| `name` | string | `"Tempo Stream Channel"` |
+| `version` | string | `"1"` |
+| `chainId` | number | Tempo chain ID (e.g., `42431`) |
+| `verifyingContract` | string | Escrow contract address from challenge |
+
+## Signing Procedure
+
+To sign a close request, implementations MUST:
+
+1. Construct the domain separator hash (same as Voucher)
+
+2. Construct the struct hash:
+
+   ~~~
+   structHash = keccak256(
+     abi.encode(
+       keccak256("CloseRequest(bytes32 channelId,uint64 requestedAt)"),
+       channelId,
+       requestedAt
+     )
+   )
+   ~~~
+
+3. Compute the signing hash:
+
+   ~~~
+   signingHash = keccak256("\x19\x01" || domainSeparator || structHash)
+   ~~~
+
+4. Sign with ECDSA using secp256k1 curve
+
+5. Encode signature as 65-byte `r || s || v` where `v` is 27 or 28
 
 ## Replay Protection
 
 Servers SHOULD reject CloseRequest signatures where `requestedAt` is
 more than 300 seconds (5 minutes) in the past relative to server time.
 This prevents replay of old close requests while allowing reasonable
-clock skew between client and server.
+clock skew between client and server. Servers SHOULD also reject
+CloseRequest signatures where `requestedAt` is more than 60 seconds in
+the future relative to server time, to prevent pre-signed close requests
+from being stockpiled.
 
 The escrow contract MUST expose a `CLOSE_REQUEST_TYPEHASH()` view
 function returning the keccak256 hash of the type string for
@@ -763,30 +1118,49 @@ implementer convenience.
 
 On `action="open"`, servers MUST:
 
-1. Verify `openTxHash` references a finalized transaction. On Tempo
-   networks, finality is achieved within approximately 500ms. Servers
-   SHOULD query the escrow contract state rather than relying solely
-   on transaction receipt.
+1. **Transaction verification** (depends on `type`):
+   - If `type="hash"`: Verify the `hash` references a finalized transaction.
+     On Tempo networks, finality is achieved within approximately 500ms.
+   - If `type="transaction"`: Decode the signed transaction from `signature`,
+     verify it calls `open()` on the expected escrow contract with correct
+     parameters. If `feePayer: true`, add fee payer signature and broadcast.
+     Otherwise, broadcast as-is.
 2. Query the escrow contract to verify channel state:
    - Channel exists with matching `channelId`
    - `channel.payee` matches server's address
    - `channel.token` matches `request.currency`
-   - `channel.deposit >= request.amount`
+   - `channel.deposit >= amount` (minimum one unit)
    - `channel.settled == 0` (fresh channel)
 3. Verify the initial voucher:
    - Recover signer from EIP-712 signature
-   - Verify signature uses canonical low-s values (see Section 10.7)
+   - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
    - `voucher.channelId` matches
    - `voucher.cumulativeAmount == 0` for initial voucher
 4. Initialize server-side channel state
+
+## TopUp Verification
+
+On `action="topUp"`, servers MUST:
+
+1. **Transaction verification** (depends on `type`):
+   - If `type="hash"`: Verify the `hash` references a finalized `topUp()`
+     transaction for the specified `channelId`.
+   - If `type="transaction"`: Decode the signed transaction from `signature`,
+     verify it calls `topUp()` on the expected escrow contract. If
+     `feePayer: true`, add fee payer signature and broadcast.
+2. Query the escrow contract to verify updated channel state:
+   - `channel.deposit` increased by `additionalDeposit`
+   - Channel is not finalized
+3. Update server-side accounting:
+   - Increase available balance by `additionalDeposit`
 
 ## Voucher Verification
 
 On `action="voucher"`, servers MUST:
 
 1. Verify voucher signature using EIP-712 recovery
-2. Verify signature uses canonical low-s values (see Section 10.7)
+2. Verify signature uses canonical low-s values (see {{signature-malleability}})
 3. Recover signer and MUST verify it matches expected signer from on-chain state
 4. Verify monotonicity:
    - `cumulativeAmount > highestVoucherAmount`
@@ -825,11 +1199,11 @@ code with a Problem Details {{RFC9457}} response body:
 | 402 Payment Required | Invalid signature or signer mismatch |
 | 410 Gone | Channel finalized or not found |
 
-For the `streamEndpoint` API, error responses use Problem Details format:
+Error responses use Problem Details format:
 
 ~~~json
 {
-  "type": "https://tempo.xyz/stream/errors/invalid-signature",
+  "type": "https://paymentauth.org/problems/stream/invalid-signature",
   "title": "Invalid Signature",
   "status": 402,
   "detail": "Voucher signature could not be verified",
@@ -841,33 +1215,128 @@ Problem type URIs:
 
 | Type URI | Description |
 |----------|-------------|
-| `https://tempo.xyz/stream/errors/invalid-signature` | Voucher or close request signature invalid |
-| `https://tempo.xyz/stream/errors/signer-mismatch` | Signer is not authorized for this channel |
-| `https://tempo.xyz/stream/errors/amount-exceeds-deposit` | Voucher amount exceeds channel deposit |
-| `https://tempo.xyz/stream/errors/delta-too-small` | Amount increase below `minVoucherDelta` |
-| `https://tempo.xyz/stream/errors/channel-not-found` | No channel with this ID exists |
-| `https://tempo.xyz/stream/errors/channel-finalized` | Channel has been closed |
+| `https://paymentauth.org/problems/stream/invalid-signature` | Voucher or close request signature invalid |
+| `https://paymentauth.org/problems/stream/signer-mismatch` | Signer is not authorized for this channel |
+| `https://paymentauth.org/problems/stream/amount-exceeds-deposit` | Voucher amount exceeds channel deposit |
+| `https://paymentauth.org/problems/stream/delta-too-small` | Amount increase below `minVoucherDelta` |
+| `https://paymentauth.org/problems/stream/channel-not-found` | No channel with this ID exists |
+| `https://paymentauth.org/problems/stream/channel-finalized` | Channel has been closed |
 
 For errors on the Payment Auth protected resource (the initial request
 carrying `Authorization: Payment`), servers MUST return 402 with a fresh
 `WWW-Authenticate: Payment` challenge per {{I-D.httpauth-payment}}.
 
-## Stream Endpoint Responses
+# Server-Side Accounting {#server-accounting}
 
-Successful voucher submissions to `streamEndpoint` MUST return:
+Servers MUST maintain per-session accounting state to track authorized
+funds versus consumed service. This section defines the normative
+requirements for balance tracking, crash safety, and idempotency.
+
+## Accounting State
+
+For each active session identified by `(sessionId, channelId)`, servers
+MUST maintain:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `acceptedCumulative` | uint128 | Highest valid voucher amount accepted (monotonically increasing) |
+| `spent` | uint128 | Cumulative amount charged for delivered service (monotonically increasing) |
+| `settledOnChain` | uint128 | Last cumulative amount settled on-chain (informational) |
+
+The `available` balance is computed as:
 
 ~~~
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "accepted": true,
-  "highestAmount": "250000"
-}
+available = acceptedCumulative - spent
 ~~~
 
-Servers SHOULD limit voucher submissions to 10 per second per channel.
-Servers MAY implement IP-based rate limiting for unauthenticated requests.
+## Per-Request Processing
+
+For each request carrying a Payment credential with `intent="stream"`,
+servers MUST follow this procedure:
+
+1. **Voucher acceptance** (if a voucher is provided in the credential):
+   - Verify signature and monotonicity per Section 9.2
+   - If valid, persist the new `acceptedCumulative` value to durable storage
+   - If invalid, return 402 with a fresh challenge
+
+2. **Balance check**:
+   - Compute `available = acceptedCumulative - spent`
+   - Compute `cost` for this request (see Section 10.4)
+   - If `available < cost`: return 402 with Problem Details including
+     `requiredTopUp = cost - available`
+
+3. **Charge and deliver** (if `available >= cost`):
+   - **MUST persist** `spent := spent + cost` to durable storage BEFORE
+     or atomically with delivering metered service
+   - Deliver the response (or next chunk/token window for streaming)
+   - Return `Payment-Receipt` header with current balance state
+
+4. **Receipt generation**:
+   - Include balance state in receipt (see Section 10.5)
+
+## Crash Safety
+
+To prevent fund loss from server crashes:
+
+- Servers MUST persist `spent` increments BEFORE delivering corresponding
+  service. If the server crashes after persisting but before delivery,
+  the client may retry and be charged again (see Idempotency below).
+
+- Servers MUST persist `acceptedCumulative` BEFORE relying on the new
+  balance for service authorization.
+
+- Implementations SHOULD use transactional storage or write-ahead logging
+  to ensure atomicity between state updates and service delivery.
+
+## Idempotency
+
+To prevent double-charging on retries and network failures:
+
+- Clients SHOULD include an `Idempotency-Key` header on paid requests
+- Servers SHOULD track `(sessionId, idempotencyKey)` pairs and return
+  the cached response (including receipt) for duplicate requests
+- Servers MUST NOT increment `spent` for duplicate idempotent requests
+
+If idempotency is not implemented, servers MUST document this limitation
+and warn clients that retries may incur additional charges.
+
+**Example idempotent request:**
+
+~~~http
+GET /api/chat HTTP/1.1
+Host: api.example.com
+Idempotency-Key: req_a1b2c3d4e5f6
+Authorization: Payment eyJ...
+~~~
+
+## Cost Calculation {#cost-calculation}
+
+The `cost` for a request depends on the pricing model declared in the
+challenge. Servers MUST support at least one of:
+
+- **Fixed cost**: A predetermined amount per request
+- **Metered cost**: Cost proportional to resource consumption (e.g.,
+  tokens generated, bytes transferred, compute time)
+
+For metered resources, servers compute cost during or after service
+delivery. For streaming responses (SSE, chunked), servers SHOULD:
+
+1. Reserve an estimated cost before starting delivery
+2. Adjust `spent` as actual consumption is measured
+3. Pause delivery if `available` is exhausted (client must top-up)
+
+## Insufficient Balance During Streaming
+
+When a streaming response exhausts `available` balance:
+
+1. Server MUST stop delivering additional metered content
+2. Server MAY hold the connection open awaiting a voucher top-up
+3. Server MAY close the response; client then retries with higher voucher
+4. If client submits a voucher update (concurrent request to same URI),
+   server SHOULD resume delivery on the original connection if still open
+
+Servers SHOULD NOT deliver service beyond the authorized balance under
+any circumstances. See {{dos-mitigation}} for rate limiting requirements.
 
 # Settlement Procedure
 
@@ -921,38 +1390,91 @@ contract tracks cumulative settlements.
 
 ## Voucher Submission Transport
 
-Vouchers MUST be submitted via separate HTTP requests to `streamEndpoint`,
-independent of any SSE connection used for streaming content. Clients
-SHOULD use HTTP/2 multiplexing or maintain separate connections for
-voucher submission and content streaming.
+Vouchers are submitted via HTTP requests to the **same resource URI** that
+requires payment. There is no separate stream endpoint. Clients SHOULD use
+HTTP/2 multiplexing or maintain separate connections for voucher updates
+and content streaming when topping up during a long-lived response.
 
-## Receipt Generation
+For voucher-only updates (no response body needed), clients MAY use `HEAD`
+requests. Servers SHOULD support voucher credentials on `HEAD` requests
+for resources that require stream payment.
 
-Upon successful settlement or close, servers MUST return a `Payment-Receipt`
-header per Section 5.3 of {{I-D.httpauth-payment}}.
+## Receipt Generation {#receipt-generation}
+
+Servers MUST return a `Payment-Receipt` header on **every successful
+paid request**, not only on settlement or close. This enables clients
+to track balance consumption in real-time.
 
 The base Payment Auth spec defines core receipt fields. The stream intent
-extends the receipt with additional fields in the `methodDetails` object:
+extends the receipt with balance tracking and metering information:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `method` | string | `"tempo"` |
-| `reference` | string | Transaction hash of settlement/close |
-| `status` | string | `"success"` or `"failed"` |
-| `timestamp` | string | {{RFC3339}} settlement time |
-| `methodDetails.channelId` | string | The channel identifier |
-| `methodDetails.settledAmount` | string | Total amount settled to payee |
+| `intent` | string | `"stream"` |
+| `status` | string | `"success"` |
+| `timestamp` | string | {{RFC3339}} response time |
+| `sessionId` | string | Session identifier from challenge |
+| `challengeId` | string | Challenge identifier for audit correlation |
+| `channelId` | string | The channel identifier |
+| `balance.acceptedCumulative` | string | Highest voucher amount accepted |
+| `balance.spent` | string | Total amount charged so far |
+| `balance.available` | string | Remaining spendable balance |
+| `metering` | object | OPTIONAL: details of this request's charge |
+| `metering.units` | number | Units consumed (e.g., tokens, bytes) |
+| `metering.unit` | string | Unit type (e.g., `"llm_token"`, `"byte"`) |
+| `metering.cost` | string | Base units charged for this request |
+| `settlement` | object | OPTIONAL: present only on settlement/close |
+| `settlement.txHash` | string | On-chain transaction hash |
+| `settlement.settledAmount` | string | Cumulative amount settled |
 
-**Example receipt:**
+The `metering` object describes what was charged for **this specific
+request**. The `cost` equals `units × amount` from the challenge.
+This allows clients to understand exactly what they paid for and verify
+server billing accuracy.
+
+**Example receipt (per-request with metering):**
 
 ~~~json
 {
   "method": "tempo",
-  "reference": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+  "intent": "stream",
+  "status": "success",
+  "timestamp": "2025-01-06T12:08:30Z",
+  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+  "balance": {
+    "acceptedCumulative": "250000",
+    "spent": "237500",
+    "available": "12500"
+  },
+  "metering": {
+    "units": 500,
+    "unit": "llm_token",
+    "cost": "12500"
+  }
+}
+~~~
+
+**Example receipt (on close with settlement):**
+
+~~~json
+{
+  "method": "tempo",
+  "intent": "stream",
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
-  "methodDetails": {
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+  "balance": {
+    "acceptedCumulative": "250000",
+    "spent": "250000",
+    "available": "0"
+  },
+  "settlement": {
+    "txHash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
     "settledAmount": "250000"
   }
 }
@@ -988,13 +1510,19 @@ storage requirements and operational liability. Servers MAY refuse to
 accept vouchers for channels with no activity exceeding a configured
 threshold.
 
-## Denial of Service
+## Denial of Service {#dos-mitigation}
 
-To mitigate voucher flooding:
+To mitigate voucher flooding, servers MUST implement rate limiting:
 
-- Enforce `minVoucherDelta` to prevent tiny increments
-- Rate-limit voucher submissions per channel (SHOULD limit to 10/second)
-- Reject vouchers that don't advance state
+- Servers SHOULD limit voucher submissions to 10 per second per session
+- Servers MAY implement additional IP-based rate limiting for
+  unauthenticated requests
+- Servers MUST enforce `minVoucherDelta` to prevent tiny increments
+- Servers SHOULD reject vouchers that don't advance state
+
+Servers SHOULD perform format validation (field presence, hex encoding,
+length checks) before expensive ECDSA signature recovery to minimize
+computational cost of malformed requests.
 
 To mitigate channel griefing via dust deposits:
 
@@ -1077,14 +1605,83 @@ Vouchers are bound to channels but not to specific HTTP sessions or API
 requests. When a payee operates multiple services using the same channel,
 voucher-to-service attribution is an implementation concern.
 
+The `sessionId` in the challenge provides correlation across requests.
 Servers MUST implement session-to-voucher mapping for:
 
 - Dispute resolution
 - Usage accounting
 - Audit trails
 
-The `streamEndpoint` MAY include a `sessionId` parameter for this purpose,
-though it is not cryptographically bound to the voucher signature.
+The `sessionId` is not cryptographically bound to the voucher signature;
+it is an application-layer correlation mechanism.
+
+## Session and Resource Binding {#session-binding}
+
+To prevent cross-session and cross-resource attacks, vouchers MUST
+cryptographically bind to the session context.
+
+### Extended Voucher Type
+
+The Voucher type is extended to include session binding:
+
+~~~
+Voucher(bytes32 channelId, uint128 cumulativeAmount, bytes32 sessionHash)
+~~~
+
+Where `sessionHash` is computed as:
+
+~~~
+sessionHash = keccak256(abi.encode(sessionId, resourceHash))
+resourceHash = keccak256(bytes(resourceURI))
+~~~
+
+For realm-scoped sessions (`scope="realm"`), `resourceHash` is computed
+from the realm identifier instead of the specific resource URI.
+
+Servers MUST reject vouchers where `sessionHash` does not match the
+expected value for the current session and resource. This prevents:
+
+- **Cross-session replay**: Vouchers signed for one session cannot be
+  used in another session, even for the same channel.
+- **Cross-resource replay**: Vouchers authorized for one resource
+  cannot authorize access to different resources (unless realm-scoped).
+
+Clients MUST include the correct `sessionHash` when signing vouchers.
+The `sessionId` and resource URI are provided in the challenge.
+
+### On-Chain vs Off-Chain Verification
+
+The `sessionHash` is included in the signed voucher message and verified
+at two levels:
+
+- **On-chain**: The escrow contract verifies the EIP-712 signature covers
+  `(channelId, cumulativeAmount, sessionHash)`. The contract does not
+  interpret or validate the `sessionHash` value—it only ensures the
+  signature commits to the provided hash.
+
+- **Off-chain**: Servers MUST compute the expected `sessionHash` from
+  `(sessionId, resourceURI)` and reject vouchers where the signed
+  `sessionHash` does not match. This provides session and resource
+  binding without requiring the contract to understand HTTP semantics.
+
+This design keeps the on-chain contract simple and generic while enabling
+application-layer session security through cryptographic commitment.
+
+## Chain Reorganization {#chain-reorg}
+
+On Tempo networks, finality is achieved within approximately 500ms.
+However, for high-value channels, servers SHOULD:
+
+1. Re-verify channel state periodically during long-lived sessions
+2. Monitor for `ChannelClosed` or `CloseRequested` events
+3. Cease service delivery if the channel becomes invalid
+
+If a chain reorganization invalidates an accepted `openTxHash`, the
+server SHOULD:
+
+1. Stop accepting vouchers for that channel
+2. Return 410 Gone with problem type `channel-not-found`
+3. Log the incident for investigation
 
 ## Grace Period Rationale
 
@@ -1111,6 +1708,26 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 |--------|-------------------|-------------|-----------|
 | `stream` | `tempo` | Streaming payment channel | This document |
 
+Contact: Tempo Labs (<contact@tempo.xyz>)
+
+## Problem Type Registration
+
+This document registers the following problem types in the "HTTP
+Problem Types" registry established by {{RFC9457}}:
+
+| Type URI | Title | Status | Reference |
+|----------|-------|--------|-----------|
+| `https://paymentauth.org/problems/stream/invalid-signature` | Invalid Signature | 402 | This document |
+| `https://paymentauth.org/problems/stream/signer-mismatch` | Signer Mismatch | 402 | This document |
+| `https://paymentauth.org/problems/stream/amount-exceeds-deposit` | Amount Exceeds Deposit | 402 | This document |
+| `https://paymentauth.org/problems/stream/delta-too-small` | Delta Too Small | 402 | This document |
+| `https://paymentauth.org/problems/stream/channel-not-found` | Channel Not Found | 410 | This document |
+| `https://paymentauth.org/problems/stream/channel-finalized` | Channel Finalized | 410 | This document |
+| `https://paymentauth.org/problems/stream/session-not-found` | Session Not Found | 410 | This document |
+| `https://paymentauth.org/problems/stream/insufficient-balance` | Insufficient Balance | 402 | This document |
+
+Each problem type is defined in Section 9.4 of this document.
+
 --- back
 
 # Example
@@ -1124,20 +1741,23 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   method="tempo",
   intent="stream",
   expires="2025-01-06T12:05:00Z",
-  request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImN1cnJlbmN5IjoiMHgyMGMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwicmVjaXBpZW50IjoiMHg3NDJkMzVDYzY2MzRDMDUzMjkyNWEzYjg0NEJjOWU3NTk1ZjhmRTAwIiwibWV0aG9kRGV0YWlscyI6eyJlc2Nyb3dDb250cmFjdCI6IjB4N2E2MzU3ZGIzMzczMWNmYjdiOWQ1NGFjYTc1MDUwN2YxM2EzZmVjMCIsInNhbHQiOiIweGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTAiLCJzdHJlYW1FbmRwb2ludCI6Imh0dHBzOi8vYXBpLmxsbS1zZXJ2aWNlLmNvbS9wYXltZW50cy9zdHJlYW0iLCJtaW5Wb3VjaGVyRGVsdGEiOiIxMDAwIiwiY2hhaW5JZCI6NDI0MzF9fQ"
+  request="<base64url-encoded JSON below>"
 ~~~
 
 The `request` decodes to:
 
 ~~~json
 {
-  "amount": "10000000",
+  "amount": "25",
+  "unitType": "llm_token",
+  "suggestedDeposit": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
     "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "streamEndpoint": "https://api.llm-service.com/payments/stream",
+    "sessionId": "s_kM9xPqWvT2nJ",
+    "scope": "realm",
     "minVoucherDelta": "1000",
     "chainId": 42431
   }
@@ -1147,109 +1767,103 @@ The `request` decodes to:
 Note: Challenge expiry is in the header `expires` auth-param, not in the
 request JSON.
 
-This requests a deposit of 10.00 alphaUSD (10000000 base units).
+This requests a price of 0.000025 tokens per LLM token, with a suggested
+deposit of 10.00 alphaUSD (10000000 base units).
 
 ## Open Credential
 
+The client retries the **same resource URI** with the open credential:
+
 ~~~http
-GET /api/stream HTTP/1.1
+GET /api/chat HTTP/1.1
 Host: api.llm-service.com
-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsiYWN0aW9uIjoib3BlbiIsImNoYW5uZWxJZCI6IjB4NmQwZjRmZGYxZjJmNmExZjZjMWIwZmJkNmE3ZDVjMmMwYThkM2Q3YjFmNmE5YzFiM2UyZDRhNWI2YzdkOGU5ZiIsIm9wZW5UeEhhc2giOiIweGFiY2QxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWIiLCJ2b3VjaGVyIjp7InBheWxvYWQiOnt9LCJzaWduYXR1cmUiOiIweDEyMzQ1Njc4OTBhYmNkZWYuLi4ifX0sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyNDMxOjB4MTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3OCJ9
+Authorization: Payment <base64url-encoded credential>
 ~~~
 
-## Voucher Submission
+## Voucher Top-Up (Same Resource URI)
 
-During streaming, clients POST updated vouchers to the `streamEndpoint`:
+During streaming, clients submit updated vouchers to the **same resource
+URI**. This can use any HTTP method; `HEAD` is recommended for pure
+top-ups when no response body is needed:
 
 ~~~http
-POST /payments/stream HTTP/1.1
+HEAD /api/chat HTTP/1.1
 Host: api.llm-service.com
-Content-Type: application/json
+Authorization: Payment <base64url-encoded credential with action="voucher">
+~~~
 
+Or with a regular request that also retrieves content:
+
+~~~http
+GET /api/chat HTTP/1.1
+Host: api.llm-service.com
+Authorization: Payment <base64url-encoded credential with action="voucher">
+~~~
+
+The credential payload for a voucher update:
+
+~~~json
 {
-  "action": "voucher",
-  "actionDetails": {
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "voucher": {
-      "payload": {
-        "primaryType": "Voucher",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+  "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
+  "payload": {
+    "action": "voucher",
+    "sessionId": "s_kM9xPqWvT2nJ",
+    "actionDetails": {
+      "channelId": "0x6d0f4fdf...",
+      "voucher": {
+        "payload": {
+          "message": {
+            "channelId": "0x6d0f4fdf...",
+            "cumulativeAmount": "250000",
+            "sessionHash": "0x8a7b6c5d..."
+          }
         },
-        "types": {
-          "Voucher": [
-            { "name": "channelId", "type": "bytes32" },
-            { "name": "cumulativeAmount", "type": "uint128" }
-          ]
-        },
-        "message": {
-          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "250000"
-        }
-      },
-      "signature": "0x1234567890abcdef..."
+        "signature": "0x1234567890abcdef..."
+      }
     }
   }
 }
 ~~~
 
-## Close Request
+## Close Request (Same Resource URI)
+
+Close requests are also sent to the same resource URI:
 
 ~~~http
-POST /payments/stream HTTP/1.1
+GET /api/chat HTTP/1.1
 Host: api.llm-service.com
-Content-Type: application/json
+Authorization: Payment <base64url-encoded credential with action="close">
+~~~
 
+The credential payload for a close request:
+
+~~~json
 {
-  "action": "close",
-  "actionDetails": {
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "voucher": {
-      "payload": {
-        "primaryType": "Voucher",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+  "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
+  "payload": {
+    "action": "close",
+    "sessionId": "s_kM9xPqWvT2nJ",
+    "actionDetails": {
+      "channelId": "0x6d0f4fdf...",
+      "voucher": {
+        "payload": {
+          "message": {
+            "channelId": "0x6d0f4fdf...",
+            "cumulativeAmount": "500000",
+            "sessionHash": "0x8a7b6c5d..."
+          }
         },
-        "types": {
-          "Voucher": [
-            { "name": "channelId", "type": "bytes32" },
-            { "name": "cumulativeAmount", "type": "uint128" }
-          ]
-        },
-        "message": {
-          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "cumulativeAmount": "500000"
-        }
+        "signature": "0xabcdef1234567890..."
       },
-      "signature": "0xabcdef1234567890..."
-    },
-    "closeRequest": {
-      "payload": {
-        "primaryType": "CloseRequest",
-        "domain": {
-          "name": "Tempo Stream Channel",
-          "version": "1",
-          "chainId": 42431,
-          "verifyingContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0"
+      "closeRequest": {
+        "payload": {
+          "message": {
+            "channelId": "0x6d0f4fdf...",
+            "requestedAt": "1736165100"
+          }
         },
-        "types": {
-          "CloseRequest": [
-            { "name": "channelId", "type": "bytes32" },
-            { "name": "requestedAt", "type": "uint64" }
-          ]
-        },
-        "message": {
-          "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-          "requestedAt": "1736165100"
-        }
-      },
-      "signature": "0x1234567890abcdef..."
+        "signature": "0x1234567890abcdef..."
+      }
     }
   }
 }
@@ -1346,7 +1960,8 @@ interface ITempoStreamChannel {
 
     function getVoucherDigest(
         bytes32 channelId,
-        uint128 cumulativeAmount
+        uint128 cumulativeAmount,
+        bytes32 sessionHash
     ) external view returns (bytes32);
 
     function getCloseRequestDigest(
@@ -1427,12 +2042,13 @@ https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels/src
 ### Voucher Signing
 
 ~~~typescript
-import { hashTypedData, recoverTypedDataAddress } from 'viem'
+import { hashTypedData, recoverTypedDataAddress, keccak256, encodePacked } from 'viem'
 
 const voucherTypes = {
   Voucher: [
     { name: 'channelId', type: 'bytes32' },
     { name: 'cumulativeAmount', type: 'uint128' },
+    { name: 'sessionHash', type: 'bytes32' },
   ],
 } as const
 
@@ -1445,7 +2061,15 @@ function getVoucherDomain(escrowContract: Address, chainId: number) {
   } as const
 }
 
+// Compute sessionHash for session/resource binding
+function computeSessionHash(sessionId: string, resourceURI: string): `0x${string}` {
+  const resourceHash = keccak256(encodePacked(['string'], [resourceURI]))
+  return keccak256(encodePacked(['string', 'bytes32'], [sessionId, resourceHash]))
+}
+
 // Sign a voucher
+const sessionHash = computeSessionHash('s_7c9f2a4b8e1d3f5a', '/api/chat')
+
 const signature = await walletClient.signTypedData({
   domain: getVoucherDomain(escrowContract, 42431),
   types: voucherTypes,
@@ -1453,6 +2077,7 @@ const signature = await walletClient.signTypedData({
   message: {
     channelId: '0x...',
     cumulativeAmount: 250000n,
+    sessionHash,
   },
 })
 
@@ -1464,6 +2089,7 @@ const signer = await recoverTypedDataAddress({
   message: {
     channelId: '0x...',
     cumulativeAmount: 250000n,
+    sessionHash,
   },
   signature,
 })
@@ -1493,6 +2119,396 @@ const signature = await walletClient.signTypedData({
 })
 
 // Server should reject if requestedAt is older than 5 minutes
+~~~
+
+# Schema Definitions (CDDL)
+
+This appendix provides CDDL {{RFC8610}} schema definitions for the
+wire formats defined in this specification.
+
+~~~cddl
+; Base types
+; Note: Patterns accept mixed-case hex; implementations normalize to lowercase
+hex-string = tstr .regexp "0x[0-9a-fA-F]+"
+address = tstr .regexp "0x[0-9a-fA-F]{40}"
+bytes32 = tstr .regexp "0x[0-9a-fA-F]{64}"
+; Signature: 65-byte (130 hex) standard or 64-byte (128 hex) EIP-2098 compact
+signature = tstr .regexp "0x[0-9a-fA-F]{128,130}"
+uint-string = tstr .regexp "[0-9]+"
+session-id = tstr
+
+; Stream Request (decoded from challenge request parameter)
+stream-request = {
+  amount: uint-string,        ; price per unit for stream intent
+  unitType: tstr,
+  currency: address,
+  recipient: address,
+  ? suggestedDeposit: uint-string,
+  methodDetails: stream-method-details,
+}
+
+stream-method-details = {
+  escrowContract: address,
+  sessionId: session-id,
+  (salt: bytes32 // channelId: bytes32),
+  ? scope: "resource" / "realm",
+  ? minVoucherDelta: uint-string,
+  ? feePayer: bool,
+  ? chainId: uint,
+}
+
+; EIP-712 Typed Data structures
+; Note: The following definitions represent EIP-712 wire format, not
+; pure CDDL types. The "name" and "type" fields inside arrays are
+; EIP-712 type descriptors, not CDDL type annotations.
+eip712-domain = {
+  name: tstr,
+  version: tstr,
+  chainId: uint,
+  verifyingContract: address,
+}
+
+; EIP-712 type definitions as they appear in the wire format
+; The inner objects use EIP-712 type names (e.g., "bytes32", "uint128")
+voucher-types = {
+  "Voucher": [
+    { name: "channelId", type: "bytes32" },
+    { name: "cumulativeAmount", type: "uint128" },
+    { name: "sessionHash", type: "bytes32" },
+  ]
+}
+
+voucher-message = {
+  channelId: bytes32,
+  cumulativeAmount: uint-string,
+  sessionHash: bytes32,
+}
+
+signed-voucher = {
+  payload: {
+    types: voucher-types,
+    primaryType: "Voucher",
+    domain: eip712-domain,
+    message: voucher-message,
+  },
+  signature: signature,  ; 0x prefix + 130 hex chars (65 bytes)
+}
+
+; EIP-712 type definitions for CloseRequest
+close-request-types = {
+  "CloseRequest": [
+    { name: "channelId", type: "bytes32" },
+    { name: "requestedAt", type: "uint64" },
+  ]
+}
+
+close-request-message = {
+  channelId: bytes32,
+  requestedAt: uint-string,
+}
+
+signed-close-request = {
+  payload: {
+    types: close-request-types,
+    primaryType: "CloseRequest",
+    domain: eip712-domain,
+    message: close-request-message,
+  },
+  signature: signature,
+}
+
+; Credential payloads
+open-action-details = {
+  type: "transaction" / "hash",
+  channelId: bytes32,
+  (signature: hex-string // hash: bytes32),  ; signature if type="transaction", hash if type="hash"
+  voucher: signed-voucher,
+  ? authorizedSigner: address,
+}
+
+topup-action-details = {
+  type: "transaction" / "hash",
+  channelId: bytes32,
+  (signature: hex-string // hash: bytes32),
+  additionalDeposit: uint-string,
+}
+
+voucher-action-details = {
+  channelId: bytes32,
+  voucher: signed-voucher,
+}
+
+close-action-details = {
+  channelId: bytes32,
+  voucher: signed-voucher,
+  ? closeRequest: signed-close-request,
+}
+
+stream-payload = {
+  action: "open" / "topUp" / "voucher" / "close",
+  sessionId: session-id,
+  actionDetails: open-action-details / topup-action-details / voucher-action-details / close-action-details,
+}
+
+; Receipt
+stream-receipt = {
+  method: "tempo",
+  intent: "stream",
+  status: "success",
+  timestamp: tstr,          ; RFC 3339
+  challengeId: tstr,
+  sessionId: session-id,
+  channelId: bytes32,
+  balance: {
+    acceptedCumulative: uint-string,
+    spent: uint-string,
+    available: uint-string,
+  },
+  ? metering: {
+    units: uint,
+    unit: tstr,
+    cost: uint-string,
+  },
+  ? settlement: {
+    txHash: bytes32,
+    settledAmount: uint-string,
+  },
+}
+~~~
+
+# Schema Definitions (JSON Schema)
+
+This appendix provides JSON Schema definitions for implementations that
+prefer JSON Schema over CDDL.
+
+## Stream Request Schema
+
+~~~json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paymentauth.org/schemas/stream-request.json",
+  "title": "Stream Request",
+  "type": "object",
+  "required": ["amount", "unitType", "currency", "recipient", "methodDetails"],
+  "properties": {
+    "amount": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Price per unit in base units (decimal string)"
+    },
+    "unitType": {
+      "type": "string",
+      "description": "Unit type being priced (e.g., llm_token, byte)"
+    },
+    "suggestedDeposit": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Suggested channel deposit in base units"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "TIP-20 token address (mixed-case accepted, normalized to lowercase)"
+    },
+    "recipient": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Payee address (mixed-case accepted, normalized to lowercase)"
+    },
+    "methodDetails": { "$ref": "#/$defs/methodDetails" }
+  },
+  "$defs": {
+    "methodDetails": {
+      "type": "object",
+      "required": ["escrowContract", "sessionId"],
+      "properties": {
+        "escrowContract": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "sessionId": { "type": "string" },
+        "salt": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$"
+        },
+        "channelId": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$"
+        },
+        "scope": { "enum": ["resource", "realm"], "default": "resource" },
+        "minVoucherDelta": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "feePayer": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, server pays transaction fees"
+        },
+        "chainId": { "type": "integer" }
+      },
+      "oneOf": [
+        { "required": ["salt"] },
+        { "required": ["channelId"] }
+      ]
+    }
+  }
+}
+~~~
+
+## Stream Payload Schema
+
+~~~json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paymentauth.org/schemas/stream-payload.json",
+  "title": "Stream Payload",
+  "type": "object",
+  "required": ["action", "sessionId", "actionDetails"],
+  "properties": {
+    "action": { "enum": ["open", "topUp", "voucher", "close"] },
+    "sessionId": { "type": "string" },
+    "actionDetails": {
+      "type": "object",
+      "required": ["channelId"],
+      "properties": {
+        "type": {
+          "enum": ["transaction", "hash"],
+          "description": "Submission type for open/topUp actions"
+        },
+        "channelId": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]+$",
+          "description": "Signed transaction bytes (if type=transaction)"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$",
+          "description": "Transaction hash (if type=hash)"
+        },
+        "additionalDeposit": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Amount added for topUp action"
+        },
+        "authorizedSigner": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "voucher": { "$ref": "#/$defs/signedTypedData" },
+        "closeRequest": { "$ref": "#/$defs/signedTypedData" }
+      }
+    }
+  },
+  "$defs": {
+    "signedTypedData": {
+      "type": "object",
+      "required": ["payload", "signature"],
+      "properties": {
+        "payload": {
+          "type": "object",
+          "required": ["types", "primaryType", "domain", "message"],
+          "properties": {
+            "types": { "type": "object" },
+            "primaryType": { "type": "string" },
+            "domain": {
+              "type": "object",
+              "required": ["name", "version", "chainId", "verifyingContract"],
+              "properties": {
+                "name": { "type": "string" },
+                "version": { "type": "string" },
+                "chainId": { "type": "integer" },
+                "verifyingContract": {
+                  "type": "string",
+                  "pattern": "^0x[0-9a-fA-F]{40}$"
+                }
+              }
+            },
+            "message": { "type": "object" }
+          }
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{128,130}$",
+          "description": "65-byte (130 hex) or EIP-2098 64-byte (128 hex) signature"
+        }
+      }
+    }
+  }
+}
+~~~
+
+## Stream Receipt Schema
+
+~~~json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paymentauth.org/schemas/stream-receipt.json",
+  "title": "Stream Receipt",
+  "type": "object",
+  "required": ["method", "intent", "status", "timestamp", "challengeId", "sessionId", "channelId", "balance"],
+  "properties": {
+    "method": { "const": "tempo" },
+    "intent": { "const": "stream" },
+    "status": { "const": "success" },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "challengeId": { "type": "string" },
+    "sessionId": { "type": "string" },
+    "channelId": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "balance": {
+      "type": "object",
+      "required": ["acceptedCumulative", "spent", "available"],
+      "properties": {
+        "acceptedCumulative": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "spent": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "available": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      }
+    },
+    "metering": {
+      "type": "object",
+      "properties": {
+        "units": { "type": "integer" },
+        "unit": { "type": "string" },
+        "cost": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      }
+    },
+    "settlement": {
+      "type": "object",
+      "properties": {
+        "txHash": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{64}$"
+        },
+        "settledAmount": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      }
+    }
+  }
+}
 ~~~
 
 # Acknowledgements

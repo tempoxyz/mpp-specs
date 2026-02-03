@@ -423,6 +423,17 @@ and reject new payment requests when balance is insufficient.
 
 # IANA Considerations
 
+## Payment Method Registration
+
+This document registers the following payment method in the "HTTP Payment
+Methods" registry established by {{I-D.httpauth-payment}}:
+
+| Method Identifier | Description | Reference |
+|-------------------|-------------|-----------|
+| `tempo` | Tempo blockchain TIP-20 token payments | This document |
+
+Contact: Tempo Labs (<contact@tempo.xyz>)
+
 ## Payment Intent Registration
 
 This document registers the following payment intent in the "HTTP Payment
