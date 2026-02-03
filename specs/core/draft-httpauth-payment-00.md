@@ -813,7 +813,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
 
 {
-  "type": "https://ietf.org/payment/problems/payment-required",
+  "type": "https://paymentauth.org/problems/payment-required",
   "title": "Payment Required",
   "status": 402,
   "detail": "Payment required for access.",
@@ -946,7 +946,7 @@ Content-Type: application/problem+json
 WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", method="invoice", intent="charge", request="..."
 
 {
-  "type": "https://ietf.org/payment/problems/verification-failed",
+  "type": "https://paymentauth.org/problems/verification-failed",
   "title": "Payment Verification Failed",
   "status": 402,
   "detail": "Invalid payment proof."
