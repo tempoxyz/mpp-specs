@@ -150,7 +150,7 @@ stream endpoint:
       |                             |-------------------------->  |
       |                             |                             |
       |  (10) 200 OK + Receipt      |                             |
-      |       (includes closeTxHash)|                             |
+      |       (includes txHash)     |                             |
       |<--------------------------  |                             |
       |                             |                             |
 ~~~
@@ -238,7 +238,7 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 |------|--------|---------|
 | address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
 | bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
-| signature | 132 chars (0x + 130 hex) | 65-byte (r‖s‖v) ECDSA signature |
+| signature | 130-132 chars (0x + 128-130 hex) | 65-byte (r‖s‖v) or 64-byte EIP-2098 compact |
 
 Implementations MUST use lowercase hex. Implementations SHOULD accept
 mixed-case input but normalize to lowercase before comparison.
@@ -375,15 +375,18 @@ Server withdraws funds using a signed voucher without closing the channel.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Unique channel identifier |
 | `cumulativeAmount` | uint128 | Cumulative total authorized (not delta) |
+| `sessionHash` | bytes32 | Session binding hash (see {{session-binding}}) |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
 The contract computes `delta = cumulativeAmount - channel.settled` and
-transfers `delta` tokens to the payee.
+transfers `delta` tokens to the payee. The `sessionHash` is required to
+verify the EIP-712 signature but is not stored or validated by the contract.
 
 ~~~solidity
 function settle(
     bytes32 channelId,
     uint128 cumulativeAmount,
+    bytes32 sessionHash,
     bytes calldata signature
 ) external;
 ~~~
@@ -413,15 +416,19 @@ the remainder to the payer. Only callable by the payee.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Channel to close |
 | `cumulativeAmount` | uint128 | Final cumulative amount for settlement |
+| `sessionHash` | bytes32 | Session binding hash (see {{session-binding}}) |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
 Transfers `cumulativeAmount - channel.settled` to payee, refunds
 `channel.deposit - cumulativeAmount` to payer, and marks channel finalized.
+The `sessionHash` is required to verify the EIP-712 signature but is not
+stored or validated by the contract.
 
 ~~~solidity
 function close(
     bytes32 channelId,
     uint128 cumulativeAmount,
+    bytes32 sessionHash,
     bytes calldata signature
 ) external;
 ~~~
@@ -538,7 +545,7 @@ promote common fields to the core schema.
 | `methodDetails.escrowContract` | string | REQUIRED | Address of the channel escrow contract |
 | `methodDetails.channelId` | string | CONDITIONAL | Channel ID if channel already exists |
 | `methodDetails.salt` | string | CONDITIONAL | Random salt for new channel |
-| `methodDetails.sessionId` | string | REQUIRED | Opaque session identifier for correlating requests |
+| `methodDetails.sessionId` | string | REQUIRED | Opaque session identifier (see Section 3 for requirements) |
 | `methodDetails.scope` | string | OPTIONAL | Session scope: `"resource"` (default) or `"realm"` |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (default: `"1"`) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
@@ -579,11 +586,11 @@ The `scope` field controls session applicability:
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
     "scope": "realm",
     "minVoucherDelta": "1000",
     "chainId": 42431
@@ -601,11 +608,11 @@ deposit of 10.00 tokens.
   "amount": "25",
   "unitType": "llm_token",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
     "minVoucherDelta": "1000",
     "chainId": 42431
   }
@@ -614,6 +621,92 @@ deposit of 10.00 tokens.
 
 For existing channels, `suggestedDeposit` is omitted since the channel
 already has funds.
+
+# Fee Payment {#fee-payment}
+
+When a challenge includes `methodDetails.feePayer: true`, the server
+commits to paying transaction fees on behalf of the client. In the
+`stream` intent, `feePayer` affects only the client-originated channel
+funding transactions (`open` and `topUp`) when the credential uses
+`type="transaction"`.
+
+## Server-Paid Fees
+
+When `feePayer: true` and `type="transaction"` for `open` or `topUp`:
+
+1. **Client signs with placeholder**: The client signs the Tempo Transaction
+   {{TEMPO-TX-SPEC}} with `fee_payer_signature` set to a placeholder value
+   (`0x00`) and `fee_token` left empty. The client uses signature domain
+   `0x76`.
+
+2. **Server receives credential**: The server extracts the client-signed
+   transaction from the credential payload.
+
+3. **Server adds fee payment signature**: The server selects a `fee_token`
+   (any USD-denominated TIP-20 stablecoin) and signs the transaction using
+   signature domain `0x78`. This signature commits to the transaction
+   including the `fee_token` and client's address.
+
+4. **Server broadcasts**: The final transaction contains both signatures:
+   - Client's signature (authorizing the channel operation)
+   - Server's `fee_payer_signature` (committing to pay fees)
+
+**`type="hash"` limitation**: When the client supplies `type="hash"`, the
+transaction is already broadcast; the server cannot add a fee payer
+signature. Therefore, `type="hash"` credentials MUST NOT be used with
+`feePayer: true` for `open` or `topUp` actions. Servers MUST reject such
+credentials with 400 Bad Request.
+
+## Client-Paid Fees
+
+When `feePayer: false` or omitted:
+
+- **`type="transaction"`**: The client MUST set `fee_token` to a valid
+  USD TIP-20 token address and include valid fee payment fields so the
+  transaction is executable without server fee sponsorship. The server
+  broadcasts the transaction as-is.
+- **`type="hash"`**: The client has already broadcast and paid fees.
+  The server only verifies the transaction on-chain.
+
+## Server-Initiated Operations
+
+The `settle` and `close` contract functions are server-originated on-chain
+transactions. The server pays transaction fees for these operations
+regardless of the `feePayer` setting:
+
+- **Voucher updates** (`action="voucher"`) are off-chain and incur no
+  transaction fees.
+- **Settlement** (`settle()`) and **close** (`close()`) are initiated by
+  the server using the highest valid voucher. The server pays fees for
+  these transactions.
+- Servers MAY recover settlement costs through pricing or other business
+  logic.
+
+The `feePayer` field applies only to `open` and `topUp` operations where
+the client provides a signed transaction.
+
+## Server Requirements
+
+When acting as fee payer for `open` or `topUp`:
+
+- Servers MUST maintain sufficient balance of a USD TIP-20 token to pay
+  transaction fees
+- Servers MAY use any USD-denominated TIP-20 token with sufficient AMM
+  liquidity as the fee token
+- Servers MUST validate the transaction matches challenge and channel
+  parameters before adding fee payer signature
+- Servers MUST reject `type="hash"` credentials when `feePayer: true`
+
+## Client Requirements
+
+- When `feePayer: true` and `type="transaction"`: Clients MUST sign with
+  `fee_payer_signature` set to `0x00` and `fee_token` empty or `0x80`
+  (RLP null)
+- When `feePayer: false` or omitted and `type="transaction"`: Clients
+  MUST set `fee_token` to a valid USD TIP-20 token and have sufficient
+  balance to pay fees
+- When `type="hash"`: Clients are responsible for paying fees before
+  broadcast
 
 # Credential Schema
 
@@ -697,9 +790,11 @@ broadcast.
 | `voucher` | object | REQUIRED | Initial signed voucher (amount=0) |
 
 When `type` is `"transaction"`, the `signature` field contains the complete
-signed Tempo Transaction (type 0x76) serialized as RLP and hex-encoded.
+signed Tempo Transaction (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP
+and hex-encoded. This is the full transaction bytes, not an ECDSA signature.
 The server broadcasts the transaction, optionally adding a fee payer
-signature if `feePayer: true` was specified in the challenge.
+signature if `feePayer: true` was specified in the challenge (see
+{{fee-payment}}).
 
 When `type` is `"hash"`, the client has already broadcast the transaction.
 The `hash` field contains the transaction hash for the server to verify
@@ -729,7 +824,7 @@ The `voucher` object contains:
   },
   "payload": {
     "action": "open",
-    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
     "actionDetails": {
       "type": "hash",
       "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -770,7 +865,7 @@ The `voucher` object contains:
 {
   "payload": {
     "action": "open",
-    "sessionId": "s_7c9f2a4b8e1d3f5a",
+    "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
     "actionDetails": {
       "type": "transaction",
       "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -781,8 +876,10 @@ The `voucher` object contains:
 }
 ~~~
 
-Note: Signatures are 65 bytes (r‖s‖v) hex-encoded with 0x prefix (132 characters
-total). Examples use abbreviated signatures for brevity.
+Note: The `signature` field here contains RLP-encoded transaction bytes, not
+an ECDSA signature. ECDSA signatures in vouchers are 65 bytes (r‖s‖v) or
+64 bytes (EIP-2098 compact). Examples use abbreviated values for brevity;
+the voucher structure is shown in full in the type="hash" example above.
 
 The `challenge` object MUST echo all parameters from the server's
 `WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
@@ -808,7 +905,7 @@ or provide a signed transaction for the server to broadcast.
 ~~~json
 {
   "action": "topUp",
-  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
   "actionDetails": {
     "type": "hash",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -837,7 +934,7 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 ~~~json
 {
   "action": "voucher",
-  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
   "actionDetails": {
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "voucher": {
@@ -890,7 +987,7 @@ directly by the payer when cooperative close fails.
 ~~~json
 {
   "action": "close",
-  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
   "actionDetails": {
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "voucher": {
@@ -1122,21 +1219,21 @@ On `action="open"`, servers MUST:
    - If `type="hash"`: Verify the `hash` references a finalized transaction.
      On Tempo networks, finality is achieved within approximately 500ms.
    - If `type="transaction"`: Decode the signed transaction from `signature`,
-     verify it calls `open()` on the expected escrow contract with correct
-     parameters. If `feePayer: true`, add fee payer signature and broadcast.
-     Otherwise, broadcast as-is.
+      verify it calls `open()` on the expected escrow contract with correct
+      parameters. If `feePayer: true`, add fee payer signature using domain
+      `0x78` (see {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify channel state:
    - Channel exists with matching `channelId`
    - `channel.payee` matches server's address
    - `channel.token` matches `request.currency`
-   - `channel.deposit >= amount` (minimum one unit)
-   - `channel.settled == 0` (fresh channel)
+   - `channel.deposit - channel.settled >= amount` (sufficient available balance)
+   - Channel is not finalized
 3. Verify the initial voucher:
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
    - `voucher.channelId` matches
-   - `voucher.cumulativeAmount == 0` for initial voucher
+   - `voucher.cumulativeAmount >= channel.settled` (at or above current settlement)
 4. Initialize server-side channel state
 
 ## TopUp Verification
@@ -1147,8 +1244,9 @@ On `action="topUp"`, servers MUST:
    - If `type="hash"`: Verify the `hash` references a finalized `topUp()`
      transaction for the specified `channelId`.
    - If `type="transaction"`: Decode the signed transaction from `signature`,
-     verify it calls `topUp()` on the expected escrow contract. If
-     `feePayer: true`, add fee payer signature and broadcast.
+      verify it calls `topUp()` on the expected escrow contract. If
+      `feePayer: true`, add fee payer signature using domain `0x78` (see
+      {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify updated channel state:
    - `channel.deposit` increased by `additionalDeposit`
    - Channel is not finalized
@@ -1178,7 +1276,7 @@ Servers MUST persist the highest voucher to durable storage before
 providing the corresponding service. Failure to do so may result in
 unrecoverable fund loss if the server crashes after service delivery.
 
-## Idempotency
+## Idempotency {#idempotency}
 
 Servers MUST treat voucher submissions idempotently:
 
@@ -1402,8 +1500,21 @@ for resources that require stream payment.
 ## Receipt Generation {#receipt-generation}
 
 Servers MUST return a `Payment-Receipt` header on **every successful
-paid request**, not only on settlement or close. This enables clients
-to track balance consumption in real-time.
+paid request**. For streaming responses (SSE, chunked transfer), servers
+MUST include the receipt in the initial response headers AND in the final
+message of the stream. This ensures clients receive at least one receipt
+even if the stream is interrupted, while also providing accurate final
+state when the stream completes normally.
+
+For SSE responses, the final receipt SHOULD be delivered as an event:
+
+~~~
+event: payment-receipt
+data: {"method":"tempo","intent":"stream","status":"success",...}
+~~~
+
+For chunked responses, the final receipt MAY be delivered as an HTTP
+trailer if the client advertises trailer support via `TE: trailers`.
 
 The base Payment Auth spec defines core receipt fields. The stream intent
 extends the receipt with balance tracking and metering information:
@@ -1441,7 +1552,7 @@ server billing accuracy.
   "intent": "stream",
   "status": "success",
   "timestamp": "2025-01-06T12:08:30Z",
-  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "balance": {
@@ -1465,7 +1576,7 @@ server billing accuracy.
   "intent": "stream",
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
-  "sessionId": "s_7c9f2a4b8e1d3f5a",
+  "sessionId": "s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "balance": {
@@ -1518,7 +1629,9 @@ To mitigate voucher flooding, servers MUST implement rate limiting:
 - Servers MAY implement additional IP-based rate limiting for
   unauthenticated requests
 - Servers MUST enforce `minVoucherDelta` to prevent tiny increments
-- Servers SHOULD reject vouchers that don't advance state
+- Servers SHOULD skip expensive signature verification for vouchers that
+  do not advance state (return 200 OK with current `highestAmount` per
+  {{idempotency}})
 
 Servers SHOULD perform format validation (field presence, hex encoding,
 length checks) before expensive ECDSA signature recovery to minimize
@@ -1612,8 +1725,10 @@ Servers MUST implement session-to-voucher mapping for:
 - Usage accounting
 - Audit trails
 
-The `sessionId` is not cryptographically bound to the voucher signature;
-it is an application-layer correlation mechanism.
+The `sessionId` is cryptographically bound to the voucher signature via
+`sessionHash` (see {{session-binding}}). This binding prevents cross-session
+replay attacks while maintaining the `sessionId` as the primary application-
+layer correlation mechanism.
 
 ## Session and Resource Binding {#session-binding}
 
@@ -1676,7 +1791,7 @@ However, for high-value channels, servers SHOULD:
 2. Monitor for `ChannelClosed` or `CloseRequested` events
 3. Cease service delivery if the channel becomes invalid
 
-If a chain reorganization invalidates an accepted `openTxHash`, the
+If a chain reorganization invalidates an accepted `hash`, the
 server SHOULD:
 
 1. Stop accepting vouchers for that channel
@@ -1752,11 +1867,11 @@ The `request` decodes to:
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
     "salt": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-    "sessionId": "s_kM9xPqWvT2nJ",
+    "sessionId": "s_kM9xPqWv-T2nJ-4rHs-Y4aD-fEb123456789",
     "scope": "realm",
     "minVoucherDelta": "1000",
     "chainId": 42431
@@ -1807,7 +1922,7 @@ The credential payload for a voucher update:
   "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
   "payload": {
     "action": "voucher",
-    "sessionId": "s_kM9xPqWvT2nJ",
+    "sessionId": "s_kM9xPqWv-T2nJ-4rHs-Y4aD-fEb123456789",
     "actionDetails": {
       "channelId": "0x6d0f4fdf...",
       "voucher": {
@@ -1842,7 +1957,7 @@ The credential payload for a close request:
   "challenge": { "id": "kM9xPqWvT2nJrHsY4aDfEb", ... },
   "payload": {
     "action": "close",
-    "sessionId": "s_kM9xPqWvT2nJ",
+    "sessionId": "s_kM9xPqWv-T2nJ-4rHs-Y4aD-fEb123456789",
     "actionDetails": {
       "channelId": "0x6d0f4fdf...",
       "voucher": {
@@ -1925,6 +2040,7 @@ interface ITempoStreamChannel {
     function settle(
         bytes32 channelId,
         uint128 cumulativeAmount,
+        bytes32 sessionHash,
         bytes calldata signature
     ) external;
 
@@ -1936,6 +2052,7 @@ interface ITempoStreamChannel {
     function close(
         bytes32 channelId,
         uint128 cumulativeAmount,
+        bytes32 sessionHash,
         bytes calldata signature
     ) external;
 
@@ -2012,12 +2129,6 @@ interface ITempoStreamChannel {
         uint256 refundedToPayer
     );
 
-    event ChannelExpired(
-        bytes32 indexed channelId,
-        address indexed payer,
-        address indexed payee
-    );
-
     error ChannelAlreadyExists();
     error ChannelNotFound();
     error ChannelFinalized();
@@ -2042,7 +2153,7 @@ https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels/src
 ### Voucher Signing
 
 ~~~typescript
-import { hashTypedData, recoverTypedDataAddress, keccak256, encodePacked } from 'viem'
+import { hashTypedData, recoverTypedDataAddress, keccak256, encodeAbiParameters } from 'viem'
 
 const voucherTypes = {
   Voucher: [
@@ -2062,13 +2173,14 @@ function getVoucherDomain(escrowContract: Address, chainId: number) {
 }
 
 // Compute sessionHash for session/resource binding
+// Uses abi.encode (not encodePacked) to match spec and avoid hash collisions
 function computeSessionHash(sessionId: string, resourceURI: string): `0x${string}` {
-  const resourceHash = keccak256(encodePacked(['string'], [resourceURI]))
-  return keccak256(encodePacked(['string', 'bytes32'], [sessionId, resourceHash]))
+  const resourceHash = keccak256(encodeAbiParameters([{ type: 'string' }], [resourceURI]))
+  return keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'bytes32' }], [sessionId, resourceHash]))
 }
 
 // Sign a voucher
-const sessionHash = computeSessionHash('s_7c9f2a4b8e1d3f5a', '/api/chat')
+const sessionHash = computeSessionHash('s_7c9f2a4b-8e1d-4f5a-b9c0-1234567890ab', '/api/chat')
 
 const signature = await walletClient.signTypedData({
   domain: getVoucherDomain(escrowContract, 42431),
