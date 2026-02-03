@@ -108,9 +108,7 @@ The client pays exactly for tokens received, with no worst-case reservation.
 
 ## Stream Flow
 
-The following diagram illustrates the Tempo stream flow. Crucially, all
-interactions occur on the **same resource URI**—there is no separate
-stream endpoint:
+The following diagram illustrates the Tempo stream flow:
 
 ~~~
    Client                        Server                     Tempo Network
@@ -308,31 +306,31 @@ Channels have no expiry—they remain open until explicitly closed.
 
 ~~~
 ┌─────────────────────────────────────────────────────────────────┐
-│                         CHANNEL OPEN                            │
-│  Client deposits tokens, channel created with unique ID         │
+│                          CHANNEL OPEN                           │
+│       Client deposits tokens, channel created with unique ID    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      STREAMING PAYMENTS                         │
-│  Client signs vouchers, server provides service                 │
-│  Server may periodically settle() to claim funds                │
+│                       STREAMING PAYMENTS                        │
+│          Client signs vouchers, server provides service         │
+│          Server may periodically settle() to claim funds        │
 └─────────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
               ▼                               ▼
 ┌─────────────────────────┐     ┌─────────────────────────────────┐
-│    COOPERATIVE CLOSE    │     │        FORCED CLOSE             │
+│   COOPERATIVE CLOSE     │     │          FORCED CLOSE           │
 │  Server calls close()   │     │  1. Client calls requestClose() │
-│  with final voucher     │     │  2. Wait 15 min grace period    │
+│   with final voucher    │     │  2. Wait 15 min grace period    │
 │                         │     │  3. Client calls withdraw()     │
 └─────────────────────────┘     └─────────────────────────────────┘
               │                               │
               └───────────────┬───────────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       CHANNEL CLOSED                            │
-│  Funds distributed, channel finalized                           │
+│                        CHANNEL CLOSED                           │
+│           Funds distributed, channel finalized                  │
 └─────────────────────────────────────────────────────────────────┘
 ~~~
 
