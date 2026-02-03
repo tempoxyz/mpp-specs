@@ -100,8 +100,8 @@ Consider an LLM inference API that charges per output token:
 1. Client requests a streaming completion (SSE response)
 2. Server returns 402 with a `stream` challenge
 3. Client opens a payment channel on-chain, depositing funds
-4. Server begins streaming tokens
-5. As tokens stream, client signs vouchers with increasing amounts
+4. Server begins streaming response
+5. As response streams streams, or over incremental requests, client signs vouchers with increasing amounts
 6. Server settles periodically or at stream completion
 
 The client pays exactly for tokens received, with no worst-case reservation.
@@ -133,7 +133,7 @@ The following diagram illustrates the Tempo stream flow:
       |      (streaming response)   |                             |
       |<--------------------------  |                             |
       |                             |                             |
-      |  (6) GET /api/resource      |                             |
+      |  (6) HEAD /api/resource     |                             |
       |      action="voucher"       |                             |
       |      (top-up, same URI)     |                             |
       |-------------------------->  |                             |
@@ -142,12 +142,21 @@ The following diagram illustrates the Tempo stream flow:
       |<--------------------------  |                             |
       |                             |                             |
       |  (8) GET /api/resource      |                             |
-      |      action="close"         |                             |
+      |      action="voucher"       |                             |
+      |      (incremental request)  |                             |
       |-------------------------->  |                             |
-      |                             |  (9) close(voucher)         |
+      |                             |                             |
+      |  (9) 200 OK + Receipt       |                             |
+      |      (additional response)  |                             |
+      |<--------------------------  |                             |
+      |                             |                             |
+      |  (10) GET /api/resource     |                             |
+      |       action="close"        |                             |
+      |-------------------------->  |                             |
+      |                             |  (11) close(voucher)        |
       |                             |-------------------------->  |
       |                             |                             |
-      |  (10) 200 OK + Receipt      |                             |
+      |  (12) 200 OK + Receipt      |                             |
       |       (includes txHash)     |                             |
       |<--------------------------  |                             |
       |                             |                             |
@@ -812,6 +821,13 @@ The `topUp` action adds funds to an existing channel during a streaming
 session. Like `open`, the client may submit the transaction themselves
 or provide a signed transaction for the server to broadcast.
 
+Clients MUST include a `challengeId` in the Payment credential for `topUp`
+actions. To obtain a challenge for a top-up outside an active streaming
+response, clients MAY send a `HEAD` request to the protected resource;
+the server returns 402 with a `WWW-Authenticate` challenge (no body).
+Servers MUST reject `topUp` actions referencing an unknown or expired
+`challengeId` with problem type `challenge-not-found`.
+
 **Payload fields (in addition to `action`):**
 
 | Field | Type | Required | Description |
@@ -1121,6 +1137,8 @@ Problem type URIs:
 | `https://paymentauth.org/problems/stream/delta-too-small` | Amount increase below `minVoucherDelta` |
 | `https://paymentauth.org/problems/stream/channel-not-found` | No channel with this ID exists |
 | `https://paymentauth.org/problems/stream/channel-finalized` | Channel has been closed |
+| `https://paymentauth.org/problems/stream/challenge-not-found` | Challenge ID unknown or expired |
+| `https://paymentauth.org/problems/stream/insufficient-balance` | Insufficient authorized balance for request |
 
 For errors on the Payment Auth protected resource (the initial request
 carrying `Authorization: Payment`), servers MUST return 402 with a fresh
@@ -1751,21 +1769,7 @@ The voucher fields contain the final cumulative amount for on-chain settlement.
 This appendix provides reference implementation details. These are
 informative and not normative.
 
-## Deployed Contracts
-
-| Network | Chain ID | Contract Address |
-|---------|----------|------------------|
-| Moderato (Testnet) | 42431 | `0x7a6357db33731cfb7b9d54aca750507f13a3fec0` |
-
-## Contract Source
-
-The reference implementation is available at:
-
-~~~
-https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels
-~~~
-
-### Solidity Interface
+## Solidity Interface
 
 ~~~solidity
 // SPDX-License-Identifier: MIT
@@ -1900,183 +1904,16 @@ interface ITempoStreamChannel {
 }
 ~~~
 
-## TypeScript SDK
+## Deployed Contracts
 
-A TypeScript SDK is available at:
+| Network | Chain ID | Contract Address |
+|---------|----------|------------------|
+| Moderato (Testnet) | 42431 | `0x7a6357db33731cfb7b9d54aca750507f13a3fec0` |
 
-~~~
-https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels/src
-~~~
+## Contract Source
 
-### Voucher Signing
-
-~~~typescript
-import { hashTypedData, recoverTypedDataAddress, keccak256, encodeAbiParameters } from 'viem'
-
-const voucherTypes = {
-  Voucher: [
-    { name: 'channelId', type: 'bytes32' },
-    { name: 'cumulativeAmount', type: 'uint128' },
-    { name: 'sessionHash', type: 'bytes32' },
-  ],
-} as const
-
-function getVoucherDomain(escrowContract: Address, chainId: number) {
-  return {
-    name: 'Tempo Stream Channel',
-    version: '1',
-    chainId,
-    verifyingContract: escrowContract,
-  } as const
-}
-
-// Compute sessionHash for session/resource binding
-// Uses abi.encode (not encodePacked) to match spec and avoid hash collisions
-function computeSessionHash(challengeId: string, resourceURI: string): `0x${string}` {
-  const resourceHash = keccak256(encodeAbiParameters([{ type: 'string' }], [resourceURI]))
-  return keccak256(encodeAbiParameters([{ type: 'string' }, { type: 'bytes32' }], [challengeId, resourceHash]))
-}
-
-// Sign a voucher
-const sessionHash = computeSessionHash('kM9xPqWvT2nJrHsY4aDfEb', '/api/chat')
-
-const signature = await walletClient.signTypedData({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: voucherTypes,
-  primaryType: 'Voucher',
-  message: {
-    channelId: '0x...',
-    cumulativeAmount: 250000n,
-    sessionHash,
-  },
-})
-
-// Recover signer from voucher
-const signer = await recoverTypedDataAddress({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: voucherTypes,
-  primaryType: 'Voucher',
-  message: {
-    channelId: '0x...',
-    cumulativeAmount: 250000n,
-    sessionHash,
-  },
-  signature,
-})
-~~~
-
-### Close Request Signing
-
-~~~typescript
-const closeRequestTypes = {
-  CloseRequest: [
-    { name: 'channelId', type: 'bytes32' },
-    { name: 'requestedAt', type: 'uint64' },
-  ],
-} as const
-
-// Sign a close request with timestamp for replay protection
-const requestedAt = BigInt(Math.floor(Date.now() / 1000))
-
-const signature = await walletClient.signTypedData({
-  domain: getVoucherDomain(escrowContract, 42431),
-  types: closeRequestTypes,
-  primaryType: 'CloseRequest',
-  message: {
-    channelId: '0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f',
-    requestedAt,
-  },
-})
-
-// Server should reject if requestedAt is older than 5 minutes
-~~~
-
-# Schema Definitions (CDDL)
-
-This appendix provides CDDL {{RFC8610}} schema definitions for the
-wire formats defined in this specification.
-
-~~~cddl
-; Base types
-; Note: Patterns accept mixed-case hex; implementations normalize to lowercase
-hex-string = tstr .regexp "0x[0-9a-fA-F]+"
-address = tstr .regexp "0x[0-9a-fA-F]{40}"
-bytes32 = tstr .regexp "0x[0-9a-fA-F]{64}"
-; Signature: 65-byte (130 hex) standard or 64-byte (128 hex) EIP-2098 compact
-signature = tstr .regexp "0x[0-9a-fA-F]{128,130}"
-uint-string = tstr .regexp "[0-9]+"
-
-; Stream Request (decoded from challenge request parameter)
-stream-request = {
-  amount: uint-string,        ; price per unit for stream intent
-  unitType: tstr,
-  currency: address,
-  recipient: address,
-  ? suggestedDeposit: uint-string,
-  methodDetails: stream-method-details,
-}
-
-stream-method-details = {
-  escrowContract: address,
-  ? channelId: bytes32,         ; OPTIONAL: for channel reuse
-  ? minVoucherDelta: uint-string, ; OPTIONAL: server policy hint
-  ? feePayer: bool,
-  ? chainId: uint,
-}
-
-; Credential payloads (flattened - voucher fields at payload level)
-open-payload = {
-  action: "open",
-  type: "transaction" / "hash",
-  (transaction: hex-string // hash: bytes32),
-  ? authorizedSigner: address,
-  ; voucher fields (flattened)
-  channelId: bytes32,
-  cumulativeAmount: uint-string,
-  sessionHash: bytes32,
-  signature: signature,
-}
-
-topup-payload = {
-  action: "topUp",
-  type: "transaction" / "hash",
-  channelId: bytes32,
-  (transaction: hex-string // hash: bytes32),
-  additionalDeposit: uint-string,
-}
-
-voucher-payload = {
-  action: "voucher",
-  channelId: bytes32,
-  cumulativeAmount: uint-string,
-  sessionHash: bytes32,
-  signature: signature,
-}
-
-close-payload = {
-  action: "close",
-  channelId: bytes32,
-  cumulativeAmount: uint-string,
-  sessionHash: bytes32,
-  signature: signature,
-}
-
-stream-payload = open-payload / topup-payload / voucher-payload / close-payload
-
-; Receipt (flattened)
-stream-receipt = {
-  method: "tempo",
-  intent: "stream",
-  status: "success",
-  timestamp: tstr,          ; RFC 3339
-  challengeId: tstr,
-  channelId: bytes32,
-  acceptedCumulative: uint-string,
-  spent: uint-string,
-  ? units: uint,            ; OPTIONAL: units consumed this request
-  ? txHash: bytes32,        ; OPTIONAL: present on settlement/close
-}
-~~~
+The reference implementation is available at:
+https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels
 
 # Schema Definitions (JSON Schema)
 
@@ -2210,6 +2047,13 @@ prefer JSON Schema over CDDL.
 ~~~
 
 ## Stream Receipt Schema
+
+Servers MUST include `Payment-Receipt` only on successful processing of a
+stream action (2xx responses). On error responses (4xx/5xx), servers MUST
+return Problem Details and MUST NOT include a `Payment-Receipt` header.
+The `status` field is always `"success"` because receipts represent
+successful acceptance; failures are communicated via HTTP status codes
+and Problem Details.
 
 ~~~json
 {
