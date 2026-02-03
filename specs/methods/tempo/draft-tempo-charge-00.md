@@ -378,7 +378,9 @@ the transaction. The server verifies the transaction onchain:
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}.
+per Section 5.3 of {{I-D.httpauth-payment}}. Servers MUST NOT include a
+`Payment-Receipt` header on error responses; failures are communicated via
+HTTP status codes and Problem Details.
 
 The receipt payload for Tempo charge:
 
@@ -386,7 +388,7 @@ The receipt payload for Tempo charge:
 |-------|------|-------------|
 | `method` | string | `"tempo"` |
 | `reference` | string | Transaction hash of the settlement transaction |
-| `status` | string | `"success"` or `"failed"` |
+| `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} settlement time |
 
 # Security Considerations
