@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: deploy
@@ -17,9 +15,6 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,18 +32,6 @@ jobs:
         run: |
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site/public/
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
       - name: Upload bundle
         uses: actions/upload-artifact@v4
