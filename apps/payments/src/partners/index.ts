@@ -2,6 +2,7 @@ import type { PartnerConfig } from '../config.js'
 import { anthropic } from './anthropic.js'
 import { browserbase } from './browserbase.js'
 import { exa } from './exa.js'
+import { fal } from './fal.js'
 import { firecrawl } from './firecrawl.js'
 import { modal } from './modal.js'
 import { openai } from './openai.js'
@@ -14,6 +15,7 @@ export const partners: PartnerConfig[] = [
 	anthropic,
 	browserbase,
 	exa,
+	fal,
 	firecrawl,
 	modal,
 	openai,

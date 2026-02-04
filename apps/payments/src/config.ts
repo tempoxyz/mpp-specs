@@ -109,6 +109,8 @@ export interface Env {
 	OPENROUTER_API_KEY?: string
 	TWITTER_BEARER_TOKEN?: string
 	ANTHROPIC_API_KEY?: string
+	/** fal.ai API key for image/video generation */
+	FAL_API_KEY?: string
 	/** S3/R2 storage endpoint URL (e.g., https://bucket.s3.amazonaws.com or R2 URL) */
 	STORAGE_ENDPOINT?: string
 	/** S3/R2 pre-signed auth or access key for storage proxy */

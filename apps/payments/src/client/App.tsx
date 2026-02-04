@@ -96,7 +96,15 @@ export function App() {
 								className="service-card"
 							>
 								<div className="service-name">{service.name}</div>
-								<div className="service-url">{new URL(service.url).hostname}</div>
+								<div className="service-url">
+									{(() => {
+										try {
+											return new URL(service.url).hostname
+										} catch {
+											return service.url
+										}
+									})()}
+								</div>
 								<div className="service-price">
 									<span className="service-price-label">Default price</span>
 									<span className="service-price-value">
