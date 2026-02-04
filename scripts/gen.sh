@@ -98,8 +98,10 @@ process_spec() {
   xml2rfc --pdf $XML2RFC_OPTS "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
 
   # Copy to site/public for web serving
+  # Use cp -f to overwrite existing files/symlinks
   echo "    [copy] Copying to site/public..."
   for ext in xml html txt pdf; do
+    rm -f "$SITE_PUBLIC_DIR/${name}.${ext}"
     cp "$OUT_DIR/${name}.${ext}" "$SITE_PUBLIC_DIR/${name}.${ext}"
   done
 }
