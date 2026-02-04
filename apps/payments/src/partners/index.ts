@@ -1,6 +1,7 @@
 import type { PartnerConfig } from '../config.js'
 import { anthropic } from './anthropic.js'
 import { browserbase } from './browserbase.js'
+import { elevenlabs } from './elevenlabs.js'
 import { exa } from './exa.js'
 import { fal } from './fal.js'
 import { firecrawl } from './firecrawl.js'
@@ -15,6 +16,7 @@ import { twitter } from './twitter.js'
 export const partners: PartnerConfig[] = [
 	anthropic,
 	browserbase,
+	elevenlabs,
 	exa,
 	fal,
 	firecrawl,

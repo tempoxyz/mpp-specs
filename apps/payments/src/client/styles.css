@@ -158,10 +158,7 @@ pre {
 /* Services grid */
 .services-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-	gap: 1px;
-	background: var(--border);
-	border: 1px solid var(--border);
+	grid-template-columns: repeat(4, 1fr);
 }
 
 .service-card {
@@ -172,6 +169,9 @@ pre {
 	background: var(--bg);
 	text-decoration: none;
 	transition: background 0.15s;
+	border: 1px solid var(--border);
+	margin-top: -1px;
+	margin-left: -1px;
 }
 
 .service-card:hover {
