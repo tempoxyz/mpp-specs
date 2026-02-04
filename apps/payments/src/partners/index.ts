@@ -9,6 +9,7 @@ import { openai } from './openai.js'
 import { openrouter } from './openrouter.js'
 import { storage } from './storage.js'
 import { temporpc } from './tempo-rpc.js'
+import { twilio } from './twilio.js'
 import { twitter } from './twitter.js'
 
 export const partners: PartnerConfig[] = [
@@ -22,6 +23,7 @@ export const partners: PartnerConfig[] = [
 	openrouter,
 	storage,
 	temporpc,
+	twilio,
 	twitter,
 ]
 
