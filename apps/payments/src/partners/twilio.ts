@@ -9,11 +9,16 @@ import { PRICES, TOKENS, WALLETS } from '../constants.js'
  *
  * API Docs: https://www.twilio.com/docs/messaging/api
  *
- * Base URL: https://api.twilio.com/2010-04-01
- * Auth: HTTP Basic (API Key as username, API Secret as password)
+ * Base URL: https://api.twilio.com
+ * Auth: HTTP Basic (Account SID as username, Auth Token as password)
  *
- * Note: Twilio requires Account SID in the URL path for most endpoints.
- * The API credentials should be in format: "ACCOUNT_SID:AUTH_TOKEN" or "API_KEY:API_SECRET"
+ * Credentials format: "ACCOUNT_SID:AUTH_TOKEN"
+ * The proxy automatically:
+ * - Extracts the Account SID to construct the full URL path
+ * - Base64-encodes credentials for HTTP Basic auth
+ *
+ * Client-facing paths are simplified (no Account SID needed):
+ *   POST /Messages.json -> POST /2010-04-01/Accounts/{accountSid}/Messages.json
  */
 export const twilio: PartnerConfig = {
 	name: 'Twilio',
@@ -29,19 +34,19 @@ export const twilio: PartnerConfig = {
 	destination: WALLETS.TEST_RECEIVER,
 	endpoints: [
 		{
-			path: '/2010-04-01/Accounts/:accountSid/Messages.json',
+			path: '/Messages.json',
 			methods: ['POST'],
 			price: PRICES.CENT_1,
 			description: 'Send an SMS or MMS message',
 		},
 		{
-			path: '/2010-04-01/Accounts/:accountSid/Messages/:messageSid.json',
+			path: '/Messages/:messageSid.json',
 			methods: ['GET'],
 			price: PRICES.CENT_1,
 			description: 'Fetch a specific message',
 		},
 		{
-			path: '/2010-04-01/Accounts/:accountSid/Messages.json',
+			path: '/Messages.json',
 			methods: ['GET'],
 			price: PRICES.CENT_1,
 			description: 'List messages',

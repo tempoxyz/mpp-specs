@@ -119,7 +119,7 @@ export async function proxyRequest(
 	const actualForwardPath = needsAnthropicTranslation ? '/v1/messages' : forwardPath
 	const fullPath =
 		basePath + (actualForwardPath.startsWith('/') ? actualForwardPath : `/${actualForwardPath}`)
-	const upstreamUrl = new URL(fullPath, baseUrl.origin)
+	let upstreamUrl = new URL(fullPath, baseUrl.origin)
 
 	// Copy query parameters
 	const requestUrl = new URL(c.req.url)
@@ -150,6 +150,9 @@ export async function proxyRequest(
 	let needsS3Signing = false
 	let s3Credentials: { accessKeyId: string; secretAccessKey: string } | null = null
 
+	// Track Twilio account SID for URL rewriting
+	let twilioAccountSid: string | null = null
+
 	// In paid mode, set the partner's API key
 	// In passthrough mode, the client's auth header is preserved (if any)
 	if (!preserveClientAuth) {
@@ -168,6 +171,15 @@ export async function proxyRequest(
 				}
 				headers.set('Modal-Key', modalKey)
 				headers.set('Modal-Secret', modalSecret)
+			} else if (partner.slug === 'twilio') {
+				// Twilio uses HTTP Basic auth with ACCOUNT_SID:AUTH_TOKEN
+				// We extract the Account SID for URL rewriting and base64-encode for auth
+				const [accountSid, authToken] = apiKey.split(':')
+				if (!accountSid || !authToken) {
+					throw new Error('Twilio credentials must be in "ACCOUNT_SID:AUTH_TOKEN" format')
+				}
+				twilioAccountSid = accountSid
+				headers.set('Authorization', `Basic ${btoa(apiKey)}`)
 			} else if (partner.apiKeySecretEnvVar) {
 				// S3-style auth with separate access key ID and secret
 				const envRecord = c.env as unknown as Record<string, string | undefined>
@@ -181,6 +193,15 @@ export async function proxyRequest(
 				headers.set(partner.apiKeyHeader, formatApiKey(partner, apiKey))
 			}
 		}
+	}
+
+	// Twilio URL rewriting: inject Account SID into the path
+	// Client sends: /Messages.json
+	// We rewrite to: /2010-04-01/Accounts/{accountSid}/Messages.json
+	if (twilioAccountSid) {
+		const twilioPath = `/2010-04-01/Accounts/${twilioAccountSid}${forwardPath.startsWith('/') ? forwardPath : `/${forwardPath}`}`
+		upstreamUrl = new URL(twilioPath, baseUrl.origin)
+		upstreamUrl.search = requestUrl.search
 	}
 
 	// Get request body if present
