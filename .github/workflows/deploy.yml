@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deploy
@@ -39,6 +39,18 @@ jobs:
           name: ietf-specs-${{ github.sha }}
           path: site/public/
           retention-days: 90
+
+      - name: Publish spec artifacts as GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest site/public/*.html site/public/*.txt site/public/*.xml site/public/*.pdf \
+            --title "Latest spec artifacts" \
+            --notes "Auto-published spec build artifacts from commit ${{ github.sha }}.
+
+          Contains HTML, TXT, XML, and PDF renderings of all IETF Payment Auth specifications." \
+            --latest
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
