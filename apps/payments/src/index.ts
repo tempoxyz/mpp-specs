@@ -924,7 +924,7 @@ app.all('/*', async (c) => {
 			price,
 			description ??
 				`Pay ${formatPrice(price)} to access ${partner.name} ${c.req.method} ${forwardPath}`,
-			c.req.url,
+			host,
 		)
 
 		// If partner supports streaming, put stream challenge FIRST so Python's urllib sees it
@@ -934,7 +934,7 @@ app.all('/*', async (c) => {
 			const protocol = host.includes('localhost') ? 'http' : 'https'
 			const voucherBase = `${protocol}://${host}`
 			const streamChallenge = createStreamChallenge(c.env, partner, partner.streaming, voucherBase)
-			c.header('WWW-Authenticate', formatStreamChallenge(streamChallenge, c.req.url))
+			c.header('WWW-Authenticate', formatStreamChallenge(streamChallenge, host))
 			c.header('WWW-Authenticate', formatWwwAuthenticate(challenge), { append: true })
 		} else {
 			c.header('WWW-Authenticate', formatWwwAuthenticate(challenge))
@@ -963,7 +963,7 @@ app.all('/*', async (c) => {
 	if (!challengeResult.valid) {
 		c.header(
 			'WWW-Authenticate',
-			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, c.req.url)),
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, host)),
 		)
 		return c.json(
 			new PaymentVerificationFailedError('Unknown or expired challenge ID').toJSON(),
@@ -975,7 +975,7 @@ app.all('/*', async (c) => {
 	if (challengeResult.data.partnerSlug !== partner.slug) {
 		c.header(
 			'WWW-Authenticate',
-			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, c.req.url)),
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, host)),
 		)
 		return c.json(new PaymentVerificationFailedError('Challenge partner mismatch').toJSON(), 401)
 	}
@@ -984,7 +984,7 @@ app.all('/*', async (c) => {
 	if (new Date(challengeResult.data.expires) < new Date()) {
 		c.header(
 			'WWW-Authenticate',
-			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, c.req.url)),
+			formatWwwAuthenticate(await createChallenge(c.env, partner, price, undefined, host)),
 		)
 		return c.json(new PaymentExpiredError('Challenge has expired').toJSON(), 402)
 	}
