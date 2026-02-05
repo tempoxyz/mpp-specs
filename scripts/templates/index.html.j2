@@ -52,7 +52,6 @@
     }
 
     .folder-icon {
-      margin-right: 0.5rem;
     }
 
     .spec-entry {
@@ -98,7 +97,6 @@
     .formats a {
       color: var(--color-link);
       text-decoration: none;
-      margin-right: 0.25rem;
     }
 
     .formats a:hover {
@@ -158,7 +156,7 @@
 
   <div class="tree">
 {%- for domain in domains %}
-    <div class="folder"><span class="folder-icon">📁</span>{{ domain.name }}</div>
+    <div class="folder"><span class="folder-icon">~/</span>{{ domain.name }}</div>
 {%- for spec in domain.specs %}
 {%- set is_last = loop.last %}
     <div class="spec-entry">
