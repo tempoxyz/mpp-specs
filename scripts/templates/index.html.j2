@@ -38,8 +38,7 @@
     }
 
     h1 {
-      border-bottom: 2px solid var(--color-text);
-      padding-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
 
     .tree {
@@ -111,6 +110,22 @@
       margin: 0 0.25rem;
     }
 
+    .header-links {
+      font-size: 0.8rem;
+      margin-top: 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    .header-links a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .header-links a:hover {
+      text-decoration: underline;
+    }
+
     @media (max-width: 600px) {
       .spec-entry {
         padding-left: 0.5rem;
@@ -139,6 +154,7 @@
 </head>
 <body>
   <h1>HTTP <code>Payment</code> Authentication Specifications</h1>
+  <p class="header-links"><a href="https://github.com/tempoxyz/payment-auth-spec">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/payment-auth-spec/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
   <div class="tree">
 {%- for domain in domains %}
