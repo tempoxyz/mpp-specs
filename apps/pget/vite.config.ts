@@ -5,11 +5,19 @@ import { defineConfig } from 'vite'
 export default defineConfig({
 	plugins: [
 		react(),
-		// configPath ensures the Vite plugin uses our wrangler.jsonc with all settings
-		// (workers_dev, preview_urls, routes, etc). Without it, the plugin generates a
-		// new config that may be missing these settings.
 		cloudflare({ configPath: './wrangler.jsonc' }),
 	],
+	build: {
+		rollupOptions: {
+			input: {
+				client: './src/client/index.tsx',
+			},
+			output: {
+				entryFileNames: 'assets/[name].js',
+				assetFileNames: 'assets/[name][extname]',
+			},
+		},
+	},
 	server: {
 		port: 8789,
 	},
