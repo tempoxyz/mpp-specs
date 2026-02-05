@@ -3,7 +3,7 @@ title: "Payment Authentication Scheme: MCP Transport"
 abbrev: Payment MCP Transport
 docname: draft-payment-transport-mcp-00
 version: 00
-category: std
+category: info
 ipr: trust200902
 submissiontype: IETF
 consensus: true
