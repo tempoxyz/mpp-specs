@@ -237,7 +237,7 @@ export function useAccessKey(
 				],
 				feeToken: ALPHA_USD,
 				maxPriorityFeePerGas: 1_000_000_000n,
-				maxFeePerGas: 10_000_000_000n,
+				maxFeePerGas: 20_000_000_000n,
 				gas: 100_000n,
 			} as unknown as Parameters<typeof prepareTransactionRequest>[1])
 

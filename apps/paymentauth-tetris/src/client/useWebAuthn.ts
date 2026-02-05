@@ -183,7 +183,7 @@ export function useWebAuthn() {
 				],
 				feeToken: ALPHA_USD, // Pay gas with stablecoin
 				maxPriorityFeePerGas: 1_000_000_000n, // 1 gwei
-				maxFeePerGas: 10_000_000_000n, // 10 gwei
+				maxFeePerGas: 20_000_000_000n, // 20 gwei
 				gas: 100_000n,
 			} as any)
 
