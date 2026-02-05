@@ -430,9 +430,9 @@ export function parseStreamCredential(credential: unknown): StreamCredentialPayl
 /**
  * Format stream challenge for WWW-Authenticate header.
  */
-export function formatStreamChallenge(request: StreamRequest): string {
+export function formatStreamChallenge(request: StreamRequest, realm?: string): string {
 	const params = [
-		`realm="payments/stream"`,
+		`realm="${realm ?? 'payments/stream'}"`,
 		`method="tempo"`,
 		`intent="stream"`,
 		`escrowContract="${request.escrowContract}"`,
