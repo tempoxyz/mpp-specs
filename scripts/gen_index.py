@@ -13,8 +13,8 @@ DOMAINS = [
     {"folder": "core", "name": "Core"},
     {"folder": "extensions", "name": "Extensions"},
     {"folder": "intents", "name": "Intents"},
-    {"folder": "methods/stripe", "name": "Payment Methods / Stripe"},
-    {"folder": "methods/tempo", "name": "Payment Methods / Tempo"},
+    {"folder": "methods/stripe", "name": "Payment Methods/Stripe"},
+    {"folder": "methods/tempo", "name": "Payment Methods/Tempo"},
     {"folder": "extensions/transports", "name": "Transports"},
 ]
 
