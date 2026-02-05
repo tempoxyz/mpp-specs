@@ -1,0 +1,25 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "streaming-demo",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-15",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": { "enabled": true },
+	"workers_dev": true,
+	"preview_urls": true,
+
+	"vars": {
+		"TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+		"ESCROW_CONTRACT": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
+		"CHAIN_ID": "42431",
+		"ALPHA_USD": "0x20c0000000000000000000000000000000000001",
+		"PRICE_PER_TOKEN": "25",
+		"MIN_VOUCHER_DELTA": "1000",
+		"CHALLENGE_SECRET": "streaming-demo-secret-change-in-production"
+	}
+
+	// Production routes (uncomment when deploying):
+	// "routes": [
+	// 	{ "pattern": "streaming-demo.tempo.xyz", "zone_name": "tempo.xyz", "custom_domain": true }
+	// ]
+}
