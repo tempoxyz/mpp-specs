@@ -18,11 +18,11 @@ import {
 	createWalletClient,
 	encodeFunctionData,
 	type Hex,
-	http,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
 import type { PaymentChannel } from '../durable-objects/PaymentChannel.js'
+import { httpWithAuth } from '../rpc.js'
 
 /**
  * Settlement job from the queue.
@@ -68,14 +68,14 @@ export async function processSettlementBatch(
 
 	const publicClient = createPublicClient({
 		chain,
-		transport: http(env.TEMPO_RPC_URL),
+		transport: httpWithAuth(env.TEMPO_RPC_URL),
 	})
 
 	const account = privateKeyToAccount(env.SETTLER_PRIVATE_KEY as Hex)
 	const walletClient = createWalletClient({
 		account,
 		chain,
-		transport: http(env.TEMPO_RPC_URL),
+		transport: httpWithAuth(env.TEMPO_RPC_URL),
 	})
 
 	// Process each settlement job

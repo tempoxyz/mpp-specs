@@ -20,7 +20,6 @@ import {
 	createPublicClient,
 	decodeFunctionData,
 	type Hex,
-	http,
 	isAddressEqual,
 	parseTransaction,
 	recoverTransactionAddress,
@@ -37,6 +36,7 @@ import {
 	STORAGE_MAX_UPLOAD_BYTES,
 } from './partners/storage.js'
 import { proxyRequest } from './proxy.js'
+import { httpWithAuth, rpcFetch } from './rpc.js'
 import {
 	closeChannel,
 	createStreamChallenge,
@@ -376,15 +376,11 @@ async function broadcastTransaction(
 			signedTx: `${signedTx.slice(0, 20)}...`,
 		})
 
-		const response = await fetch(env.TEMPO_RPC_URL, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: 1,
-				method: 'eth_sendRawTransaction',
-				params: [signedTx],
-			}),
+		const response = await rpcFetch(env.TEMPO_RPC_URL, {
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'eth_sendRawTransaction',
+			params: [signedTx],
 		})
 
 		const data = (await response.json()) as {
@@ -529,19 +525,17 @@ async function calculateStoragePriceForRequest(
 async function getTransactionReceipt(
 	txHash: Hex,
 	env: Env,
-): Promise<{ blockNumber: bigint | null, status: 'success' | 'reverted' | null }> {
+): Promise<{ blockNumber: bigint | null; status: 'success' | 'reverted' | null }> {
 	try {
 		const client = createPublicClient({
 			chain: tempoModerato,
-			transport: http(env.TEMPO_RPC_URL),
+			transport: httpWithAuth(env.TEMPO_RPC_URL),
 		})
 
 		const receipt = await client.waitForTransactionReceipt({
 			hash: txHash,
 			timeout: 30_000,
 		})
-
-
 
 		return { blockNumber: receipt.blockNumber, status: receipt.status }
 	} catch {
@@ -1107,7 +1101,6 @@ app.all('/*', async (c) => {
 			500,
 		)
 	}
-
 
 	const blockNumber = receiptData.blockNumber
 

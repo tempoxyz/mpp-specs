@@ -7,10 +7,11 @@ import {
 	type StreamCredentialPayload,
 	type StreamRequest,
 } from '@tempo/stream-channels'
-import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem'
+import { type Address, createPublicClient, createWalletClient, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { tempoModerato } from 'viem/chains'
 import type { Env, PartnerConfig, StreamingConfig } from './config.js'
+import { httpWithAuth } from './rpc.js'
 
 export type { StreamingConfig }
 
@@ -41,14 +42,14 @@ function getStreamServer(env: Env, serverAddress: Address): StreamChannelServer 
 
 	const publicClient = createPublicClient({
 		chain: tempoModerato,
-		transport: http(env.TEMPO_RPC_URL),
+		transport: httpWithAuth(env.TEMPO_RPC_URL),
 	})
 
 	const walletClient = env.SETTLER_PRIVATE_KEY
 		? createWalletClient({
 				account: privateKeyToAccount(env.SETTLER_PRIVATE_KEY as Hex),
 				chain: tempoModerato,
-				transport: http(env.TEMPO_RPC_URL),
+				transport: httpWithAuth(env.TEMPO_RPC_URL),
 			})
 		: null
 
@@ -78,7 +79,7 @@ async function rehydrateChannelFromChain(
 ): Promise<{ valid: true; state: ServerChannelState } | { valid: false; error: string }> {
 	const publicClient = createPublicClient({
 		chain: tempoModerato,
-		transport: http(env.TEMPO_RPC_URL),
+		transport: httpWithAuth(env.TEMPO_RPC_URL),
 	})
 
 	try {
