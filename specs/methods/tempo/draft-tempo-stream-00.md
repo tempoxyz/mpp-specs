@@ -376,18 +376,15 @@ Server withdraws funds using a signed voucher without closing the channel.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Unique channel identifier |
 | `cumulativeAmount` | uint128 | Cumulative total authorized (not delta) |
-| `sessionHash` | bytes32 | Session binding hash (see {{session-binding}}) |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
 The contract computes `delta = cumulativeAmount - channel.settled` and
-transfers `delta` tokens to the payee. The `sessionHash` is required to
-verify the EIP-712 signature but is not stored or validated by the contract.
+transfers `delta` tokens to the payee.
 
 ~~~solidity
 function settle(
     bytes32 channelId,
     uint128 cumulativeAmount,
-    bytes32 sessionHash,
     bytes calldata signature
 ) external;
 ~~~
@@ -417,19 +414,15 @@ the remainder to the payer. Only callable by the payee.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Channel to close |
 | `cumulativeAmount` | uint128 | Final cumulative amount for settlement |
-| `sessionHash` | bytes32 | Session binding hash (see {{session-binding}}) |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
 Transfers `cumulativeAmount - channel.settled` to payee, refunds
 `channel.deposit - cumulativeAmount` to payer, and marks channel finalized.
-The `sessionHash` is required to verify the EIP-712 signature but is not
-stored or validated by the contract.
 
 ~~~solidity
 function close(
     bytes32 channelId,
     uint128 cumulativeAmount,
-    bytes32 sessionHash,
     bytes calldata signature
 ) external;
 ~~~
@@ -757,7 +750,6 @@ broadcast.
 | `authorizedSigner` | string | OPTIONAL | Delegated signer address |
 | `channelId` | string | REQUIRED | Channel identifier |
 | `cumulativeAmount` | string | REQUIRED | Initial amount (typically `"0"`) |
-| `sessionHash` | string | REQUIRED | Session binding hash |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
 
 When `type` is `"transaction"`, the `transaction` field contains the complete
@@ -770,9 +762,8 @@ When `type` is `"hash"`, the client has already broadcast the transaction.
 The `hash` field contains the transaction hash for the server to verify
 on-chain.
 
-The initial zero-amount voucher (channelId, cumulativeAmount, sessionHash,
-signature) proves the client controls the signing key and establishes the
-voucher chain.
+The initial zero-amount voucher (channelId, cumulativeAmount, signature)
+proves the client controls the signing key and establishes the voucher chain.
 
 **Example (type="hash", client submitted):**
 
@@ -785,7 +776,6 @@ voucher chain.
     "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "0",
-    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -802,7 +792,6 @@ voucher chain.
     "transaction": "0x76f901...signed transaction bytes...",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "0",
-    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -866,11 +855,7 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel identifier |
 | `cumulativeAmount` | string | REQUIRED | Cumulative amount authorized |
-| `sessionHash` | string | REQUIRED | Session binding hash |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
-
-The `sessionHash` binds the voucher to this specific session and resource
-(see {{session-binding}}).
 
 **Example:**
 
@@ -881,7 +866,6 @@ The `sessionHash` binds the voucher to this specific session and resource
     "action": "voucher",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "250000",
-    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
     "signature": "0xabcdef1234567890..."
   }
 }
@@ -898,12 +882,10 @@ on-chain.
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel identifier |
 | `cumulativeAmount` | string | REQUIRED | Final cumulative amount for settlement |
-| `sessionHash` | string | REQUIRED | Session binding hash |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
 
-The server uses the voucher fields (channelId, cumulativeAmount, sessionHash,
-signature) to call `close(channelId, cumulativeAmount, sessionHash, signature)`
-on-chain.
+The server uses the voucher fields (channelId, cumulativeAmount, signature)
+to call `close(channelId, cumulativeAmount, signature)` on-chain.
 
 **Example:**
 
@@ -914,7 +896,6 @@ on-chain.
     "action": "close",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "500000",
-    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
     "signature": "0xabcdef1234567890..."
   }
 }
@@ -935,7 +916,6 @@ Voucher fields are placed directly in the credential `payload` object
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
 | `cumulativeAmount` | string | REQUIRED | Cumulative amount authorized (decimal string) |
-| `sessionHash` | string | REQUIRED | Session binding hash (hex-encoded bytes32) |
 | `signature` | string | REQUIRED | EIP-712 signature (hex-encoded) |
 
 The EIP-712 domain and type definitions are fixed by this specification.
@@ -951,8 +931,7 @@ The `types` object MUST contain exactly:
 {
   "Voucher": [
     { "name": "channelId", "type": "bytes32" },
-    { "name": "cumulativeAmount", "type": "uint128" },
-    { "name": "sessionHash", "type": "bytes32" }
+    { "name": "cumulativeAmount", "type": "uint128" }
   ]
 }
 ~~~
@@ -961,9 +940,6 @@ Note: The `EIP712Domain` type is implicit per EIP-712 and SHOULD NOT be
 included in the `types` object. The domain separator is computed from
 the `domain` object using the canonical type string
 `EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)`.
-
-The `sessionHash` field provides cryptographic binding to the session
-and resource (see {{session-binding}}).
 
 ## Domain Separator
 
@@ -999,10 +975,9 @@ To sign a voucher, implementations MUST:
    ~~~
    structHash = keccak256(
      abi.encode(
-       keccak256("Voucher(bytes32 channelId,uint128 cumulativeAmount,bytes32 sessionHash)"),
+       keccak256("Voucher(bytes32 channelId,uint128 cumulativeAmount)"),
        channelId,
-       cumulativeAmount,
-       sessionHash
+       cumulativeAmount
      )
    )
    ~~~
@@ -1522,59 +1497,28 @@ Servers MUST implement challenge-to-voucher mapping for:
 - Usage accounting
 - Audit trails
 
-The `challengeId` is cryptographically bound to the voucher signature via
-`sessionHash` (see {{session-binding}}). This binding prevents cross-session
-replay attacks while maintaining the `challengeId` as the primary application-
-layer correlation mechanism.
+## Cross-Session Replay Prevention {#session-binding}
 
-## Session and Resource Binding {#session-binding}
+Vouchers use cumulative amount semantics: each voucher authorizes a total
+payment up to `cumulativeAmount`, and the on-chain contract enforces strict
+monotonicity (`cumulativeAmount > channel.settled`). This means a voucher
+can only ever advance the channel state forward -- it cannot be "replayed"
+to extract additional funds because the settlement watermark only moves in
+one direction.
 
-To prevent cross-session and cross-resource attacks, vouchers MUST
-cryptographically bind to the session context.
+A separate `sessionHash` binding is therefore unnecessary:
 
-### Extended Voucher Type
+- **Cross-session replay is harmless**: If a voucher from session A is
+  presented in session B, it can only authorize funds up to the amount
+  already committed. The server tracks `highestVoucherAmount` per session
+  and rejects vouchers that do not advance state.
+- **Cross-resource replay**: Vouchers authorize cumulative payment on a
+  channel, not access to specific resources. Resource authorization is
+  handled at the application layer via `challengeId` correlation.
 
-The Voucher type is extended to include session binding:
-
-~~~
-Voucher(bytes32 channelId, uint128 cumulativeAmount, bytes32 sessionHash)
-~~~
-
-Where `sessionHash` is computed as:
-
-~~~
-sessionHash = keccak256(abi.encode(challengeId, resourceHash))
-resourceHash = keccak256(bytes(resourceURI))
-~~~
-
-Servers MUST reject vouchers where `sessionHash` does not match the
-expected value for the current session and resource. This prevents:
-
-- **Cross-session replay**: Vouchers signed for one session cannot be
-  used in another session, even for the same channel.
-- **Cross-resource replay**: Vouchers authorized for one resource
-  cannot authorize access to different resources.
-
-Clients MUST include the correct `sessionHash` when signing vouchers.
-The `challengeId` and resource URI are provided in the challenge.
-
-### On-Chain vs Off-Chain Verification
-
-The `sessionHash` is included in the signed voucher message and verified
-at two levels:
-
-- **On-chain**: The escrow contract verifies the EIP-712 signature covers
-  `(channelId, cumulativeAmount, sessionHash)`. The contract does not
-  interpret or validate the `sessionHash` value—it only ensures the
-  signature commits to the provided hash.
-
-- **Off-chain**: Servers MUST compute the expected `sessionHash` from
-  `(challengeId, resourceURI)` and reject vouchers where the signed
-  `sessionHash` does not match. This provides session and resource
-  binding without requiring the contract to understand HTTP semantics.
-
-This design keeps the on-chain contract simple and generic while enabling
-application-layer session security through cryptographic commitment.
+This simplification aligns the spec with the deployed `TempoStreamChannel`
+contract and the `@tempo/stream-channels` package, neither of which
+include a session hash in the voucher type.
 
 ## Chain Reorganization {#chain-reorg}
 
@@ -1700,7 +1644,6 @@ The credential payload for an open action:
     "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "0",
-    "sessionHash": "0x8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -1735,7 +1678,6 @@ The credential payload for a voucher update:
     "action": "voucher",
     "channelId": "0x6d0f4fdf...",
     "cumulativeAmount": "250000",
-    "sessionHash": "0x8a7b6c5d...",
     "signature": "0x1234567890abcdef..."
   }
 }
@@ -1760,7 +1702,6 @@ The credential payload for a close request:
     "action": "close",
     "channelId": "0x6d0f4fdf...",
     "cumulativeAmount": "500000",
-    "sessionHash": "0x8a7b6c5d...",
     "signature": "0xabcdef1234567890..."
   }
 }
@@ -1806,7 +1747,6 @@ interface ITempoStreamChannel {
     function settle(
         bytes32 channelId,
         uint128 cumulativeAmount,
-        bytes32 sessionHash,
         bytes calldata signature
     ) external;
 
@@ -1818,7 +1758,6 @@ interface ITempoStreamChannel {
     function close(
         bytes32 channelId,
         uint128 cumulativeAmount,
-        bytes32 sessionHash,
         bytes calldata signature
     ) external;
 
@@ -1843,8 +1782,7 @@ interface ITempoStreamChannel {
 
     function getVoucherDigest(
         bytes32 channelId,
-        uint128 cumulativeAmount,
-        bytes32 sessionHash
+        uint128 cumulativeAmount
     ) external view returns (bytes32);
 
     function getCloseRequestDigest(
@@ -2025,11 +1963,6 @@ prefer JSON Schema over CDDL.
       "type": "string",
       "pattern": "^[0-9]+$",
       "description": "Cumulative amount authorized (decimal string)"
-    },
-    "sessionHash": {
-      "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{64}$",
-      "description": "Session binding hash"
     },
     "signature": {
       "type": "string",
