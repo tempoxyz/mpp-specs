@@ -54,6 +54,8 @@ const CHALLENGE_SECRET = 'tempo-payments-challenge-v1' // Could move to env var
 
 // Modern ChargeRequest type matching mpay-rs / IETF spec
 interface MppChargeRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	amount: string
 	currency: Address
 	recipient: Address
@@ -140,6 +142,7 @@ async function createChallenge(
 	const expiresAt = new Date(Date.now() + validityMs)
 
 	const request = {
+		version: 1,
 		amount: price,
 		currency: partner.asset,
 		recipient: partner.destination,
@@ -1063,6 +1066,7 @@ app.all('/*', async (c) => {
 
 	// Reconstruct challenge request from stateless data for verification
 	const expectedRequest = {
+		version: 1,
 		amount: challengeResult.data.price,
 		currency: partner.asset,
 		recipient: partner.destination,

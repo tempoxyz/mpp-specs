@@ -38,6 +38,8 @@ export interface PaymentChallenge<TRequest = unknown> {
  * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.1
  */
 export interface ChargeRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Amount in base units (stringified number, e.g., "10000" = 0.01 with 6 decimals) */
 	amount: string
 	/** TIP-20 token address */
@@ -55,6 +57,8 @@ export interface ChargeRequest {
  * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.2
  */
 export interface AuthorizeRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** TIP-20 token address */
 	asset: Address
 	/** Authorized spender address (required for transaction fulfillment) */
@@ -74,6 +78,8 @@ export interface AuthorizeRequest {
  * @see https://datatracker.ietf.org/doc/html/draft-tempo-payment-method-00#section-6.3
  */
 export interface SubscriptionRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Amount per period in base units */
 	amount: string
 	/** TIP-20 token address */

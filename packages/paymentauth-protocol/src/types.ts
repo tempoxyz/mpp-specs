@@ -43,6 +43,8 @@ export interface PaymentChallenge<TRequest = unknown> {
  * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/methods/tempo/
  */
 export interface TempoMethodDetails {
+	/** Method specification version (default: 1) */
+	version?: number
 	/** Chain ID for the Tempo network */
 	chainId: number
 	/** If true, server will pay transaction fees */
@@ -54,6 +56,8 @@ export interface TempoMethodDetails {
  * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/intents/draft-charge-intent-00.md
  */
 export interface ChargeRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Amount in base units (stringified number, e.g., "1000000" = 1.00 with 6 decimals) */
 	amount: string
 	/** Currency identifier (ISO 4217 code or token address) */
@@ -75,6 +79,8 @@ export interface ChargeRequest {
  * @see https://github.com/tempoxyz/payment-auth-spec/blob/main/specs/intents/draft-authorize-intent-00.md
  */
 export interface AuthorizeRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Maximum authorization amount in base units */
 	amount: string
 	/** Currency identifier (ISO 4217 code or token address) */
@@ -93,6 +99,8 @@ export interface AuthorizeRequest {
  * Subscription request for intent="subscription".
  */
 export interface SubscriptionRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Amount per period in base units */
 	amount: string
 	/** Currency identifier (ISO 4217 code or token address) */
@@ -113,6 +121,8 @@ export interface SubscriptionRequest {
  * Stream request for intent="stream".
  */
 export interface StreamRequest {
+	/** Intent request schema version (default: 1) */
+	version?: number
 	/** Address of the channel escrow contract */
 	escrowContract: Address
 	/** Currency identifier (token address) */
