@@ -1611,7 +1611,7 @@ The `request` decodes to:
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
-    "escrowContract": "0x7a6357db33731cfb7b9d54aca750507f13a3fec0",
+    "escrowContract": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
     "chainId": 42431
   }
 }
@@ -1850,7 +1850,7 @@ interface ITempoStreamChannel {
 
 | Network | Chain ID | Contract Address |
 |---------|----------|------------------|
-| Moderato (Testnet) | 42431 | `0x7a6357db33731cfb7b9d54aca750507f13a3fec0` |
+| Moderato (Testnet) | 42431 | `0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70` |
 
 ## Contract Source
 
