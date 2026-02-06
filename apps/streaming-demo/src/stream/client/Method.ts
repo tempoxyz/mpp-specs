@@ -1,8 +1,8 @@
 import { Credential, Method, z } from 'mpay'
 import type { Account, Address, Hex, WalletClient } from 'viem'
-import type { StreamCredentialPayload } from '../types/stream.js'
-import { tempoMethod } from './stream-intent.js'
-import { computeSessionHash, deriveChannelId, signVoucher } from './voucher.js'
+import type { StreamCredentialPayload } from '../Types.js'
+import { tempoMethod } from '../Method.js'
+import { signVoucher } from '../Voucher.js'
 
 /**
  * Context schema for stream credential creation.
@@ -11,14 +11,14 @@ import { computeSessionHash, deriveChannelId, signVoucher } from './voucher.js'
 export const streamContextSchema = z.object({
 	/** Action to perform: open, topUp, voucher, or close */
 	action: z.enum(['open', 'topUp', 'voucher', 'close']),
+	/** On-chain channel ID (caller provides from channel open) */
+	channelId: z.string(),
 	/** Cumulative amount for the voucher */
 	cumulativeAmount: z.bigint(),
 	/** Transaction hash for open action (optional - can derive channelId) */
-	openTxHash: z.optional(z.string()),
+	hash: z.optional(z.string()),
 	/** Transaction hash for topUp action */
 	topUpTxHash: z.optional(z.string()),
-	/** Resource hash for session binding (optional) */
-	resourceHash: z.optional(z.string()),
 	/** Override authorized signer (defaults to account address) */
 	authorizedSigner: z.optional(z.string()),
 })
@@ -28,8 +28,8 @@ export type StreamContext = z.infer<typeof streamContextSchema>
 /**
  * Creates a stream payment client using the mpay Method.toClient() pattern.
  *
- * The client derives channelId deterministically from the payer address
- * and server realm, eliminating the need for client-side persistence.
+ * The client accepts a channelId from the caller, which should be the
+ * real on-chain channel ID from opening a channel on the escrow contract.
  *
  * @example
  * ```ts
@@ -51,25 +51,18 @@ export function streamClient(parameters: streamClient.Parameters) {
 		context: streamContextSchema,
 
 		async createCredential({ challenge, context }) {
-			const { action, cumulativeAmount, openTxHash, topUpTxHash, resourceHash, authorizedSigner } =
+			const { action, channelId: channelIdRaw, cumulativeAmount, hash: openTxHash, topUpTxHash, authorizedSigner } =
 				context
 
-			// Derive channelId deterministically from account address + realm
-			// This eliminates the need for client-side persistence
-			const channelId = deriveChannelId(account.address, challenge.realm)
+			const channelId = channelIdRaw as Hex
 
-			// Compute sessionHash = keccak256(challengeId, resourceHash)
-			// This binds the voucher to this specific session
-			const sessionHash = computeSessionHash(challenge.id, resourceHash as Hex | undefined)
-
-			// Sign voucher with sessionHash
+			// Sign voucher (no sessionHash — cumulative monotonicity prevents replay)
 			const signature = await signVoucher(
 				walletClient,
 				account,
 				{
 					channelId,
 					cumulativeAmount,
-					sessionHash,
 				},
 				escrowContract,
 				chainId,
@@ -83,10 +76,9 @@ export function streamClient(parameters: streamClient.Parameters) {
 						action: 'open',
 						type: openTxHash ? 'hash' : 'transaction',
 						channelId,
-						openTxHash: openTxHash as Hex | undefined,
+						hash: openTxHash as Hex | undefined,
 						authorizedSigner: (authorizedSigner as Address) ?? account.address,
 						cumulativeAmount: cumulativeAmount.toString(),
-						sessionHash,
 						voucherSignature: signature,
 					}
 					break
@@ -100,7 +92,6 @@ export function streamClient(parameters: streamClient.Parameters) {
 						channelId,
 						topUpTxHash: topUpTxHash as Hex,
 						cumulativeAmount: cumulativeAmount.toString(),
-						sessionHash,
 						voucherSignature: signature,
 					}
 					break
@@ -110,7 +101,6 @@ export function streamClient(parameters: streamClient.Parameters) {
 						action: 'voucher',
 						channelId,
 						cumulativeAmount: cumulativeAmount.toString(),
-						sessionHash,
 						signature,
 					}
 					break
@@ -120,7 +110,6 @@ export function streamClient(parameters: streamClient.Parameters) {
 						action: 'close',
 						channelId,
 						cumulativeAmount: cumulativeAmount.toString(),
-						sessionHash,
 						voucherSignature: signature,
 					}
 					break

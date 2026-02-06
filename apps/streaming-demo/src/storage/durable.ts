@@ -1,5 +1,5 @@
 import type { Hex } from 'viem'
-import type { ChannelState, ChannelStorage, SessionState } from '../storage.js'
+import type { ChannelState, ChannelStorage, SessionState } from '../stream/Storage.js'
 
 /**
  * Durable Objects + D1 storage implementation for production.
@@ -20,26 +20,6 @@ export class DurableStorage implements ChannelStorage {
 		return response.json()
 	}
 
-	async setChannel(channelId: Hex, state: ChannelState): Promise<void> {
-		const stub = this.channelDO.get(this.channelDO.idFromName(channelId))
-		await stub.fetch('http://internal/state', {
-			method: 'PUT',
-			body: JSON.stringify(state, bigintReplacer),
-		})
-
-		// Also persist to D1 for durability
-		await this.db
-			.prepare('INSERT OR REPLACE INTO channels (id, state, updated_at) VALUES (?, ?, ?)')
-			.bind(channelId, JSON.stringify(state, bigintReplacer), new Date().toISOString())
-			.run()
-	}
-
-	async deleteChannel(channelId: Hex): Promise<void> {
-		const stub = this.channelDO.get(this.channelDO.idFromName(channelId))
-		await stub.fetch('http://internal/state', { method: 'DELETE' })
-		await this.db.prepare('DELETE FROM channels WHERE id = ?').bind(channelId).run()
-	}
-
 	async getSession(challengeId: string): Promise<SessionState | null> {
 		const result = await this.db
 			.prepare('SELECT state FROM sessions WHERE id = ?')
@@ -50,31 +30,49 @@ export class DurableStorage implements ChannelStorage {
 		return JSON.parse(result.state, bigintReviver)
 	}
 
-	async setSession(challengeId: string, state: SessionState): Promise<void> {
-		await this.db
-			.prepare('INSERT OR REPLACE INTO sessions (id, channel_id, state, updated_at) VALUES (?, ?, ?, ?)')
-			.bind(challengeId, state.channelId, JSON.stringify(state, bigintReplacer), new Date().toISOString())
-			.run()
-	}
+	async updateChannel(
+		channelId: Hex,
+		fn: (current: ChannelState | null) => ChannelState | null,
+	): Promise<ChannelState | null> {
+		const current = await this.getChannel(channelId)
+		const next = fn(current)
 
-	async deleteSession(challengeId: string): Promise<void> {
-		await this.db.prepare('DELETE FROM sessions WHERE id = ?').bind(challengeId).run()
-	}
+		const stub = this.channelDO.get(this.channelDO.idFromName(channelId))
 
-	async getOrCreateSession(challengeId: string, channelId: Hex): Promise<SessionState> {
-		const existing = await this.getSession(challengeId)
-		if (existing) return existing
-
-		const newSession: SessionState = {
-			challengeId,
-			channelId,
-			acceptedCumulative: 0n,
-			spent: 0n,
-			units: 0,
-			createdAt: new Date(),
+		if (next === null) {
+			await stub.fetch('http://internal/state', { method: 'DELETE' })
+			await this.db.prepare('DELETE FROM channels WHERE id = ?').bind(channelId).run()
+		} else {
+			await stub.fetch('http://internal/state', {
+				method: 'PUT',
+				body: JSON.stringify(next, bigintReplacer),
+			})
+			await this.db
+				.prepare('INSERT OR REPLACE INTO channels (id, state, updated_at) VALUES (?, ?, ?)')
+				.bind(channelId, JSON.stringify(next, bigintReplacer), new Date().toISOString())
+				.run()
 		}
-		await this.setSession(challengeId, newSession)
-		return newSession
+
+		return next
+	}
+
+	async updateSession(
+		challengeId: string,
+		fn: (current: SessionState | null) => SessionState | null,
+	): Promise<SessionState | null> {
+		const current = await this.getSession(challengeId)
+		const next = fn(current)
+
+		if (next === null) {
+			await this.db.prepare('DELETE FROM sessions WHERE id = ?').bind(challengeId).run()
+		} else {
+			await this.db
+				.prepare('INSERT OR REPLACE INTO sessions (id, channel_id, state, updated_at) VALUES (?, ?, ?, ?)')
+				.bind(challengeId, next.channelId, JSON.stringify(next, bigintReplacer), new Date().toISOString())
+				.run()
+		}
+
+		return next
 	}
 }
 
@@ -94,7 +92,7 @@ function bigintReplacer(_key: string, value: unknown): unknown {
 function bigintReviver(key: string, value: unknown): unknown {
 	if (
 		typeof value === 'string' &&
-		['deposit', 'settled', 'highestVoucherAmount', 'acceptedCumulative', 'spent', 'cumulativeAmount'].includes(key)
+		['deposit', 'highestVoucherAmount', 'acceptedCumulative', 'spent', 'cumulativeAmount'].includes(key)
 	) {
 		return BigInt(value)
 	}

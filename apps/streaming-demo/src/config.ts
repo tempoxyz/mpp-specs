@@ -78,7 +78,7 @@ export const tempoModerato = {
 	blockExplorers: {
 		default: {
 			name: 'Tempo Explorer',
-			url: 'https://explorer.moderato.tempo.xyz',
+			url: 'https://explore.testnet.tempo.xyz',
 		},
 	},
 } as const

@@ -1,4 +1,4 @@
-import { Intent, Method, MethodIntent, z } from 'mpay'
+import { Intent, MethodIntent, z } from 'mpay'
 
 /**
  * Base stream intent for pay-as-you-go streaming payments.
@@ -32,11 +32,10 @@ export const tempoStreamIntent = MethodIntent.fromIntent(streamIntent, {
 					action: z.literal('open'),
 					type: z.union([z.literal('hash'), z.literal('transaction')]),
 					channelId: z.hash(),
-					openTxHash: z.optional(z.hash()),
+					hash: z.optional(z.hash()),
 					signature: z.optional(z.signature()),
 					authorizedSigner: z.optional(z.string()),
 					cumulativeAmount: z.amount(),
-					sessionHash: z.hash(),
 					voucherSignature: z.signature(),
 				}),
 				// TopUp: client topped up existing channel
@@ -45,7 +44,6 @@ export const tempoStreamIntent = MethodIntent.fromIntent(streamIntent, {
 					channelId: z.hash(),
 					topUpTxHash: z.hash(),
 					cumulativeAmount: z.amount(),
-					sessionHash: z.hash(),
 					voucherSignature: z.signature(),
 				}),
 				// Voucher: client submits cumulative payment voucher
@@ -53,7 +51,6 @@ export const tempoStreamIntent = MethodIntent.fromIntent(streamIntent, {
 					action: z.literal('voucher'),
 					channelId: z.hash(),
 					cumulativeAmount: z.amount(),
-					sessionHash: z.hash(),
 					signature: z.signature(),
 				}),
 				// Close: client requests channel closure
@@ -61,7 +58,6 @@ export const tempoStreamIntent = MethodIntent.fromIntent(streamIntent, {
 					action: z.literal('close'),
 					channelId: z.hash(),
 					cumulativeAmount: z.amount(),
-					sessionHash: z.hash(),
 					voucherSignature: z.signature(),
 				}),
 			]),
@@ -77,15 +73,3 @@ export const tempoStreamIntent = MethodIntent.fromIntent(streamIntent, {
 		},
 	},
 })
-
-/**
- * Tempo method with stream intent for use with Method.toClient() and Method.toServer().
- */
-export const tempoMethod = Method.from({
-	name: 'tempo',
-	intents: {
-		stream: tempoStreamIntent,
-	},
-})
-
-export type TempoMethod = typeof tempoMethod

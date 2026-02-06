@@ -1,6 +1,6 @@
 import { Base64 } from 'ox'
 import type { Hex } from 'viem'
-import type { StreamReceipt } from '../types/stream.js'
+import type { StreamReceipt } from './Types.js'
 
 /**
  * Create a stream receipt.
@@ -18,7 +18,7 @@ export function createStreamReceipt(params: {
 		intent: 'stream',
 		status: 'success',
 		timestamp: new Date().toISOString(),
-		reference: params.challengeId,
+		challengeId: params.challengeId,
 		channelId: params.channelId,
 		acceptedCumulative: params.acceptedCumulative.toString(),
 		spent: params.spent.toString(),
@@ -41,22 +41,4 @@ export function serializeStreamReceipt(receipt: StreamReceipt): string {
 export function deserializeStreamReceipt(encoded: string): StreamReceipt {
 	const json = Base64.toString(encoded)
 	return JSON.parse(json) as StreamReceipt
-}
-
-/**
- * Format stream receipt for the standard mpay Receipt format.
- * This allows interoperability with mpay's Receipt.fromResponse().
- */
-export function toMpayReceipt(receipt: StreamReceipt): {
-	method: string
-	reference: string
-	status: 'success'
-	timestamp: string
-} {
-	return {
-		method: receipt.method,
-		reference: receipt.reference,
-		status: receipt.status,
-		timestamp: receipt.timestamp,
-	}
 }

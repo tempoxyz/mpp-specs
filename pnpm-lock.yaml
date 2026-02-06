@@ -437,6 +437,9 @@ importers:
 
   apps/streaming-demo:
     dependencies:
+      '@tempo/stream-channels':
+        specifier: link:../../packages/stream-channels
+        version: link:../../packages/stream-channels
       hono:
         specifier: ^4.6.0
         version: 4.11.4

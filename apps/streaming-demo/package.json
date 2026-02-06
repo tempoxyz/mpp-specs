@@ -16,6 +16,7 @@
 		"demo": "tsx scripts/demo.ts"
 	},
 	"dependencies": {
+		"@tempo/stream-channels": "link:../../packages/stream-channels",
 		"hono": "^4.6.0",
 		"mpay": "link:../../../mpay",
 		"ox": "^0.12.0",

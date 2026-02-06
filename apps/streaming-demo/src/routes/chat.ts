@@ -2,16 +2,11 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { Credential } from 'mpay'
 import { type Config, type Env, parseConfig } from '../config.js'
-import { createStreamReceipt, serializeStreamReceipt } from '../lib/receipt.js'
-import { InMemoryStorage } from '../lib/storage/memory.js'
-import type { ChannelStorage } from '../lib/storage.js'
-import {
-	createPaymentHandler,
-	getAvailableBalance,
-	type PaymentHandler,
-	updateSessionSpending,
-} from '../lib/stream-server.js'
-import type { StreamCredentialPayload } from '../types/stream.js'
+import { createStreamReceipt, serializeStreamReceipt } from '../stream/Receipt.js'
+import { InMemoryStorage } from '../storage/memory.js'
+import type { ChannelStorage } from '../stream/Storage.js'
+import { createPaymentHandler } from '../stream/server/Method.js'
+import type { StreamCredentialPayload } from '../stream/Types.js'
 
 // Global in-memory storage (would be Durable Objects in production)
 const globalStorage = new InMemoryStorage()
@@ -38,6 +33,20 @@ export function createChatRoutes(storage?: ChannelStorage) {
 	const chat = new Hono<{ Bindings: Env }>()
 	const storageInstance = storage ?? globalStorage
 
+	// Track active streams per challengeId to prevent concurrent streams
+	const activeStreams = new Set<string>()
+
+	// Cache payment handler per realm to avoid re-creating on every request
+	let cachedPayment: ReturnType<typeof createPaymentHandler> | null = null
+	let cachedRealm: string | null = null
+
+	function getPaymentHandler(config: Config) {
+		if (cachedPayment && cachedRealm === config.realm) return cachedPayment
+		cachedPayment = createPaymentHandler(config, storageInstance)
+		cachedRealm = config.realm
+		return cachedPayment
+	}
+
 	/**
 	 * GET /chat - Streaming LLM endpoint with payment
 	 *
@@ -51,8 +60,7 @@ export function createChatRoutes(storage?: ChannelStorage) {
 		const isHeadRequest = c.req.method === 'HEAD'
 		const prompt = c.req.query('prompt') ?? 'Hello!'
 
-		// Create payment handler using Mpay.create()
-		const payment = createPaymentHandler(config, storageInstance)
+		const payment = getPaymentHandler(config)
 
 		// Use the stream intent handler
 		const result = await payment.stream(getStreamRequest(config))(c.req.raw)
@@ -63,7 +71,7 @@ export function createChatRoutes(storage?: ChannelStorage) {
 		}
 
 		// 200 - Payment verified
-		// For HEAD requests, just return receipt
+		// For HEAD requests (top-up/close), return receipt from the result
 		if (isHeadRequest) {
 			return result.withReceipt(new Response(null, { status: 200 }))
 		}
@@ -85,7 +93,7 @@ export function createChatRoutes(storage?: ChannelStorage) {
 		}
 
 		// Check available balance
-		const availableBalance = await getAvailableBalance(storageInstance, challengeId)
+		const availableBalance = session.acceptedCumulative - session.spent
 		if (availableBalance <= 0n) {
 			return c.json(
 				{
@@ -97,86 +105,99 @@ export function createChatRoutes(storage?: ChannelStorage) {
 			)
 		}
 
+		// Enforce at most one active stream per challengeId
+		if (activeStreams.has(challengeId)) {
+			return c.json({ error: 'Stream already active for this session' }, 409)
+		}
+		activeStreams.add(challengeId)
+
 		// Stream response with live metering
 		return streamSSE(c, async (stream) => {
-			// Simulate LLM response
-			const tokens = generateMockTokens(prompt)
-			let tokenCount = 0
-			let totalSpent = session.spent
+			try {
+				// Simulate LLM response
+				const tokens = generateMockTokens(prompt)
+				let tokenCount = 0
+				let totalSpent = session.spent
 
-			// Add receipt header via result.withReceipt
-			const initialReceipt = createStreamReceipt({
-				challengeId,
-				channelId: payload.channelId,
-				acceptedCumulative: session.acceptedCumulative,
-				spent: totalSpent,
-				units: session.units,
-			})
-			c.header('Payment-Receipt', serializeStreamReceipt(initialReceipt))
+				// Add receipt header via result.withReceipt
+				const initialReceipt = createStreamReceipt({
+					challengeId,
+					channelId: payload.channelId,
+					acceptedCumulative: session.acceptedCumulative,
+					spent: totalSpent,
+					units: session.units,
+				})
+				c.header('Payment-Receipt', serializeStreamReceipt(initialReceipt))
 
-			for (const token of tokens) {
-				// Re-fetch session to get latest acceptedCumulative (may have been topped up via HEAD)
-				const currentSession = await storageInstance.getSession(challengeId)
-				const acceptedCumulative = currentSession?.acceptedCumulative ?? session.acceptedCumulative
+				for (const token of tokens) {
+					// Re-fetch session to get latest acceptedCumulative (may have been topped up via HEAD)
+					const currentSession = await storageInstance.getSession(challengeId)
+					const acceptedCumulative = currentSession?.acceptedCumulative ?? session.acceptedCumulative
 
-				// Check if we still have balance
-				const currentBalance = acceptedCumulative - totalSpent
-				const tokenCost = config.pricePerToken
+					// Check if we still have balance
+					const currentBalance = acceptedCumulative - totalSpent
+					const tokenCost = config.pricePerToken
 
-				if (currentBalance < tokenCost) {
-					// Out of balance, stop streaming
+					if (currentBalance < tokenCost) {
+						// Out of balance, stop streaming
+						await stream.writeSSE({
+							event: 'balance_exhausted',
+							data: JSON.stringify({
+								message: 'Balance exhausted. Submit a new voucher to continue.',
+								acceptedCumulative: acceptedCumulative.toString(),
+								spent: totalSpent.toString(),
+								units: tokenCount,
+							}),
+						})
+						break
+					}
+
+					// Charge for token
+					totalSpent += tokenCost
+					tokenCount++
+
+					// Update session state atomically
+					await storageInstance.updateSession(challengeId, (current) => {
+						if (!current) return null
+						return { ...current, spent: totalSpent, units: tokenCount }
+					})
+
+					// Send token
 					await stream.writeSSE({
-						event: 'balance_exhausted',
+						event: 'token',
 						data: JSON.stringify({
-							message: 'Balance exhausted. Submit a new voucher to continue.',
-							acceptedCumulative: acceptedCumulative.toString(),
+							token,
 							spent: totalSpent.toString(),
-							units: tokenCount,
+							remaining: (acceptedCumulative - totalSpent).toString(),
 						}),
 					})
-					break
+
+					// Simulate token generation delay
+					await sleep(50)
 				}
 
-				// Charge for token
-				totalSpent += tokenCost
-				tokenCount++
+				// Get final session state for receipt
+				const finalSession = await storageInstance.getSession(challengeId)
+				const finalAccepted = finalSession?.acceptedCumulative ?? session.acceptedCumulative
 
-				// Update session state
-				await updateSessionSpending(storageInstance, challengeId, totalSpent, tokenCount)
-
-				// Send token
-				await stream.writeSSE({
-					event: 'token',
-					data: JSON.stringify({
-						token,
-						spent: totalSpent.toString(),
-						remaining: (acceptedCumulative - totalSpent).toString(),
-					}),
+				// Send final receipt
+				const finalReceipt = createStreamReceipt({
+					challengeId,
+					channelId: payload.channelId,
+					acceptedCumulative: finalAccepted,
+					spent: totalSpent,
+					units: tokenCount,
 				})
 
-				// Simulate token generation delay
-				await sleep(50)
+				await stream.writeSSE({
+					event: 'done',
+					data: JSON.stringify({
+						receipt: finalReceipt,
+					}),
+				})
+			} finally {
+				activeStreams.delete(challengeId)
 			}
-
-			// Get final session state for receipt
-			const finalSession = await storageInstance.getSession(challengeId)
-			const finalAccepted = finalSession?.acceptedCumulative ?? session.acceptedCumulative
-
-			// Send final receipt
-			const finalReceipt = createStreamReceipt({
-				challengeId,
-				channelId: payload.channelId,
-				acceptedCumulative: finalAccepted,
-				spent: totalSpent,
-				units: tokenCount,
-			})
-
-			await stream.writeSSE({
-				event: 'done',
-				data: JSON.stringify({
-					receipt: finalReceipt,
-				}),
-			})
 		})
 	})
 
@@ -219,8 +240,7 @@ export function createChatRoutes(storage?: ChannelStorage) {
 		const authHeader = c.req.header('Authorization')
 
 		if (!authHeader?.startsWith('Payment ')) {
-			// Create payment handler and return 402
-			const payment = createPaymentHandler(config, storageInstance)
+			const payment = getPaymentHandler(config)
 			const result = await payment.stream(getStreamRequest(config))(c.req.raw)
 
 			if (result.status === 402) {
