@@ -599,12 +599,11 @@ already has funds. The `channelId` tells the client to resume this channel.
 When a challenge includes `methodDetails.feePayer: true`, the server
 commits to paying transaction fees on behalf of the client. In the
 `stream` intent, `feePayer` affects only the client-originated channel
-funding transactions (`open` and `topUp`) when the credential uses
-`type="transaction"`.
+funding transactions (`open` and `topUp`).
 
 ## Server-Paid Fees
 
-When `feePayer: true` and `type="transaction"` for `open` or `topUp`:
+When `feePayer: true` for `open` or `topUp`:
 
 1. **Client signs with placeholder**: The client signs the Tempo Transaction
    {{TEMPO-TX-SPEC}} with `fee_payer_signature` set to a placeholder value
@@ -623,22 +622,12 @@ When `feePayer: true` and `type="transaction"` for `open` or `topUp`:
    - Client's signature (authorizing the channel operation)
    - Server's `fee_payer_signature` (committing to pay fees)
 
-**`type="hash"` limitation**: When the client supplies `type="hash"`, the
-transaction is already broadcast; the server cannot add a fee payer
-signature. Therefore, `type="hash"` credentials MUST NOT be used with
-`feePayer: true` for `open` or `topUp` actions. Servers MUST reject such
-credentials with 400 Bad Request.
-
 ## Client-Paid Fees
 
-When `feePayer: false` or omitted:
-
-- **`type="transaction"`**: The client MUST set `fee_token` to a valid
-  USD TIP-20 token address and include valid fee payment fields so the
-  transaction is executable without server fee sponsorship. The server
-  broadcasts the transaction as-is.
-- **`type="hash"`**: The client has already broadcast and paid fees.
-  The server only verifies the transaction on-chain.
+When `feePayer: false` or omitted, the client MUST set `fee_token` to a valid
+USD TIP-20 token address and include valid fee payment fields so the
+transaction is executable without server fee sponsorship. The server
+broadcasts the transaction as-is.
 
 ## Server-Initiated Operations
 
@@ -667,18 +656,14 @@ When acting as fee payer for `open` or `topUp`:
   liquidity as the fee token
 - Servers MUST validate the transaction matches challenge and channel
   parameters before adding fee payer signature
-- Servers MUST reject `type="hash"` credentials when `feePayer: true`
+- Servers MUST reject credentials with unknown `type` values
 
 ## Client Requirements
 
-- When `feePayer: true` and `type="transaction"`: Clients MUST sign with
-  `fee_payer_signature` set to `0x00` and `fee_token` empty or `0x80`
-  (RLP null)
-- When `feePayer: false` or omitted and `type="transaction"`: Clients
-  MUST set `fee_token` to a valid USD TIP-20 token and have sufficient
-  balance to pay fees
-- When `type="hash"`: Clients are responsible for paying fees before
-  broadcast
+- When `feePayer: true`: Clients MUST sign with `fee_payer_signature`
+  set to `0x00` and `fee_token` empty or `0x80` (RLP null)
+- When `feePayer: false` or omitted: Clients MUST set `fee_token` to a
+  valid USD TIP-20 token and have sufficient balance to pay fees
 
 # Credential Schema
 
@@ -736,52 +721,29 @@ Action-specific fields are placed directly in the `payload` object alongside
 ### Open Payload {#open-payload}
 
 The `open` action confirms an on-chain channel opening and begins the
-streaming session. The client may either submit the transaction themselves
-and provide the hash, or provide a signed transaction for the server to
-broadcast.
+streaming session. The client provides a signed transaction for the server
+to broadcast.
 
 **Payload fields (in addition to `action`):**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` or `"hash"` |
-| `transaction` | string | CONDITIONAL | Signed transaction bytes (if `type="transaction"`) |
-| `hash` | string | CONDITIONAL | Transaction hash (if `type="hash"`) |
+| `type` | string | REQUIRED | `"transaction"` |
+| `transaction` | string | REQUIRED | Signed transaction bytes |
 | `authorizedSigner` | string | OPTIONAL | Delegated signer address |
 | `channelId` | string | REQUIRED | Channel identifier |
 | `cumulativeAmount` | string | REQUIRED | Initial amount (typically `"0"`) |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
 
-When `type` is `"transaction"`, the `transaction` field contains the complete
-signed Tempo Transaction (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP
-and hex-encoded. The server broadcasts the transaction, optionally adding
-a fee payer signature if `feePayer: true` was specified in the challenge
-(see {{fee-payment}}).
-
-When `type` is `"hash"`, the client has already broadcast the transaction.
-The `hash` field contains the transaction hash for the server to verify
-on-chain.
+The `transaction` field contains the complete signed Tempo Transaction
+(type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP and hex-encoded. The server
+broadcasts the transaction, optionally adding a fee payer signature if
+`feePayer: true` was specified in the challenge (see {{fee-payment}}).
 
 The initial zero-amount voucher (channelId, cumulativeAmount, signature)
 proves the client controls the signing key and establishes the voucher chain.
 
-**Example (type="hash", client submitted):**
-
-~~~json
-{
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
-  "payload": {
-    "action": "open",
-    "type": "hash",
-    "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "cumulativeAmount": "0",
-    "signature": "0x1234567890abcdef..."
-  }
-}
-~~~
-
-**Example (type="transaction", server submits):**
+**Example:**
 
 ~~~json
 {
@@ -807,8 +769,8 @@ The `challengeId` MUST match the challenge `id` from the server's
 ### TopUp Payload {#topup-payload}
 
 The `topUp` action adds funds to an existing channel during a streaming
-session. Like `open`, the client may submit the transaction themselves
-or provide a signed transaction for the server to broadcast.
+session. Like `open`, the client provides a signed transaction for the
+server to broadcast.
 
 Clients MUST include a `challengeId` in the Payment credential for `topUp`
 actions. To obtain a challenge for a top-up outside an active streaming
@@ -821,10 +783,9 @@ Servers MUST reject `topUp` actions referencing an unknown or expired
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` or `"hash"` |
+| `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
-| `transaction` | string | CONDITIONAL | Signed transaction bytes (if `type="transaction"`) |
-| `hash` | string | CONDITIONAL | Transaction hash (if `type="hash"`) |
+| `transaction` | string | REQUIRED | Signed transaction bytes |
 | `additionalDeposit` | string | REQUIRED | Amount added in base units |
 
 **Example:**
@@ -834,9 +795,9 @@ Servers MUST reject `topUp` actions referencing an unknown or expired
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "payload": {
     "action": "topUp",
-    "type": "hash",
+    "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "hash": "0x5678abcd1234567890abcdef1234567890abcdef1234567890abcdef12345678",
+    "transaction": "0x76f901...signed topUp transaction bytes...",
     "additionalDeposit": "5000000"
   }
 }
@@ -1008,13 +969,11 @@ When settling, the contract computes: `delta = cumulativeAmount - settled`
 
 On `action="open"`, servers MUST:
 
-1. **Transaction verification** (depends on `type`):
-   - If `type="hash"`: Verify the `hash` references a finalized transaction.
-     On Tempo networks, finality is achieved within approximately 500ms.
-   - If `type="transaction"`: Decode the signed transaction from `transaction`,
-      verify it calls `open()` on the expected escrow contract with correct
-      parameters. If `feePayer: true`, add fee payer signature using domain
-      `0x78` (see {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
+1. **Transaction verification**: Decode the signed transaction from
+   `transaction`, verify it calls `open()` on the expected escrow contract
+   with correct parameters. If `feePayer: true`, add fee payer signature
+   using domain `0x78` (see {{fee-payment}}) and broadcast. Otherwise,
+   broadcast as-is.
 2. Query the escrow contract to verify channel state:
    - Channel exists with matching `channelId`
    - `channel.payee` matches server's address
@@ -1033,13 +992,10 @@ On `action="open"`, servers MUST:
 
 On `action="topUp"`, servers MUST:
 
-1. **Transaction verification** (depends on `type`):
-   - If `type="hash"`: Verify the `hash` references a finalized `topUp()`
-     transaction for the specified `channelId`.
-   - If `type="transaction"`: Decode the signed transaction from `transaction`,
-      verify it calls `topUp()` on the expected escrow contract. If
-      `feePayer: true`, add fee payer signature using domain `0x78` (see
-      {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
+1. **Transaction verification**: Decode the signed transaction from
+   `transaction`, verify it calls `topUp()` on the expected escrow contract.
+   If `feePayer: true`, add fee payer signature using domain `0x78` (see
+   {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify updated channel state:
    - `channel.deposit` increased by `additionalDeposit`
    - Channel is not finalized
@@ -1529,7 +1485,7 @@ However, for high-value channels, servers SHOULD:
 2. Monitor for `ChannelClosed` or `CloseRequested` events
 3. Cease service delivery if the channel becomes invalid
 
-If a chain reorganization invalidates an accepted `hash`, the
+If a chain reorganization invalidates an accepted transaction, the
 server SHOULD:
 
 1. Stop accepting vouchers for that channel
@@ -1640,8 +1596,8 @@ The credential payload for an open action:
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "payload": {
     "action": "open",
-    "type": "hash",
-    "hash": "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+    "type": "transaction",
+    "transaction": "0x76f901...signed transaction bytes...",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "0",
     "signature": "0x1234567890abcdef..."
@@ -1941,18 +1897,13 @@ prefer JSON Schema over CDDL.
   "properties": {
     "action": { "enum": ["open", "topUp", "voucher", "close"] },
     "type": {
-      "enum": ["transaction", "hash"],
+      "enum": ["transaction"],
       "description": "Submission type for open/topUp actions"
     },
     "transaction": {
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]+$",
-      "description": "Signed transaction bytes (if type=transaction)"
-    },
-    "hash": {
-      "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{64}$",
-      "description": "Transaction hash (if type=hash)"
+      "description": "Signed transaction bytes"
     },
     "channelId": {
       "type": "string",
