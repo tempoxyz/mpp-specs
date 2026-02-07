@@ -1,7 +1,7 @@
 import { Credential, Method, z } from 'mpay'
 import type { Account, Address, Hex, WalletClient } from 'viem'
-import type { StreamCredentialPayload } from '../Types.js'
 import { tempoMethod } from '../Method.js'
+import type { StreamCredentialPayload } from '../Types.js'
 import { signVoucher } from '../Voucher.js'
 
 /**
@@ -51,8 +51,14 @@ export function streamClient(parameters: streamClient.Parameters) {
 		context: streamContextSchema,
 
 		async createCredential({ challenge, context }) {
-			const { action, channelId: channelIdRaw, cumulativeAmount, hash: openTxHash, topUpTxHash, authorizedSigner } =
-				context
+			const {
+				action,
+				channelId: channelIdRaw,
+				cumulativeAmount,
+				hash: openTxHash,
+				topUpTxHash,
+				authorizedSigner,
+			} = context
 
 			const channelId = channelIdRaw as Hex
 
