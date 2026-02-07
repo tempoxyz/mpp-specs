@@ -156,32 +156,41 @@ wire format, register a new scheme name (e.g., `Payment2`).
 RFC 7616), OAuth 2.0 (RFC 6749), JOSE/JWT
 (RFC 7515-7519).
 
-### Payment Methods: Version by Identifier
+### Payment Methods: Version in Method Details
 
 Methods are identified by strings in the IANA Payment
 Methods Registry (e.g., `tempo`, `x402`, `stripe`).
 
-- **Compatible changes** (adding optional fields, defining
-  defaults): made in-place under the same identifier.
-- **Breaking changes** (removing required fields, changing
-  semantics): register a new identifier (e.g.,
-  `tempo-v2`).
-
-Method specs MAY define a `version` field within their
-method-specific details for incremental schema tracking:
+Method specs MAY include a `version` field in their
+`methodDetails`. The absence of a `version` field is
+implicitly version 1:
 
 ```json
 {
-  "version": 1,
   "chainId": 42431,
   "feePayer": true
 }
 ```
 
-**Registry policy:** Changes to an existing method
-identifier MUST be backwards compatible. Removing or
-renaming required fields, or changing the semantics of
-existing fields, requires a new method identifier.
+When a breaking change is needed, the method spec adds
+a `version` field starting at `2`:
+
+```json
+{
+  "version": 2,
+  "chainId": 42431,
+  "feePayer": true
+}
+```
+
+- **Compatible changes** (adding optional fields, defining
+  defaults): made in-place, same version.
+- **Breaking changes** (removing required fields, changing
+  semantics): add or increment `version`.
+
+Methods MAY also register a new identifier (e.g.,
+`tempo-v2`) for changes fundamental enough to warrant a
+distinct name, but this is not required.
 
 ### Payment Intents: No Version
 
@@ -213,5 +222,5 @@ and enables most evolution without version changes.
 | Layer | Versioning | Breaking Change |
 |-------|------------|-----------------|
 | Core | None (stable scheme name) | New scheme (`Payment2`) |
-| Methods | Identifier + `methodDetails.version` | New identifier (`tempo-v2`) |
+| Methods | Optional `methodDetails.version` (absent = v1) | Add/increment version |
 | Intents | None (stable intent identifier) | New identifier (`charge-v2`) |
