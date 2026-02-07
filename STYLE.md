@@ -131,9 +131,8 @@ Each directory contains specs at the same abstraction level. Cross-references sh
 
 ## Versioning
 
-The Payment scheme uses a three-layer versioning strategy
-aligned with the layered architecture above. Each layer
-evolves independently.
+The Payment scheme uses a two-layer versioning strategy
+aligned with the layered architecture above.
 
 ### Core Protocol: No Wire Version
 
@@ -184,38 +183,20 @@ identifier MUST be backwards compatible. Removing or
 renaming required fields, or changing the semantics of
 existing fields, requires a new method identifier.
 
-### Payment Intents: Version in Request Schema
+### Payment Intents: No Version
 
-Intent request schemas carry a `version` field inside the
-`request` JSON blob:
+Intents (`charge`, `authorize`, `stream`, etc.) do not
+carry their own version. They evolve through the same
+compatibility rules as the core protocol:
 
-```json
-{
-  "version": 1,
-  "amount": "10000",
-  "currency": "0x20c0...0001",
-  "recipient": "0x...",
-  "expires": "2026-02-06T12:00:00Z"
-}
-```
+- Adding optional fields with defined defaults is always
+  compatible
+- New intent types are registered as new identifiers
+- Breaking changes to an existing intent's semantics
+  require a new intent identifier (e.g., `charge-v2`)
 
-The `version` field is OPTIONAL and defaults to `1` when
-absent. Rules:
-
-- Adding optional fields with defined defaults: compatible,
-  same version
-- Adding required fields or changing field semantics:
-  increment version
-- The intent identifier (`charge`, `authorize`, etc.)
-  remains stable across versions
-- Servers MAY offer multiple challenges with different
-  request versions (RFC 7235 allows multiple
-  `WWW-Authenticate` values)
-- Clients that encounter an unrecognized version SHOULD
-  treat it as an unsupported intent
-
-**Prior art:** x402 (`x402Version`), EIP-712
-(`domain.version`), JSON Schema (`$schema`).
+This keeps intent schemas simple and avoids version
+negotiation complexity in the request blob.
 
 ### Compatibility Rules
 
@@ -233,4 +214,4 @@ and enables most evolution without version changes.
 |-------|------------|-----------------|
 | Core | None (stable scheme name) | New scheme (`Payment2`) |
 | Methods | Identifier + `methodDetails.version` | New identifier (`tempo-v2`) |
-| Intents | `request.version` (default: 1) | Increment version |
+| Intents | None (stable intent identifier) | New identifier (`charge-v2`) |
