@@ -93,7 +93,7 @@ The following diagram illustrates the Stripe charge payment flow:
 ## Relationship to the Payment Scheme
 
 This document is a payment method intent specification as defined in
-Section 9.1 of {{I-D.httpauth-payment}}. It defines the `request` and
+Section 10.1 of {{I-D.httpauth-payment}}. It defines the `request` and
 `payload` structures for the `charge` intent of the `stripe` payment
 method, along with verification and settlement procedures.
 
@@ -185,7 +185,7 @@ The client fulfills this by creating an SPT using Stripe.js:
 
 ~~~ javascript
 const spt = await stripe.createPaymentToken({
-  amount: '5000',
+  amount: 5000,
   currency: 'usd'
 });
 // Returns: { id: 'spt_1N...' }
@@ -356,7 +356,7 @@ only be transmitted over HTTPS connections.
 ## Payment Intent Registration
 
 This specification registers the "charge" intent for the "stripe" payment
-method in the Payment Intent Registry per Section 12.4 of
+method in the Payment Intent Registry per Section 13.4 of
 {{I-D.httpauth-payment}}:
 
 - **Intent**: charge
@@ -397,15 +397,13 @@ WWW-Authenticate: Payment id="ch_1a2b3c4d5e",
   realm="api.example.com",
   method="stripe",
   intent="charge",
-  request="eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJkZXNjcmlwdGlvbiI6IkFJIGdlbmVyYXRpb24ifQ"
+  request="eyJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBSSBnZW5lcmF0aW9uIn0"
 Cache-Control: no-store
-Content-Type: application/problem+json
+Content-Type: application/json
 
 {
-  "type": "https://paymentauth.org/problems/payment-required",
-  "title": "Payment Required",
-  "status": 402,
-  "detail": "This resource requires payment"
+  "error": "payment_required",
+  "message": "This resource requires payment"
 }
 ~~~
 
@@ -435,7 +433,7 @@ Decoded credential:
     "realm": "api.example.com",
     "method": "stripe",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJkZXNjcmlwdGlvbiI6IkFJIGdlbmVyYXRpb24ifQ",
+    "request": "eyJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBSSBnZW5lcmF0aW9uIn0",
     "expires": "2025-01-15T12:05:00Z"
   },
   "payload": {
@@ -475,7 +473,7 @@ WWW-Authenticate: Payment id="ch_b2b_payment",
   realm="supplier.example.com",
   method="stripe",
   intent="charge",
-  request="eyJhbW91bnQiOiIyNTAwMDAiLCJjdXJyZW5jeSI6InVzZCIsImJ1c2luZXNzTmV0d29yayI6ImJuXzFNcURjVktBNWZFTzJ0WnZLUW05ZzhZaiIsImRlc2NyaXB0aW9uIjoiU3VwcGxpZXIgcGF5bWVudCBmb3Igb3JkZXIgIzEyMzQiLCJkZXN0aW5hdGlvbiI6ImFjY3RfMU1xRTF2S0I2Z0ZQM3VZdyJ9"
+  request="eyJhbW91bnQiOjI1MDAwMCwiY3VycmVuY3kiOiJ1c2QiLCJidXNpbmVzc05ldHdvcmsiOiJibl8xTXFEY1ZLQTVMRU8ydFp2S1FtOWc4WWoiLCJkZXNjcmlwdGlvbiI6IlN1cHBsaWVyIHBheW1lbnQgZm9yIG9yZGVyICMxMjM0In0"
 ~~~
 
 Decoded request:
