@@ -390,10 +390,7 @@ function settle(
 
 ### topUp
 
-User adds more funds to an existing channel. If a close request is
-pending (`closeRequestedAt != 0`), calling `topUp()` MUST cancel it by
-resetting `closeRequestedAt` to zero and emitting a
-`CloseRequestCancelled` event.
+User adds more funds to an existing channel.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
