@@ -679,6 +679,14 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 | `challengeId` | string | REQUIRED | The challenge ID from the server's WWW-Authenticate header |
 | `payload` | object | REQUIRED | Stream-specific payload object |
 
+Note: The stream intent uses a simplified credential structure with only
+`challengeId` rather than the full `challenge` object echo defined in
+Section 5.2 of {{I-D.httpauth-payment}}. This reduces payload size for
+high-frequency voucher submissions where the full challenge parameters
+are already known to both parties from the initial exchange. Servers MUST
+bind the `challengeId` to the original challenge parameters as specified
+in Section 5.1.2 of {{I-D.httpauth-payment}}.
+
 Implementations MUST ignore unknown fields in credential payloads, request
 objects, and receipts to allow forward-compatible extensions.
 
@@ -1284,6 +1292,10 @@ extends the receipt with balance tracking:
 | `spent` | string | Total amount charged so far |
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
+
+The `txHash` field serves as the core spec's `reference` field (Section
+5.3 of {{I-D.httpauth-payment}}). It is OPTIONAL because not every
+response involves an on-chain settlement—voucher updates are off-chain.
 
 The `units` field indicates what was consumed for **this specific request**.
 The unit type is defined in the challenge `unitType`. Clients can compute

@@ -140,6 +140,10 @@ base64url-encoded JSON object.
 | `recipient` | string | REQUIRED | Recipient address |
 | `expires` | string | REQUIRED | Expiry timestamp in {{RFC3339}} format |
 
+The `expires` field in the request JSON MUST match the `expires`
+auth-param in the `WWW-Authenticate` header when both are present.
+Clients SHOULD use the auth-param value for expiry checks.
+
 ## Method Details
 
 | Field | Type | Required | Description |
