@@ -121,13 +121,14 @@ The following diagram illustrates the Tempo stream flow:
       |      (includes challengeId) |                             |
       |<--------------------------  |                             |
       |                             |                             |
-      |  (3) Open channel on-chain  |                             |
-      |------------------------------------------------------>    |
-      |                             |                             |
-      |  (4) GET /api/resource      |                             |
+      |  (3) GET /api/resource      |                             |
       |      Authorization: Payment |                             |
       |      action="open"          |                             |
+      |      (includes signed tx)   |                             |
       |-------------------------->  |                             |
+      |                             |                             |
+      |                             |  (4) open(...)               |
+      |                             |-------------------------->  |
       |                             |                             |
       |  (5) 200 OK + Receipt       |                             |
       |      (streaming response)   |                             |
