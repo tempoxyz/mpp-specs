@@ -532,6 +532,36 @@ Payment method specifications MUST define:
 5. **Settlement Procedure**: How payment is finalized
 6. **Security Considerations**: Method-specific threats and mitigations
 
+## Versioning {#versioning}
+
+The Payment scheme uses a layered versioning strategy:
+
+### Core Protocol
+
+The `Payment` scheme name is the stable identifier. The core protocol
+does NOT carry a version on the wire, consistent with all deployed HTTP
+authentication schemes (`Basic`, `Bearer`, `Digest`). Evolution happens
+through adding optional parameters and fields; implementations MUST
+ignore unknown parameters and fields. If a future change is truly
+incompatible, a new scheme name (e.g., `Payment2`) would be registered.
+
+### Payment Methods
+
+Payment method specifications MAY include a `version` field in their
+`methodDetails`. The absence of a `version` field is implicitly
+version 1. When a breaking change is needed, the method specification
+adds a `version` field starting at `2`. Compatible changes (adding
+optional fields, defining defaults) do not require a version change.
+Methods MAY also register a new identifier for changes fundamental
+enough to warrant a distinct name.
+
+### Payment Intents
+
+Payment intents do not carry a version. They evolve through the same
+compatibility rules as the core: adding optional fields with defined
+defaults is compatible, and breaking changes require a new intent
+identifier (e.g., `charge-v2`).
+
 ## Custom Parameters
 
 Implementations MAY define additional parameters in challenges:

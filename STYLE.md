@@ -128,3 +128,99 @@ specs/
 ```
 
 Each directory contains specs at the same abstraction level. Cross-references should flow downward: core → intents → methods.
+
+## Versioning
+
+The Payment scheme uses a two-layer versioning strategy
+aligned with the layered architecture above.
+
+### Core Protocol: No Wire Version
+
+The `Payment` scheme name is the stable anchor. The core
+does NOT carry a version identifier on the wire.
+
+No deployed HTTP authentication scheme uses a version
+parameter (`Basic`, `Bearer`, `Digest` are all
+unversioned). Evolution happens through:
+
+- Adding optional challenge parameters (peers MUST ignore
+  unknown parameters)
+- Adding optional credential fields (peers MUST ignore
+  unknown fields)
+- Publishing new RFCs that Update or Obsolete the original
+
+If a future change is truly incompatible with the core
+wire format, register a new scheme name (e.g., `Payment2`).
+
+**Prior art:** HTTP auth schemes (RFC 7617, RFC 6750,
+RFC 7616), OAuth 2.0 (RFC 6749), JOSE/JWT
+(RFC 7515-7519).
+
+### Payment Methods: Version in Method Details
+
+Methods are identified by strings in the IANA Payment
+Methods Registry (e.g., `tempo`, `x402`, `stripe`).
+
+Method specs MAY include a `version` field in their
+`methodDetails`. The absence of a `version` field is
+implicitly version 1:
+
+```json
+{
+  "chainId": 42431,
+  "feePayer": true
+}
+```
+
+When a breaking change is needed, the method spec adds
+a `version` field starting at `2`:
+
+```json
+{
+  "version": 2,
+  "chainId": 42431,
+  "feePayer": true
+}
+```
+
+- **Compatible changes** (adding optional fields, defining
+  defaults): made in-place, same version.
+- **Breaking changes** (removing required fields, changing
+  semantics): add or increment `version`.
+
+Methods MAY also register a new identifier (e.g.,
+`tempo-v2`) for changes fundamental enough to warrant a
+distinct name, but this is not required.
+
+### Payment Intents: No Version
+
+Intents (`charge`, `authorize`, `stream`, etc.) do not
+carry their own version. They evolve through the same
+compatibility rules as the core protocol:
+
+- Adding optional fields with defined defaults is always
+  compatible
+- New intent types are registered as new identifiers
+- Breaking changes to an existing intent's semantics
+  require a new intent identifier (e.g., `charge-v2`)
+
+This keeps intent schemas simple and avoids version
+negotiation complexity in the request blob.
+
+### Compatibility Rules
+
+All layers follow the same rule:
+
+> Implementations MUST ignore unknown fields in
+> challenges, credentials, request objects, and receipts.
+
+This is the primary mechanism for forward compatibility
+and enables most evolution without version changes.
+
+### Summary
+
+| Layer | Versioning | Breaking Change |
+|-------|------------|-----------------|
+| Core | None (stable scheme name) | New scheme (`Payment2`) |
+| Methods | Optional `methodDetails.version` (absent = v1) | Add/increment version |
+| Intents | None (stable intent identifier) | New identifier (`charge-v2`) |
