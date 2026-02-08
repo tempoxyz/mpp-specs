@@ -292,7 +292,6 @@ channelId = keccak256(abi.encode(
     payer,
     payee,
     token,
-    deposit,
     salt,
     authorizedSigner
 ))
@@ -391,7 +390,10 @@ function settle(
 
 ### topUp
 
-User adds more funds to an existing channel.
+User adds more funds to an existing channel. If a close request is
+pending (`closeRequestedAt != 0`), calling `topUp()` MUST cancel it by
+resetting `closeRequestedAt` to zero and emitting a
+`CloseRequestCancelled` event.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -1430,7 +1432,7 @@ that enforce these requirements.
 
 The voucher message contains only `channelId` and `cumulativeAmount`. The
 `channelId` is derived from channel parameters including payer, payee,
-token, and deposit amount, cryptographically binding these values.
+token, salt, and authorized signer, cryptographically binding these values.
 
 However, wallet signing interfaces may only display the raw `channelId`
 bytes, making it difficult for users to verify payment details. Wallet
@@ -1731,7 +1733,6 @@ interface ITempoStreamChannel {
         address payer,
         address payee,
         address token,
-        uint128 deposit,
         bytes32 salt,
         address authorizedSigner
     ) external view returns (bytes32);
@@ -1771,6 +1772,12 @@ interface ITempoStreamChannel {
         address indexed payer,
         address indexed payee,
         uint256 closeGraceEnd
+    );
+
+    event CloseRequestCancelled(
+        bytes32 indexed channelId,
+        address indexed payer,
+        address indexed payee
     );
 
     event TopUp(
