@@ -658,7 +658,7 @@ When acting as fee payer for `open` or `topUp`:
   liquidity as the fee token
 - Servers MUST validate the transaction matches challenge and channel
   parameters before adding fee payer signature
-- Servers MUST reject credentials with unknown `type` values
+- Servers MUST reject credentials with unknown `action` values
 
 ## Client Requirements
 
@@ -730,20 +730,25 @@ to broadcast.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-| `authorizedSigner` | string | OPTIONAL | Delegated signer address |
-| `channelId` | string | REQUIRED | Channel identifier |
-| `cumulativeAmount` | string | REQUIRED | Initial amount (typically `"0"`) |
-| `signature` | string | REQUIRED | EIP-712 voucher signature |
+| `cumulativeAmount` | string | OPTIONAL | Initial amount (typically `"0"`) |
+| `signature` | string | OPTIONAL | EIP-712 voucher signature |
 
 The `transaction` field contains the complete signed Tempo Transaction
 (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP and hex-encoded. The server
 broadcasts the transaction, optionally adding a fee payer signature if
 `feePayer: true` was specified in the challenge (see {{fee-payment}}).
 
-The initial zero-amount voucher (channelId, cumulativeAmount, signature)
+The server recovers the `payer` address from the signed transaction and
+uses it to compute the `channelId` deterministically (see {{channel-state}}).
+The `authorizedSigner` is inferred from the calldata inside `transaction`
+and verified when the transaction is signed.
+
+If `cumulativeAmount` and `signature` are provided, the initial voucher
 proves the client controls the signing key and establishes the voucher chain.
+When omitted, proof of authority is deferred until the first voucher
+submission. This is typical when the initial `cumulativeAmount` would be
+zero.
 
 **Example:**
 
@@ -752,18 +757,14 @@ proves the client controls the signing key and establishes the voucher chain.
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "payload": {
     "action": "open",
-    "type": "transaction",
-    "transaction": "0x76f901...signed transaction bytes...",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "cumulativeAmount": "0",
-    "signature": "0x1234567890abcdef..."
+    "transaction": "0x76f901...signed transaction bytes..."
   }
 }
 ~~~
 
-Note: The `transaction` field contains RLP-encoded transaction bytes. The
-`signature` field is the EIP-712 voucher signature (65 bytes r‖s‖v or 64
-bytes EIP-2098 compact).
+Note: The `transaction` field contains RLP-encoded transaction bytes.
+When provided, the `signature` field is the EIP-712 voucher signature
+(65 bytes r‖s‖v or 64 bytes EIP-2098 compact).
 
 The `challengeId` MUST match the challenge `id` from the server's
 `WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
@@ -785,10 +786,11 @@ Servers MUST reject `topUp` actions referencing an unknown or expired
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-| `additionalDeposit` | string | REQUIRED | Amount added in base units |
+
+The `additionalDeposit` amount is inferred from the calldata inside
+`transaction`.
 
 **Example:**
 
@@ -797,10 +799,8 @@ Servers MUST reject `topUp` actions referencing an unknown or expired
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "payload": {
     "action": "topUp",
-    "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "transaction": "0x76f901...signed topUp transaction bytes...",
-    "additionalDeposit": "5000000"
+    "transaction": "0x76f901...signed topUp transaction bytes..."
   }
 }
 ~~~
@@ -973,16 +973,19 @@ On `action="open"`, servers MUST:
 
 1. **Transaction verification**: Decode the signed transaction from
    `transaction`, verify it calls `open()` on the expected escrow contract
-   with correct parameters. If `feePayer: true`, add fee payer signature
-   using domain `0x78` (see {{fee-payment}}) and broadcast. Otherwise,
-   broadcast as-is.
+   with correct parameters. Recover the `payer` address from the
+   transaction, infer `authorizedSigner` from the calldata, and compute
+   `channelId` deterministically (see {{channel-state}}). If `feePayer: true`,
+   add fee payer signature using domain `0x78` (see {{fee-payment}}) and
+   broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify channel state:
-   - Channel exists with matching `channelId`
+   - Channel exists with the computed `channelId`
    - `channel.payee` matches server's address
    - `channel.token` matches `request.currency`
    - `channel.deposit - channel.settled >= amount` (sufficient available balance)
    - Channel is not finalized
-3. Verify the initial voucher:
+3. If `cumulativeAmount` and `signature` are provided, verify the initial
+   voucher:
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
@@ -996,13 +999,14 @@ On `action="topUp"`, servers MUST:
 
 1. **Transaction verification**: Decode the signed transaction from
    `transaction`, verify it calls `topUp()` on the expected escrow contract.
-   If `feePayer: true`, add fee payer signature using domain `0x78` (see
+   Infer the `additionalDeposit` amount from the calldata. If
+   `feePayer: true`, add fee payer signature using domain `0x78` (see
    {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify updated channel state:
-   - `channel.deposit` increased by `additionalDeposit`
+   - `channel.deposit` increased by the inferred deposit amount
    - Channel is not finalized
 3. Update server-side accounting:
-   - Increase available balance by `additionalDeposit`
+   - Increase available balance by the inferred deposit amount
 
 ## Voucher Verification {#voucher-verification}
 
@@ -1598,11 +1602,7 @@ The credential payload for an open action:
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "payload": {
     "action": "open",
-    "type": "transaction",
-    "transaction": "0x76f901...signed transaction bytes...",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "cumulativeAmount": "0",
-    "signature": "0x1234567890abcdef..."
+    "transaction": "0x76f901...signed transaction bytes..."
   }
 }
 ~~~
@@ -1903,10 +1903,6 @@ prefer JSON Schema over CDDL.
   "required": ["action"],
   "properties": {
     "action": { "enum": ["open", "topUp", "voucher", "close"] },
-    "type": {
-      "enum": ["transaction"],
-      "description": "Submission type for open/topUp actions"
-    },
     "transaction": {
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]+$",
@@ -1926,16 +1922,6 @@ prefer JSON Schema over CDDL.
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{128,130}$",
       "description": "EIP-712 voucher signature"
-    },
-    "additionalDeposit": {
-      "type": "string",
-      "pattern": "^[0-9]+$",
-      "description": "Amount added for topUp action"
-    },
-    "authorizedSigner": {
-      "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{40}$",
-      "description": "Delegated signer address for open action"
     }
   }
 }
