@@ -292,15 +292,19 @@ channelId = keccak256(abi.encode(
     payer,
     payee,
     token,
+    deposit,
     salt,
-    authorizedSigner
+    authorizedSigner,
+    address(this),
+    block.chainid
 ))
 ~~~
 
-Note: The `chainId` and `contractAddress` are implicitly bound via the
-EIP-712 domain separator used for voucher verification. Clients MUST use
-the contract's `computeChannelId()` function or equivalent logic to
-ensure interoperability.
+Note: The `channelId` includes `deposit`, `address(this)` (the escrow
+contract address), and `block.chainid`, explicitly binding the channel
+to a specific deposit amount, contract deployment, and chain. Clients
+MUST use the contract's `computeChannelId()` function or equivalent
+logic to ensure interoperability.
 
 ## Channel Lifecycle
 
@@ -1733,6 +1737,7 @@ interface ITempoStreamChannel {
         address payer,
         address payee,
         address token,
+        uint128 deposit,
         bytes32 salt,
         address authorizedSigner
     ) external view returns (bytes32);
