@@ -293,14 +293,17 @@ channelId = keccak256(abi.encode(
     payee,
     token,
     salt,
-    authorizedSigner
+    authorizedSigner,
+    address(this),
+    block.chainid
 ))
 ~~~
 
-Note: The `chainId` and `contractAddress` are implicitly bound via the
-EIP-712 domain separator used for voucher verification. Clients MUST use
-the contract's `computeChannelId()` function or equivalent logic to
-ensure interoperability.
+Note: The `channelId` includes `address(this)` (the escrow contract
+address) and `block.chainid`, explicitly binding the channel to a
+specific contract deployment and chain. Clients MUST use the contract's
+`computeChannelId()` function or equivalent logic to ensure
+interoperability.
 
 ## Channel Lifecycle
 
