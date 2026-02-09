@@ -130,7 +130,7 @@ Cache-Control: max-age=300
   "methods": {
     "tempo": {
       "intents": ["charge", "authorize", "subscription"],
-      "assets": ["0x20c0000000000000000000000000000000000001"]
+      "assets": ["0x20c0000000000000000000000000000000000000"]
     },
     "lightning": {
       "intents": ["charge"],
