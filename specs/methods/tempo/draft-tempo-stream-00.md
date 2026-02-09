@@ -121,13 +121,14 @@ The following diagram illustrates the Tempo stream flow:
       |      (includes challengeId) |                             |
       |<--------------------------  |                             |
       |                             |                             |
-      |  (3) Open channel on-chain  |                             |
-      |------------------------------------------------------>    |
-      |                             |                             |
-      |  (4) GET /api/resource      |                             |
+      |  (3) GET /api/resource      |                             |
       |      Authorization: Payment |                             |
       |      action="open"          |                             |
+      |      (includes signed tx)   |                             |
       |-------------------------->  |                             |
+      |                             |                             |
+      |                             |  (4) open(...)               |
+      |                             |-------------------------->  |
       |                             |                             |
       |  (5) 200 OK + Receipt       |                             |
       |      (streaming response)   |                             |
@@ -568,7 +569,7 @@ mappings to suggest channel reuse, reducing on-chain transactions.
   "amount": "25",
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
@@ -586,7 +587,7 @@ deposit of 10.00 tokens. The client generates a random salt locally.
 {
   "amount": "25",
   "unitType": "llm_token",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
@@ -661,7 +662,7 @@ When acting as fee payer for `open` or `topUp`:
   liquidity as the fee token
 - Servers MUST validate the transaction matches challenge and channel
   parameters before adding fee payer signature
-- Servers MUST reject credentials with unknown `type` values
+- Servers MUST reject credentials with unknown `action` values
 
 ## Client Requirements
 
@@ -679,7 +680,7 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `challengeId` | string | REQUIRED | The challenge ID from the server's WWW-Authenticate header |
+| `challenge` | object | REQUIRED | Echo of the challenge parameters from the server's WWW-Authenticate header |
 | `payload` | object | REQUIRED | Stream-specific payload object |
 
 Implementations MUST ignore unknown fields in credential payloads, request
@@ -733,43 +734,51 @@ to broadcast.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-| `authorizedSigner` | string | OPTIONAL | Delegated signer address |
-| `channelId` | string | REQUIRED | Channel identifier |
-| `cumulativeAmount` | string | REQUIRED | Initial amount (typically `"0"`) |
-| `signature` | string | REQUIRED | EIP-712 voucher signature |
+| `cumulativeAmount` | string | OPTIONAL | Initial amount (typically `"0"`) |
+| `signature` | string | OPTIONAL | EIP-712 voucher signature |
 
 The `transaction` field contains the complete signed Tempo Transaction
 (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP and hex-encoded. The server
 broadcasts the transaction, optionally adding a fee payer signature if
 `feePayer: true` was specified in the challenge (see {{fee-payment}}).
 
-The initial zero-amount voucher (channelId, cumulativeAmount, signature)
+The server recovers the `payer` address from the signed transaction and
+uses it to compute the `channelId` deterministically (see {{channel-state}}).
+The `authorizedSigner` is inferred from the calldata inside `transaction`
+and verified when the transaction is signed.
+
+If `cumulativeAmount` and `signature` are provided, the initial voucher
 proves the client controls the signing key and establishes the voucher chain.
+When omitted, proof of authority is deferred until the first voucher
+submission. This is typical when the initial `cumulativeAmount` would be
+zero.
 
 **Example:**
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "open",
-    "type": "transaction",
-    "transaction": "0x76f901...signed transaction bytes...",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "cumulativeAmount": "0",
-    "signature": "0x1234567890abcdef..."
+    "transaction": "0x76f901...signed transaction bytes..."
   }
 }
 ~~~
 
-Note: The `transaction` field contains RLP-encoded transaction bytes. The
-`signature` field is the EIP-712 voucher signature (65 bytes r‖s‖v or 64
-bytes EIP-2098 compact).
+Note: The `transaction` field contains RLP-encoded transaction bytes.
+When provided, the `signature` field is the EIP-712 voucher signature
+(65 bytes r‖s‖v or 64 bytes EIP-2098 compact).
 
-The `challengeId` MUST match the challenge `id` from the server's
-`WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
+The `challenge` object MUST echo the challenge parameters from the server's
+`WWW-Authenticate` header per Section 5.2 of {{I-D.httpauth-payment}}.
 
 ### TopUp Payload {#topup-payload}
 
@@ -777,33 +786,39 @@ The `topUp` action adds funds to an existing channel during a streaming
 session. Like `open`, the client provides a signed transaction for the
 server to broadcast.
 
-Clients MUST include a `challengeId` in the Payment credential for `topUp`
+Clients MUST include a `challenge` object in the Payment credential for `topUp`
 actions. To obtain a challenge for a top-up outside an active streaming
 response, clients MAY send a `HEAD` request to the protected resource;
 the server returns 402 with a `WWW-Authenticate` challenge (no body).
 Servers MUST reject `topUp` actions referencing an unknown or expired
-`challengeId` with problem type `challenge-not-found`.
+challenge `id` with problem type `challenge-not-found`.
 
 **Payload fields (in addition to `action`):**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-| `additionalDeposit` | string | REQUIRED | Amount added in base units |
+
+The `additionalDeposit` amount is inferred from the calldata inside
+`transaction`.
 
 **Example:**
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "topUp",
-    "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "transaction": "0x76f901...signed topUp transaction bytes...",
-    "additionalDeposit": "5000000"
+    "transaction": "0x76f901...signed topUp transaction bytes..."
   }
 }
 ~~~
@@ -827,7 +842,14 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "voucher",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -857,7 +879,14 @@ to call `close(channelId, cumulativeAmount, signature)` on-chain.
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "close",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -976,16 +1005,19 @@ On `action="open"`, servers MUST:
 
 1. **Transaction verification**: Decode the signed transaction from
    `transaction`, verify it calls `open()` on the expected escrow contract
-   with correct parameters. If `feePayer: true`, add fee payer signature
-   using domain `0x78` (see {{fee-payment}}) and broadcast. Otherwise,
-   broadcast as-is.
+   with correct parameters. Recover the `payer` address from the
+   transaction, infer `authorizedSigner` from the calldata, and compute
+   `channelId` deterministically (see {{channel-state}}). If `feePayer: true`,
+   add fee payer signature using domain `0x78` (see {{fee-payment}}) and
+   broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify channel state:
-   - Channel exists with matching `channelId`
+   - Channel exists with the computed `channelId`
    - `channel.payee` matches server's address
    - `channel.token` matches `request.currency`
    - `channel.deposit - channel.settled >= amount` (sufficient available balance)
    - Channel is not finalized
-3. Verify the initial voucher:
+3. If `cumulativeAmount` and `signature` are provided, verify the initial
+   voucher:
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
@@ -999,13 +1031,14 @@ On `action="topUp"`, servers MUST:
 
 1. **Transaction verification**: Decode the signed transaction from
    `transaction`, verify it calls `topUp()` on the expected escrow contract.
-   If `feePayer: true`, add fee payer signature using domain `0x78` (see
+   Infer the `additionalDeposit` amount from the calldata. If
+   `feePayer: true`, add fee payer signature using domain `0x78` (see
    {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify updated channel state:
-   - `channel.deposit` increased by `additionalDeposit`
+   - `channel.deposit` increased by the inferred deposit amount
    - Channel is not finalized
 3. Update server-side accounting:
-   - Increase available balance by `additionalDeposit`
+   - Increase available balance by the inferred deposit amount
 
 ## Voucher Verification {#voucher-verification}
 
@@ -1288,6 +1321,10 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
+The `txHash` field serves as the core spec's `reference` field (Section
+5.3 of {{I-D.httpauth-payment}}). It is OPTIONAL because not every
+response involves an on-chain settlement—voucher updates are off-chain.
+
 The `units` field indicates what was consumed for **this specific request**.
 The unit type is defined in the challenge `unitType`. Clients can compute
 cost as `units × amount` from the challenge.
@@ -1569,7 +1606,7 @@ The `request` decodes to:
   "amount": "25",
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
@@ -1582,7 +1619,7 @@ Note: Challenge expiry is in the header `expires` auth-param, not in the
 request JSON. The client generates a random salt locally for new channels.
 
 This requests a price of 0.000025 tokens per LLM token, with a suggested
-deposit of 10.00 alphaUSD (10000000 base units).
+deposit of 10.00 pathUSD (10000000 base units).
 
 ## Open Credential
 
@@ -1598,14 +1635,17 @@ The credential payload for an open action:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "open",
-    "type": "transaction",
-    "transaction": "0x76f901...signed transaction bytes...",
-    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "cumulativeAmount": "0",
-    "signature": "0x1234567890abcdef..."
+    "transaction": "0x76f901...signed transaction bytes..."
   }
 }
 ~~~
@@ -1634,7 +1674,14 @@ The credential payload for a voucher update:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "voucher",
     "channelId": "0x6d0f4fdf...",
@@ -1658,7 +1705,14 @@ The credential payload for a close request:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "close",
     "channelId": "0x6d0f4fdf...",
@@ -1906,10 +1960,6 @@ prefer JSON Schema over CDDL.
   "required": ["action"],
   "properties": {
     "action": { "enum": ["open", "topUp", "voucher", "close"] },
-    "type": {
-      "enum": ["transaction"],
-      "description": "Submission type for open/topUp actions"
-    },
     "transaction": {
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]+$",
@@ -1929,16 +1979,6 @@ prefer JSON Schema over CDDL.
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{128,130}$",
       "description": "EIP-712 voucher signature"
-    },
-    "additionalDeposit": {
-      "type": "string",
-      "pattern": "^[0-9]+$",
-      "description": "Amount added for topUp action"
-    },
-    "authorizedSigner": {
-      "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{40}$",
-      "description": "Delegated signer address for open action"
     }
   }
 }

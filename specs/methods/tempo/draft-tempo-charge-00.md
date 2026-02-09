@@ -140,6 +140,10 @@ base64url-encoded JSON object.
 | `recipient` | string | REQUIRED | Recipient address |
 | `expires` | string | REQUIRED | Expiry timestamp in {{RFC3339}} format |
 
+The `expires` field in the request JSON MUST match the `expires`
+auth-param in the `WWW-Authenticate` header when both are present.
+Clients SHOULD use the auth-param value for expiry checks.
+
 ## Method Details
 
 | Field | Type | Required | Description |
@@ -152,7 +156,7 @@ base64url-encoded JSON object.
 ~~~json
 {
   "amount": "1000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z",
   "methodDetails": {
@@ -465,7 +469,7 @@ The `request` decodes to:
 ~~~json
 {
   "amount": "1000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "expires": "2025-01-06T12:00:00Z",
   "methodDetails": {
@@ -474,7 +478,7 @@ The `request` decodes to:
 }
 ~~~
 
-This requests a transfer of 1.00 alphaUSD (1000000 base units).
+This requests a transfer of 1.00 pathUSD (1000000 base units).
 
 **Credential:**
 

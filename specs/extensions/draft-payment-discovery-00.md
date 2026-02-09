@@ -130,7 +130,7 @@ Cache-Control: max-age=300
   "methods": {
     "tempo": {
       "intents": ["charge", "authorize", "subscription"],
-      "assets": ["0x20c0000000000000000000000000000000000001"]
+      "assets": ["0x20c0000000000000000000000000000000000000"]
     },
     "lightning": {
       "intents": ["charge"],
@@ -188,8 +188,8 @@ URIs" registry established by {{!RFC8615}}:
 
 - **URI Suffix**: payment
 - **Change Controller**: IETF
-- **Reference**: This document, Section 3
+- **Reference**: This document, Section 4
 - **Status**: permanent
 - **Related Information**: None
 
-{backmatter}
+--- back

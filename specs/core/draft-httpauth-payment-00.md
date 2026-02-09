@@ -33,7 +33,6 @@ normative:
   RFC4648:
   RFC5234:
   RFC5246:
-  RFC6750:
   RFC8126:
   RFC8174:
   RFC8259:
@@ -41,6 +40,7 @@ normative:
   RFC9110:
   RFC9111:
   RFC9457:
+  RFC9530:
 
 informative:
   W3C-DID:
@@ -259,7 +259,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   Servers SHOULD include this parameter when the payment challenge applies
   to a request with a body (e.g., POST, PUT, PATCH). When present, clients
   MUST submit the credential with a request body whose digest matches this
-  value. See Section 5.1.5 for body binding requirements.
+  value. See Section 5.1.3 for body binding requirements.
 
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an {{RFC3339}} date-time string (e.g., `"2025-01-15T12:00:00Z"`).
@@ -330,15 +330,15 @@ When verifying a credential with a `digest` parameter, servers MUST:
 
 ## Credentials (Authorization)
 
-The Payment credential is sent in the `Authorization` header using the
-b64token syntax as defined in {{RFC6750}}:
+The Payment credential is sent in the `Authorization` header using
+base64url encoding without padding per {{RFC4648}} Section 5:
 
 ~~~abnf
-credentials     = "Payment" 1*SP b64token
-b64token        = 1*( ALPHA / DIGIT / "-" / "." / "_" / "~" / "+" / "/" ) *"="
+credentials     = "Payment" 1*SP base64url-nopad
+base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 ~~~
 
-The b64token value is a base64url-encoded JSON object (without padding)
+The base64url-nopad value is a base64url-encoded JSON object (without padding)
 containing:
 
 | Field | Type | Required | Description |
@@ -394,7 +394,7 @@ Decoded credential:
 Servers SHOULD include a `Payment-Receipt` header on successful responses:
 
 ~~~abnf
-Payment-Receipt = b64token
+Payment-Receipt = base64url-nopad
 ~~~
 
 The decoded JSON object contains:
@@ -488,14 +488,21 @@ recognize an intent SHOULD treat the challenge as unsupported.
 
 ## Error Response Format
 
-Servers SHOULD return JSON error bodies with 402 responses:
+Servers SHOULD return Problem Details {{RFC9457}} error bodies with 402
+responses:
 
 ~~~json
 {
-  "error": "error_code",
-  "message": "Human-readable description"
+  "type": "https://paymentauth.org/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Human-readable description"
 }
 ~~~
+
+The `type` URI SHOULD correspond to the error code from the table
+below (e.g., `https://paymentauth.org/problems/verification-failed`
+for `payment_verification_failed`).
 
 ## Error Codes
 
@@ -504,7 +511,7 @@ Servers SHOULD return JSON error bodies with 402 responses:
 | `payment_required` | 402 | Resource requires payment |
 | `payment_insufficient` | 402 | Amount too low |
 | `payment_expired` | 402 | Challenge or authorization expired |
-| `payment_verification_failed` | 401 | Proof invalid |
+| `payment_verification_failed` | 402 | Proof invalid |
 | `payment_method_unsupported` | 400 | Method not accepted |
 | `malformed_proof` | 400 | Invalid proof format |
 
@@ -531,6 +538,36 @@ Payment method specifications MUST define:
 4. **Verification Procedure**: How servers validate proofs
 5. **Settlement Procedure**: How payment is finalized
 6. **Security Considerations**: Method-specific threats and mitigations
+
+## Versioning {#versioning}
+
+The Payment scheme uses a layered versioning strategy:
+
+### Core Protocol
+
+The `Payment` scheme name is the stable identifier. The core protocol
+does NOT carry a version on the wire, consistent with all deployed HTTP
+authentication schemes (`Basic`, `Bearer`, `Digest`). Evolution happens
+through adding optional parameters and fields; implementations MUST
+ignore unknown parameters and fields. If a future change is truly
+incompatible, a new scheme name (e.g., `Payment2`) would be registered.
+
+### Payment Methods {#versioning-payment-methods}
+
+Payment method specifications MAY include a `version` field in their
+`methodDetails`. The absence of a `version` field is implicitly
+version 1. When a breaking change is needed, the method specification
+adds a `version` field starting at `2`. Compatible changes (adding
+optional fields, defining defaults) do not require a version change.
+Methods MAY also register a new identifier for changes fundamental
+enough to warrant a distinct name.
+
+### Payment Intents {#versioning-payment-intents}
+
+Payment intents do not carry a version. They evolve through the same
+compatibility rules as the core: adding optional fields with defined
+defaults is compatible, and breaking changes require a new intent
+identifier (e.g., `charge-v2`).
 
 ## Custom Parameters
 
