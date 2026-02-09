@@ -565,7 +565,7 @@ mappings to suggest channel reuse, reducing on-chain transactions.
   "amount": "25",
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
@@ -583,7 +583,7 @@ deposit of 10.00 tokens. The client generates a random salt locally.
 {
   "amount": "25",
   "unitType": "llm_token",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
@@ -1566,7 +1566,7 @@ The `request` decodes to:
   "amount": "25",
   "unitType": "llm_token",
   "suggestedDeposit": "10000000",
-  "currency": "0x20c0000000000000000000000000000000000001",
+  "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
@@ -1579,7 +1579,7 @@ Note: Challenge expiry is in the header `expires` auth-param, not in the
 request JSON. The client generates a random salt locally for new channels.
 
 This requests a price of 0.000025 tokens per LLM token, with a suggested
-deposit of 10.00 alphaUSD (10000000 base units).
+deposit of 10.00 pathUSD (10000000 base units).
 
 ## Open Credential
 
