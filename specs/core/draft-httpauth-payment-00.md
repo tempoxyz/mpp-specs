@@ -545,7 +545,7 @@ through adding optional parameters and fields; implementations MUST
 ignore unknown parameters and fields. If a future change is truly
 incompatible, a new scheme name (e.g., `Payment2`) would be registered.
 
-### Payment Methods
+### Payment Methods {#versioning-payment-methods}
 
 Payment method specifications MAY include a `version` field in their
 `methodDetails`. The absence of a `version` field is implicitly
@@ -555,7 +555,7 @@ optional fields, defining defaults) do not require a version change.
 Methods MAY also register a new identifier for changes fundamental
 enough to warrant a distinct name.
 
-### Payment Intents
+### Payment Intents {#versioning-payment-intents}
 
 Payment intents do not carry a version. They evolve through the same
 compatibility rules as the core: adding optional fields with defined
