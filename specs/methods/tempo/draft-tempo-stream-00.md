@@ -677,7 +677,7 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `challengeId` | string | REQUIRED | The challenge ID from the server's WWW-Authenticate header |
+| `challenge` | object | REQUIRED | Echo of the challenge parameters from the server's WWW-Authenticate header |
 | `payload` | object | REQUIRED | Stream-specific payload object |
 
 Implementations MUST ignore unknown fields in credential payloads, request
@@ -755,7 +755,14 @@ zero.
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "open",
     "transaction": "0x76f901...signed transaction bytes..."
@@ -767,8 +774,8 @@ Note: The `transaction` field contains RLP-encoded transaction bytes.
 When provided, the `signature` field is the EIP-712 voucher signature
 (65 bytes r‖s‖v or 64 bytes EIP-2098 compact).
 
-The `challengeId` MUST match the challenge `id` from the server's
-`WWW-Authenticate` header per {{I-D.httpauth-payment}} Section 5.2.
+The `challenge` object MUST echo the challenge parameters from the server's
+`WWW-Authenticate` header per Section 5.2 of {{I-D.httpauth-payment}}.
 
 ### TopUp Payload {#topup-payload}
 
@@ -776,12 +783,12 @@ The `topUp` action adds funds to an existing channel during a streaming
 session. Like `open`, the client provides a signed transaction for the
 server to broadcast.
 
-Clients MUST include a `challengeId` in the Payment credential for `topUp`
+Clients MUST include a `challenge` object in the Payment credential for `topUp`
 actions. To obtain a challenge for a top-up outside an active streaming
 response, clients MAY send a `HEAD` request to the protected resource;
 the server returns 402 with a `WWW-Authenticate` challenge (no body).
 Servers MUST reject `topUp` actions referencing an unknown or expired
-`challengeId` with problem type `challenge-not-found`.
+challenge `id` with problem type `challenge-not-found`.
 
 **Payload fields (in addition to `action`):**
 
@@ -797,7 +804,14 @@ The `additionalDeposit` amount is inferred from the calldata inside
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "topUp",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -825,7 +839,14 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "voucher",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -855,7 +876,14 @@ to call `close(channelId, cumulativeAmount, signature)` on-chain.
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "close",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -1290,6 +1318,10 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
+The `txHash` field serves as the core spec's `reference` field (Section
+5.3 of {{I-D.httpauth-payment}}). It is OPTIONAL because not every
+response involves an on-chain settlement—voucher updates are off-chain.
+
 The `units` field indicates what was consumed for **this specific request**.
 The unit type is defined in the challenge `unitType`. Clients can compute
 cost as `units × amount` from the challenge.
@@ -1600,7 +1632,14 @@ The credential payload for an open action:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "open",
     "transaction": "0x76f901...signed transaction bytes..."
@@ -1632,7 +1671,14 @@ The credential payload for a voucher update:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "voucher",
     "channelId": "0x6d0f4fdf...",
@@ -1656,7 +1702,14 @@ The credential payload for a close request:
 
 ~~~json
 {
-  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "tempo",
+    "intent": "stream",
+    "request": "eyJ...",
+    "expires": "2025-01-06T12:05:00Z"
+  },
   "payload": {
     "action": "close",
     "channelId": "0x6d0f4fdf...",

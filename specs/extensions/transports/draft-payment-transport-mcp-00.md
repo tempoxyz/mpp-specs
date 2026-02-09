@@ -25,9 +25,12 @@ normative:
   RFC8174:
   RFC8259:
   RFC8446:
-  PAYMENT-CORE:
-    title: "The Payment HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
+  I-D.httpauth-payment:
+    title: "The 'Payment' HTTP Authentication Scheme"
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    author:
+      - name: Jake Moxey
+    date: 2026-01
   MCP:
     title: "Model Context Protocol Specification"
     target: https://modelcontextprotocol.io/specification/2025-11-25
@@ -53,7 +56,7 @@ metadata fields, and receipt delivery in successful responses.
 The Model Context Protocol (MCP) enables communication between AI
 applications and external tools, resources, and services using JSON-RPC
 2.0 messages. This document extends MCP to support payment requirements
-using the Payment HTTP Authentication Scheme {{PAYMENT-CORE}}.
+using the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}.
 
 This transport enables MCP servers to require payment for:
 
@@ -81,7 +84,7 @@ This transport enables MCP servers to require payment for:
 
 # Terminology
 
-This document uses terminology from {{PAYMENT-CORE}}:
+This document uses terminology from {{I-D.httpauth-payment}}:
 
 Challenge
 : Payment requirements communicated by the server.
@@ -255,7 +258,11 @@ Each challenge object MUST contain:
   IANA HTTP Payment Intents registry.
 
 **`request`** (REQUIRED): Method-specific payment request data as a
-  JSON object. The schema is defined by the payment method
+  native JSON object. Unlike the HTTP transport where the `request`
+  parameter is base64url-encoded JSON per {{I-D.httpauth-payment}} Section
+  5.1.1, the MCP transport uses native JSON objects for the `request`
+  field. Servers MUST NOT base64url-encode the request when using
+  JSON-RPC transport. The schema is defined by the payment method
   specification.
 
 Each challenge object MAY contain:
@@ -739,7 +746,7 @@ resources or payment processor rate limits. Servers SHOULD:
 # IANA Considerations
 
 This document has no IANA actions. Payment methods and intents are
-registered per {{PAYMENT-CORE}}.
+registered per {{I-D.httpauth-payment}}.
 
 This specification defines JSON-RPC error codes in the
 implementation-defined range:
