@@ -1006,7 +1006,8 @@ On `action="open"`, servers MUST:
    - `channel.token` matches `request.currency`
    - `channel.deposit - channel.settled >= amount` (sufficient available balance)
    - Channel is not finalized
-3. If `cumulativeAmount` and `signature` are provided, verify the initial
+   - `channel.closeRequestedAt == 0` (no pending close request)
+   3. If `cumulativeAmount` and `signature` are provided, verify the initial
    voucher:
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
@@ -1037,12 +1038,15 @@ On `action="voucher"`, servers MUST:
 1. Verify voucher signature using EIP-712 recovery
 2. Verify signature uses canonical low-s values (see {{signature-malleability}})
 3. Recover signer and MUST verify it matches expected signer from on-chain state
-4. Verify monotonicity:
+4. Verify `channel.closeRequestedAt == 0` (no pending close request).
+   Servers MUST reject vouchers on channels with a pending forced close
+   to prevent service delivery that cannot be settled.
+5. Verify monotonicity:
    - `cumulativeAmount > highestVoucherAmount`
    - `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
-5. Verify `cumulativeAmount <= channel.deposit`
-6. Persist voucher to durable storage before providing service
-7. Update `highestVoucherAmount = cumulativeAmount`
+6. Verify `cumulativeAmount <= channel.deposit`
+7. Persist voucher to durable storage before providing service
+8. Update `highestVoucherAmount = cumulativeAmount`
 
 Servers MUST derive the expected signer from on-chain channel state by
 querying the escrow contract. The expected signer is `channel.authorizedSigner`
