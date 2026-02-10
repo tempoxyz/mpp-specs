@@ -171,26 +171,19 @@ voucher top-ups when no response body is needed.
 
 ## Concurrency Model {#concurrency}
 
-A streaming session consists of:
+A channel supports one active session at a time. The cumulative voucher
+semantics ensure correctness—each voucher advances a single monotonic
+counter. The channel is the unit of concurrency; no additional session
+locking is required.
 
-- **At most one active streaming response** per `(challengeId, channelId)`
-  pair. If a client initiates a new streaming request with the same
-  challenge, servers SHOULD either:
-  - Reject with 409 Conflict if the previous stream is still active
-  - Terminate the previous stream and start a new one
-
-- **Zero or more concurrent voucher update requests** that reference
-  the same challenge. These requests:
-  - MAY arrive on separate HTTP connections (including HTTP/2 streams)
-  - MUST be processed atomically with respect to balance updates
-  - MUST NOT block the streaming response delivery
-
-When using HTTP/2 or HTTP/3, clients SHOULD use separate streams for
-voucher updates and content consumption to avoid head-of-line blocking.
+When a client sends a new streaming request on a channel that already
+has an active stream, servers SHOULD terminate the previous stream and
+start a new one. Voucher updates MAY arrive on separate HTTP connections
+(including HTTP/2 streams) and MUST be processed atomically with respect
+to balance updates.
 
 Servers MUST ensure that voucher acceptance and balance deduction are
-serialized per challenge to prevent race conditions between concurrent
-requests.
+serialized per channel to prevent race conditions.
 
 # Requirements Language
 
@@ -1216,8 +1209,32 @@ When a streaming response exhausts `available` balance:
 1. Server MUST stop delivering additional metered content
 2. Server MAY hold the connection open awaiting a voucher top-up
 3. Server MAY close the response; client then retries with higher voucher
-4. If client submits a voucher update (concurrent request to same URI),
-   server SHOULD resume delivery on the original connection if still open
+4. If client submits a voucher update (request to same URI or any
+   endpoint protected by the same payment handler), server SHOULD
+   resume delivery on the original connection if still open
+
+For SSE responses, servers MUST emit an `mpay-need-voucher` event when
+available balance is exhausted:
+
+~~~
+event: mpay-need-voucher
+data: {"channelId":"0x6d0f4fdf...","minDelta":"25","acceptedCumulative":"250000","spent":"250000"}
+~~~
+
+The `mpay-need-voucher` event data MUST be a JSON object containing:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acceptedCumulative` | string | REQUIRED | Current highest accepted voucher amount (base units) |
+| `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
+| `minDelta` | string | REQUIRED | Minimum voucher increment required (base units) |
+| `spent` | string | REQUIRED | Current total amount charged for delivered service (base units) |
+
+After emitting `mpay-need-voucher`, the server MUST pause delivery and
+poll for an updated voucher on the channel. Clients SHOULD respond by
+sending a voucher credential to any endpoint protected by the same
+payment handler. Once the server detects that `acceptedCumulative` has
+advanced, it SHOULD resume delivering content on the original connection.
 
 Servers SHOULD NOT deliver service beyond the authorized balance under
 any circumstances. See {{dos-mitigation}} for rate limiting requirements.
@@ -1265,12 +1282,13 @@ If the server does not respond to close requests:
 Clients SHOULD wait at least 16 minutes after `requestClose()` before
 calling `withdraw()` to account for block time variance.
 
-## Concurrent Streams
+## Sequential Streams
 
-A single channel MAY be used for multiple sequential or concurrent
-streams. The cumulative voucher semantics ensure correctness regardless
-of stream count—each voucher authorizes a total amount, and the
-contract tracks cumulative settlements.
+A single channel supports sequential streams. Each stream uses the same
+cumulative voucher counter. When a new session begins on a channel, the
+previous session's spending state is irrelevant—the channel's
+`highestVoucherAmount` is the source of truth for the next voucher's
+minimum value.
 
 ## Voucher Submission Transport
 
