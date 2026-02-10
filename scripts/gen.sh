@@ -5,7 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 SPECS_DIR="$ROOT_DIR/specs"
 ARTIFACTS_DIR="$ROOT_DIR/artifacts"
-SITE_PUBLIC_DIR="$ROOT_DIR/site/public"
 OUT_DIR="$ARTIFACTS_DIR"
 
 # Config file path (differs inside Docker vs local)
@@ -61,13 +60,9 @@ elif $VERBOSE; then
 fi
 
 mkdir -p "$OUT_DIR"
-mkdir -p "$SITE_PUBLIC_DIR"
-
-# Clean up stale spec files in site/public (keeps fonts/ and other static assets)
-find "$SITE_PUBLIC_DIR" -maxdepth 1 -type f \( -name "*.xml" -o -name "*.html" -o -name "*.txt" -o -name "*.pdf" \) -delete 2>/dev/null || true
 
 # Export for use in subshells
-export OUT_DIR SITE_PUBLIC_DIR XML2RFC_OPTS VERBOSE
+export OUT_DIR XML2RFC_OPTS VERBOSE
 
 process_spec() {
   local md="$1"
@@ -96,24 +91,12 @@ process_spec() {
 
   echo "    [xml2rfc] Generating PDF..."
   xml2rfc --pdf $XML2RFC_OPTS "$OUT_DIR/${name}.xml" -o "$OUT_DIR/${name}.pdf"
-
-  # Copy to site/public for web serving
-  # Use cp -f to overwrite existing files/symlinks
-  echo "    [copy] Copying to site/public..."
-  for ext in xml html txt pdf; do
-    rm -f "$SITE_PUBLIC_DIR/${name}.${ext}"
-    cp "$OUT_DIR/${name}.${ext}" "$SITE_PUBLIC_DIR/${name}.${ext}"
-  done
 }
 export -f process_spec
 
 # Process specs in parallel (up to 4 at a time)
 # Find all markdown files (not just draft-*) to support various naming conventions
 find "$SPECS_DIR" -name "*.md" -type f | xargs -P4 -I{} bash -c 'process_spec "$1"' _ {}
-
-# Generate index.html using Python/Jinja2 templating
-echo "==> Generating index.html"
-python3 "$SCRIPT_DIR/gen_index.py"
 
 echo ""
 echo "Done. Output in $OUT_DIR/"

@@ -37,7 +37,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ietf-specs-${{ github.sha }}
-          path: site/public/
+          path: artifacts/
           retention-days: 90
 
       - name: Publish spec artifacts as GitHub Release
@@ -45,26 +45,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest site/public/*.html site/public/*.txt site/public/*.xml site/public/*.pdf \
+          gh release create latest artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf \
             --title "Latest spec artifacts" \
             --notes "Auto-published spec build artifacts from commit ${{ github.sha }}.
 
           Contains HTML, TXT, XML, and PDF renderings of all IETF Payment Auth specifications." \
             --latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install site dependencies
-        working-directory: site
-        run: npm install
-
-      - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: site
-          command: deploy

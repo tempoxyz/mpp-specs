@@ -8,16 +8,13 @@ concurrency:
   group: pr-${{ github.event.number || github.run_id }}
   cancel-in-progress: true
 
-env:
-  WRANGLER_SEND_METRICS: false
-
 permissions:
   actions: read
   contents: read
   pull-requests: write
 
 jobs:
-  build-and-preview:
+  build-and-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,33 +69,6 @@ jobs:
             fi
           done
 
-      - name: Deploy to Cloudflare Pages
-        id: deploy
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy artifacts --project-name=ietf-payment-specs
-
-      - name: Generate spec table
-        id: specs
-        run: |
-          TABLE="| Spec | Changed | HTML | TXT | XML | PDF | Diff |\n|------|---------|------|-----|-----|-----|------|\n"
-          BASE_URL="${{ steps.deploy.outputs.deployment-url }}"
-          for file in artifacts/draft-*.html; do
-            name=$(basename "$file" .html)
-            diff_file="artifacts/diffs/${name}-diff.txt"
-            if [[ -f "$diff_file" ]] && [[ -s "$diff_file" ]] && ! grep -q "New spec" "$diff_file"; then
-              changed="Yes"
-            else
-              changed="-"
-            fi
-            TABLE="${TABLE}| ${name} | ${changed} | [HTML](${BASE_URL}/${name}.html) | [TXT](${BASE_URL}/${name}.txt) | [XML](${BASE_URL}/${name}.xml) | [PDF](${BASE_URL}/${name}.pdf) | [Diff](${BASE_URL}/diffs/${name}-diff.txt) |\n"
-          done
-          echo "table<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$TABLE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -111,10 +81,37 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const body = `<!-- ietf-spec-preview -->
-            ## Spec Preview
+            const fs = require('fs');
+            const path = require('path');
 
-            ${{ steps.specs.outputs.table }}
+            const artifactsDir = 'artifacts';
+            const diffsDir = path.join(artifactsDir, 'diffs');
+
+            let table = '| Spec | Changed |\n|------|--------|\n';
+
+            const htmlFiles = fs.readdirSync(artifactsDir)
+              .filter(f => f.startsWith('draft-') && f.endsWith('.html'))
+              .sort();
+
+            for (const file of htmlFiles) {
+              const name = file.replace('.html', '');
+              const diffFile = path.join(diffsDir, `${name}-diff.txt`);
+              let changed = '-';
+              if (fs.existsSync(diffFile)) {
+                const content = fs.readFileSync(diffFile, 'utf8');
+                if (content.trim() && !content.includes('New spec')) {
+                  changed = 'Yes';
+                }
+              }
+              table += `| ${name} | ${changed} |\n`;
+            }
+
+            const body = `<!-- ietf-spec-preview -->
+            ## Spec Check
+
+            ${table}
+
+            Download artifacts from the workflow run for HTML, TXT, XML, and PDF renderings.
             `;
 
             const { data: comments } = await github.rest.issues.listComments({
