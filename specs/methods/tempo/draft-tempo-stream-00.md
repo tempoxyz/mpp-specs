@@ -1218,7 +1218,7 @@ available balance is exhausted:
 
 ~~~
 event: mpay-need-voucher
-data: {"channelId":"0x6d0f4fdf...","minDelta":"25","acceptedCumulative":"250000","spent":"250000"}
+data: {"channelId":"0x6d0f4fdf...","requiredCumulative":"250025","acceptedCumulative":"250000"}
 ~~~
 
 The `mpay-need-voucher` event data MUST be a JSON object containing:
@@ -1227,14 +1227,14 @@ The `mpay-need-voucher` event data MUST be a JSON object containing:
 |-------|------|----------|-------------|
 | `acceptedCumulative` | string | REQUIRED | Current highest accepted voucher amount (base units) |
 | `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
-| `minDelta` | string | REQUIRED | Minimum voucher increment required (base units) |
-| `spent` | string | REQUIRED | Current total amount charged for delivered service (base units) |
+| `requiredCumulative` | string | REQUIRED | Minimum cumulative amount the next voucher must authorize (base units) |
 
-After emitting `mpay-need-voucher`, the server MUST pause delivery and
-poll for an updated voucher on the channel. Clients SHOULD respond by
-sending a voucher credential to any endpoint protected by the same
-payment handler. Once the server detects that `acceptedCumulative` has
-advanced, it SHOULD resume delivering content on the original connection.
+After emitting `mpay-need-voucher`, the server MUST pause delivery
+until a valid voucher advancing `acceptedCumulative` is accepted.
+Servers SHOULD close the stream if no voucher is received within a
+reasonable timeout (for example, 60 seconds). Clients SHOULD respond
+by sending a voucher credential to any endpoint protected by the same
+payment handler.
 
 Servers SHOULD NOT deliver service beyond the authorized balance under
 any circumstances. See {{dos-mitigation}} for rate limiting requirements.
