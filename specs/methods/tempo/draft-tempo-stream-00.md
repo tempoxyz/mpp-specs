@@ -1222,6 +1222,30 @@ When a streaming response exhausts `available` balance:
 4. If client submits a voucher update (concurrent request to same URI),
    server SHOULD resume delivery on the original connection if still open
 
+When holding the connection open (option 2), servers SHOULD emit a
+`402-need-voucher` SSE event to inform the client that additional
+authorization is required:
+
+~~~
+event: 402-need-voucher
+data: {"channelId":"0x...","requiredCumulative":"6000000","acceptedCumulative":"5000000","deposit":"5000000"}
+~~~
+
+The event data contains the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `channelId` | string | The channel identifier |
+| `requiredCumulative` | string | Minimum cumulative amount the next voucher must authorize |
+| `acceptedCumulative` | string | Current highest accepted voucher amount |
+| `deposit` | string | Current on-chain deposit in the escrow contract |
+
+The `deposit` field allows the client to determine the correct recovery
+action. When `requiredCumulative` exceeds `deposit`, the client MUST
+submit `action="topUp"` to increase the on-chain deposit before sending
+a new voucher. When `requiredCumulative` is within `deposit`, the client
+can submit `action="voucher"` directly.
+
 Servers SHOULD NOT deliver service beyond the authorized balance under
 any circumstances. See {{dos-mitigation}} for rate limiting requirements.
 
