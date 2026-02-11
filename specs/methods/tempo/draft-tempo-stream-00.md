@@ -1218,7 +1218,7 @@ available balance is exhausted:
 
 ~~~
 event: 402-need-voucher
-data: {"channelId":"0x6d0f4fdf...","requiredCumulative":"250025","acceptedCumulative":"250000"}
+data: {"channelId":"0x6d0f4fdf...","requiredCumulative":"250025","acceptedCumulative":"250000","deposit":"500000"}
 ~~~
 
 The `402-need-voucher` event data MUST be a JSON object containing:
@@ -1227,7 +1227,14 @@ The `402-need-voucher` event data MUST be a JSON object containing:
 |-------|------|----------|-------------|
 | `acceptedCumulative` | string | REQUIRED | Current highest accepted voucher amount (base units) |
 | `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
+| `deposit` | string | REQUIRED | Current on-chain deposit in the escrow contract (base units) |
 | `requiredCumulative` | string | REQUIRED | Minimum cumulative amount the next voucher must authorize (base units) |
+
+The `deposit` field allows the client to determine the correct recovery
+action. When `requiredCumulative` exceeds `deposit`, the client MUST
+submit `action="topUp"` to increase the on-chain deposit before sending
+a new voucher. When `requiredCumulative` is within `deposit`, the client
+can submit `action="voucher"` directly.
 
 After emitting `402-need-voucher`, the server MUST pause delivery
 until a valid voucher advancing `acceptedCumulative` is accepted.
