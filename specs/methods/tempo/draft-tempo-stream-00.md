@@ -1220,15 +1220,15 @@ When a streaming response exhausts `available` balance:
    endpoint protected by the same payment handler), server SHOULD
    resume delivery on the original connection if still open
 
-For SSE responses, servers MUST emit an `402-need-voucher` event when
+For SSE responses, servers MUST emit an `payment-need-voucher` event when
 available balance is exhausted:
 
 ~~~
-event: 402-need-voucher
+event: payment-need-voucher
 data: {"channelId":"0x6d0f4fdf...","requiredCumulative":"250025","acceptedCumulative":"250000","deposit":"500000"}
 ~~~
 
-The `402-need-voucher` event data MUST be a JSON object containing:
+The `payment-need-voucher` event data MUST be a JSON object containing:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -1243,7 +1243,7 @@ submit `action="topUp"` to increase the on-chain deposit before sending
 a new voucher. When `requiredCumulative` is within `deposit`, the client
 can submit `action="voucher"` directly.
 
-After emitting `402-need-voucher`, the server MUST pause delivery
+After emitting `payment-need-voucher`, the server MUST pause delivery
 until a valid voucher advancing `acceptedCumulative` is accepted.
 Servers SHOULD close the stream if no voucher is received within a
 reasonable timeout (for example, 60 seconds). Clients SHOULD respond
