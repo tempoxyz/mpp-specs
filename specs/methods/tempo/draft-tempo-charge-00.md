@@ -109,7 +109,7 @@ The following diagram illustrates the Tempo charge flow:
 TIP-20
 : Tempo's enshrined token standard, implemented as precompiles rather
   than smart contracts. TIP-20 tokens use 6 decimal places and provide
-  `transfer`, `transferFrom`, and `approve` operations.
+  `transfer`, `transferWithMemo`, `transferFrom`, and `approve` operations.
 
 Tempo Transaction
 : An EIP-2718 transaction with type prefix `0x76`, supporting batched
@@ -167,7 +167,8 @@ Clients SHOULD use the auth-param value for expiry checks.
 ~~~
 
 The client fulfills this by signing a Tempo Transaction with
-`transfer(recipient, amount)` on the specified `currency` (token address),
+`transfer(recipient, amount)` or `transferWithMemo(recipient, amount, memo)`
+on the specified `currency` (token address),
 with `validBefore` set to `expires`. The client SHOULD use a dedicated
 `nonceKey` (2D nonce lane) for payment transactions to avoid blocking
 other account activity if the transaction is not immediately settled.
@@ -199,7 +200,7 @@ Ethereum address.
 When `type` is `"transaction"`, `signature` contains the complete signed
 Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
 `0x` prefix. The transaction MUST contain a `transfer(recipient, amount)`
-call on the TIP-20 token.
+or `transferWithMemo(recipient, amount, memo)` call on the TIP-20 token.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -308,7 +309,7 @@ When acting as fee payer, servers:
 # Settlement Procedure
 
 For `intent="charge"` fulfilled via transaction, the client signs a
-transaction containing the `transfer` call. If `feePayer: true`, the server
+transaction containing a `transfer` or `transferWithMemo` call. If `feePayer: true`, the server
 adds its fee payer signature before broadcasting:
 
 ~~~
@@ -334,7 +335,7 @@ adds its fee payer signature before broadcasting:
       |                                |                                |
 ~~~
 
-1. Client submits credential containing signed `transfer` transaction
+1. Client submits credential containing signed `transfer` or `transferWithMemo` transaction
 2. If `feePayer: true`, server adds fee sponsorship (signs with `0x78` domain)
 3. Server broadcasts transaction to Tempo
 4. Transaction included in block with immediate finality (~500ms)
