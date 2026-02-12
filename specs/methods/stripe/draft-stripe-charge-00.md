@@ -72,9 +72,9 @@ The following diagram illustrates the Stripe charge payment flow:
       |---------------------------->  |                               |
       |                               |                               |
       |  (2) 402 Payment Required     |                               |
-      |      intent="charge"          |                               |
+      |      intent="charge",         |                               |
+      |      request=<base64url>      |                               |
       |<----------------------------- |                               |
-      |                               |                               |
       |                               |                               |
       |  (3) Collect payment method   |                               |
       |      via Stripe.js and        |                               |
@@ -92,7 +92,7 @@ The following diagram illustrates the Stripe charge payment flow:
       |                               |                               |
       |  (6) 200 OK                   |                               |
       |      Payment-Receipt:         |                               |
-      |      <charge_id>              |                               |
+      |      ch_123                   |                               |
       |<----------------------------  |                               |
       |                               |                               |
 ~~~
@@ -192,7 +192,8 @@ const spt = await stripe.sharedPayment.issuedTokens.create({
   payment_method: 'pm_123',
   usage_limits: {
     currency: 'usd',
-    max_amount: 5000
+    max_amount: 5000,
+    expires_at: Timestamp
   },
   seller_details: {
     network_id: 'profile_123'
@@ -298,22 +299,7 @@ amount, so clients must trust the challenge parameters.
 ## PCI DSS Compliance
 
 Stripe's SPT model ensures clients never handle raw payment method details,
-significantly reducing PCI DSS compliance scope. Servers using this
-specification inherit Stripe's PCI Level 1 certification.
-
-## 3D Secure and Strong Customer Authentication
-
-Stripe.js automatically handles 3D Secure challenges when required by
-the customer's bank or EU Strong Customer Authentication regulations.
-Clients MUST use Stripe.js or equivalent SDKs that support challenge flows.
-
-## Credential Storage
-
-Clients MUST NOT log or persist SPTs. SPTs are bearer tokens that grant
-payment authorization.
-
-Servers MUST NOT store SPTs after processing. Instead, store the resulting
-Stripe PaymentIntent ID or Charge ID.
+significantly reducing PCI DSS compliance scope.
 
 ## HTTPS Requirement
 
