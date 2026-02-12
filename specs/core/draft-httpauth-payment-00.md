@@ -500,20 +500,20 @@ responses:
 }
 ~~~
 
-The `type` URI SHOULD correspond to the error code from the table
-below (e.g., `https://paymentauth.org/problems/verification-failed`
-for `payment_verification_failed`).
+The `type` URI is constructed as `https://paymentauth.org/problems/{code}`
+where `{code}` is the error code from the table below.
 
 ## Error Codes
 
 | Code | HTTP | Description |
 |------|------|-------------|
-| `payment_required` | 402 | Resource requires payment |
-| `payment_insufficient` | 402 | Amount too low |
-| `payment_expired` | 402 | Challenge or authorization expired |
-| `payment_verification_failed` | 402 | Proof invalid |
-| `payment_method_unsupported` | 400 | Method not accepted |
-| `malformed_proof` | 400 | Invalid proof format |
+| `payment-required` | 402 | Resource requires payment |
+| `payment-insufficient` | 402 | Amount too low |
+| `payment-expired` | 402 | Challenge or authorization expired |
+| `verification-failed` | 402 | Proof invalid |
+| `method-unsupported` | 400 | Method not accepted |
+| `malformed-credential` | 400 | Invalid credential format |
+| `invalid-challenge` | 400 | Challenge ID unknown, expired, or already used |
 
 ## Retry Behavior
 

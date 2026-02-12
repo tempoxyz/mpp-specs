@@ -402,8 +402,10 @@ Cache-Control: no-store
 Content-Type: application/json
 
 {
-  "error": "payment_required",
-  "message": "This resource requires payment"
+  "type": "https://paymentauth.org/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "This resource requires payment"
 }
 ~~~
 
