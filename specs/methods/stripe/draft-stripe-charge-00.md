@@ -169,6 +169,7 @@ base64url-encoded JSON object with the following fields:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID |
+| `methodDetails.paymentMethodTypes | []string | REQUIRED | The list of payment method types that the seller can process. |
 | `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
@@ -181,6 +182,7 @@ base64url-encoded JSON object with the following fields:
   "externalId": "order_12345",
   "methodDetails": {
     "network_id": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "payment_method_types": ["card", "link"]
   }
 }
 ~~~
@@ -418,33 +420,7 @@ Decoded receipt:
 }
 ~~~
 
-## Business Network Example
-
-**Payment challenge:**
-
-~~~ http
-HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="ch_b2b_payment",
-  realm="supplier.example.com",
-  method="stripe",
-  intent="charge",
-  request="eyJhbW91bnQiOjI1MDAwMCwiY3VycmVuY3kiOiJ1c2QiLCJidXNpbmVzc05ldHdvcmsiOiJibl8xTXFEY1ZLQTVMRU8ydFp2S1FtOWc4WWoiLCJkZXNjcmlwdGlvbiI6IlN1cHBsaWVyIHBheW1lbnQgZm9yIG9yZGVyICMxMjM0In0"
-~~~
-
-Decoded request:
-~~~ json
-{
-  "amount": "250000",
-  "currency": "usd",
-  "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-  "description": "Supplier payment for order #1234",
-  "destination": "acct_1MqE1vKB6gFP3uYw"
-}
-~~~
-
-This payment will flow through the specified Business Network, enabling
-automatic reconciliation and network-specific terms.
-
 # Acknowledgements
 
-TBD
+The authors thank the Tempo community for their feedback on this
+specification.
