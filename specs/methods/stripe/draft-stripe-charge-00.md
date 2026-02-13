@@ -63,32 +63,40 @@ and provide a unified interface for payment acceptance.
 
 The following diagram illustrates the Stripe charge payment flow:
 
+The following diagram illustrates the Stripe charge payment flow:
+
 ~~~
-   Client                                            Server
-      |                                                 |
-      |  (1) GET /resource                              |
-      |------------------------------------------------>|
-      |                                                 |
-      |  (2) 402 Payment Required                       |
-      |      WWW-Authenticate: Payment method="stripe", |
-      |        intent="charge", request=<base64url>     |
-      |<------------------------------------------------|
-      |                                                 |
-      |  (3) Client creates SPT via Stripe.js or API    |
-      |      (may involve 3DS, biometrics, etc.)        |
-      |                                                 |
-      |  (4) GET /resource                              |
-      |      Authorization: Payment <credential>        |
-      |------------------------------------------------>|
-      |                                                 |
-      |  (5) Server creates PaymentIntent or Charge     |
-      |      via Stripe API using SPT                   |
-      |                                                 |
-      |  (6) 200 OK                                     |
-      |      Payment-Receipt: <receipt with charge_id>  |
-      |<------------------------------------------------|
-      |                                                 |
+   Client                          Server                          Stripe
+      |                               |                               |
+      |  (1) GET /resource            |                               |
+      |---------------------------->  |                               |
+      |                               |                               |
+      |  (2) 402 Payment Required     |                               |
+      |      intent="charge",         |                               |
+      |      request=<base64url>      |                               |
+      |<----------------------------- |                               |
+      |                               |                               |
+      |  (3) Collect payment method   |                               |
+      |      via Stripe.js and        |                               |
+      |      generate SPT             |                               |
+      |      (may prompt for 3DS,     |                               |
+      |      biometrics, etc.)        |                               |
+      |------------------------------------------------------------>  |
+      |                               |                               |
+      |  (4) Authorization:           |                               |
+      |      Payment <credential>     |                               |
+      |---------------------------->  |                               |
+      |                               |  (5) Create PaymentIntent     |
+      |                               |      (Stripe API, using SPT)  |
+      |                               |---------------------------->  |
+      |                               |                               |
+      |  (6) 200 OK                   |                               |
+      |      Payment-Receipt:         |                               |
+      |      ch_123                   |                               |
+      |<----------------------------  |                               |
+      |                               |                               |
 ~~~
+
 
 ## Relationship to the Payment Scheme
 
@@ -105,22 +113,21 @@ method, along with verification and settlement procedures.
 
 Stripe Payment Token (SPT)
 : A single-use token (prefixed with `spt_`) that represents authorization
-  to charge a payment method. SPTs are created by clients using Stripe.js
-  or the Stripe API and consumed by servers to process payments.
+  to charge a payment method. SPTs are created by clients using the
+  Stripe API and consumed by servers to process payments. Both the Client
+  and Server require a Stripe account.
+  Learn more: https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens
 
-Business Network
-: A Stripe-managed network of connected accounts that can transact with
-  each other. Business Networks enable payments between merchants and
-  their suppliers, partners, or service providers.
-
-Connected Account
-: A Stripe account connected to a platform account, enabling the platform
-  to process payments on behalf of the connected account.
+Business Network Profile
+: A Stripe profile is a business’s public identity on Stripe. With a Stripe profile,
+  businesses can find, verify, and connect with each other on Stripe.
+  Learn more: https://docs.stripe.com/get-started/account/profile
 
 Payment Intent
 : A Stripe API object that tracks the lifecycle of a customer payment,
   from creation through settlement. Not to be confused with the HTTP
   Payment Auth protocol's "payment intent" parameter.
+  Learn more: https://docs.stripe.com/payments/payment-intents
 
 # Intent Identifier
 
@@ -140,9 +147,8 @@ payment immediately upon receiving the SPT.
 
 **Fulfillment mechanism:**
 
-1. **Stripe Payment Token (SPT)**: The payer creates an SPT using Stripe.js
-   or the Stripe API, which the server uses to create a Charge or
-   PaymentIntent via the Stripe API.
+1. **Stripe Payment Token (SPT)**: The payer creates an SPT using the
+   Stripe API, which the server uses to create a PaymentIntent via Stripe.
 
 # Request Schema
 
@@ -162,8 +168,8 @@ base64url-encoded JSON object with the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.destination` | string | OPTIONAL | Stripe account ID to receive funds (Connect) |
-| `methodDetails.businessNetwork` | string | OPTIONAL | Business Network ID for B2B payments |
+| `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID |
+| `methodDetails.paymentMethodTypes | []string | REQUIRED | The list of payment method types that the seller can process. |
 | `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
@@ -175,18 +181,25 @@ base64url-encoded JSON object with the following fields:
   "description": "Premium API access for 1 month",
   "externalId": "order_12345",
   "methodDetails": {
-    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-    "destination": "acct_1MqE1vKB6gFP3uYw"
+    "network_id": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "payment_method_types": ["card", "link"]
   }
 }
 ~~~
 
-The client fulfills this by creating an SPT using Stripe.js:
+The client fulfills this by creating an SPT using Stripe:
 
 ~~~ javascript
-const spt = await stripe.createPaymentToken({
-  amount: 5000,
-  currency: 'usd'
+const spt = await stripe.sharedPayment.issuedTokens.create({
+  payment_method: 'pm_123',
+  usage_limits: {
+    currency: 'usd',
+    max_amount: 5000,
+    expires_at: Timestamp
+  },
+  seller_details: {
+    network_id: 'profile_123'
+  }
 });
 // Returns: { id: 'spt_1N...' }
 ~~~
@@ -236,16 +249,13 @@ issued. This includes validating:
 **Synchronous settlement:**
 
 1. Server receives and verifies the credential ({{charge-verification}})
-2. Server creates a Stripe PaymentIntent or Charge:
+2. Server creates a Stripe PaymentIntent:
 
 ~~~ javascript
 const paymentIntent = await stripe.paymentIntents.create({
   amount: request.amount,
   currency: request.currency,
-  payment_method_data: {
-    type: 'card',
-    token: credential.spt
-  },
+  shared_payment_granted_token: credential.spt,
   confirm: true,
   description: request.description,
   metadata: {
@@ -264,36 +274,6 @@ Stripe processes payments asynchronously. Card payments typically settle
 within seconds, but bank transfers may take several business days. Servers
 SHOULD return 200 immediately after API confirmation, even if final
 settlement is pending.
-
-## Business Network Settlement
-
-When `businessNetwork` is specified, payments flow through Stripe's
-Business Network infrastructure:
-
-~~~ javascript
-const paymentIntent = await stripe.paymentIntents.create({
-  amount: request.amount,
-  currency: request.currency,
-  payment_method_data: {
-    type: 'card',
-    token: credential.spt
-  },
-  confirm: true,
-  transfer_data: {
-    destination: request.destination
-  },
-  metadata: {
-    business_network: request.businessNetwork,
-    challenge_id: challenge.id
-  }
-});
-~~~
-
-Business Networks enable:
-
-- Automatic routing between network participants
-- Consolidated reporting and reconciliation
-- Network-specific terms and pricing
 
 # Security Considerations
 
@@ -318,33 +298,10 @@ amount, so clients must trust the challenge parameters.
 4. Verify the challenge hasn't expired
 5. Verify the server's identity (TLS certificate validation)
 
-## Business Network Authorization
-
-When using Business Networks, clients SHOULD verify:
-
-- The `businessNetwork` ID is expected
-- The `destination` account (if specified) is authorized to receive payment
-- The payment terms are acceptable
-
 ## PCI DSS Compliance
 
 Stripe's SPT model ensures clients never handle raw payment method details,
-significantly reducing PCI DSS compliance scope. Servers using this
-specification inherit Stripe's PCI Level 1 certification.
-
-## 3D Secure and Strong Customer Authentication
-
-Stripe.js automatically handles 3D Secure challenges when required by
-the customer's bank or EU Strong Customer Authentication regulations.
-Clients MUST use Stripe.js or equivalent SDKs that support challenge flows.
-
-## Credential Storage
-
-Clients MUST NOT log or persist SPTs. SPTs are bearer tokens that grant
-payment authorization.
-
-Servers MUST NOT store SPTs after processing. Instead, store the resulting
-Stripe PaymentIntent ID or Charge ID.
+significantly reducing PCI DSS compliance scope.
 
 ## HTTPS Requirement
 
@@ -465,33 +422,7 @@ Decoded receipt:
 }
 ~~~
 
-## Business Network Example
-
-**Payment challenge:**
-
-~~~ http
-HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="ch_b2b_payment",
-  realm="supplier.example.com",
-  method="stripe",
-  intent="charge",
-  request="eyJhbW91bnQiOjI1MDAwMCwiY3VycmVuY3kiOiJ1c2QiLCJidXNpbmVzc05ldHdvcmsiOiJibl8xTXFEY1ZLQTVMRU8ydFp2S1FtOWc4WWoiLCJkZXNjcmlwdGlvbiI6IlN1cHBsaWVyIHBheW1lbnQgZm9yIG9yZGVyICMxMjM0In0"
-~~~
-
-Decoded request:
-~~~ json
-{
-  "amount": "250000",
-  "currency": "usd",
-  "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-  "description": "Supplier payment for order #1234",
-  "destination": "acct_1MqE1vKB6gFP3uYw"
-}
-~~~
-
-This payment will flow through the specified Business Network, enabling
-automatic reconciliation and network-specific terms.
-
 # Acknowledgements
 
-TBD
+The authors thank the Tempo community for their feedback on this
+specification.
