@@ -1,11 +1,12 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-ryan-httpauth-payment-00
+docname: draft-httpauth-payment-00
 version: 00
-category: exp
+category: std
 ipr: trust200902
-submissiontype: independent
+submissiontype: IETF
+consensus: true
 
 author:
   - name: Brendan Ryan
