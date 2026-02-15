@@ -9,13 +9,13 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - name: Jake Moxey
-    ins: J. Moxey
-    email: jake@tempo.xyz
-    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
+    org: Tempo Labs
+  - name: Jake Moxey
+    ins: J. Moxey
+    email: jake@tempo.xyz
     org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
@@ -24,6 +24,10 @@ author:
   - name: Jeff Weinstein
     ins: J. Weinstein
     email: jweinstein@stripe.com
+    org: Stripe
+  - name: Steve Kaliski
+    ins: S. Kaliski
+    email: stevekaliski@stripe.com
     org: Stripe
 
 normative:
