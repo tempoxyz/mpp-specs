@@ -1,21 +1,20 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-httpauth-payment-00
+docname: draft-ryan-httpauth-payment-00
 version: 00
-category: std
+category: exp
 ipr: trust200902
-submissiontype: IETF
-consensus: true
+submissiontype: independent
 
 author:
-  - name: Jake Moxey
-    ins: J. Moxey
-    email: jake@tempo.xyz
-    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
+    org: Tempo Labs
+  - name: Jake Moxey
+    ins: J. Moxey
+    email: jake@tempo.xyz
     org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
@@ -24,6 +23,10 @@ author:
   - name: Jeff Weinstein
     ins: J. Weinstein
     email: jweinstein@stripe.com
+    org: Stripe
+  - name: Steve Kaliski
+    ins: S. Kaliski
+    email: stevekaliski@stripe.com
     org: Stripe
 
 normative:
