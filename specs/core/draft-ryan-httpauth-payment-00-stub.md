@@ -51,8 +51,8 @@ are defined in separate specifications.
 
 # Introduction
 
-HTTP 402 "Payment Required" was reserved in HTTP/1.1 {{RFC9110}}
-for future use but never standardized. This specification defines
+HTTP 402 "Payment Required" was reserved in HTTP/one-point-one {{RFC9110}}
+but never standardized. This specification defines
 the "Payment" authentication scheme that gives 402 concrete
 semantics.
 

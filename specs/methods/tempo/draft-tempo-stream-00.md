@@ -76,7 +76,7 @@ informative:
 This document defines the "session" intent for the "tempo" payment method
 in the Payment HTTP Authentication Scheme. It specifies unidirectional
 streaming payment channels for incremental, voucher-based payments
-suitable for low-cost metered services.
+suitable for low-cost the metered services.
 
 --- middle
 
@@ -101,7 +101,7 @@ Consider an LLM inference API that charges per output token:
 2. Server returns 402 with a `session` challenge
 3. Client opens a payment channel on-chain, depositing funds
 4. Server begins streaming response
-5. As response streams streams, or over incremental requests, client signs vouchers with increasing amounts
+5. As response streams, or over incremental requests, client signs vouchers with increasing amounts
 6. Server settles periodically or at stream completion
 
 The client pays exactly for tokens received, with no worst-case reservation.
@@ -215,7 +215,7 @@ Authorized Signer
 
 Base Units
 : The smallest indivisible unit of a TIP-20 token. TIP-20 tokens use
-  6 decimal places; 1,000,000 base units equals 1.00 tokens.
+  6 decimal places; one million base units equals 1.00 tokens.
 
 # Encoding Conventions {#encoding}
 
@@ -252,9 +252,9 @@ JSON to avoid precision loss with large numbers:
 The `chainId` uses JSON number encoding as values are small enough to
 avoid precision issues.
 
-## Timestamps
+## Timestamp Format
 
-Timestamps in HTTP headers and receipt fields use {{RFC3339}} format:
+HTTP headers and receipt fields use {{RFC3339}} formatted timestamps:
 `2025-01-06T12:05:00Z`. Timestamps in EIP-712 signed data use Unix
 seconds as decimal strings.
 
@@ -272,7 +272,7 @@ Each channel is identified by a unique `channelId` and stores:
 | `payer` | address | User who deposited funds |
 | `payee` | address | Server authorized to withdraw |
 | `token` | address | {{TIP-20}} token address |
-| `authorizedSigner` | address | Address authorized to sign vouchers (0 = payer) |
+| `authorizedSigner` | address | Authorized signer (0 = payer) |
 | `deposit` | uint128 | Total amount deposited |
 | `settled` | uint128 | Cumulative amount already withdrawn by payee |
 | `closeRequestedAt` | uint64 | Timestamp when close was requested (0 if not) |
@@ -350,7 +350,7 @@ Opens a new channel with escrowed funds.
 | `token` | address | {{TIP-20}} token contract address |
 | `deposit` | uint128 | Amount to deposit in base units (6 decimals) |
 | `salt` | bytes32 | Random value for deterministic channelId computation |
-| `authorizedSigner` | address | Address delegated to sign vouchers; use `0x0` to default to payer |
+| `authorizedSigner` | address | Delegated signer; use `0x0` to default to payer |
 
 Returns the computed `channelId`.
 
@@ -636,8 +636,8 @@ regardless of the `feePayer` setting:
 
 - **Voucher updates** (`action="voucher"`) are off-chain and incur no
   transaction fees.
-- **Settlement** (`settle()`) and **close** (`close()`) are initiated by
-  the server using the highest valid voucher. The server pays fees for
+- **Settlement** (`settle()`) and channel **close** (`close` invocation) are initiated by
+  the server using the highest valid voucher. The server covers the fees for
   these transactions.
 - Servers MAY recover settlement costs through pricing or other business
   logic.
@@ -1015,7 +1015,8 @@ On `action="open"`, servers MUST:
    - `channel.deposit - channel.settled >= amount` (sufficient available balance)
    - Channel is not finalized
    - `channel.closeRequestedAt == 0` (no pending close request)
-   3. Verify the initial voucher (`cumulativeAmount` and `signature`):
+3. If `cumulativeAmount` and `signature` are provided, verify the initial
+   voucher:
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
@@ -1154,8 +1155,8 @@ servers MUST follow this procedure:
      `requiredTopUp = cost - available`
 
 3. **Charge and deliver** (if `available >= cost`):
-   - **MUST persist** `spent := spent + cost` to durable storage BEFORE
-     or atomically with delivering metered service
+   - **MUST persist** `spent := accrued + cost` to durable storage BEFORE
+     or atomically with delivering the the metered service
    - Deliver the response (or next chunk/token window for streaming)
    - Return `Payment-Receipt` header with current balance state
 
@@ -1203,7 +1204,7 @@ The `cost` for a request depends on the pricing model declared in the
 challenge. Servers MUST support at least one of:
 
 - **Fixed cost**: A predetermined amount per request
-- **Metered cost**: Cost proportional to resource consumption (e.g.,
+- **Usage-based fees**: Pricing proportional to resource consumption (e.g.,
   tokens generated, bytes transferred, compute time)
 
 For metered resources, servers compute cost during or after service
@@ -1488,7 +1489,7 @@ signature `(r, -s mod n)` is also valid for the same message. To prevent
 signature substitution attacks, implementations MUST enforce canonical
 signatures:
 
-- Signatures MUST use "low-s" values where `s <= secp256k1_order / 2`
+- Signatures MUST use "low-s" values with `s <= secp256k1_order / 2`
 - The secp256k1 half-order is:
   `0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0`
 - Servers MUST reject signatures with `s` values exceeding this threshold

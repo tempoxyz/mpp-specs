@@ -269,8 +269,8 @@ Each challenge object MUST contain:
 
 **`request`** (REQUIRED): Method-specific payment request data as a
   native JSON object. Unlike the HTTP transport where the `request`
-  parameter is base64url-encoded JSON per {{I-D.httpauth-payment}} Section
-  5.1.1, the MCP transport uses native JSON objects for the `request`
+  parameter is base64url-encoded JSON per {{I-D.httpauth-payment}}; the MCP
+  transport uses native JSON objects for the `request`
   field. Servers MUST NOT base64url-encode the request when using
   JSON-RPC transport. The schema is defined by the payment method
   specification.

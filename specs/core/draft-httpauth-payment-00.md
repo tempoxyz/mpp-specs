@@ -74,8 +74,8 @@ payment methods are defined in separate payment method specifications.
 
 # Introduction
 
-HTTP 402 "Payment Required" was reserved in HTTP/1.1 {{RFC9110}} for future
-use but never standardized. This specification defines the "Payment"
+HTTP 402 "Payment Required" was reserved in HTTP/one-point-one {{RFC9110}} but never
+standardized for common use. This specification defines the "Payment"
 authentication scheme that gives 402 its semantics, enabling resources to
 require a payment challenge to be fulfilled before access.
 
@@ -152,7 +152,7 @@ Payload
 ## Status Codes {#response-status-codes}
 
 The following table defines how servers MUST respond to payment-related
-conditions:
+conditions.
 
 | Condition | Status | Response |
 |-----------|--------|----------|
@@ -278,8 +278,7 @@ Unknown parameters MUST be ignored by clients.
 
 #### Challenge Binding
 
-Servers SHOULD bind the challenge `id` to the challenge parameters (Sections
-5.1.1 and 5.1.2) to prevent request integrity attacks where a client could
+Servers SHOULD bind the challenge `id` to the challenge parameters (Section 5.1.1 and Section 5.1.2) to prevent request integrity attacks where a client could
 sign or submit a payment different from what the server intended. Servers
 MUST verify that credentials present an `id` matching the expected binding.
 
@@ -335,7 +334,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
 ~~~
 
-Example decoded `request`:
+Decoded `request` example:
 
 ~~~json
 {
@@ -345,7 +344,7 @@ Example decoded `request`:
 }
 ~~~
 
-### Request Body Binding
+### Request Body Digest Binding
 
 Servers SHOULD include the `digest` parameter when issuing challenges for
 requests with bodies. The digest value is computed per [RFC9530]:
@@ -466,8 +465,8 @@ Payment methods are identified by lowercase ASCII strings:
 
 ~~~abnf
 payment-method-id = method-name [ ":" sub-method ]
-method-name       = 1*ALPHA
-sub-method        = 1*( ALPHA / DIGIT / "-" )
+method-name       = 1*LOWERALPHA
+sub-method        = 1*( LOWERALPHA / DIGIT / "-" )
 ~~~
 
 Method identifiers are case-sensitive and MUST be lowercase.
@@ -533,7 +532,7 @@ responses:
 ~~~
 
 The `type` URI SHOULD correspond to one of the problem types defined
-below. The canonical base URI for problem types is
+below, and the canonical base URI for problem types is
 `https://paymentauth.org/problems/`.
 
 ## Error Codes
@@ -545,8 +544,8 @@ below. The canonical base URI for problem types is
 | `payment-expired` | 402 | Challenge or authorization expired |
 | `verification-failed` | 402 | Proof invalid |
 | `method-unsupported` | 400 | Method not accepted |
-| `malformed-credential` | 400 | Invalid credential format |
-| `invalid-challenge` | 400 | Challenge ID unknown, expired, or already used |
+| `malformed-credential` | 402 | Invalid credential format |
+| `invalid-challenge` | 402 | Challenge ID unknown, expired, or already used |
 
 ## Retry Behavior
 
@@ -714,8 +713,8 @@ while the actual `request` payload requests a different amount.
 
 ## Privacy
 
-- Servers MUST NOT require user accounts for payment
-- Payment methods SHOULD support pseudonymous payments where possible
+- Servers MUST NOT require user accounts for payment.
+- Payment methods SHOULD support pseudonymous options where possible.
 - Servers SHOULD NOT log Payment credentials in plaintext
 
 ## Credential Storage
@@ -741,7 +740,7 @@ Payment challenges contain unique identifiers and time-sensitive payment
 data that MUST NOT be cached or reused. To prevent challenge replay and
 stale payment information:
 
-Servers MUST send `Cache-Control: no-store` {{RFC9111}} with 402 responses.
+Servers MUST send `Cache-Control: no-store` {{RFC9111}} with 402 responses; this ensures no shared cache reuse.
 
 Responses containing `Payment-Receipt` headers MUST include
 `Cache-Control: private` to prevent shared caches from storing
@@ -788,9 +787,9 @@ registry uses the "Specification Required" policy defined in {{RFC8126}}.
 Registration requests must include:
 
 - **Method Identifier**: Unique lowercase ASCII string
-- **Description**: Brief description of the payment method
-- **Reference**: Reference to the specification document
-- **Contact**: Contact information for the registrant
+- **Description**: Brief payment-method description
+- **Specification pointer**: Reference to the specification document
+- **Registrant Contact**: Contact information for the registrant
 
 ## Payment Intent Registry {#payment-intent-registry}
 
@@ -801,8 +800,8 @@ Registration requests must include:
 
 - **Intent Identifier**: Unique lowercase ASCII string
 - **Description**: Brief description of the intent semantics
-- **Reference**: Reference to the specification document
-- **Contact**: Contact information for the registrant
+- **Specification pointer**: Reference to the specification document
+- **Registrant Contact**: Contact information for the registrant
 
 The registry is initially empty. Intent specifications register their
 identifiers upon publication.
@@ -836,7 +835,7 @@ sub-method          = 1*( LOWERALPHA / DIGIT / "-" )
 LOWERALPHA          = %x61-7A  ; a-z
 
 ; Payment intent
-intent = 1*( ALPHA / DIGIT / "-" )
+intent-token = 1*( ALPHA / DIGIT / "-" )
 ~~~
 
 # Examples
