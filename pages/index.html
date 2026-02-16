@@ -52,8 +52,17 @@
     }
 
     .spec-entry {
+      display: flex;
+      align-items: baseline;
       margin: 0.25rem 0;
       padding-left: 2rem;
+    }
+
+    .spec-label {
+      display: flex;
+      align-items: baseline;
+      min-width: 12rem;
+      flex-shrink: 0;
     }
 
     .branch {
@@ -61,6 +70,7 @@
       user-select: none;
       display: inline-block;
       width: 1.5rem;
+      flex-shrink: 0;
     }
 
     .spec-title {
@@ -158,21 +168,21 @@
     <div class="folder"><span class="folder-icon">~/</span>The &#34;Payment&#34; HTTP Authentication Scheme <span class="formats"><a href="draft-ryan-httpauth-payment-00.html">HTML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.pdf">PDF</a></span></div>
     <div class="folder"><span class="folder-icon">~/</span>Charge <span class="formats"><a href="draft-payment-intent-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.pdf">PDF</a></span></div>
     <div class="spec-entry">
-      <span class="branch">├──</span> <span class="spec-title">Stripe</span>
+      <span class="spec-label"><span class="branch">├──</span> <span class="spec-title">Stripe</span></span>
       <span class="formats"><a href="draft-stripe-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-stripe-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-stripe-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-stripe-charge-00.pdf">PDF</a></span>
     </div>
     <div class="spec-entry">
-      <span class="branch">└──</span> <span class="spec-title">Tempo</span>
+      <span class="spec-label"><span class="branch">└──</span> <span class="spec-title">Tempo</span></span>
       <span class="formats"><a href="draft-tempo-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-tempo-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-charge-00.pdf">PDF</a></span>
     </div>
     <div class="folder"><span class="folder-icon">~/</span>Session</div>
     <div class="spec-entry">
-      <span class="branch">└──</span> <span class="spec-title">Tempo</span>
+      <span class="spec-label"><span class="branch">└──</span> <span class="spec-title">Tempo</span></span>
       <span class="formats"><a href="draft-tempo-stream-00.html">HTML</a><span class="sep">·</span><a href="draft-tempo-stream-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-stream-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-stream-00.pdf">PDF</a></span>
     </div>
     <div class="folder"><span class="folder-icon">~/</span>Transports</div>
     <div class="spec-entry">
-      <span class="branch">└──</span> <span class="spec-title">MCP Transport</span>
+      <span class="spec-label"><span class="branch">└──</span> <span class="spec-title">MCP Transport</span></span>
       <span class="formats"><a href="draft-payment-transport-mcp-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.pdf">PDF</a></span>
     </div>
     <div class="folder"><span class="folder-icon">~/</span>Discovery <span class="formats"><a href="draft-payment-discovery-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-discovery-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-discovery-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-discovery-00.pdf">PDF</a></span></div>
