@@ -1,4 +1,4 @@
-.PHONY: docker-build build build-docker build-local check shell clean lint test
+.PHONY: docker-build build build-docker build-local check shell clean lint test site
 
 docker-build:
 	docker build -t ietf-spec-tools .
@@ -25,3 +25,6 @@ lint:
 
 test:
 	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest test_lint_frontmatter.py -v
+
+site: build
+	@python3 scripts/serve.py
