@@ -218,8 +218,8 @@ payment has been made or authorized. The proof type is method-specific:
 |------------|-------------|-----------------|
 | Preimage | Hash preimage proving invoice payment | Lightning |
 | Signature | Signed transaction authorization | Tempo, EVM |
-| Confirmation | Payment processor confirmation ID | Stripe |
-| Transaction | Transaction hash on public ledger | Bitcoin, Ethereum |
+| Confirmation | Payment processor confirmation identifier | Stripe |
+| Ledger transaction | Transaction hash on public ledger | Bitcoin, Ethereum |
 
 ## Single-Use
 
@@ -240,7 +240,7 @@ Servers verifying a "charge" credential MUST:
 
 ## Settlement
 
-Settlement semantics are method-specific:
+Settlement semantics differ by method:
 
 - **Immediate settlement**: Payment is final upon verification
   (e.g., Lightning preimage, confirmed blockchain transaction)

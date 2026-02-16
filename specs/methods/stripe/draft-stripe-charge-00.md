@@ -168,8 +168,8 @@ base64url-encoded JSON object with the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID |
-| `methodDetails.paymentMethodTypes | []string | REQUIRED | The list of payment method types that the seller can process. |
+| `methodDetails.network_id` | string | REQUIRED | Stripe Business Network Profile ID |
+| `methodDetails.payment_method_types` | []string | REQUIRED | The list of payment method types that the seller can process. |
 | `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**

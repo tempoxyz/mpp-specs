@@ -339,7 +339,7 @@ adds its fee payer signature before broadcasting:
 2. If `feePayer: true`, server adds fee sponsorship (signs with `0x78` domain)
 3. Server broadcasts transaction to Tempo
 4. Transaction included in block with immediate finality (~500ms)
-5. Server returns receipt with transaction hash
+5. Server returns receipt with the transaction digest
 
 ## Hash Settlement
 
@@ -437,7 +437,7 @@ Methods" registry established by {{I-D.httpauth-payment}}:
 
 | Method Identifier | Description | Reference |
 |-------------------|-------------|-----------|
-| `tempo` | Tempo blockchain TIP-20 token payments | This document |
+| `tempo` | Tempo blockchain TIP-20 token transfer | This document |
 
 Contact: Tempo Labs (<contact@tempo.xyz>)
 

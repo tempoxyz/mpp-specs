@@ -48,7 +48,7 @@ including supported payment methods, assets, and intents.
 The "Payment" HTTP authentication scheme {{I-D.httpauth-payment}} enables
 servers to require payment for resource access. While the 402 response
 with `WWW-Authenticate: Payment` header provides all information needed
-to complete a payment, clients may benefit from discovering payment
+to complete a paid exchange, clients may benefit from discovering payment
 capabilities before making requests.
 
 This specification defines an optional discovery mechanism using a
@@ -67,17 +67,17 @@ client experience. Clients MUST NOT require discovery to function; the
 
 Discovery
 : The process by which a client learns a server's payment capabilities
-  before initiating a request that may require payment.
+  before initiating a request that may require paid access.
 
 Payment Capabilities
 : The set of payment methods, intents, and assets that a server
-  accepts for payment.
+  accepts as payment.
 
 # Well-Known Endpoint
 
-## Endpoint
+## Endpoint Location Section
 
-Servers MAY expose payment capabilities at:
+Servers MAY expose payment capabilities at the following location:
 
 ~~~
 GET /.well-known/payment
