@@ -37,7 +37,7 @@ ERRORS=0
 for xml in "$OUT_DIR"/draft-*.xml; do
   name="$(basename "$xml")"
   echo "Checking $name..."
-  if ! rfclint --no-rng --no-spell --no-dup-detection "$xml"; then
+  if ! rfclint --no-rng --no-spell "$xml"; then
     ERRORS=$((ERRORS + 1))
   fi
   echo ""
