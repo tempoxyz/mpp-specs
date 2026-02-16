@@ -168,8 +168,8 @@ base64url-encoded JSON object with the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.network_id` | string | REQUIRED | Stripe Business Network Profile ID |
-| `methodDetails.payment_method_types` | []string | REQUIRED | The list of payment method types that the seller can process. |
+| `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID |
+| `methodDetails.paymentMethodTypes` | []string | REQUIRED | The list of payment method types that the seller can process. |
 | `methodDetails.metadata` | object | OPTIONAL | Key-value pairs for additional context |
 
 **Example:**
@@ -181,8 +181,8 @@ base64url-encoded JSON object with the following fields:
   "description": "Premium API access for 1 month",
   "externalId": "order_12345",
   "methodDetails": {
-    "network_id": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
-    "payment_method_types": ["card", "link"]
+    "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "paymentMethodTypes": ["card", "link"]
   }
 }
 ~~~
@@ -198,7 +198,7 @@ const spt = await stripe.sharedPayment.issuedTokens.create({
     expires_at: Timestamp
   },
   seller_details: {
-    network_id: 'profile_123'
+    networkId: 'profile_123'
   }
 });
 // Returns: { id: 'spt_1N...' }
