@@ -1,6 +1,6 @@
 # HTTP Payment Authentication Specifications
 
-📄 **[Read the specs →](https://tempoxyz.github.io/payment-auth-spec/)**
+📄 **[Read the specs →](https://tempoxyz.github.io/mpp-spec/)**
 
 An internet-native payments protocol which enables HTTP resources to require payment before granting access.
 
