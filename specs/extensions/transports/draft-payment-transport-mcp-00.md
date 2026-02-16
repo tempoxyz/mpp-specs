@@ -224,7 +224,13 @@ to -32099) per {{JSON-RPC}}:
           "expires": "2025-01-15T12:05:00Z",
           "description": "API call fee"
         }
-      ]
+      ],
+      "problem": {
+        "type": "https://paymentauth.org/problems/payment-required",
+        "title": "Payment Required",
+        "status": 402,
+        "detail": "Payment required for access."
+      }
     }
   }
 }
@@ -239,6 +245,10 @@ transport compatibility.
 The `error.data` object MUST contain:
 
 **`challenges`** (REQUIRED): Array of one or more challenge objects.
+
+**`problem`** (OPTIONAL): An RFC 9457 Problem Details object providing
+  additional error context. When present, contains `type`, `title`,
+  `status`, `detail`, and optionally `challengeId`.
 
 Each challenge object MUST contain:
 
@@ -414,14 +424,10 @@ include a receipt in the response using `_meta` with key
     "_meta": {
       "org.paymentauth/receipt": {
         "status": "success",
-        "challengeId": "qB3wErTyU7iOpAsD9fGhJk",
         "method": "tempo",
         "timestamp": "2025-01-15T12:00:30Z",
         "reference": "tx_abc123...",
-        "settlement": {
-          "amount": "1000",
-          "currency": "usd"
-        }
+        "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
       }
     }
   }
@@ -439,19 +445,16 @@ The `org.paymentauth/receipt` object MUST contain:
 **`status`** (REQUIRED): Settlement status. MUST be `"success"` for
   successful payments.
 
-**`challengeId`** (REQUIRED): The `id` from the fulfilled challenge.
-
 **`method`** (REQUIRED): Payment method that was used.
 
 **`timestamp`** (REQUIRED): {{RFC3339}} timestamp of settlement.
+
+**`challengeId`** (REQUIRED): The `id` from the fulfilled challenge.
 
 The receipt object MAY contain:
 
 **`reference`** (OPTIONAL): Method-specific settlement reference
   (e.g., transaction hash, invoice ID).
-
-**`settlement`** (OPTIONAL): Object containing settlement details
-  such as `amount` and `currency`.
 
 # Covered Operations
 
@@ -566,8 +569,8 @@ Prompt retrieval via `prompts/get` MAY require payment:
 
 ## Error Code Mapping
 
-MCP transport maps payment errors to JSON-RPC error codes within the
-implementation-defined range (-32000 to -32099) per {{JSON-RPC}}:
+Servers MUST map payment errors to JSON-RPC error codes within the
+server error range (-32000 to -32099) per {{JSON-RPC}}:
 
 | Condition | Code | Description |
 |-----------|------|-------------|
@@ -748,8 +751,7 @@ resources or payment processor rate limits. Servers SHOULD:
 This document has no IANA actions. Payment methods and intents are
 registered per {{I-D.httpauth-payment}}.
 
-This specification defines JSON-RPC error codes in the
-implementation-defined range:
+Servers MUST use the following JSON-RPC error codes:
 
 | Code | Name | Description |
 |------|------|-------------|
@@ -757,7 +759,7 @@ implementation-defined range:
 | -32043 | Payment Verification Failed | Payment credential invalid |
 
 These codes are within the JSON-RPC server error range (-32000 to
--32099) and do not require IANA registration.
+-32099). Implementations MUST use these exact codes for interoperability.
 
 --- back
 
@@ -856,14 +858,10 @@ A complete tool call with payment:
     "_meta": {
       "org.paymentauth/receipt": {
         "status": "success",
-        "challengeId": "ch_abc123",
         "method": "tempo",
         "timestamp": "2025-01-15T12:00:15Z",
         "reference": "0xtx789...",
-        "settlement": {
-          "amount": "10",
-          "currency": "usd"
-        }
+        "challengeId": "ch_abc123"
       }
     }
   }
