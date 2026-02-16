@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Authentication Specifications</title>
+  <style>
+    :root {
+      --color-link: #0066cc;
+      --color-text: #333;
+    }
+
+    body {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 10px;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+      color: var(--color-text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1 {
+      margin-bottom: 0.25rem;
+    }
+
+    .tree {
+      font-size: 0.8rem;
+    }
+
+    .folder {
+      margin: 1.5rem 0 0.5rem 0;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .spec-entry {
+      margin: 0.25rem 0;
+      padding-left: 1.5rem;
+    }
+
+    .branch {
+      color: #666;
+      user-select: none;
+    }
+
+    .spec-title {
+      font-weight: 500;
+      color: #000;
+    }
+
+    .maturity {
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      margin-left: 0.5rem;
+      font-weight: 500;
+      background: #e7f3ff;
+      color: #0066cc;
+      text-align: center;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .category {
+      font-size: 0.65rem;
+      color: #666;
+      margin-left: 0.5rem;
+    }
+
+    .formats {
+      display: block;
+      padding-left: 2.5rem;
+      font-size: 0.75rem;
+    }
+
+    .formats a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .formats a:hover {
+      text-decoration: underline;
+    }
+
+    .sep {
+      color: #999;
+      margin: 0 0.25rem;
+    }
+
+    .header-links {
+      font-size: 0.8rem;
+      margin-top: 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    .header-links a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .header-links a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      .spec-entry {
+        padding-left: 0.5rem;
+      }
+
+      .spec-title {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+
+      .maturity, .category {
+        margin-left: 0;
+        margin-right: 0.5rem;
+      }
+
+      .formats {
+        padding-left: 0;
+        margin-top: 0.25rem;
+      }
+
+      .branch {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>HTTP <code>Payment</code> Authentication Specifications</h1>
+  <p class="header-links"><a href="https://github.com/tempoxyz/payment-auth-spec">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/payment-auth-spec/blob/main/CONTRIBUTING.md">Contributing</a></p>
+
+  <div class="tree">
+    <div class="folder"><span class="folder-icon">~/</span>Core</div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">The &#34;Payment&#34; HTTP Authentication Scheme</span><span class="maturity">Draft</span><span class="category">Standards Track</span>
+      <span class="formats"><a href="draft-ryan-httpauth-payment-00.html">HTML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.pdf">PDF</a></span>
+    </div>
+    <div class="folder"><span class="folder-icon">~/</span>Extensions</div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">Discovery Mechanisms for HTTP Payment Authentication</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-payment-discovery-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-discovery-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-discovery-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-discovery-00.pdf">PDF</a></span>
+    </div>
+    <div class="folder"><span class="folder-icon">~/</span>Intents</div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">Charge Intent for HTTP Payment Authentication</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-payment-intent-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.pdf">PDF</a></span>
+    </div>
+    <div class="folder"><span class="folder-icon">~/</span>Payment_Methods/Stripe</div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">Stripe charge Intent for HTTP Payment Authentication</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-stripe-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-stripe-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-stripe-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-stripe-charge-00.pdf">PDF</a></span>
+    </div>
+    <div class="folder"><span class="folder-icon">~/</span>Payment_Methods/Tempo</div>
+    <div class="spec-entry">
+      <span class="branch">├──</span> <span class="spec-title">Tempo charge Intent for HTTP Payment Authentication</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-tempo-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-tempo-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-charge-00.pdf">PDF</a></span>
+    </div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">Tempo Stream Intent for HTTP Payment Authentication</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-tempo-stream-00.html">HTML</a><span class="sep">·</span><a href="draft-tempo-stream-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-stream-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-stream-00.pdf">PDF</a></span>
+    </div>
+    <div class="folder"><span class="folder-icon">~/</span>Transports</div>
+    <div class="spec-entry">
+      <span class="branch">└──</span> <span class="spec-title">Payment Authentication Scheme: MCP Transport</span><span class="maturity">Draft</span><span class="category">Informational</span>
+      <span class="formats"><a href="draft-payment-transport-mcp-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.pdf">PDF</a></span>
+    </div>
+  </div>
+</body>
+</html>
