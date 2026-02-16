@@ -16,6 +16,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         path = path.strip("/")
         if path == "" or path == "index.html":
             return os.path.join(PAGES, "index.html")
+        if path.startswith("fonts/"):
+            return os.path.join(PAGES, path)
         return os.path.join(ARTIFACTS, path)
 
 

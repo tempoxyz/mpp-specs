@@ -5,13 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Machine Payments Protocol Specifications</title>
   <style>
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("fonts/BerkeleyMono-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("fonts/BerkeleyMono-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
     :root {
       --color-link: #0066cc;
       --color-text: #333;
     }
 
     body {
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-family: "Berkeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       font-size: 10px;
       max-width: 900px;
       margin: 2rem auto;
@@ -37,17 +53,22 @@
 
     .spec-entry {
       margin: 0.25rem 0;
-      padding-left: 1.5rem;
+      padding-left: 2rem;
     }
 
     .branch {
       color: #666;
       user-select: none;
+      display: inline-block;
+      width: 1.5rem;
+      flex-shrink: 0;
     }
 
     .spec-title {
-      font-weight: 500;
+      font-weight: 700;
       color: #000;
+      display: inline-block;
+      min-width: 6ch;
     }
 
     .maturity {
@@ -70,14 +91,15 @@
     }
 
     .formats {
-      display: block;
-      padding-left: 2.5rem;
-      font-size: 0.75rem;
+      display: inline;
+      padding-left: 0.5rem;
+      font-size: 0.6rem;
     }
 
     .formats a {
       color: var(--color-link);
       text-decoration: none;
+      font-weight: 400;
     }
 
     .formats a:hover {
@@ -136,8 +158,8 @@
   <p class="header-links"><a href="https://github.com/tempoxyz/mpp-spec">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/mpp-spec/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
   <div class="tree">
-    <div class="folder"><span class="folder-icon">~/</span>The &#34;Payment&#34; HTTP Authentication Scheme <span class="formats" style="display:inline;padding-left:0"><a href="draft-ryan-httpauth-payment-00.html">HTML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.pdf">PDF</a></span></div>
-    <div class="folder"><span class="folder-icon">~/</span>Charge <span class="formats" style="display:inline;padding-left:0"><a href="draft-payment-intent-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.pdf">PDF</a></span></div>
+    <div class="folder"><span class="folder-icon">~/</span>The &#34;Payment&#34; HTTP Authentication Scheme <span class="formats"><a href="draft-ryan-httpauth-payment-00.html">HTML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-ryan-httpauth-payment-00.pdf">PDF</a></span></div>
+    <div class="folder"><span class="folder-icon">~/</span>Charge <span class="formats"><a href="draft-payment-intent-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.pdf">PDF</a></span></div>
     <div class="spec-entry">
       <span class="branch">├──</span> <span class="spec-title">Stripe</span>
       <span class="formats"><a href="draft-stripe-charge-00.html">HTML</a><span class="sep">·</span><a href="draft-stripe-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-stripe-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-stripe-charge-00.pdf">PDF</a></span>
@@ -156,7 +178,7 @@
       <span class="branch">└──</span> <span class="spec-title">MCP Transport</span>
       <span class="formats"><a href="draft-payment-transport-mcp-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.pdf">PDF</a></span>
     </div>
-    <div class="folder"><span class="folder-icon">~/</span>Discovery <span class="formats" style="display:inline;padding-left:0"><a href="draft-payment-discovery-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-discovery-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-discovery-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-discovery-00.pdf">PDF</a></span></div>
+    <div class="folder"><span class="folder-icon">~/</span>Discovery <span class="formats"><a href="draft-payment-discovery-00.html">HTML</a><span class="sep">·</span><a href="draft-payment-discovery-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-discovery-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-discovery-00.pdf">PDF</a></span></div>
   </div>
 </body>
 </html>

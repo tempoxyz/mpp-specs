@@ -59,8 +59,9 @@ jobs:
 
       - name: Prepare GitHub Pages
         run: |
-          mkdir -p _site
+          mkdir -p _site/fonts
           cp pages/index.html _site/
+          cp pages/fonts/*.woff2 _site/fonts/
           cp artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf _site/
 
       - name: Upload Pages artifact
