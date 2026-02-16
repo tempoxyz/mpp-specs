@@ -287,6 +287,41 @@ The binding mechanism is implementation-defined. Servers MAY use stateful
 storage (e.g., database lookup) or stateless verification (e.g., HMAC,
 authenticated encryption) to validate the binding.
 
+##### Recommended: HMAC-SHA256 Binding
+
+Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
+the challenge `id` as follows:
+
+1. Collect the following challenge components in order:
+   - `realm`
+   - `method`
+   - `intent`
+   - base64url-encoded `request` (as it appears on the wire)
+   - `expires` (if present and non-empty)
+   - `digest` (if present and non-empty)
+
+2. Remove any empty or absent components from the list.
+
+3. Join the remaining components with the pipe character (`|`) as
+   delimiter.
+
+4. Compute HMAC-SHA256 over the resulting string using a server secret.
+
+5. Encode the HMAC output as base64url without padding ({{RFC4648}}
+   Section 5).
+
+~~~
+components = [realm, method, intent, request_b64url]
+if expires: components.append(expires)
+if digest: components.append(digest)
+input = "|".join(components)
+id = base64url(HMAC-SHA256(server_secret, input))
+~~~
+
+Absent optional fields (expires, digest) are omitted entirely from the
+HMAC input rather than included as empty strings. This ensures the `id`
+is deterministic regardless of which optional parameters are present.
+
 #### Example Challenge
 
 ~~~http
@@ -405,7 +440,7 @@ The decoded JSON object contains:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | string | Payment status: "success" or "failed" |
+| `status` | string | `"success"` — receipts are only issued on successful payment |
 | `method` | string | Payment method used |
 | `timestamp` | string | ISO 8601 settlement time |
 | `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
@@ -414,21 +449,14 @@ Payment method specifications MAY define additional fields for receipts.
 
 ### Receipt Status Semantics
 
-The `status` field indicates the final settlement status of the payment:
+The `status` field MUST be `"success"`, indicating the payment was
+verified and settled successfully. Receipts are only issued on
+successful payment responses (2xx status codes).
 
-- **"success"**: The payment was verified and settled successfully.
-- **"failed"**: The payment was submitted but failed during settlement.
-
-Servers MUST NOT return a 200 response with a `status: "failed"` receipt
-for synchronous payment flows. When verification determines that a payment
-failed, servers MUST return 402 with a `verification-failed` problem
-(see {{response-status-codes}}).
-
-The `status: "failed"` value is intended for asynchronous notification
-channels where the client has already received a 200 response but the
-payment subsequently failed during settlement. Payment method specifications
-that support asynchronous settlement MUST define how clients are notified
-of failed payments.
+Servers MUST NOT return a `Payment-Receipt` header on error responses.
+Payment failures are communicated via HTTP status codes and Problem
+Details {{RFC9457}}. Servers MUST return 402 with a fresh challenge
+and appropriate problem type when payment verification fails.
 
 # Payment Methods {#payment-methods}
 
@@ -504,8 +532,9 @@ responses:
 }
 ~~~
 
-The `type` URI is constructed as `https://paymentauth.org/problems/{code}`
-where `{code}` is the error code from the table below.
+The `type` URI SHOULD correspond to one of the problem types defined
+below. The canonical base URI for problem types is
+`https://paymentauth.org/problems/`.
 
 ## Error Codes
 

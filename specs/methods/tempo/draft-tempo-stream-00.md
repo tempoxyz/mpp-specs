@@ -1,6 +1,6 @@
 ---
-title: Tempo Stream Intent for HTTP Payment Authentication
-abbrev: Tempo Stream
+title: Tempo Session Intent for HTTP Payment Authentication
+abbrev: Tempo Session
 docname: draft-tempo-stream-00
 version: 00
 category: info
@@ -73,7 +73,7 @@ informative:
 
 --- abstract
 
-This document defines the "stream" intent for the "tempo" payment method
+This document defines the "session" intent for the "tempo" payment method
 in the Payment HTTP Authentication Scheme. It specifies unidirectional
 streaming payment channels for incremental, voucher-based payments
 suitable for low-cost metered services.
@@ -84,13 +84,13 @@ suitable for low-cost metered services.
 
 This document is published as Informational but contains normative requirements using BCP 14 keywords {{RFC2119}} {{RFC8174}} to ensure interoperability between implementations. Payment method specifications that reference this document inherit these requirements.
 
-The `stream` intent establishes a unidirectional streaming payment channel
+The `session` intent establishes a unidirectional streaming payment channel
 using on-chain escrow and off-chain {{EIP-712}} vouchers. This enables high-
 frequency, low-cost payments by batching many off-chain voucher signatures
 into periodic on-chain settlements.
 
 Unlike the `charge` intent which requires the full payment amount upfront, the
-`stream` intent allows clients to pay incrementally as they consume
+`session` intent allows clients to pay incrementally as they consume
 services, paying exactly for resources received.
 
 ## Use Case: LLM Token Streaming
@@ -98,7 +98,7 @@ services, paying exactly for resources received.
 Consider an LLM inference API that charges per output token:
 
 1. Client requests a streaming completion (SSE response)
-2. Server returns 402 with a `stream` challenge
+2. Server returns 402 with a `session` challenge
 3. Client opens a payment channel on-chain, depositing funds
 4. Server begins streaming response
 5. As response streams streams, or over incremental requests, client signs vouchers with increasing amounts
@@ -117,7 +117,7 @@ The following diagram illustrates the Tempo stream flow:
       |-------------------------->  |                             |
       |                             |                             |
       |  (2) 402 Payment Required   |                             |
-      |      intent="stream"        |                             |
+      |      intent="session"        |                             |
       |      (includes challengeId) |                             |
       |<--------------------------  |                             |
       |                             |                             |
@@ -510,7 +510,7 @@ base64url-encoded JSON object.
 | `currency` | string | REQUIRED | {{TIP-20}} token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Payee address (server's withdrawal address)—equivalent to the on-chain `payee` |
 
-For the `stream` intent, `amount` specifies the price per unit of service
+For the `session` intent, `amount` specifies the price per unit of service
 in base units (6 decimals), not a total charge. Combined with `unitType`,
 this allows clients to estimate costs before streaming begins. The total
 cost depends on consumption: `total = amount × units_consumed`.
@@ -523,14 +523,14 @@ viable deposit is implementation-defined but SHOULD be at least
 
 Challenge expiry is specified via the `expires` auth-param in the
 `WWW-Authenticate` header per {{I-D.httpauth-payment}}, using {{RFC3339}}
-timestamp format. Unlike the `charge` intent, the stream request JSON
+timestamp format. Unlike the `charge` intent, the session request JSON
 does not include an `expires` field—expiry is conveyed solely via the
 HTTP header.
 
 ## Method Details
 
 As of version 00, stream-specific request fields are placed in
-`methodDetails`. A future high-level "stream" intent definition may
+`methodDetails`. A future high-level "session" intent definition may
 promote common fields to the core schema.
 
 | Field | Type | Required | Description |
@@ -597,7 +597,7 @@ already has funds. The `channelId` tells the client to resume this channel.
 
 When a challenge includes `methodDetails.feePayer: true`, the server
 commits to paying transaction fees on behalf of the client. In the
-`stream` intent, `feePayer` affects only the client-originated channel
+`session` intent, `feePayer` affects only the client-originated channel
 funding transactions (`open` and `topUp`).
 
 ## Server-Paid Fees
@@ -727,9 +727,12 @@ to broadcast.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"transaction"` |
+| `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-| `cumulativeAmount` | string | OPTIONAL | Initial amount (typically `"0"`) |
-| `signature` | string | OPTIONAL | EIP-712 voucher signature |
+| `authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers |
+| `cumulativeAmount` | string | REQUIRED | Initial cumulative amount (typically `"0"`) |
+| `signature` | string | REQUIRED | EIP-712 voucher signature for the initial amount |
 
 The `transaction` field contains the complete signed Tempo Transaction
 (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP and hex-encoded. The server
@@ -741,11 +744,8 @@ uses it to compute the `channelId` deterministically (see {{channel-state}}).
 The `authorizedSigner` is inferred from the calldata inside `transaction`
 and verified when the transaction is signed.
 
-If `cumulativeAmount` and `signature` are provided, the initial voucher
-proves the client controls the signing key and establishes the voucher chain.
-When omitted, proof of authority is deferred until the first voucher
-submission. This is typical when the initial `cumulativeAmount` would be
-zero.
+The initial voucher (`cumulativeAmount` and `signature`) proves the client
+controls the signing key and establishes the voucher chain.
 
 **Example:**
 
@@ -755,13 +755,17 @@ zero.
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
   "payload": {
     "action": "open",
-    "transaction": "0x76f901...signed transaction bytes..."
+    "type": "transaction",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "transaction": "0x76f901...signed transaction bytes...",
+    "cumulativeAmount": "0",
+    "signature": "0xabcdef1234567890..."
   }
 }
 ~~~
@@ -790,11 +794,10 @@ challenge `id` with problem type `challenge-not-found`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
-
-The `additionalDeposit` amount is inferred from the calldata inside
-`transaction`.
+| `additionalDeposit` | string | REQUIRED | Additional amount to deposit in base units |
 
 **Example:**
 
@@ -804,14 +807,16 @@ The `additionalDeposit` amount is inferred from the calldata inside
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
   "payload": {
     "action": "topUp",
+    "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "transaction": "0x76f901...signed topUp transaction bytes..."
+    "transaction": "0x76f901...signed topUp transaction bytes...",
+    "additionalDeposit": "5000000"
   }
 }
 ~~~
@@ -839,7 +844,7 @@ The `voucher` action submits an updated cumulative voucher during streaming.
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
@@ -876,7 +881,7 @@ to call `close(channelId, cumulativeAmount, signature)` on-chain.
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
@@ -1010,8 +1015,7 @@ On `action="open"`, servers MUST:
    - `channel.deposit - channel.settled >= amount` (sufficient available balance)
    - Channel is not finalized
    - `channel.closeRequestedAt == 0` (no pending close request)
-   3. If `cumulativeAmount` and `signature` are provided, verify the initial
-   voucher:
+   3. Verify the initial voucher (`cumulativeAmount` and `signature`):
    - Recover signer from EIP-712 signature
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
@@ -1024,15 +1028,15 @@ On `action="open"`, servers MUST:
 On `action="topUp"`, servers MUST:
 
 1. **Transaction verification**: Decode the signed transaction from
-   `transaction`, verify it calls `topUp()` on the expected escrow contract.
-   Infer the `additionalDeposit` amount from the calldata. If
+   `transaction`, verify it calls `topUp()` on the expected escrow contract
+   with the specified `additionalDeposit` amount. If
    `feePayer: true`, add fee payer signature using domain `0x78` (see
    {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
 2. Query the escrow contract to verify updated channel state:
-   - `channel.deposit` increased by the inferred deposit amount
+   - `channel.deposit` increased by `additionalDeposit`
    - Channel is not finalized
 3. Update server-side accounting:
-   - Increase available balance by the inferred deposit amount
+   - Increase available balance by `additionalDeposit`
 
 ## Voucher Verification {#voucher-verification}
 
@@ -1135,7 +1139,7 @@ available = acceptedCumulative - spent
 
 ## Per-Request Processing
 
-For each request carrying a Payment credential with `intent="stream"`,
+For each request carrying a Payment credential with `intent="session"`,
 servers MUST follow this procedure:
 
 1. **Voucher acceptance** (if a voucher is provided in the credential):
@@ -1328,19 +1332,19 @@ For SSE responses, the final receipt SHOULD be delivered as an event:
 
 ~~~
 event: payment-receipt
-data: {"method":"tempo","intent":"stream","status":"success",...}
+data: {"method":"tempo","intent":"session","status":"success",...}
 ~~~
 
 For chunked responses, the final receipt MAY be delivered as an HTTP
 trailer if the client advertises trailer support via `TE: trailers`.
 
-The base Payment Auth spec defines core receipt fields. The stream intent
+The base Payment Auth spec defines core receipt fields. The session intent
 extends the receipt with balance tracking:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `method` | string | `"tempo"` |
-| `intent` | string | `"stream"` |
+| `intent` | string | `"session"` |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} response time |
 | `challengeId` | string | Challenge identifier for audit correlation |
@@ -1363,7 +1367,7 @@ cost as `units × amount` from the challenge.
 ~~~json
 {
   "method": "tempo",
-  "intent": "stream",
+  "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:08:30Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
@@ -1379,7 +1383,7 @@ cost as `units × amount` from the challenge.
 ~~~json
 {
   "method": "tempo",
-  "intent": "stream",
+  "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
@@ -1586,7 +1590,7 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 | Intent | Applicable Methods | Description | Reference |
 |--------|-------------------|-------------|-----------|
-| `stream` | `tempo` | Streaming payment channel | This document |
+| `session` | `tempo` | Streaming payment channel | This document |
 
 Contact: Tempo Labs (<contact@tempo.xyz>)
 
@@ -1623,7 +1627,7 @@ HTTP/1.1 402 Payment Required
 WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.llm-service.com",
   method="tempo",
-  intent="stream",
+  intent="session",
   expires="2025-01-06T12:05:00Z",
   request="<base64url-encoded JSON below>"
 ~~~
@@ -1668,13 +1672,17 @@ The credential payload for an open action:
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
   "payload": {
     "action": "open",
-    "transaction": "0x76f901...signed transaction bytes..."
+    "type": "transaction",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "transaction": "0x76f901...signed transaction bytes...",
+    "cumulativeAmount": "0",
+    "signature": "0xabcdef1234567890..."
   }
 }
 ~~~
@@ -1707,7 +1715,7 @@ The credential payload for a voucher update:
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
@@ -1738,7 +1746,7 @@ The credential payload for a close request:
     "id": "kM9xPqWvT2nJrHsY4aDfEb",
     "realm": "api.llm-service.com",
     "method": "tempo",
-    "intent": "stream",
+    "intent": "session",
     "request": "eyJ...",
     "expires": "2025-01-06T12:05:00Z"
   },
@@ -2031,7 +2039,7 @@ and Problem Details.
   "required": ["method", "intent", "status", "timestamp", "challengeId", "channelId", "acceptedCumulative", "spent"],
   "properties": {
     "method": { "const": "tempo" },
-    "intent": { "const": "stream" },
+    "intent": { "const": "session" },
     "status": { "const": "success" },
     "timestamp": {
       "type": "string",
