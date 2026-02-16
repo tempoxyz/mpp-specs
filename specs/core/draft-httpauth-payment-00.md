@@ -41,6 +41,7 @@ normative:
   RFC8174:
   RFC8259:
   RFC8446:
+  RFC8785:
   RFC9110:
   RFC9111:
   RFC9457:
@@ -255,7 +256,13 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 **`request`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
   payment-method-specific data needed to complete payment. Structure is
   defined by the payment method specification. Padding characters ("=")
-  MUST NOT be included.
+  MUST NOT be included. The JSON MUST be serialized using JSON
+  Canonicalization Scheme (JCS) {{RFC8785}} to ensure deterministic
+  encoding across implementations. This is critical for challenge binding
+  ({{challenge-binding}}): since the HMAC input includes the base64url-encoded
+  request as it appears on the wire, different JSON serialization orders
+  would produce different HMAC values, breaking cross-implementation
+  interoperability.
 
 ### Optional Parameters
 
@@ -295,7 +302,8 @@ the challenge `id` as follows:
    - `realm`
    - `method`
    - `intent`
-   - base64url-encoded `request` (as it appears on the wire)
+   - base64url-encoded `request` (JCS-serialized per {{RFC8785}},
+     then base64url-encoded)
    - `expires` (if present and non-empty)
    - `digest` (if present and non-empty)
 
