@@ -69,11 +69,25 @@ jobs:
             fi
           done
 
-      - name: Upload artifacts
+      - name: Upload spec artifacts
+        id: upload-specs
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.number && format('pr-{0}-specs', github.event.number) || format('manual-{0}-specs', github.run_id) }}
-          path: artifacts/
+          path: |
+            artifacts/draft-*.html
+            artifacts/draft-*.txt
+            artifacts/draft-*.xml
+            artifacts/draft-*.pdf
+          retention-days: 30
+
+      - name: Upload diff artifacts
+        id: upload-diffs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ format('pr-{0}-diffs', github.event.number) }}
+          path: artifacts/diffs/
           retention-days: 30
 
       - name: Comment on PR
@@ -86,6 +100,7 @@ jobs:
 
             const artifactsDir = 'artifacts';
             const diffsDir = path.join(artifactsDir, 'diffs');
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             let table = '| Spec | Changed |\n|------|--------|\n';
 
@@ -100,18 +115,18 @@ jobs:
               if (fs.existsSync(diffFile)) {
                 const content = fs.readFileSync(diffFile, 'utf8');
                 if (content.trim() && !content.includes('New spec')) {
-                  changed = 'Yes';
+                  changed = '✅ Yes';
                 }
               }
-              table += `| ${name} | ${changed} |\n`;
+              table += `| \`${name}\` | ${changed} |\n`;
             }
 
             const body = `<!-- ietf-spec-preview -->
-            ## Spec Check
+            ## 📄 Spec Preview
 
             ${table}
 
-            Download artifacts from the workflow run for HTML, TXT, XML, and PDF renderings.
+            **[⬇️ Download spec artifacts](${runUrl}#artifacts)** (HTML, TXT, XML, PDF)
             `;
 
             const { data: comments } = await github.rest.issues.listComments({
