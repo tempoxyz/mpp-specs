@@ -1,7 +1,7 @@
 ---
 title: Tempo Session Intent for HTTP Payment Authentication
 abbrev: Tempo Session
-docname: draft-tempo-stream-00
+docname: draft-tempo-session-00
 version: 00
 category: info
 ipr: trust200902
@@ -106,9 +106,9 @@ Consider an LLM inference API that charges per output token:
 
 The client pays exactly for tokens received, with no worst-case reservation.
 
-## Stream Flow
+## Session Flow
 
-The following diagram illustrates the Tempo stream flow:
+The following diagram illustrates the Tempo session flow:
 
 ~~~
    Client                        Server                     Tempo Network
@@ -164,7 +164,7 @@ The following diagram illustrates the Tempo stream flow:
 ~~~
 
 Voucher updates and close requests are submitted to the **same resource
-URI** that requires payment. This allows streams to work on any endpoint
+URI** that requires payment. This allows sessions to work on any endpoint
 without dedicated payment control plane routes. Servers SHOULD support
 voucher updates via any HTTP method; clients MAY use `HEAD` for pure
 voucher top-ups when no response body is needed.
@@ -177,7 +177,7 @@ counter. The channel is the unit of concurrency; no additional session
 locking is required.
 
 When a client sends a new streaming request on a channel that already
-has an active stream, servers SHOULD terminate the previous stream and
+has an active session, servers SHOULD terminate the previous session and
 start a new one. Voucher updates MAY arrive on separate HTTP connections
 (including HTTP/2 streams) and MUST be processed atomically with respect
 to balance updates.
@@ -311,7 +311,7 @@ Channels have no expiry—they remain open until explicitly closed.
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       STREAMING PAYMENTS                        │
+│                       SESSION PAYMENTS                           │
 │          Client signs vouchers, server provides service         │
 │          Server may periodically settle() to claim funds        │
 └─────────────────────────────────────────────────────────────────┘
@@ -529,7 +529,7 @@ HTTP header.
 
 ## Method Details
 
-As of version 00, stream-specific request fields are placed in
+As of version 00, session-specific request fields are placed in
 `methodDetails`. A future high-level "session" intent definition may
 promote common fields to the core schema.
 
@@ -674,7 +674,7 @@ JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge parameters from the server's WWW-Authenticate header |
-| `payload` | object | REQUIRED | Stream-specific payload object |
+| `payload` | object | REQUIRED | Session-specific payload object |
 
 Implementations MUST ignore unknown fields in credential payloads, request
 objects, and receipts to allow forward-compatible extensions.
@@ -1090,7 +1090,7 @@ Error responses use Problem Details format:
 
 ~~~json
 {
-  "type": "https://paymentauth.org/problems/stream/invalid-signature",
+  "type": "https://paymentauth.org/problems/session/invalid-signature",
   "title": "Invalid Signature",
   "status": 402,
   "detail": "Voucher signature could not be verified",
@@ -1102,14 +1102,14 @@ Problem type URIs:
 
 | Type URI | Description |
 |----------|-------------|
-| `https://paymentauth.org/problems/stream/invalid-signature` | Voucher or close request signature invalid |
-| `https://paymentauth.org/problems/stream/signer-mismatch` | Signer is not authorized for this channel |
-| `https://paymentauth.org/problems/stream/amount-exceeds-deposit` | Voucher amount exceeds channel deposit |
-| `https://paymentauth.org/problems/stream/delta-too-small` | Amount increase below `minVoucherDelta` |
-| `https://paymentauth.org/problems/stream/channel-not-found` | No channel with this ID exists |
-| `https://paymentauth.org/problems/stream/channel-finalized` | Channel has been closed |
-| `https://paymentauth.org/problems/stream/challenge-not-found` | Challenge ID unknown or expired |
-| `https://paymentauth.org/problems/stream/insufficient-balance` | Insufficient authorized balance for request |
+| `https://paymentauth.org/problems/session/invalid-signature` | Voucher or close request signature invalid |
+| `https://paymentauth.org/problems/session/signer-mismatch` | Signer is not authorized for this channel |
+| `https://paymentauth.org/problems/session/amount-exceeds-deposit` | Voucher amount exceeds channel deposit |
+| `https://paymentauth.org/problems/session/delta-too-small` | Amount increase below `minVoucherDelta` |
+| `https://paymentauth.org/problems/session/channel-not-found` | No channel with this ID exists |
+| `https://paymentauth.org/problems/session/channel-finalized` | Channel has been closed |
+| `https://paymentauth.org/problems/session/challenge-not-found` | Challenge ID unknown or expired |
+| `https://paymentauth.org/problems/session/insufficient-balance` | Insufficient authorized balance for request |
 
 For errors on the Payment Auth protected resource (the initial request
 carrying `Authorization: Payment`), servers MUST return 402 with a fresh
@@ -1301,9 +1301,9 @@ If the server does not respond to close requests:
 Clients SHOULD wait at least 16 minutes after `requestClose()` before
 calling `withdraw()` to account for block time variance.
 
-## Sequential Streams
+## Sequential Sessions
 
-A single channel supports sequential streams. Each stream uses the same
+A single channel supports sequential sessions. Each session uses the same
 cumulative voucher counter. When a new session begins on a channel, the
 previous session's spending state is irrelevant—the channel's
 `highestVoucherAmount` is the source of truth for the next voucher's
@@ -1312,13 +1312,13 @@ minimum value.
 ## Voucher Submission Transport
 
 Vouchers are submitted via HTTP requests to the **same resource URI** that
-requires payment. There is no separate stream endpoint. Clients SHOULD use
+requires payment. There is no separate session endpoint. Clients SHOULD use
 HTTP/2 multiplexing or maintain separate connections for voucher updates
 and content streaming when topping up during a long-lived response.
 
 For voucher-only updates (no response body needed), clients MAY use `HEAD`
 requests. Servers SHOULD support voucher credentials on `HEAD` requests
-for resources that require stream payment.
+for resources that require session payment.
 
 ## Receipt Generation {#receipt-generation}
 
@@ -1602,14 +1602,14 @@ Problem Types" registry established by {{RFC9457}}:
 
 | Type URI | Title | Status | Reference |
 |----------|-------|--------|-----------|
-| `https://paymentauth.org/problems/stream/invalid-signature` | Invalid Signature | 402 | This document |
-| `https://paymentauth.org/problems/stream/signer-mismatch` | Signer Mismatch | 402 | This document |
-| `https://paymentauth.org/problems/stream/amount-exceeds-deposit` | Amount Exceeds Deposit | 402 | This document |
-| `https://paymentauth.org/problems/stream/delta-too-small` | Delta Too Small | 402 | This document |
-| `https://paymentauth.org/problems/stream/channel-not-found` | Channel Not Found | 410 | This document |
-| `https://paymentauth.org/problems/stream/channel-finalized` | Channel Finalized | 410 | This document |
-| `https://paymentauth.org/problems/stream/challenge-not-found` | Challenge Not Found | 410 | This document |
-| `https://paymentauth.org/problems/stream/insufficient-balance` | Insufficient Balance | 402 | This document |
+| `https://paymentauth.org/problems/session/invalid-signature` | Invalid Signature | 402 | This document |
+| `https://paymentauth.org/problems/session/signer-mismatch` | Signer Mismatch | 402 | This document |
+| `https://paymentauth.org/problems/session/amount-exceeds-deposit` | Amount Exceeds Deposit | 402 | This document |
+| `https://paymentauth.org/problems/session/delta-too-small` | Delta Too Small | 402 | This document |
+| `https://paymentauth.org/problems/session/channel-not-found` | Channel Not Found | 410 | This document |
+| `https://paymentauth.org/problems/session/channel-finalized` | Channel Finalized | 410 | This document |
+| `https://paymentauth.org/problems/session/challenge-not-found` | Challenge Not Found | 410 | This document |
+| `https://paymentauth.org/problems/session/insufficient-balance` | Insufficient Balance | 402 | This document |
 
 Each problem type is defined in {{error-responses}}.
 
@@ -1920,13 +1920,13 @@ https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels
 This appendix provides JSON Schema definitions for implementations that
 prefer JSON Schema over CDDL.
 
-## Stream Request Schema
+## Session Request Schema
 
 ~~~json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paymentauth.org/schemas/stream-request.json",
-  "title": "Stream Request",
+  "$id": "https://paymentauth.org/schemas/session-request.json",
+  "title": "Session Request",
   "type": "object",
   "required": ["amount", "unitType", "currency", "recipient", "methodDetails"],
   "properties": {
@@ -1987,13 +1987,13 @@ prefer JSON Schema over CDDL.
 }
 ~~~
 
-## Stream Payload Schema
+## Session Payload Schema
 
 ~~~json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paymentauth.org/schemas/stream-payload.json",
-  "title": "Stream Payload",
+  "$id": "https://paymentauth.org/schemas/session-payload.json",
+  "title": "Session Payload",
   "type": "object",
   "required": ["action"],
   "properties": {
@@ -2022,10 +2022,10 @@ prefer JSON Schema over CDDL.
 }
 ~~~
 
-## Stream Receipt Schema
+## Session Receipt Schema
 
 Servers MUST include `Payment-Receipt` only on successful processing of a
-stream action (2xx responses). On error responses (4xx/5xx), servers MUST
+session action (2xx responses). On error responses (4xx/5xx), servers MUST
 return Problem Details and MUST NOT include a `Payment-Receipt` header.
 The `status` field is always `"success"` because receipts represent
 successful acceptance; failures are communicated via HTTP status codes
@@ -2034,8 +2034,8 @@ and Problem Details.
 ~~~json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://paymentauth.org/schemas/stream-receipt.json",
-  "title": "Stream Receipt",
+  "$id": "https://paymentauth.org/schemas/session-receipt.json",
+  "title": "Session Receipt",
   "type": "object",
   "required": ["method", "intent", "status", "timestamp", "challengeId", "channelId", "acceptedCumulative", "spent"],
   "properties": {
@@ -2076,5 +2076,5 @@ and Problem Details.
 
 # Acknowledgements
 
-The authors thank the Tempo community for their feedback on streaming
+The authors thank the Tempo community for their feedback on session
 payment design.

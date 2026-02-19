@@ -194,7 +194,7 @@ distinct name, but this is not required.
 
 ### Payment Intents: No Version
 
-Intents (`charge`, `authorize`, `stream`, etc.) do not
+Intents (`charge`, `authorize`, `session`, etc.) do not
 carry their own version. They evolve through the same
 compatibility rules as the core protocol:
 

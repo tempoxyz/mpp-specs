@@ -43,12 +43,12 @@ Methods may define new intent types that are not yet formalized in `specs/intent
 
 3. **Formalize**: Once 2+ methods implement the intent, extract common semantics into `specs/intents/draft-payment-intent-{name}-00.md`.
 
-**Example**: A streaming payment method might define:
+**Example**: A session payment method might define:
 
 ```
-specs/methods/draft-tempo-stream-00.md     ← defines "stream" intent (experimental)
-specs/methods/draft-lightning-stream-00.md ← second implementation
-specs/intents/draft-payment-intent-stream-00.md ← formalized after adoption
+specs/methods/draft-tempo-session-00.md     ← defines "session" intent (experimental)
+specs/methods/draft-lightning-session-00.md ← second implementation
+specs/intents/draft-payment-intent-session-00.md ← formalized after adoption
 ```
 
 This ensures intents are battle-tested before standardization, preventing premature abstractions.
