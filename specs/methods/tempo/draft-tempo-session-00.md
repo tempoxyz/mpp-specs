@@ -505,15 +505,16 @@ base64url-encoded JSON object.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Price per unit in base units (see note below) |
-| `unitType` | string | REQUIRED | Unit being priced (e.g., `"llm_token"`, `"byte"`, `"request"`) |
+| `unitType` | string | OPTIONAL | Unit being priced (e.g., `"llm_token"`, `"byte"`, `"request"`) |
 | `suggestedDeposit` | string | OPTIONAL | Suggested channel deposit amount in base units |
 | `currency` | string | REQUIRED | {{TIP-20}} token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Payee address (server's withdrawal address)—equivalent to the on-chain `payee` |
 
 For the `session` intent, `amount` specifies the price per unit of service
-in base units (6 decimals), not a total charge. Combined with `unitType`,
-this allows clients to estimate costs before streaming begins. The total
-cost depends on consumption: `total = amount × units_consumed`.
+in base units (6 decimals), not a total charge. When `unitType` is present,
+clients can use it together with `amount` to estimate costs before streaming
+begins. The total cost depends on consumption:
+`total = amount × units_consumed`.
 
 The optional `suggestedDeposit` indicates the server's recommended
 channel deposit for typical usage. Clients MAY deposit less (if they
@@ -1360,8 +1361,9 @@ The `txHash` field serves as the core spec's `reference` field (Section
 response involves an on-chain settlement—voucher updates are off-chain.
 
 The `units` field indicates what was consumed for **this specific request**.
-The unit type is defined in the challenge `unitType`. Clients can compute
-cost as `units × amount` from the challenge.
+When the challenge includes `unitType`, clients can use it to interpret the
+unit of measure. Clients can compute cost as `units × amount` from the
+challenge.
 
 **Example receipt (per-request with metering):**
 
@@ -1928,7 +1930,7 @@ prefer JSON Schema over CDDL.
   "$id": "https://paymentauth.org/schemas/session-request.json",
   "title": "Session Request",
   "type": "object",
-  "required": ["amount", "unitType", "currency", "recipient", "methodDetails"],
+  "required": ["amount", "currency", "recipient", "methodDetails"],
   "properties": {
     "amount": {
       "type": "string",
