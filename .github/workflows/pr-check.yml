@@ -14,6 +14,18 @@ permissions:
   pull-requests: write
 
 jobs:
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [build-and-check]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs failed or were cancelled"
+            exit 1
+          fi
+
   build-and-check:
     runs-on: ubuntu-latest
     steps:
