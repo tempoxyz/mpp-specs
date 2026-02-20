@@ -264,6 +264,15 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   would produce different HMAC values, breaking cross-implementation
   interoperability.
 
+  The `request` object MAY include an `opaque` member containing
+  server-defined correlation data (e.g., a payment processor intent
+  identifier). The `opaque` field MUST be a JSON object whose values
+  are strings (a flat string-to-string map). Clients MUST return
+  this data unchanged and MUST NOT interpret or modify it. Because
+  clients echo the `request` value as an opaque base64url string in
+  the credential, any `opaque` data is automatically round-tripped
+  back to the server and protected by the challenge `id` binding.
+
 ### Optional Parameters
 
 **`digest`**: Content digest of the request body, formatted per [RFC9530].
