@@ -182,7 +182,7 @@ base64url-encoded JSON object with the following fields:
   "description": "Premium API access for 1 month",
   "externalId": "order_12345",
   "opaque": {
-    "pi": "pi_3abc123XYZ"
+    "payment_intent": "pi_3abc123XYZ"
   },
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
