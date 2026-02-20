@@ -163,6 +163,7 @@ base64url-encoded JSON object with the following fields:
 | `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., `"usd"`) |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant's identifier (e.g., order ID, cart ID) |
+| `opaque` | object | OPTIONAL | Server-defined correlation data; flat string-to-string map (see core spec) |
 
 ## Method Details
 
@@ -180,6 +181,9 @@ base64url-encoded JSON object with the following fields:
   "currency": "usd",
   "description": "Premium API access for 1 month",
   "externalId": "order_12345",
+  "opaque": {
+    "payment_intent": "pi_3abc123XYZ"
+  },
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
     "paymentMethodTypes": ["card", "link"]

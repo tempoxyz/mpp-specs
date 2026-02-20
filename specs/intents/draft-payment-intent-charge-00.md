@@ -136,6 +136,7 @@ consistently across methods.
 | `expires` | string | Expiry timestamp in ISO 8601 format |
 | `description` | string | Human-readable payment description |
 | `externalId` | string | Merchant's reference (order ID, invoice number, etc.) |
+| `opaque` | object | Server-defined correlation data (see core spec {{I-D.httpauth-payment}}). Flat string-to-string map; clients MUST NOT interpret or modify |
 | `methodDetails` | object | Method-specific extension data |
 
 ## Currency Formats {#currency-formats}
