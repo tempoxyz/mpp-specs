@@ -264,15 +264,6 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   would produce different HMAC values, breaking cross-implementation
   interoperability.
 
-  The `request` object MAY include an `opaque` member containing
-  server-defined correlation data (e.g., a payment processor intent
-  identifier). The `opaque` field MUST be a JSON object whose values
-  are strings (a flat string-to-string map). Clients MUST return
-  this data unchanged and MUST NOT interpret or modify it. Because
-  clients echo the `request` value as an opaque base64url string in
-  the credential, any `opaque` data is automatically round-tripped
-  back to the server and protected by the challenge `id` binding.
-
 ### Optional Parameters
 
 **`digest`**: Content digest of the request body, formatted per [RFC9530].
@@ -289,6 +280,15 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 **`description`**: Human-readable description of the resource or payment
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see {{amount-verification}}).
+
+**`opaque`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
+  server-defined correlation data (e.g., a payment processor intent
+  identifier). The value MUST be a JSON object whose values are strings
+  (a flat string-to-string map). Clients MUST return this parameter
+  unchanged in the credential and MUST NOT modify it. The JSON MUST be
+  serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} before
+  base64url encoding. Servers SHOULD include `opaque` in the challenge
+  binding ({{challenge-binding}}) to ensure tamper protection.
 
 Unknown parameters MUST be ignored by clients.
 
@@ -315,6 +315,8 @@ the challenge `id` as follows:
      then base64url-encoded)
    - `expires` (if present and non-empty)
    - `digest` (if present and non-empty)
+   - base64url-encoded `opaque` (JCS-serialized per {{RFC8785}},
+     then base64url-encoded; if present and non-empty)
 
 2. Remove any empty or absent components from the list.
 
@@ -330,13 +332,15 @@ the challenge `id` as follows:
 components = [realm, method, intent, request_b64url]
 if expires: components.append(expires)
 if digest: components.append(digest)
+if opaque: components.append(opaque_b64url)
 input = "|".join(components)
 id = base64url(HMAC-SHA256(server_secret, input))
 ~~~
 
-Absent optional fields (expires, digest) are omitted entirely from the
-HMAC input rather than included as empty strings. This ensures the `id`
-is deterministic regardless of which optional parameters are present.
+Absent optional fields (expires, digest, opaque) are omitted entirely
+from the HMAC input rather than included as empty strings. This ensures
+the `id` is deterministic regardless of which optional parameters are
+present.
 
 #### Example Challenge
 
