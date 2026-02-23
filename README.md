@@ -24,7 +24,7 @@ sequenceDiagram
 
     Note over Client: Client fulfills payment challenge
 
-    Client->>Server: GET /resource<br/>Authorization: Payment &lt;credential&gt;
+    Client->>Server: GET /resource<br/>Authorization: Payment credential
     Server-->>Client: 200 OK
 ```
 
