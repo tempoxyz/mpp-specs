@@ -82,6 +82,7 @@ This repo ships multiple IETF-specific skills in `.agents/skills/`:
 |-------|-------------|
 | `writing-ietf-w3c-specs` | IETF/W3C spec writing conventions, ABNF, required sections, and style guide |
 | `reviewing-ietf-drafts` | Systematic review methodology for Internet-Draft publication readiness |
+| `payment-auth-scheme-author` | Domain-specific guidance for the Payment authentication scheme |
 
 Feel free to leverage these skills while authoring drafts in this repo. Even with assistance, you are still repsonsible for the final output of your proposals.
 
