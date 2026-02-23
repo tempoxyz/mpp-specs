@@ -74,6 +74,22 @@ If you use AI tools to help write specifications or code:
 2. Disclose significant AI assistance in your PR description
 3. Review all generated content for RFC compliance
 
+### Agent Skills
+
+This repo ships four IETF-specific [Amp](https://ampcode.com) skills in `.agents/skills/`:
+
+| Skill | Description |
+|-------|-------------|
+| `writing-ietf-w3c-specs` | IETF/W3C spec writing conventions, ABNF, required sections, and style guide |
+| `reviewing-ietf-drafts` | Systematic review methodology for Internet-Draft publication readiness |
+| `payment-auth-scheme-author` | Domain-specific guidance for the Payment authentication scheme |
+
+Skills are loaded automatically when working in this repo with Amp. To install them globally (so they're available across all projects):
+
+```bash
+./scripts/install-skills.sh
+```
+
 ## Building the Specifications
 
 ### Using Docker (recommended)
