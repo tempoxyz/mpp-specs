@@ -74,6 +74,14 @@ If you use AI tools to help write specifications or code:
 2. Disclose significant AI assistance in your PR description
 3. Review all generated content for RFC compliance
 
+### Agent Skills
+
+This repo ships [Amp](https://ampcode.com) agent skills in `.agents/skills/`. Skills are loaded automatically when working in this repo. To install them globally (so they're available across all projects):
+
+```bash
+./scripts/install-skills.sh
+```
+
 ## Building the Specifications
 
 ### Using Docker (recommended)
