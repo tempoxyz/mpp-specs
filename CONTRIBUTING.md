@@ -74,6 +74,21 @@ If you use AI tools to help write specifications or code:
 2. Disclose significant AI assistance in your PR description
 3. Review all generated content for RFC compliance
 
+### Agent Skills
+
+This repo ships multiple IETF-specific skills in `.agents/skills/`:
+
+| Skill | Description |
+|-------|-------------|
+| `writing-ietf-w3c-specs` | IETF/W3C spec writing conventions, ABNF, required sections, and style guide |
+| `reviewing-ietf-drafts` | Systematic review methodology for Internet-Draft publication readiness |
+
+Feel free to leverage these skills while authoring drafts in this repo. Even with assistance, you are still repsonsible for the final output of your proposals.
+
+```bash
+./scripts/install-skills.sh
+```
+
 ## Building the Specifications
 
 ### Using Docker (recommended)
