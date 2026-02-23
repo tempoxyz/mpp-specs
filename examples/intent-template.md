@@ -1,16 +1,18 @@
 ---
 title: "{name}" Intent for HTTP Payment Authentication
-docName: draft-payment-intent-{name}-00
+abbrev: "{name}" Intent
+docname: draft-payment-intent-{name}-00
 version: 00
 category: std
 ipr: trust200902
-submissionType: IETF
+submissiontype: IETF
 consensus: true
 
 author:
-  - fullname: Your Name
+  - name: Your Name
+    ins: Y. Name
     email: you@example.com
-    organization: Your Organization
+    org: Your Organization
 ---
 
 ## Abstract

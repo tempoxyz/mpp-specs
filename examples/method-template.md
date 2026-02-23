@@ -1,16 +1,18 @@
 ---
 title: "{Network}" Payment Method for HTTP Payment Authentication
-docName: draft-{network}-payment-method-00
+abbrev: "{Network}" Payment Method
+docname: draft-{network}-payment-method-00
 version: 00
 category: info
 ipr: trust200902
-submissionType: IETF
+submissiontype: IETF
 consensus: true
 
 author:
-  - fullname: Your Name
+  - name: Your Name
+    ins: Y. Name
     email: you@example.com
-    organization: Your Organization
+    org: Your Organization
 ---
 
 ## Abstract

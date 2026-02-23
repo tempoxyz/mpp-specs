@@ -1,16 +1,18 @@
 ---
 title: "{Feature}" Extension for HTTP Payment Authentication
-docName: draft-payment-{feature}-00
+abbrev: "{Feature}" Extension
+docname: draft-payment-{feature}-00
 version: 00
 category: info
 ipr: trust200902
-submissionType: IETF
+submissiontype: IETF
 consensus: true
 
 author:
-  - fullname: Your Name
+  - name: Your Name
+    ins: Y. Name
     email: you@example.com
-    organization: Your Organization
+    org: Your Organization
 ---
 
 ## Abstract

@@ -52,17 +52,19 @@ This directory contains templates for each type of specification in the Payment 
 ```yaml
 ---
 title: Document Title
-docName: draft-author-topic-00        # Versioned document name
+abbrev: Short Title
+docname: draft-author-topic-00        # Versioned document name
 version: 00                           # Current version
 category: std | info | exp            # IETF track
 ipr: trust200902                      # IPR declaration
-submissionType: IETF                  # Submission type
+submissiontype: IETF                  # Submission type
 consensus: true                       # WG consensus required
 
 author:
-  - fullname: Author Name
+  - name: Author Name
+    ins: A. Name
     email: author@example.com
-    organization: Organization Name
+    org: Organization Name
 ---
 ```
 
