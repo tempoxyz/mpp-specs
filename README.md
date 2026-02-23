@@ -2,9 +2,9 @@
 
 The open protocol for machine-to-machine payments.
 
-**[IETF Specification](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**
-**[Read the full specs](https://tempoxyz.github.io/payment-auth-spec/)**
-**[Learn more](https://mpp.sh)**
+* **[Read the IETF specification](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**
+* **[Read the full specification](https://tempoxyz.github.io/payment-auth-spec/)**
+* **[Learn more](https://mpp.sh)**
 
 ## Overview
 
@@ -38,10 +38,10 @@ sequenceDiagram
 
 MPP is deighed to be simple, secure, and performant, holding the following design principles as guides:
 
-- **Extensible core**: Minimal protocol designed for safe extension.
-- **Network agnostic and multi-rail**: Designed to support a number of payment networks and settlement layers, including bank rails, credit cards, and stablecoins.
-- **Currency agnostic**: No implicit advantages for any currency or asset.
-- **Durable by design**: All designs follow web standards and are designed for security and replay protection as first class concerns.
+* **Extensible core**: Minimal protocol designed for safe extension.
+* **Network agnostic and multi-rail**: Designed to support a number of payment networks and settlement layers, including bank rails, credit cards, and stablecoins.
+* **Currency agnostic**: No implicit advantages for any currency or asset.
+* **Durable by design**: All designs follow web standards and are designed for security and replay protection as first class concerns.
 
 See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventions.
 
@@ -49,12 +49,19 @@ See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventi
 
 The specification is modular, separating stable protocol mechanics from evolving payment ecosystems:
 
-- **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
-- **[Intents](specs/intents/)**: Abstract payment patterns—charge, authorize, subscription. Define *what* kind of payment without specifying *how*.
-- **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
-- **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
+* **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
+* **[Intents](specs/intents/)**: Abstract payment patterns—charge, authorize, subscription. Define *what* kind of payment without specifying *how*.
+* **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
+* **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
 
 ## Contributing
+
+The Machine Payments Protocol specification is currently maintained by the following organizations:
+
+* [Tempo Labs](https://tempo.xyz)
+* [Stripe](https://stripe.com)
+
+We welcome contributions from a wide variety of individuals and organizations.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building instructions and contribution guidelines.
 
