@@ -1,45 +1,47 @@
-# HTTP Payment Authentication Specifications
+# Machine Payments Protocol (MPP) Specifications  
 
-📄 **[Read the specs →](https://tempoxyz.github.io/mpp-spec/)**
+The open protocol for machine-to-machine payments.
 
-An internet-native payments protocol which enables HTTP resources to require payment before granting access.
+* **[Read the IETF specification](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**
+* **[Read the full specification](https://tempoxyz.github.io/payment-auth-spec/)**
+* **[Learn more](https://mpp.sh)**
 
 ## Overview
 
-The Payment Auth scheme extends the HTTP/OAuth flow to allow servers to specify that payment is required in order to access a resource.
+The Machine Payments Protocol (MPP) is an open and internet-native protocol for machine-to-machine payments. By using MPP, businesses and other entities can offer services to agents, apps, and humans via a simple HTTP interface and control flow.
 
-```bash
-Client                                            Server
-   │                                                 │
-   │  GET /resource                                  │
-   ├────────────────────────────────────────────────>│
-   │                                                 │
-   │  402 Payment Required                           │
-   │  WWW-Authenticate: Payment ...                  │
-   │<────────────────────────────────────────────────┤
-   │                                                 │
-   │  [Client fulfills payment challenge]            │
-   │                                                 │
-   │  GET /resource                                  │
-   │  Authorization: Payment <credential>            │
-   ├────────────────────────────────────────────────>│
-   │                                                 │
-   │  200 OK                                         │
-   │<────────────────────────────────────────────────┤
+MPP is defined by a payment-method agnostic core, submitted to the [IETF](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/) as well as a number of extensions defining payment method flows and core primitives such as discovery and identity.
+
+### Control flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: GET /resource
+    Server-->>Client: 402 Payment Required<br/>WWW-Authenticate: Payment ...
+
+    Note over Client: Client fulfills payment challenge
+
+    Client->>Server: GET /resource<br/>Authorization: Payment credential
+    Server-->>Client: 200 OK
 ```
 
-1. Client requests a protected resource
-2. Server responds with `402 Payment Required` and a `WWW-Authenticate: Payment` challenge describing what payment is needed
-3. Client fulfills the payment (off-band, via the specified payment method)
-4. Client retries the request with an `Authorization: Payment` credential proving payment
-5. Server validates the credential and grants access
+1. **Client** requests a protected resource
+2. **Server** responds with `402 Payment Required` and a `WWW-Authenticate: Payment` challenge describing what payment is needed
+3. **Client** fulfills the payment (off-band, via the specified payment method)
+4. **Client** retries the request with an `Authorization: Payment` credential proving payment
+5. **Server** validates the credential and grants access
 
 ## Design Principles
 
-- **Extensible core**: Minimal protocol designed for safe extension.
-- **Network agnostic and multi-rail**: Designed to support a number of payment networks and settlement layers, including bank rails, credit cards, and stablecoins.
-- **Currency agnostic**: No implicit advantages for any currency or asset.
-- **Hardened primitives**: All designs follow web standards and are designed for security and replay protection as first class concerns.
+MPP is deighed to be simple, secure, and performant, holding the following design principles as guides:
+
+* **Extensible core**: Minimal protocol designed for safe extension.
+* **Network agnostic and multi-rail**: Designed to support a number of payment networks and settlement layers, including bank rails, credit cards, and stablecoins.
+* **Currency agnostic**: No implicit advantages for any currency or asset.
+* **Durable by design**: All designs follow web standards and are designed for security and replay protection as first class concerns.
 
 See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventions.
 
@@ -47,12 +49,19 @@ See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventi
 
 The specification is modular, separating stable protocol mechanics from evolving payment ecosystems:
 
-- **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
-- **[Intents](specs/intents/)**: Abstract payment patterns—charge, authorize, subscription. Define *what* kind of payment without specifying *how*.
-- **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
-- **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
+* **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
+* **[Intents](specs/intents/)**: Abstract payment patterns—charge, authorize, subscription. Define *what* kind of payment without specifying *how*.
+* **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
+* **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
 
 ## Contributing
+
+The Machine Payments Protocol specification is currently maintained by the following organizations:
+
+* [Tempo Labs](https://tempo.xyz)
+* [Stripe](https://stripe.com)
+
+We welcome contributions from a wide variety of individuals and organizations.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building instructions and contribution guidelines.
 
