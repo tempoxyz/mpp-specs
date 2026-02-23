@@ -3,9 +3,7 @@
 # Installs the repo-bundled AI agent skills into the user's global
 # Amp skills directory (~/.config/agents/skills/).
 #
-# Skills included:
-#   - reviewing-ietf-drafts      Internet-Draft review methodology
-#   - payment-auth-scheme-author  Payment auth scheme authoring guidance
+# Discovers and installs all skills found in .agents/skills/.
 #
 # Usage:
 #   ./scripts/install-skills.sh
@@ -23,24 +21,17 @@ fi
 
 mkdir -p "$SKILLS_DST"
 
-SKILLS=(
-  reviewing-ietf-drafts
-  payment-auth-scheme-author
-)
-
-for skill in "${SKILLS[@]}"; do
-  src="$SKILLS_SRC/$skill"
+count=0
+for src in "$SKILLS_SRC"/*/; do
+  [ -d "$src" ] || continue
+  skill="$(basename "$src")"
   dst="$SKILLS_DST/$skill"
-
-  if [ ! -d "$src" ]; then
-    echo "Warning: $skill not found in repo, skipping" >&2
-    continue
-  fi
 
   rm -rf "$dst"
   cp -R "$src" "$dst"
   echo "Installed: $skill"
+  count=$((count + 1))
 done
 
 echo ""
-echo "Done. ${#SKILLS[@]} skills installed to $SKILLS_DST"
+echo "Done. $count skill(s) installed to $SKILLS_DST"
