@@ -1,18 +1,14 @@
-# Machine Payments Protocol (MPP) Specifications  
+# Machine Payments Protocol (MPP)
 
 The open protocol for machine-to-machine payments.
 
-* **[Read the IETF specification](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**
-* **[Read the full specification](https://tempoxyz.github.io/payment-auth-spec/)**
+* **[IETF Draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)** — the core specification submitted to the IETF
+* **[Full Rendered Spec](https://tempoxyz.github.io/payment-auth-spec/)** — all specs including methods and extensions
 * **[Learn more](https://mpp.sh)**
 
 ## Overview
 
-The Machine Payments Protocol (MPP) is an open and internet-native protocol for machine-to-machine payments. By using MPP, businesses and other entities can offer services to agents, apps, and humans via a simple HTTP interface and control flow.
-
-MPP is defined by a payment-method agnostic core, submitted to the [IETF](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/) as well as a number of extensions defining payment method flows and core primitives such as discovery and identity.
-
-### Control flow
+MPP lets businesses offer services to agents, apps, and humans via a standard HTTP control flow. The protocol defines a payment-method agnostic core alongside extensions for specific payment method flows, discovery, and identity.
 
 ```mermaid
 sequenceDiagram
