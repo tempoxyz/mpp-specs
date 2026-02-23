@@ -76,14 +76,7 @@ If you use AI tools to help write specifications or code:
 
 ### Agent Skills
 
-This repo ships multiple IETF-specific skills in `.agents/skills/`:
-
-| Skill | Description |
-|-------|-------------|
-| `reviewing-ietf-drafts` | Systematic review methodology for Internet-Draft publication readiness |
-| `payment-auth-scheme-author` | Domain-specific guidance for the Payment authentication scheme |
-
-Feel free to leverage these skills while authoring drafts in this repo. Even with assistance, you are still repsonsible for the final output of your proposals.
+This repo ships [Amp](https://ampcode.com) agent skills in `.agents/skills/`. Skills are loaded automatically when working in this repo. To install them globally (so they're available across all projects):
 
 ```bash
 ./scripts/install-skills.sh
