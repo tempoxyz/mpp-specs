@@ -4,7 +4,6 @@
 # Amp skills directory (~/.config/agents/skills/).
 #
 # Skills included:
-#   - writing-ietf-w3c-specs     IETF/W3C spec writing conventions
 #   - reviewing-ietf-drafts      Internet-Draft review methodology
 #   - payment-auth-scheme-author  Payment auth scheme authoring guidance
 #
@@ -25,7 +24,6 @@ fi
 mkdir -p "$SKILLS_DST"
 
 SKILLS=(
-  writing-ietf-w3c-specs
   reviewing-ietf-drafts
   payment-auth-scheme-author
 )
