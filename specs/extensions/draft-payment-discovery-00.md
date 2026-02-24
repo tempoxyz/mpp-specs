@@ -1,5 +1,5 @@
 ---
-title: Discovery Mechanisms for HTTP Payment Authentication
+title: Payment Method Discovery Mechanisms for HTTP Payment Authentication
 abbrev: Payment Discovery
 docname: draft-payment-discovery-00
 version: 00
@@ -39,7 +39,7 @@ normative:
 This document defines discovery mechanisms for the "Payment" HTTP
 authentication scheme {{I-D.httpauth-payment}}. It specifies how clients
 can discover a server's payment capabilities before initiating requests,
-including supported payment methods, assets, and intents.
+including supported payment methods, accepted currencies, and intents.
 
 --- middle
 
@@ -65,13 +65,19 @@ client experience. Clients MUST NOT require discovery to function; the
 
 # Terminology
 
+Currency
+: An identifier for an accepted unit of value, using the same formats
+  defined in the "charge" intent specification's Currency Formats
+  section. This includes ISO 4217 codes (e.g., `"usd"`) and
+  method-defined identifiers (e.g., token contract addresses).
+
 Discovery
 : The process by which a client learns a server's payment capabilities
   before initiating a request that may require paid access.
 
 Payment Capabilities
-: The set of payment methods, intents, and assets that a server
-  accepts as payment.
+: The set of payment methods, intents, and accepted currencies that a
+  server accepts as payment.
 
 # Well-Known Endpoint
 
@@ -105,6 +111,7 @@ The response MUST use `Content-Type: application/json`.
 |-------|------|----------|-------------|
 | `version` | integer | REQUIRED | Schema version. Currently `1`. |
 | `realm` | string | OPTIONAL | Default realm for payment challenges. |
+| `description` | string | OPTIONAL | Human-readable description of the service. |
 | `methods` | object | REQUIRED | Map of supported payment methods. |
 
 **Method Object Schema:**
@@ -115,7 +122,7 @@ is an object with:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `intents` | array | REQUIRED | Supported intent types. |
-| `assets` | array | REQUIRED | Accepted asset identifiers (method-specific). |
+| `currencies` | array | REQUIRED | Accepted currency identifiers, using the formats defined by the payment method specification (e.g., ISO 4217 codes, token addresses). |
 
 **Example Response:**
 
@@ -127,14 +134,15 @@ Cache-Control: max-age=300
 {
   "version": 1,
   "realm": "api.example.com",
+  "description": "AI inference API",
   "methods": {
     "tempo": {
-      "intents": ["charge", "authorize", "subscription"],
-      "assets": ["0x20c0000000000000000000000000000000000000"]
+      "intents": ["charge", "session"],
+      "currencies": ["0x20c0000000000000000000000000000000000000"]
     },
     "lightning": {
       "intents": ["charge"],
-      "assets": ["BTC"]
+      "currencies": ["sat"]
     }
   }
 }
@@ -154,6 +162,14 @@ Longer durations (e.g., `max-age=3600`) MAY be used for capabilities that
 change infrequently. Clients SHOULD respect cache headers and refetch
 when capabilities may have changed (e.g., after receiving an unexpected
 402 challenge for a method not in the cached discovery response).
+
+## Version Handling
+
+Clients MUST check the `version` field before processing the response.
+If the `version` value is higher than the version the client supports,
+the client SHOULD treat the response as unsupported and fall back to
+the 402 challenge flow. Clients MUST NOT assume forward compatibility
+with unknown schema versions.
 
 ## Error Handling
 
@@ -178,6 +194,15 @@ accept discovery information over unencrypted HTTP.
 
 Discovery endpoints reveal payment capabilities to unauthenticated clients.
 Servers should consider whether this information disclosure is acceptable.
+
+## Cross-Origin Requests
+
+Browser-based clients (e.g., wallets, payment agents) may need to access
+the discovery endpoint cross-origin. Servers that intend to support
+browser-based clients SHOULD include appropriate CORS headers
+(e.g., `Access-Control-Allow-Origin`) on responses to
+`/.well-known/payment`. This aligns with the cross-origin considerations
+in Section 11.11 of {{I-D.httpauth-payment}}.
 
 # IANA Considerations
 
