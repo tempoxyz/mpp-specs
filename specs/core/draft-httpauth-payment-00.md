@@ -307,40 +307,53 @@ authenticated encryption) to validate the binding.
 Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
 the challenge `id` as follows:
 
-1. Collect the following challenge components in order:
-   - `realm`
-   - `method`
-   - `intent`
-   - base64url-encoded `request` (JCS-serialized per {{RFC8785}},
-     then base64url-encoded)
-   - `expires` (if present and non-empty)
-   - `digest` (if present and non-empty)
-   - base64url-encoded `opaque` (JCS-serialized per {{RFC8785}},
-     then base64url-encoded; if present and non-empty)
+The HMAC input is constructed from exactly seven fixed positional
+slots. Required fields supply their string value; optional fields use
+an empty string (`""`) when absent. The slots are:
 
-2. Remove any empty or absent components from the list.
+| Slot | Field | Value |
+|------|-------|-------|
+| 0 | `realm` | Required. String value. |
+| 1 | `method` | Required. String value. |
+| 2 | `intent` | Required. String value. |
+| 3 | `request` | Required. JCS-serialized per {{RFC8785}}, then base64url-encoded. |
+| 4 | `expires` | Optional. String value if present; empty string if absent. |
+| 5 | `digest` | Optional. String value if present; empty string if absent. |
+| 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
 
-3. Join the remaining components with the pipe character (`|`) as
-   delimiter.
+The computation proceeds as follows:
 
-4. Compute HMAC-SHA256 over the resulting string using a server secret.
+1. Populate all seven slots as described above.
 
-5. Encode the HMAC output as base64url without padding ({{RFC4648}}
+2. Join all seven slots with the pipe character (`|`) as delimiter.
+   Every slot is always present in the joined string; absent optional
+   fields appear as empty segments (e.g., `...|expires||opaque_b64url`
+   when `digest` is absent).
+
+3. Compute HMAC-SHA256 over the resulting string using a server secret.
+
+4. Encode the HMAC output as base64url without padding ({{RFC4648}}
    Section 5).
 
 ~~~
-components = [realm, method, intent, request_b64url]
-if expires: components.append(expires)
-if digest: components.append(digest)
-if opaque: components.append(opaque_b64url)
-input = "|".join(components)
+input = "|".join([
+    realm,
+    method,
+    intent,
+    request_b64url,
+    expires or "",
+    digest or "",
+    opaque_b64url or "",
+])
 id = base64url(HMAC-SHA256(server_secret, input))
 ~~~
 
-Absent optional fields (expires, digest, opaque) are omitted entirely
-from the HMAC input rather than included as empty strings. This ensures
-the `id` is deterministic regardless of which optional parameters are
-present.
+Optional fields use fixed positional slots with empty strings when
+absent, rather than being omitted. This avoids ambiguity between
+combinations of optional fields — for example, `(expires set, no
+digest)` and `(no expires, digest set)` produce distinct inputs — and
+ensures that adding a new optional slot in a future revision does not
+change the HMAC for challenges that omit it.
 
 #### Example Challenge
 
