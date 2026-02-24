@@ -307,17 +307,23 @@ authenticated encryption) to validate the binding.
 Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
 the challenge `id` as follows:
 
-1. Construct an ordered list of exactly seven fixed positional slots:
+The HMAC input is constructed from exactly seven fixed positional
+slots. Required fields supply their string value; optional fields use
+an empty string (`""`) when absent. The slots are:
 
-   | Slot | Field | Value |
-   |------|-------|-------|
-   | 0 | `realm` | Required. String value. |
-   | 1 | `method` | Required. String value. |
-   | 2 | `intent` | Required. String value. |
-   | 3 | `request` | Required. JCS-serialized per {{RFC8785}}, then base64url-encoded. |
-   | 4 | `expires` | Optional. String value if present; empty string (`""`) if absent. |
-   | 5 | `digest` | Optional. String value if present; empty string (`""`) if absent. |
-   | 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string (`""`) if absent. |
+| Slot | Field | Value |
+|------|-------|-------|
+| 0 | `realm` | Required. String value. |
+| 1 | `method` | Required. String value. |
+| 2 | `intent` | Required. String value. |
+| 3 | `request` | Required. JCS-serialized per {{RFC8785}}, then base64url-encoded. |
+| 4 | `expires` | Optional. String value if present; empty string if absent. |
+| 5 | `digest` | Optional. String value if present; empty string if absent. |
+| 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
+
+The computation proceeds as follows:
+
+1. Populate all seven slots as described above.
 
 2. Join all seven slots with the pipe character (`|`) as delimiter.
    Every slot is always present in the joined string; absent optional
