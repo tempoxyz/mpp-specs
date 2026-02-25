@@ -20,7 +20,9 @@ author:
 
 normative:
   RFC2119:
+  RFC3339:
   RFC8174:
+  RFC8785:
   RFC7235:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
@@ -63,8 +65,6 @@ and provide a unified interface for payment acceptance.
 
 The following diagram illustrates the Stripe charge payment flow:
 
-The following diagram illustrates the Stripe charge payment flow:
-
 ~~~
    Client                          Server                          Stripe
       |                               |                               |
@@ -92,7 +92,7 @@ The following diagram illustrates the Stripe charge payment flow:
       |                               |                               |
       |  (6) 200 OK                   |                               |
       |      Payment-Receipt:         |                               |
-      |      ch_123                   |                               |
+      |      <receipt>                |                               |
       |<----------------------------  |                               |
       |                               |                               |
 ~~~
@@ -115,7 +115,8 @@ Stripe Payment Token (SPT)
 : A single-use token (prefixed with `spt_`) that represents authorization
   to charge a payment method. SPTs are created by clients using the
   Stripe API and consumed by servers to process payments. Both the Client
-  and Server require a Stripe account.
+  and Server require a Stripe account. In the Stripe API, SPTs are
+  referenced as `shared_payment_granted_token` on PaymentIntent creation.
   Learn more: https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens
 
 Business Network Profile
@@ -153,16 +154,20 @@ payment immediately upon receiving the SPT.
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object with the following fields:
+base64url-encoded JSON object with the following fields. The JSON MUST
+be serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} before
+base64url encoding, per Section 5.1.2 of {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount in smallest currency unit (e.g., cents) |
+| `amount` | string | REQUIRED | Amount in smallest currency unit (e.g., cents), encoded as a string |
 | `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., `"usd"`) |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant's identifier (e.g., order ID, cart ID) |
+| `expires` | string | OPTIONAL | Expiry timestamp in {{RFC3339}} format |
+| `recipient` | string | OPTIONAL | Payment recipient identifier |
 
 ## Method Details
 
@@ -206,8 +211,10 @@ const spt = await stripe.sharedPayment.issuedTokens.create({
 
 # Credential Schema
 
-The `payload` field in the Payment credential contains a base64url-encoded
-JSON object with the following fields:
+The Payment credential is a base64url-encoded JSON object containing
+`challenge` and `payload` fields per Section 5.2 of
+{{I-D.httpauth-payment}}. For Stripe charge, the `payload` object
+contains the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -249,40 +256,69 @@ issued. This includes validating:
 **Synchronous settlement:**
 
 1. Server receives and verifies the credential ({{charge-verification}})
-2. Server creates a Stripe PaymentIntent:
+2. Server creates a Stripe PaymentIntent with `confirm: true` and the
+   SPT as `shared_payment_granted_token`:
 
 ~~~ javascript
 const paymentIntent = await stripe.paymentIntents.create({
-  amount: request.amount,
+  amount: Number(request.amount),
   currency: request.currency,
   shared_payment_granted_token: credential.spt,
   confirm: true,
-  description: request.description,
-  metadata: {
-    challenge_id: challenge.id,
-    external_id: request.externalId
-  }
+  automatic_payment_methods: {
+    enabled: true,
+    allow_redirects: 'never'
+  },
+  metadata: { challenge_id: challenge.id }
+}, {
+  idempotencyKey: `${challenge.id}_${credential.spt}`
 });
 ~~~
 
-3. If successful, server returns 200 with `Payment-Receipt` header
-4. If failed, server returns 402 with new challenge
+3. Server MUST verify the PaymentIntent `status` is `"succeeded"`
+   before returning 200 with `Payment-Receipt` header
+4. If the PaymentIntent fails or requires additional action, server
+   returns 402 with a new challenge
+
+**Idempotency:**
+
+Servers SHOULD include an idempotency key derived from the challenge ID
+and SPT when creating PaymentIntents. This prevents duplicate charges
+if the client retries a request.
 
 **Settlement timing:**
 
-Stripe processes payments asynchronously. Card payments typically settle
-within seconds, but bank transfers may take several business days. Servers
-SHOULD return 200 immediately after API confirmation, even if final
-settlement is pending.
+Stripe processes fund transfers asynchronously. Servers SHOULD return
+200 immediately after PaymentIntent confirmation (status `"succeeded"`),
+even if final fund settlement to the merchant is pending.
+
+## Receipt Generation
+
+Upon successful settlement, servers MUST return a `Payment-Receipt` header
+per Section 5.3 of {{I-D.httpauth-payment}}. Servers MUST NOT include a
+`Payment-Receipt` header on error responses; failures are communicated via
+HTTP status codes and Problem Details.
+
+The receipt payload for Stripe charge:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `method` | string | `"stripe"` |
+| `reference` | string | Stripe PaymentIntent ID (e.g., `"pi_1N4..."`) |
+| `status` | string | `"success"` |
+| `timestamp` | string | {{RFC3339}} confirmation time |
+| `externalId` | string | OPTIONAL. Echoed from credential payload |
 
 # Security Considerations
 
 ## SPT Single-Use Constraint
 
-SPTs are single-use tokens. Servers MUST track used SPTs and reject
-replayed tokens. Stripe automatically prevents SPT reuse at the API level,
-but servers SHOULD implement their own replay protection by storing
-challenge IDs and verifying they haven't been previously fulfilled.
+SPTs are single-use tokens. Stripe automatically prevents SPT reuse at
+the API level, and idempotency keys ({{charge-settlement}}) prevent
+duplicate PaymentIntent creation. Servers MUST enforce single-use
+challenge IDs per Section 5.1.3 of {{I-D.httpauth-payment}} and SHOULD
+use Stripe idempotency keys to prevent repeated charges. Servers MAY
+additionally maintain a local replay cache of consumed challenge IDs.
 
 ## Amount Verification
 
@@ -320,6 +356,8 @@ method in the Payment Intent Registry per Section 13.4 of
 - **Method**: stripe
 - **Specification**: [this document]
 
+Contact: Stripe (<stevekaliski@stripe.com>) and Tempo Labs (<brendan@tempo.xyz>)
+
 --- back
 
 # ABNF Collected
@@ -330,9 +368,12 @@ stripe-charge-challenge = "Payment" 1*SP
   "realm=" quoted-string ","
   "method=" DQUOTE "stripe" DQUOTE ","
   "intent=" DQUOTE "charge" DQUOTE ","
-  "request=" base64url
+  "request=" base64url-nopad
 
-stripe-charge-credential = "Payment" 1*SP base64url
+stripe-charge-credential = "Payment" 1*SP base64url-nopad
+
+; Base64url encoding without padding per RFC 4648 Section 5
+base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 ~~~
 
 # Examples
@@ -354,7 +395,7 @@ WWW-Authenticate: Payment id="ch_1a2b3c4d5e",
   realm="api.example.com",
   method="stripe",
   intent="charge",
-  request="eyJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBSSBnZW5lcmF0aW9uIn0"
+  request="eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJkZXNjcmlwdGlvbiI6IkFJIGdlbmVyYXRpb24ifQ"
 Cache-Control: no-store
 Content-Type: application/json
 
@@ -380,7 +421,7 @@ Decoded request:
 ~~~ http
 GET /api/generate HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJpZCI6ImNoXzFhMmIzYzRkNWUiLCJwYXlsb2FkIjoiZXlKemNIUWlPaUp6Y0hSZk1VNDBXBLJ9
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF8xYTJiM2M0ZDVlIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJzdHJpcGUiLCJpbnRlbnQiOiJjaGFyZ2UiLCJyZXF1ZXN0IjoiZXlKaGJXOTFiblFpT2lJMU1EQXdJaXdpWTNWeWNtVnVZM2tpT2lKMWMyUWlMQ0prWlhOamNtbHdkR2x2YmlJNklrRkpJR2RsYm1WeVlYUnBiMjRpZlEiLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJzcHQiOiJzcHRfMU40WnYzMmVadktZbG8yQ1BoVlBrSmxXIn19
 
 ~~~
 
@@ -392,7 +433,7 @@ Decoded credential:
     "realm": "api.example.com",
     "method": "stripe",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwiZGVzY3JpcHRpb24iOiJBSSBnZW5lcmF0aW9uIn0",
+    "request": "eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJkZXNjcmlwdGlvbiI6IkFJIGdlbmVyYXRpb24ifQ",
     "expires": "2025-01-15T12:05:00Z"
   },
   "payload": {
@@ -405,7 +446,8 @@ Decoded credential:
 
 ~~~ http
 HTTP/1.1 200 OK
-Payment-Receipt: eyJ0eXBlIjoiY2hhcmdlIiwiY2hhcmdlSWQiOiJjaF8xTjRadjMyZVp2S1lsbzJDUGhWUGtKbFciLCJhbW91bnQiOjUwMDAsImN1cnJlbmN5IjoidXNkIiwic3RhdHVzIjoic3VjY2VlZGVkIn0
+Payment-Receipt: eyJtZXRob2QiOiJzdHJpcGUiLCJyZWZlcmVuY2UiOiJwaV8xTjRadjMyZVp2S1lsbzJDUGhWUGtKbFciLCJzdGF0dXMiOiJzdWNjZXNzIiwidGltZXN0YW1wIjoiMjAyNS0wMS0xNVQxMjowNDozMloifQ
+Cache-Control: private
 Content-Type: text/plain
 
 Here is your generated content...
@@ -414,11 +456,10 @@ Here is your generated content...
 Decoded receipt:
 ~~~ json
 {
-  "type": "charge",
-  "chargeId": "ch_1N4Zv32eZvKYlo2CPhVPkJlW",
-  "amount": "5000",
-  "currency": "usd",
-  "status": "succeeded"
+  "method": "stripe",
+  "reference": "pi_1N4Zv32eZvKYlo2CPhVPkJlW",
+  "status": "success",
+  "timestamp": "2025-01-15T12:04:32Z"
 }
 ~~~
 
