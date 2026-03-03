@@ -63,6 +63,7 @@ jobs:
           cp pages/index.html _site/
           cp pages/fonts/*.woff2 _site/fonts/
           cp artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf _site/
+          echo "paymentauth.org" > _site/CNAME
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
