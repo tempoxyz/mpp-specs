@@ -1356,8 +1356,8 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
-The `txHash` field serves as the core spec's `reference` field (Section
-5.3 of {{I-D.httpauth-payment}}). It is OPTIONAL because not every
+The `txHash` field serves as the core spec's `reference` field in
+{{I-D.httpauth-payment}}. It is OPTIONAL because not every
 response involves an on-chain settlement—voucher updates are off-chain.
 
 The `units` field indicates what was consumed for **this specific request**.
