@@ -498,16 +498,10 @@ and appropriate problem type when payment verification fails.
 Payment methods are identified by lowercase ASCII strings:
 
 ~~~abnf
-payment-method-id = method-name [ ":" sub-method ]
-method-name       = 1*LOWERALPHA
-sub-method        = 1*( LOWERALPHA / DIGIT / "-" )
+payment-method-id = 1*LOWERALPHA
 ~~~
 
 Method identifiers are case-sensitive and MUST be lowercase.
-
-The optional `sub-method` component allows payment methods to specify
-variants, networks, or chains. Payment method specifications MUST define
-the semantics of their sub-methods.
 
 ## Method Registry
 
@@ -863,9 +857,7 @@ Payment-Receipt = base64url-nopad
 base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 
 ; Payment method identifier (lowercase only)
-payment-method-id   = method-name [ ":" sub-method ]
-method-name         = 1*LOWERALPHA
-sub-method          = 1*( LOWERALPHA / DIGIT / "-" )
+payment-method-id   = 1*LOWERALPHA
 LOWERALPHA          = %x61-7A  ; a-z
 
 ; Payment intent

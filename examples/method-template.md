@@ -127,17 +127,6 @@ This specification registers the following payment method identifier:
 
 The identifier is case-sensitive and MUST be lowercase.
 
-### 4.1. Sub-methods (if applicable)
-
-[If your method has variants, describe them here]
-
-| Sub-method | Description |
-|------------|-------------|
-| `{network}:variant1` | Description |
-| `{network}:variant2` | Description |
-
----
-
 ## 5. Supported Intents
 
 This method supports the following intents:
