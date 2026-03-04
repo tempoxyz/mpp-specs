@@ -181,7 +181,7 @@ MUST set `fee_token` and pay fees themselves.
 # Credential Schema
 
 The credential in the `Authorization` header contains a base64url-encoded
-JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
+JSON object per {{I-D.httpauth-payment}}.
 
 ## Credential Structure
 
@@ -383,7 +383,7 @@ the transaction. The server verifies the transaction onchain:
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}. Servers MUST NOT include a
+per {{I-D.httpauth-payment}}. Servers MUST NOT include a
 `Payment-Receipt` header on error responses; failures are communicated via
 HTTP status codes and Problem Details.
 

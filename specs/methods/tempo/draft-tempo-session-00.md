@@ -668,7 +668,7 @@ When acting as fee payer for `open` or `topUp`:
 # Credential Schema
 
 The credential in the `Authorization` header contains a base64url-encoded
-JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
+JSON object per {{I-D.httpauth-payment}}.
 
 ## Credential Structure
 
@@ -776,7 +776,7 @@ When provided, the `signature` field is the EIP-712 voucher signature
 (65 bytes r‖s‖v or 64 bytes EIP-2098 compact).
 
 The `challenge` object MUST echo the challenge parameters from the server's
-`WWW-Authenticate` header per Section 5.2 of {{I-D.httpauth-payment}}.
+`WWW-Authenticate` header per {{I-D.httpauth-payment}}.
 
 ### TopUp Payload {#topup-payload}
 
