@@ -428,6 +428,7 @@ The `challenge` object contains the parameters from the original challenge:
 | `method` | string | Payment method identifier |
 | `intent` | string | Payment intent type |
 | `request` | string | Base64url-encoded payment request |
+| `opaque` | string | Base64url-encoded server correlation data (if present in challenge) |
 | `digest` | string | Content digest  |
 | `expires` | string | Challenge expiration timestamp |
 
