@@ -144,7 +144,7 @@ using the `experimental` namespace per {{MCP}} conventions:
     "experimental": {
       "payment": {
         "methods": ["tempo", "stripe"],
-        "intents": ["charge", "authorize"]
+        "intents": ["charge"]
       }
     }
   },

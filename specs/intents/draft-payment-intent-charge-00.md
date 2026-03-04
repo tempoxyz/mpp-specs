@@ -170,8 +170,8 @@ shared fields to users.
   "description": "Premium API access",
   "externalId": "order_12345",
   "methodDetails": {
-    "businessNetwork": "bn_1MqDcVKA5fEO2tZvKQm9g8Yj",
-    "destination": "acct_1MqE1vKB6gFP3uYw"
+    "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "paymentMethodTypes": ["card", "link"]
   }
 }
 ~~~
