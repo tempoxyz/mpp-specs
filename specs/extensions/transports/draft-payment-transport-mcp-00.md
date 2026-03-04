@@ -20,6 +20,7 @@ author:
 
 normative:
   RFC2119:
+  RFC8785:
   RFC3339:
   RFC5246:
   RFC8174:
