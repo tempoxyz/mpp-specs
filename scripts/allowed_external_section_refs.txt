@@ -1,0 +1,15 @@
+# Existing hardcoded external section references.
+#
+# Format: <relative-path>::<matched-reference>
+
+specs/extensions/draft-payment-discovery-00.md::Section 11.11 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 10.1 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 13.4 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 5.1.2 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 5.3 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 5.1.3 of {{I-D.httpauth-payment}}
+specs/methods/stripe/draft-stripe-charge-00.md::Section 5.2 of {{I-D.httpauth-payment}}
+specs/methods/tempo/draft-tempo-charge-00.md::Section 5.2 of {{I-D.httpauth-payment}}
+specs/methods/tempo/draft-tempo-charge-00.md::Section 5.3 of {{I-D.httpauth-payment}}
+specs/methods/tempo/draft-tempo-session-00.md::Section 5.2 of {{I-D.httpauth-payment}}
+specs/methods/tempo/draft-tempo-session-00.md::Section 5.3 of {{I-D.httpauth-payment}}
