@@ -67,8 +67,8 @@ on the Tempo blockchain.
 # Introduction
 
 The `charge` intent represents a one-time payment of a specified amount.
-The server may submit the signed transaction any time before the `expires`
-timestamp.
+The server may submit the signed transaction any time before the
+challenge `expires` auth-param timestamp.
 
 This specification defines the request schema, credential formats, and
 settlement procedures for charge transactions on Tempo.
@@ -138,11 +138,9 @@ base64url-encoded JSON object.
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
 | `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Recipient address |
-| `expires` | string | REQUIRED | Expiry timestamp in {{RFC3339}} format |
 
-The `expires` field in the request JSON MUST match the `expires`
-auth-param in the `WWW-Authenticate` header when both are present.
-Clients SHOULD use the auth-param value for expiry checks.
+Challenge expiry is conveyed by the `expires` auth-param in
+`WWW-Authenticate` per {{I-D.httpauth-payment}}.
 
 ## Method Details
 
@@ -158,7 +156,6 @@ Clients SHOULD use the auth-param value for expiry checks.
   "amount": "1000000",
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "2025-01-06T12:00:00Z",
   "methodDetails": {
     "chainId": 42431,
     "feePayer": true
@@ -169,7 +166,7 @@ Clients SHOULD use the auth-param value for expiry checks.
 The client fulfills this by signing a Tempo Transaction with
 `transfer(recipient, amount)` or `transferWithMemo(recipient, amount, memo)`
 on the specified `currency` (token address),
-with `validBefore` set to `expires`. The client SHOULD use a dedicated
+with `validBefore` set to the challenge `expires` auth-param. The client SHOULD use a dedicated
 `nonceKey` (2D nonce lane) for payment transactions to avoid blocking
 other account activity if the transaction is not immediately settled.
 
@@ -462,7 +459,8 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDEiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJleHBpcmVzIjoiMjAyNS0wMS0wNlQxMjowMDowMFoiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxfX0"
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxfX0",
+  expires="2025-01-06T12:00:00Z"
 ~~~
 
 The `request` decodes to:
@@ -472,7 +470,6 @@ The `request` decodes to:
   "amount": "1000000",
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "2025-01-06T12:00:00Z",
   "methodDetails": {
     "chainId": 42431
   }

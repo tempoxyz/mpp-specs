@@ -166,7 +166,6 @@ base64url encoding, per {{I-D.httpauth-payment}}.
 | `currency` | string | REQUIRED | Three-letter ISO currency code (e.g., `"usd"`) |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant's identifier (e.g., order ID, cart ID) |
-| `expires` | string | OPTIONAL | Expiry timestamp in {{RFC3339}} format |
 | `recipient` | string | OPTIONAL | Payment recipient identifier |
 
 ## Method Details
