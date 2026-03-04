@@ -47,10 +47,14 @@ jobs:
         run: |
           docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_frontmatter.py
 
+      - name: Lint external section references
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_external_section_refs.py
+
       - name: Build and validate specs
         run: |
           mkdir -p .cache
-          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/check.sh
 
       - name: Download main branch artifacts
         if: github.event_name == 'pull_request'

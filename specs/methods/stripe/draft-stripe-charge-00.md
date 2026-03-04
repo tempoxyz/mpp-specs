@@ -212,7 +212,7 @@ const spt = await stripe.sharedPayment.issuedTokens.create({
 # Credential Schema
 
 The Payment credential is a base64url-encoded JSON object containing
-`challenge` and `payload` fields per Section 5.2 of
+`challenge` and `payload` fields per
 {{I-D.httpauth-payment}}. For Stripe charge, the `payload` object
 contains the following fields:
 

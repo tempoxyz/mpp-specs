@@ -1,0 +1,4 @@
+# Existing hardcoded external section references.
+#
+# Format: <relative-path>::<matched-reference>
+# Repeat an entry to allow multiple occurrences of the same reference.
