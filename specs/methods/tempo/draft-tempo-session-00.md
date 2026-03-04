@@ -1156,8 +1156,8 @@ servers MUST follow this procedure:
      `requiredTopUp = cost - available`
 
 3. **Charge and deliver** (if `available >= cost`):
-   - **MUST persist** `spent := accrued + cost` to durable storage BEFORE
-     or atomically with delivering the the metered service
+   - **MUST persist** `spent := spent + cost` to durable storage BEFORE
+     or atomically with delivering the metered service
    - Deliver the response (or next chunk/token window for streaming)
    - Return `Payment-Receipt` header with current balance state
 
@@ -1434,7 +1434,7 @@ To mitigate voucher flooding, servers MUST implement rate limiting:
 - Servers SHOULD limit voucher submissions to 10 per second per session
 - Servers MAY implement additional IP-based rate limiting for
   unauthenticated requests
-- Servers MUST enforce `minVoucherDelta` to prevent tiny increments
+- Servers MUST enforce `minVoucherDelta` when present to prevent tiny increments
 - Servers SHOULD skip expensive signature verification for vouchers that
   do not advance state (return 200 OK with current `highestAmount` per
   {{idempotency}})
@@ -1610,7 +1610,7 @@ Problem Types" registry established by {{RFC9457}}:
 | `https://paymentauth.org/problems/session/delta-too-small` | Delta Too Small | 402 | This document |
 | `https://paymentauth.org/problems/session/channel-not-found` | Channel Not Found | 410 | This document |
 | `https://paymentauth.org/problems/session/channel-finalized` | Channel Finalized | 410 | This document |
-| `https://paymentauth.org/problems/session/challenge-not-found` | Challenge Not Found | 410 | This document |
+| `https://paymentauth.org/problems/session/challenge-not-found` | Challenge Not Found | 402 | This document |
 | `https://paymentauth.org/problems/session/insufficient-balance` | Insufficient Balance | 402 | This document |
 
 Each problem type is defined in {{error-responses}}.
