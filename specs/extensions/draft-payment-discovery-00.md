@@ -202,7 +202,7 @@ the discovery endpoint cross-origin. Servers that intend to support
 browser-based clients SHOULD include appropriate CORS headers
 (e.g., `Access-Control-Allow-Origin`) on responses to
 `/.well-known/payment`. This aligns with the cross-origin considerations
-in Section 11.11 of {{I-D.httpauth-payment}}.
+defined in {{I-D.httpauth-payment}}.
 
 # IANA Considerations
 

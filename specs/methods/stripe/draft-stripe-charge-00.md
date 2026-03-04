@@ -101,7 +101,7 @@ The following diagram illustrates the Stripe charge payment flow:
 ## Relationship to the Payment Scheme
 
 This document is a payment method intent specification as defined in
-Section 10.1 of {{I-D.httpauth-payment}}. It defines the `request` and
+{{I-D.httpauth-payment}}. It defines the `request` and
 `payload` structures for the `charge` intent of the `stripe` payment
 method, along with verification and settlement procedures.
 
@@ -156,7 +156,7 @@ payment immediately upon receiving the SPT.
 The `request` parameter in the `WWW-Authenticate` challenge contains a
 base64url-encoded JSON object with the following fields. The JSON MUST
 be serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} before
-base64url encoding, per Section 5.1.2 of {{I-D.httpauth-payment}}.
+base64url encoding, per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
@@ -295,7 +295,7 @@ even if final fund settlement to the merchant is pending.
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}. Servers MUST NOT include a
+per {{I-D.httpauth-payment}}. Servers MUST NOT include a
 `Payment-Receipt` header on error responses; failures are communicated via
 HTTP status codes and Problem Details.
 
@@ -316,7 +316,7 @@ The receipt payload for Stripe charge:
 SPTs are single-use tokens. Stripe automatically prevents SPT reuse at
 the API level, and idempotency keys ({{charge-settlement}}) prevent
 duplicate PaymentIntent creation. Servers MUST enforce single-use
-challenge IDs per Section 5.1.3 of {{I-D.httpauth-payment}} and SHOULD
+challenge IDs per {{I-D.httpauth-payment}} and SHOULD
 use Stripe idempotency keys to prevent repeated charges. Servers MAY
 additionally maintain a local replay cache of consumed challenge IDs.
 
@@ -349,7 +349,7 @@ only be transmitted over HTTPS connections.
 ## Payment Intent Registration
 
 This specification registers the "charge" intent for the "stripe" payment
-method in the Payment Intent Registry per Section 13.4 of
+method in the Payment Intent Registry established by
 {{I-D.httpauth-payment}}:
 
 - **Intent**: charge

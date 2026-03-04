@@ -91,6 +91,15 @@ WWW-Authenticate: Payment id="pay_abc123",
   request="eyJ..."
 ```
 
+### Cross-References
+
+Prefer stable references over hardcoded section numbers.
+
+- For internal references, use labels/anchors (e.g., `{{payment-receipt-header}}`).
+- For external drafts, prefer section-agnostic wording like "defined in
+  {{I-D.httpauth-payment}}".
+- Avoid `Section X.Y of {{I-D...}}` unless there is no practical alternative.
+
 ### Security Considerations
 
 Never leave this section empty. Address at minimum:
