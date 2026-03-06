@@ -24,6 +24,7 @@ author:
 
 normative:
   RFC2119:
+  RFC3339:
   RFC8174:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
@@ -133,10 +134,13 @@ consistently across methods.
 | Field | Type | Description |
 |-------|------|-------------|
 | `recipient` | string | Payment recipient in method-native format |
-| `expires` | string | Expiry timestamp in ISO 8601 format |
 | `description` | string | Human-readable payment description |
 | `externalId` | string | Merchant's reference (order ID, invoice number, etc.) |
 | `methodDetails` | object | Method-specific extension data |
+
+Challenge expiry is conveyed by the `expires` auth-param in
+`WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
+format. Request objects MUST NOT duplicate the expiry value.
 
 ## Currency Formats {#currency-formats}
 
@@ -183,7 +187,6 @@ shared fields to users.
   "amount": "1000000",
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
-  "expires": "2025-01-06T12:00:00Z",
   "methodDetails": {
     "chainId": 42431,
     "feePayer": true
@@ -197,7 +200,6 @@ shared fields to users.
 {
   "amount": "100000",
   "currency": "sat",
-  "expires": "2025-01-15T12:05:00Z",
   "methodDetails": {
     "invoice": "lnbc1000n1pj9..."
   }
