@@ -189,8 +189,7 @@ JSON object per {{I-D.httpauth-payment}}.
 | `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
 
 The `source` field, if present, SHOULD use the `did:pkh` method with the
-Tempo chain ID (42431 for Moderato testnet) and the payer's
-Ethereum address.
+chain ID applicable to the challenge and the payer's Ethereum address.
 
 ## Transaction Payload (type="transaction")
 
@@ -327,7 +326,7 @@ adds its fee payer signature before broadcasting:
       |                                |<-------------------------------|
       |                                |                                |
       |  (5) 200 OK                    |                                |
-      |      Payment-Receipt: <txHash> |                                |
+      |      Payment-Receipt: <base64url-receipt> |                    |
       |<-------------------------------|                                |
       |                                |                                |
 ~~~
@@ -336,7 +335,7 @@ adds its fee payer signature before broadcasting:
 2. If `feePayer: true`, server adds fee sponsorship (signs with `0x78` domain)
 3. Server broadcasts transaction to Tempo
 4. Transaction included in block with immediate finality (~500ms)
-5. Server returns receipt with the transaction digest
+5. Server returns a receipt whose `reference` field is the transaction digest
 
 ## Hash Settlement
 
@@ -367,7 +366,7 @@ the transaction. The server verifies the transaction onchain:
       |                             |                             |
       |  (7) 200 OK                 |                             |
       |      Payment-Receipt:       |                             |
-      |      <txHash>               |                             |
+      |      <base64url-receipt>    |                             |
       |<--------------------------  |                             |
       |                             |                             |
 ~~~

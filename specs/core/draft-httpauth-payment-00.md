@@ -428,6 +428,7 @@ The `challenge` object contains the parameters from the original challenge:
 | `method` | string | Payment method identifier |
 | `intent` | string | Payment intent type |
 | `request` | string | Base64url-encoded payment request |
+| `description` | string | Human-readable payment purpose (if present in challenge) |
 | `opaque` | string | Base64url-encoded server correlation data (if present in challenge) |
 | `digest` | string | Content digest  |
 | `expires` | string | Challenge expiration timestamp |
@@ -476,7 +477,7 @@ The decoded JSON object contains:
 |-------|------|-------------|
 | `status` | string | `"success"` — receipts are only issued on successful payment |
 | `method` | string | Payment method used |
-| `timestamp` | string | ISO 8601 settlement time |
+| `timestamp` | string | {{RFC3339}} settlement timestamp |
 | `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
 
 Payment method specifications MAY define additional fields for receipts.
@@ -496,7 +497,7 @@ and appropriate problem type when payment verification fails.
 
 ## Method Identifier Format
 
-Payment methods are identified by lowercase ASCII strings:
+Payment methods are identified by lowercase ASCII letters:
 
 ~~~abnf
 payment-method-id = 1*LOWERALPHA
@@ -815,7 +816,7 @@ registry uses the "Specification Required" policy defined in {{RFC8126}}.
 
 Registration requests must include:
 
-- **Method Identifier**: Unique lowercase ASCII string
+- **Method Identifier**: Unique lowercase ASCII letters (`a-z`)
 - **Description**: Brief payment-method description
 - **Specification pointer**: Reference to the specification document
 - **Registrant Contact**: Contact information for the registrant
@@ -846,7 +847,7 @@ auth-params       = auth-param *( OWS "," OWS auth-param )
 auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; Required parameters: id, realm, method, intent, request
-; Optional parameters: expires, description
+; Optional parameters: expires, digest, description, opaque
 
 ; HTTP Authorization Credentials
 payment-credentials = "Payment" 1*SP base64url-nopad

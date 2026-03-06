@@ -20,6 +20,7 @@ author:
 
 normative:
   RFC2119:
+  RFC8785:
   RFC3339:
   RFC5246:
   RFC8174:
@@ -272,8 +273,10 @@ Each challenge object MUST contain:
   parameter is base64url-encoded JSON per {{I-D.httpauth-payment}}; the MCP
   transport uses native JSON objects for the `request`
   field. Servers MUST NOT base64url-encode the request when using
-  JSON-RPC transport. The schema is defined by the payment method
-  specification.
+  JSON-RPC transport. For challenge binding and challenge ID
+  verification, both parties MUST canonicalize `request` using JSON
+  Canonicalization Scheme (JCS) {{RFC8785}} and hash the canonicalized
+  bytes. The schema is defined by the payment method specification.
 
 Each challenge object MAY contain:
 
@@ -673,6 +676,8 @@ to receive payment challenges and results.
 
 Servers MUST cryptographically bind challenge IDs to their parameters
 (at minimum: `realm`, `method`, `intent`, `request` hash, `expires`).
+The `request` hash MUST be computed over the JCS-canonicalized
+representation of `request` per {{RFC8785}}.
 This prevents clients from reusing a challenge ID with modified
 payment terms.
 
