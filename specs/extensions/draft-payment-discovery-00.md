@@ -20,8 +20,10 @@ author:
 
 normative:
   RFC2119:
+  RFC3339:
   RFC3986:
   RFC7515:
+  RFC7517:
   RFC8174:
   RFC8259:
   RFC8615:
@@ -59,7 +61,7 @@ informative:
     target: https://eips.ethereum.org/EIPS/eip-8004
     date: 2025
   LLMS-TXT:
-    title: "llms.txt — A Proposal to Standardise
+    title: "llms.txt - A Proposal to Standardise
       LLM-Friendly Documentation"
     target: https://llmstxt.org/
     date: 2024
@@ -183,9 +185,10 @@ Accept: application/json
 
 ## Response
 
-The server responds with a JSON object {{RFC8259}}
-conforming to the Service Manifest Schema defined below.
-The response MUST use `Content-Type: application/json`.
+The server responds with an HTTP 200 (OK) {{RFC9110}}
+response containing a JSON object {{RFC8259}} conforming
+to the Service Manifest Schema defined below. The
+response MUST use `Content-Type: application/json`.
 
 ## Domain Normalization {#domain-normalization}
 
@@ -298,6 +301,13 @@ object:
 The `amount` field is REQUIRED but its value MAY be
 `null` to support endpoints where pricing depends on
 request parameters (e.g., variable-cost operations).
+When non-null, the value MUST be a string of ASCII
+digits (`0`-`9`) representing a non-negative integer
+in the smallest denomination of the currency (e.g.,
+cents for USD, wei for ETH). Leading zeros MUST NOT
+be used except for the value `"0"`. This format is
+consistent with the `amount` field defined in the
+request object of {{I-D.httpauth-payment}}.
 When `amount` is `null`, clients SHOULD expect pricing
 to be communicated via the 402 challenge at request
 time.
@@ -321,21 +331,60 @@ All URI values MUST conform to {{RFC3986}}.
 Services MAY sign their manifest to provide
 cryptographic proof of authenticity. When present, the
 `signatures` field MUST be an array of JWS
-(JSON Web Signature {{RFC7515}}) objects.
+(JSON Web Signature {{RFC7515}}) objects using the
+JWS JSON Serialization (flattened or general form) with
+a detached payload as defined below.
 
-### Signing Procedure
+### JWS Profile
+
+This specification defines a constrained JWS profile
+for manifest signatures:
+
+- Serialization: JWS JSON Serialization per Section
+  7.2 of {{RFC7515}}. Each entry in the `signatures`
+  array is a JSON object with `protected` and
+  `signature` fields.
+- Payload: The JWS payload is detached (not included
+  in the signature object). The payload is the
+  canonical manifest bytes as defined in
+  {{signing-procedure}}.
+- Algorithms: Implementations MUST support ES256
+  (ECDSA using P-256 and SHA-256). Implementations
+  MAY support EdDSA. Implementations MUST NOT use
+  `"none"` or symmetric algorithms (HS256, HS384,
+  HS512).
+- Multiple signatures: When more than one entry is
+  present in the `signatures` array, a client
+  considers the manifest signed if ANY single
+  signature verifies successfully.
+
+### Signing Procedure {#signing-procedure}
 
 To produce a signature:
 
-1. Serialize the manifest as JSON, excluding the
-   `signatures` field itself.
+1. Serialize the manifest as a JSON object, excluding
+   the `signatures` field itself.
 2. Canonicalize the result using JCS (JSON
-   Canonicalization Scheme {{RFC8785}}).
-3. Sign the canonical bytes using a JWS algorithm
-   (e.g., ES256). The JWS protected header MUST
-   include `alg` and SHOULD include `kid`. The header
-   MAY include `jku` (JWK Set URL) to indicate where
-   the verification key can be retrieved.
+   Canonicalization Scheme {{RFC8785}}). The output
+   is the JWS payload (a deterministic byte sequence).
+3. Construct the JWS protected header as a JSON object.
+   The header MUST include:
+   - `alg`: The signature algorithm (e.g., `"ES256"`).
+   - `kid`: A key identifier for the signing key.
+   The header MAY include:
+   - `jku`: A JWK Set URL {{RFC7517}} pointing to an
+     HTTPS endpoint hosting the verification key. The
+     `jku` URL MUST use the `https` scheme and MUST
+     be on the same origin as the service domain.
+4. Base64url-encode the protected header (without
+   padding) to produce the `protected` string.
+5. Compute the JWS Signing Input as defined in
+   Section 5.2 of {{RFC7515}}:
+   `ASCII(BASE64URL(header)) || '.' || BASE64URL(payload)`
+6. Sign the Signing Input using the private key and
+   the algorithm specified in `alg`.
+7. Base64url-encode the signature bytes (without
+   padding) to produce the `signature` string.
 
 ### Signature Object
 
@@ -350,13 +399,22 @@ Each entry in the `signatures` array MUST contain:
 
 To verify a signature:
 
-1. Decode the `protected` header to obtain `alg`,
-   `kid`, and optionally `jku`.
-2. Retrieve the public key using `kid` (from a trusted
-   key store or via the `jku` URL over HTTPS).
-3. Re-serialize the manifest without the `signatures`
+1. Decode the `protected` header (base64url) to
+   obtain `alg` and `kid`, and optionally `jku`.
+2. Verify that `alg` is a supported asymmetric
+   algorithm (e.g., ES256, EdDSA). Reject `"none"`,
+   symmetric algorithms, and unknown algorithms.
+3. Retrieve the public key identified by `kid`. If
+   `jku` is present, fetch the JWK Set over HTTPS
+   and select the key matching `kid`. The `jku` URL
+   MUST be on the same origin as the service domain.
+   If `jku` is absent, resolve `kid` from a locally
+   configured trust store.
+4. Re-serialize the manifest without the `signatures`
    field and canonicalize using JCS {{RFC8785}}.
-4. Verify the JWS signature over the canonical bytes.
+5. Reconstruct the JWS Signing Input per Section 5.2
+   of {{RFC7515}} and verify the signature using the
+   public key.
 
 Clients MAY verify manifest signatures to establish
 stronger trust than HTTPS alone provides. Clients MUST
@@ -516,8 +574,8 @@ operational metadata:
 |-------|------|-------------|
 | `id` | string | Stable identifier derived from the normalized domain. |
 | `domain` | string | The normalized domain hosting `/.well-known/payment`. |
-| `addedAt` | string | ISO 8601 timestamp of first registration. |
-| `updatedAt` | string | ISO 8601 timestamp of last successful crawl. |
+| `addedAt` | string | {{RFC3339}} date-time of first registration (e.g., `"2026-01-15T12:00:00Z"`). |
+| `updatedAt` | string | {{RFC3339}} date-time of last successful crawl. |
 | `contentHash` | string | SHA-256 hex digest of raw manifest JSON. |
 | `manifest` | object | The validated `/.well-known/payment` response. |
 
@@ -533,7 +591,7 @@ A snapshot is a JSON document with the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `generatedAt` | string | ISO 8601 timestamp. |
+| `generatedAt` | string | {{RFC3339}} date-time (e.g., `"2026-01-15T12:00:00Z"`). |
 | `merkleRoot` | string | SHA-256 Merkle root over sorted service content hashes. |
 | `previousMerkleRoot` | string | Merkle root from the previous snapshot. `null` on first generation. |
 | `serviceCount` | integer | Number of services. |
@@ -796,15 +854,162 @@ this service" from "how do I call this service."
 
 # JSON Schema
 
-A JSON Schema for the `/.well-known/payment` manifest
-is published at:
+The following JSON Schema defines the structure of
+the `/.well-known/payment` service manifest. Service
+operators SHOULD validate their manifests against
+this schema before hosting them.
 
+~~~json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Payment Service Manifest",
+  "type": "object",
+  "required": ["version", "name", "description"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 5
+    },
+    "methods": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["intents"],
+        "properties": {
+          "intents": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "currencies": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method", "path"],
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT",
+              "PATCH", "DELETE", "HEAD",
+              "OPTIONS"]
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "description": { "type": "string" },
+          "payment": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["intent", "method",
+                  "amount"],
+                "properties": {
+                  "intent": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "oneOf": [
+                      { "type": "null" },
+                      {
+                        "type": "string",
+                        "pattern":
+                          "^(0|[1-9][0-9]*)$"
+                      }
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "docs": {
+            "type": "object",
+            "properties": {
+              "apiReference": {
+                "type": "string",
+                "format": "uri"
+              },
+              "homepage": {
+                "type": "string",
+                "format": "uri"
+              },
+              "llms": {
+                "type": "string",
+                "format": "uri"
+              },
+              "openapi": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        }
+      }
+    },
+    "docs": {
+      "type": "object",
+      "properties": {
+        "apiReference": {
+          "type": "string",
+          "format": "uri"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "llms": {
+          "type": "string",
+          "format": "uri"
+        },
+        "openapi": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["protected", "signature"],
+        "properties": {
+          "protected": { "type": "string" },
+          "signature": { "type": "string" }
+        }
+      }
+    }
+  }
+}
 ~~~
-https://mpp.tempo.xyz/schemas/well-known-mpp.schema.json
-~~~
-
-Service operators SHOULD validate their manifests
-against this schema before hosting them.
 
 # Acknowledgments
 {:numbered="false"}
