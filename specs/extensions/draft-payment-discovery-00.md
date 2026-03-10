@@ -607,14 +607,20 @@ the entire registry state. It is computed as follows:
    order).
 3. Convert each hex string to its raw 32-byte
    representation. These are the leaves.
-4. If there is exactly one leaf, the Merkle root is
+4. If there are no leaves (empty registry), the
+   Merkle root is the SHA-256 hash of the empty
+   string: `SHA-256("")`.
+5. If there is exactly one leaf, the Merkle root is
    `SHA-256(leaf)`.
-5. If the number of leaves is odd, duplicate the last
-   leaf.
-6. Build a binary tree bottom-up: each parent node is
-   `SHA-256(left_child || right_child)` where `||`
-   denotes byte concatenation.
-7. The root of this tree is the `merkleRoot`, encoded
+6. Pair the nodes at the current level from left to
+   right. If the number of nodes at any level is odd,
+   duplicate the last node to form a complete pair.
+7. For each pair, compute the parent node as
+   `SHA-256(left || right)` where `||` denotes byte
+   concatenation.
+8. Repeat steps 6-7 on the resulting parent nodes
+   until a single root remains.
+9. The root of this tree is the `merkleRoot`, encoded
    as a lowercase hex string.
 
 The `previousMerkleRoot` field creates a hash chain
@@ -879,8 +885,7 @@ this schema before hosting them.
     },
     "categories": {
       "type": "array",
-      "items": { "type": "string" },
-      "maxItems": 5
+      "items": { "type": "string" }
     },
     "methods": {
       "type": "object",
