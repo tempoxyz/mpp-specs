@@ -248,9 +248,8 @@ MAY use any string value. The following values are
 RECOMMENDED as a starting vocabulary:
 
 ~~~
-ai, blockchain, communication, compute, data,
-developer-tools, media, search, social, storage,
-travel, web
+communication, compute, data, developer-tools,
+media, search, social, storage, travel
 ~~~
 
 Category values SHOULD be lowercase, use hyphens for
@@ -428,7 +427,7 @@ NOT require signatures; unsigned manifests are valid.
   "name": "Example AI API",
   "description": "Chat completions, embeddings,
     and image generation.",
-  "categories": ["ai"],
+  "categories": ["compute"],
   "methods": {
     "tempo": {
       "intents": ["charge", "session"],
