@@ -62,6 +62,7 @@ jobs:
           mkdir -p _site/fonts
           cp pages/index.html _site/
           cp pages/fonts/*.woff2 _site/fonts/
+          cp -r pages/problems _site/problems
           cp artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf _site/
           echo "paymentauth.org" > _site/CNAME
 

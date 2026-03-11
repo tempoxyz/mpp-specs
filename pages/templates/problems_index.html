@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☰</text></svg>">
+  <title>Problem Types – Payment Auth</title>
+  <style>
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("/fonts/BerkeleyMono-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("/fonts/BerkeleyMono-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --color-link: #0066cc;
+      --color-text: #333;
+    }
+
+    body {
+      font-family: "Berkeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 16px;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+      color: var(--color-text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .header-links {
+      font-size: 0.8rem;
+      margin-top: 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    .header-links a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .header-links a:hover {
+      text-decoration: underline;
+    }
+
+    .sep {
+      color: #999;
+      margin: 0 0.25rem;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.4rem 0.75rem 0.4rem 0;
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: 700;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    td {
+      border-bottom: 1px solid #ddd;
+    }
+
+    td a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    td a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      font-size: 0.85em;
+    }
+
+    .back {
+      margin-top: 2rem;
+      font-size: 0.85rem;
+    }
+
+    .back a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .back a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      th, td {
+        padding-right: 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Problem Types</h1>
+  <p class="header-links"><a href="/">← Specifications</a></p>
+
+  <p>Problem type URIs used in <code>application/problem+json</code> error
+  responses per <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>.</p>
+
+  <h2>Core</h2>
+  <table>
+    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
+    {% for p in core_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
+      <td><code>{{ p.http_status }}</code></td>
+      <td>{{ p.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h2>Session</h2>
+  <table>
+    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
+    {% for p in session_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
+      <td><code>{{ p.http_status }}</code></td>
+      <td>{{ p.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+</body>
+</html>

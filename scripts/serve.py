@@ -18,6 +18,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return os.path.join(PAGES, "index.html")
         if path.startswith("fonts/"):
             return os.path.join(PAGES, path)
+        if path.startswith("problems"):
+            # Serve problem pages with directory-style index.html
+            candidate = os.path.join(PAGES, path)
+            if os.path.isdir(candidate):
+                return os.path.join(candidate, "index.html")
+            return candidate
         return os.path.join(ARTIFACTS, path)
 
 
