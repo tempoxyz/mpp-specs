@@ -1,5 +1,5 @@
 ---
-title: Payment Service Discovery for HTTP Payment Authentication
+title: Service Discovery for HTTP Payment Authentication
 abbrev: Payment Discovery
 docname: draft-payment-discovery-00
 version: 00
@@ -193,6 +193,23 @@ standard fields:
 - `info.version`: The API version.
 - `paths`: At least one path with operations.
 
+## Service Extension: x-service-info {#x-service-info}
+
+The OpenAPI document MAY include a top-level
+`x-service-info` extension object to provide service
+metadata that is not part of the standard OpenAPI
+specification.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `categories` | array | OPTIONAL | Service categories (see {{categories}}). |
+| `docs` | object | OPTIONAL | Documentation and reference links (see {{docs-schema}}). |
+
+This extension ensures that OpenAPI documents carry
+the same service metadata available in the well-known
+fallback ({{well-known-fallback}}), enabling registries
+and agents to use a single discovery source.
+
 ## Payment Extension: x-payment-info {#x-payment-info}
 
 Each payable operation MUST include the
@@ -264,6 +281,15 @@ discovery clients and registries.
   "info": {
     "title": "Example AI API",
     "version": "1.0.0"
+  },
+  "x-service-info": {
+    "categories": ["compute"],
+    "docs": {
+      "homepage": "https://api.example.com/docs",
+      "llms": "https://api.example.com/llms.txt",
+      "apiReference":
+        "https://api.example.com/reference"
+    }
   },
   "paths": {
     "/v1/chat/completions": {
@@ -409,7 +435,6 @@ following fields:
 | `name` | string | REQUIRED | Human-readable display name. |
 | `description` | string | REQUIRED | Short description of the service. |
 | `categories` | array | OPTIONAL | Service categories. |
-| `methods` | object | OPTIONAL | Supported payment methods. |
 | `endpoints` | array | OPTIONAL | API endpoints with payment details. |
 | `docs` | object | OPTIONAL | Documentation and reference links. |
 
@@ -440,18 +465,6 @@ multi-word values, and be concise. Registries SHOULD
 limit services to no more than 5 categories per
 manifest. Clients SHOULD ignore category values they
 do not recognize.
-
-### Payment Methods {#methods-schema}
-
-The `methods` field, when present, MUST be a JSON
-object where each key is a registered payment method
-identifier (e.g., `"tempo"`, `"stripe"`,
-`"lightning"`) and each value is a Method Object:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `intents` | array | REQUIRED | Supported intent types (e.g., `["charge", "session"]`). |
-| `currencies` | array | OPTIONAL | Accepted currency identifiers. For blockchain methods: token contract addresses. For fiat: ISO 4217 codes. |
 
 ### Endpoints {#endpoints-schema}
 
@@ -516,14 +529,6 @@ All URI values MUST conform to {{RFC3986}}.
   "description": "Chat completions, embeddings,
     and image generation.",
   "categories": ["compute"],
-  "methods": {
-    "tempo": {
-      "intents": ["charge", "session"],
-      "currencies": [
-        "0x20c00000000000000000000000000000000000"
-      ]
-    }
-  },
   "endpoints": [
     {
       "method": "POST",
@@ -790,6 +795,43 @@ this schema.
 }
 ~~~
 
+# JSON Schema for x-service-info
+
+The following JSON Schema defines the structure of
+the `x-service-info` OpenAPI extension.
+
+~~~json
+{
+  "$schema":
+    "https://json-schema.org/draft/2020-12/schema",
+  "title": "x-service-info",
+  "type": "object",
+  "properties": {
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "docs": {
+      "type": "object",
+      "properties": {
+        "apiReference": {
+          "type": "string",
+          "format": "uri"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "llms": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    }
+  }
+}
+~~~
+
 # JSON Schema for Well-Known Manifest
 
 The following JSON Schema defines the structure of
@@ -820,23 +862,6 @@ this schema before hosting them.
     "categories": {
       "type": "array",
       "items": { "type": "string" }
-    },
-    "methods": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "required": ["intents"],
-        "properties": {
-          "intents": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "currencies": {
-            "type": "array",
-            "items": { "type": "string" }
-          }
-        }
-      }
     },
     "endpoints": {
       "type": "array",
