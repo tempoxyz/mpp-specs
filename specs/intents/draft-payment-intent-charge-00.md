@@ -25,7 +25,9 @@ author:
 normative:
   RFC2119:
   RFC3339:
+  RFC4648:
   RFC8174:
+  RFC8259:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
@@ -114,13 +116,17 @@ failed).
 
 The `request` parameter for a "charge" intent is a JSON object with
 shared fields defined by this specification and optional method-specific
-extensions in the `methodDetails` field.
+extensions in the `methodDetails` field. The `request` JSON MUST be
+serialized using JSON Canonicalization Scheme (JCS) and base64url-encoded
+without padding per Section 5.1.2 of {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
 All payment methods implementing the "charge" intent MUST support these
 shared fields, enabling clients to parse and display payment requests
-consistently across methods.
+consistently across methods. Payment methods MAY elevate OPTIONAL fields
+to REQUIRED in their method specification (e.g., `recipient` and
+`expires` are REQUIRED for blockchain methods).
 
 ### Required Fields
 
@@ -150,6 +156,7 @@ payment networks:
 | Format | Example | Description |
 |--------|---------|-------------|
 | ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
+| Token address | `"0x20c0..."` | On-chain token contract address |
 | Method-defined | (varies) | Payment method-specific currency identifiers |
 
 Payment method specifications MUST document which currency formats they
@@ -213,8 +220,11 @@ for their implementation of the "charge" intent.
 
 ## Payload
 
-The credential `payload` for a "charge" intent MUST contain proof that
-payment has been made or authorized. The proof type is method-specific:
+The credential structure follows Section 5.2 of {{I-D.httpauth-payment}},
+containing `challenge`, `payload`, and an optional `source` field
+identifying the payer. The `payload` for a "charge" intent MUST contain
+proof that payment has been made or authorized. The proof type is
+method-specific:
 
 | Proof Type | Description | Example Methods |
 |------------|-------------|-----------------|
@@ -261,9 +271,11 @@ amounts.
 
 ## Recipient Verification
 
-Clients SHOULD verify the payment recipient when possible. For methods
-that support recipient verification (e.g., known merchant addresses),
-clients SHOULD warn users about unknown recipients.
+Clients SHOULD verify the payment recipient when possible. Not all
+payment methods expose an explicit recipient (e.g., processor-based
+methods like Stripe route payments internally). For methods that do
+expose a recipient (e.g., blockchain addresses), clients SHOULD warn
+users about unknown recipients.
 
 ## Replay Protection
 
@@ -281,6 +293,18 @@ The finality of a "charge" payment depends on the payment method:
 Servers SHOULD understand the finality guarantees of their accepted
 payment methods and adjust resource access accordingly.
 
+## Transport Security
+
+All Payment authentication flows MUST use TLS 1.2 or later per
+{{I-D.httpauth-payment}}. Payment credentials contain sensitive
+authorization data that could result in financial loss if intercepted.
+
+## Currency Verification
+
+Clients MUST verify the `currency` field matches their expectation
+before authorizing payment. Malicious servers could request payment
+in a different currency or token than expected.
+
 # IANA Considerations
 
 ## Payment Intent Registration
@@ -291,3 +315,5 @@ registry established by {{I-D.httpauth-payment}}:
 | Intent | Description | Reference |
 |--------|-------------|-----------|
 | `charge` | One-time immediate payment | This document |
+
+Contact: Tempo Labs (<contact@tempo.xyz>)
