@@ -23,7 +23,6 @@ normative:
   RFC3986:
   RFC8174:
   RFC8259:
-  RFC8615:
   RFC9110:
   OPENAPI:
     title: "OpenAPI Specification v3.1.0"
@@ -72,15 +71,15 @@ informative:
 --- abstract
 
 This document defines a service discovery framework for
-the "Payment" HTTP authentication scheme. It specifies
-a two-tier discovery architecture: (1) an OpenAPI
-document as the canonical machine-readable contract for
-payment-enabled APIs, annotated with payment extensions
-that describe pricing, payment methods, and intent
-types; and (2) a well-known endpoint as a compatibility
-fallback for services that cannot publish OpenAPI. The
-runtime 402 challenge remains authoritative for all
-payment parameters.
+the "Payment" HTTP authentication scheme. Services
+publish an OpenAPI document annotated with payment
+extensions that describe pricing, payment methods, and
+intent types. The OpenAPI document serves as the
+canonical machine-readable contract, providing both
+payment metadata and input schemas so that agents can
+discover and invoke endpoints. The runtime 402
+challenge remains authoritative for all payment
+parameters.
 
 --- middle
 
@@ -94,26 +93,20 @@ needed to complete a single paid exchange, clients and
 agents benefit from discovering payment-enabled services
 before initiating requests.
 
-This specification defines a discovery framework with
-two tiers:
+This specification defines a discovery mechanism based
+on OpenAPI {{OPENAPI}}. Services publish an OpenAPI
+document annotated with two extensions:
 
-- Tier 1 (OpenAPI Discovery): An OpenAPI {{OPENAPI}}
-  document annotated with payment extensions. This is
-  the RECOMMENDED and canonical discovery mechanism.
-  OpenAPI provides both payment metadata and input
-  schemas, enabling agents to discover and invoke
-  endpoints without additional documentation.
+- `x-service-info`: Top-level service metadata
+  including categories and documentation links.
 
-- Tier 2 (Well-Known Fallback): A minimal JSON
-  manifest at `/.well-known/payment` for services
-  that cannot publish OpenAPI. This tier provides
-  basic payment capability metadata but lacks input
-  schemas.
+- `x-payment-info`: Per-operation payment requirements
+  including intent type, payment method, amount, and
+  currency.
 
-Clients SHOULD prefer OpenAPI when available. The
-runtime 402 challenge defined in
-{{I-D.httpauth-payment}} is always authoritative and
-takes precedence over any discovery metadata.
+OpenAPI provides both payment metadata and input
+schemas, enabling agents to discover and invoke
+endpoints without additional documentation.
 
 Discovery is OPTIONAL. Servers MAY implement this
 mechanism to improve client experience. Clients MUST
@@ -130,46 +123,21 @@ Service
 : An HTTP origin that accepts payment via the "Payment"
   authentication scheme.
 
-Discovery Document
-: An OpenAPI document or well-known manifest that
-  describes a service's payment capabilities.
-
 Payable Operation
 : An API operation that requires payment, indicated by
   a 402 response and `x-payment-info` extension in the
   OpenAPI document.
 
-# Discovery Precedence {#discovery-precedence}
+# OpenAPI Discovery {#openapi-discovery}
 
-Clients MUST resolve discovery metadata in the
-following order, stopping at the first valid source:
-
-| Order | Source | Expected Location |
-|-------|--------|-------------------|
-| 1 | OpenAPI document | `/openapi.json` then `/.well-known/openapi.json` |
-| 2 | Well-known fallback | `/.well-known/payment` |
-
-If an OpenAPI document is present and contains valid
-payment extensions, clients MUST use it and SHOULD NOT
-fall back to `/.well-known/payment`. If no OpenAPI
-document is found (404 or invalid), clients SHOULD
-attempt the well-known fallback.
-
-In all cases, the runtime 402 challenge is
-authoritative. If discovery metadata conflicts with the
-402 challenge, the 402 challenge takes precedence.
-
-# Tier 1: OpenAPI Discovery {#openapi-discovery}
-
-Services SHOULD publish an OpenAPI 3.x {{OPENAPI}}
-document that describes their API surface, including
-payment-enabled operations. This is the canonical and
-RECOMMENDED discovery mechanism.
+Services that support discovery MUST publish an OpenAPI
+3.x {{OPENAPI}} document that describes their API
+surface, including payment-enabled operations.
 
 ## Document Location
 
 The OpenAPI document MUST be accessible at one of the
-following locations:
+following locations, tried in order:
 
 ~~~
 GET /openapi.json
@@ -205,10 +173,35 @@ specification.
 | `categories` | array | OPTIONAL | Service categories (see {{categories}}). |
 | `docs` | object | OPTIONAL | Documentation and reference links (see {{docs-schema}}). |
 
-This extension ensures that OpenAPI documents carry
-the same service metadata available in the well-known
-fallback ({{well-known-fallback}}), enabling registries
-and agents to use a single discovery source.
+### Categories {#categories}
+
+The `categories` field, when present, MUST be an array
+of strings. Category values are free-form; services
+MAY use any string value. The following values are
+RECOMMENDED as a starting vocabulary:
+
+~~~
+communication, compute, data, developer-tools,
+media, search, social, storage, travel
+~~~
+
+Category values SHOULD be lowercase, use hyphens for
+multi-word values, and be concise. Registries SHOULD
+limit services to no more than 5 categories. Clients
+SHOULD ignore category values they do not recognize.
+
+### Documentation Links {#docs-schema}
+
+The `docs` field, when present, MUST be a JSON object
+with the following optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `apiReference` | string (URI) | API reference documentation URL. |
+| `homepage` | string (URI) | Main documentation or landing page. |
+| `llms` | string (URI) | LLM-friendly documentation URL (see {{LLMS-TXT}}). |
+
+All URI values MUST conform to {{RFC3986}}.
 
 ## Payment Extension: x-payment-info {#x-payment-info}
 
@@ -272,6 +265,19 @@ Input schemas enable agents to construct valid requests
 without additional documentation. Operations that omit
 input schemas MAY be marked as "schema-missing" by
 discovery clients and registries.
+
+## Caching
+
+Servers SHOULD include `Cache-Control` headers. A
+maximum age of 5 minutes is RECOMMENDED for services
+whose capabilities change infrequently:
+
+~~~http
+Cache-Control: max-age=300
+~~~
+
+Clients SHOULD respect cache headers and refetch when
+capabilities may have changed.
 
 ## Example OpenAPI Document
 
@@ -381,222 +387,6 @@ discovery clients and registries.
 }
 ~~~
 
-# Tier 2: Well-Known Fallback {#well-known-fallback}
-
-Services that cannot publish an OpenAPI document MAY
-use the well-known fallback as a compatibility bridge.
-This mechanism provides basic payment capability
-metadata but lacks the input schema information
-available in OpenAPI.
-
-Services SHOULD prefer OpenAPI discovery
-({{openapi-discovery}}) when feasible.
-
-## Endpoint Location
-
-Services that use the fallback MUST serve a JSON
-document at the following well-known URI {{RFC8615}}:
-
-~~~
-GET /.well-known/payment
-~~~
-
-The endpoint MUST be served over HTTPS. Clients MUST
-NOT accept discovery information over unencrypted HTTP.
-
-## Request
-
-The client issues a GET request with an `Accept` header
-of `application/json`:
-
-~~~http
-GET /.well-known/payment HTTP/1.1
-Host: api.example.com
-Accept: application/json
-~~~
-
-## Response
-
-The server responds with an HTTP 200 (OK) {{RFC9110}}
-response containing a JSON object {{RFC8259}} conforming
-to the Service Manifest Schema defined below. The
-response MUST use `Content-Type: application/json`.
-
-## Service Manifest Schema {#manifest-schema}
-
-The service manifest is a JSON object with the
-following fields:
-
-### Top-Level Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `version` | integer | REQUIRED | Schema version. Currently `1`. |
-| `name` | string | REQUIRED | Human-readable display name. |
-| `description` | string | REQUIRED | Short description of the service. |
-| `categories` | array | OPTIONAL | Service categories. |
-| `endpoints` | array | OPTIONAL | API endpoints with payment details. |
-| `docs` | object | OPTIONAL | Documentation and reference links. |
-
-The `version` field MUST be a positive integer. Clients
-MUST check the `version` field before processing the
-response. If the value is higher than the version the
-client supports, the client SHOULD treat the response
-as unsupported and fall back to the 402 challenge flow.
-
-The `name` field MUST be a non-empty string.
-
-The `description` field MUST be a non-empty string.
-
-### Categories {#categories}
-
-The `categories` field, when present, MUST be an array
-of strings. Category values are free-form; services
-MAY use any string value. The following values are
-RECOMMENDED as a starting vocabulary:
-
-~~~
-communication, compute, data, developer-tools,
-media, search, social, storage, travel
-~~~
-
-Category values SHOULD be lowercase, use hyphens for
-multi-word values, and be concise. Registries SHOULD
-limit services to no more than 5 categories per
-manifest. Clients SHOULD ignore category values they
-do not recognize.
-
-### Endpoints {#endpoints-schema}
-
-The `endpoints` field, when present, MUST be an array
-of Endpoint Objects. Each object describes a single API
-endpoint:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `method` | string | REQUIRED | HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, or `OPTIONS`. |
-| `path` | string | REQUIRED | URL path pattern. MUST start with `/`. MAY contain `:param` placeholders. |
-| `description` | string | OPTIONAL | What this endpoint does. |
-| `payment` | object | OPTIONAL | Payment requirement. Omission or `null` indicates a free endpoint. |
-
-#### Endpoint Payment Object
-
-When present, the `payment` field MUST be a JSON
-object:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `intent` | string | REQUIRED | `"charge"` (per-request) or `"session"` (pay-as-you-go). |
-| `method` | string | REQUIRED | Payment method identifier (e.g., `"tempo"`, `"stripe"`). |
-| `amount` | string or null | REQUIRED | Cost in base units of the currency. `null` indicates dynamic pricing. |
-| `currency` | string | OPTIONAL | Currency identifier. For blockchain methods: token contract address. For fiat: ISO 4217 code. |
-| `description` | string | OPTIONAL | Human-readable pricing note. |
-
-The `amount` field is REQUIRED but its value MAY be
-`null` to support endpoints where pricing depends on
-request parameters (e.g., variable-cost operations).
-When non-null, the value MUST be a string of ASCII
-digits (`0`-`9`) representing a non-negative integer
-in the smallest denomination of the currency (e.g.,
-cents for USD, wei for ETH). Leading zeros MUST NOT
-be used except for the value `"0"`. This format is
-consistent with the `amount` field defined in the
-request object of {{I-D.httpauth-payment}}.
-When `amount` is `null`, clients SHOULD expect pricing
-to be communicated via the 402 challenge at request
-time.
-
-### Documentation Links {#docs-schema}
-
-The `docs` field, when present, MUST be a JSON object
-with the following optional fields:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `apiReference` | string (URI) | API reference documentation URL. |
-| `homepage` | string (URI) | Main documentation or landing page. |
-| `llms` | string (URI) | LLM-friendly documentation URL (see {{LLMS-TXT}}). |
-| `openapi` | string (URI) | OpenAPI/Swagger specification URL. |
-
-All URI values MUST conform to {{RFC3986}}.
-
-## Example Service Manifest
-
-~~~json
-{
-  "version": 1,
-  "name": "Example AI API",
-  "description": "Chat completions, embeddings,
-    and image generation.",
-  "categories": ["compute"],
-  "endpoints": [
-    {
-      "method": "POST",
-      "path": "/v1/chat/completions",
-      "description": "Chat completions.",
-      "payment": {
-        "intent": "session",
-        "method": "tempo",
-        "amount": "500",
-        "currency":
-          "0x20c00000000000000000000000000000000000"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/v1/embeddings",
-      "description": "Text embeddings.",
-      "payment": {
-        "intent": "charge",
-        "method": "tempo",
-        "amount": null,
-        "currency":
-          "0x20c00000000000000000000000000000000000",
-        "description": "Price varies by model
-          and token count."
-      }
-    }
-  ],
-  "docs": {
-    "homepage": "https://api.example.com/docs",
-    "llms": "https://api.example.com/llms.txt",
-    "openapi":
-      "https://api.example.com/openapi.json",
-    "apiReference":
-      "https://api.example.com/reference"
-  }
-}
-~~~
-
-## Extensibility
-
-The service manifest schema is designed for forward
-compatibility. Implementations MUST ignore unknown
-top-level fields and unknown fields within nested
-objects. The `version` field provides a mechanism for
-introducing breaking schema changes in the future.
-
-## Caching
-
-Servers SHOULD include `Cache-Control` headers. A
-maximum age of 5 minutes is RECOMMENDED for services
-whose capabilities change infrequently:
-
-~~~http
-Cache-Control: max-age=300
-~~~
-
-Clients SHOULD respect cache headers and refetch when
-capabilities may have changed.
-
-## Error Handling
-
-If the server does not support the well-known fallback,
-it SHOULD return 404 Not Found. Clients MUST NOT treat
-a 404 response as an error; it indicates that the
-fallback is unavailable and the client SHOULD rely on
-the 402 challenge flow.
-
 # Relationship to the 402 Challenge
 
 Discovery metadata is advisory. The 402 challenge
@@ -631,32 +421,22 @@ payment parameters.
 
 ## Information Disclosure
 
-OpenAPI documents and `/.well-known/payment` manifests
-reveal payment capabilities, endpoint structure, input
-schemas, and pricing to unauthenticated clients.
-Service operators SHOULD consider whether this
-disclosure is acceptable for their use case.
+OpenAPI documents reveal payment capabilities, endpoint
+structure, input schemas, and pricing to
+unauthenticated clients. Service operators SHOULD
+consider whether this disclosure is acceptable for
+their use case.
 
 ## Cross-Origin Requests
 
 Browser-based clients may need to access discovery
 endpoints cross-origin. Servers that intend to support
 browser-based clients SHOULD include appropriate CORS
-headers on discovery responses.
+headers on OpenAPI document responses.
 
 # IANA Considerations
 
-## Well-Known URI Registration
-
-This document registers the following well-known URI
-in the "Well-Known URIs" registry established by
-{{!RFC8615}}:
-
-- URI Suffix: payment
-- Change Controller: IETF
-- Reference: This document, {{well-known-fallback}}
-- Status: permanent
-- Related Information: None
+This document has no IANA actions.
 
 --- back
 
@@ -664,7 +444,7 @@ in the "Well-Known URIs" registry established by
 
 This appendix provides informative guidance for
 building registries and aggregators on top of the
-discovery mechanisms defined in this specification.
+discovery mechanism defined in this specification.
 
 ## Registries
 
@@ -672,14 +452,12 @@ A registry is a server that discovers, validates, and
 indexes payment-enabled services into a searchable
 catalog. Registries MAY discover services by:
 
-- Crawling OpenAPI documents and `/.well-known/payment`
-  endpoints from submitted domains.
+- Crawling OpenAPI documents from submitted domains.
 - Accepting domain submissions from service operators.
 - Consuming snapshots from other registries.
 
 If a domain serves a valid OpenAPI document with
-`x-payment-info` extensions or a valid
-`/.well-known/payment` manifest over HTTPS, that
+`x-payment-info` extensions over HTTPS, that
 constitutes sufficient proof of domain ownership.
 
 Registries SHOULD re-crawl services periodically (at
@@ -702,9 +480,8 @@ llms.txt {{LLMS-TXT}}), or federating (merging data
 from multiple registries).
 
 Aggregators are not required to use the registry API
-schema. The only universal contract is the discovery
-mechanisms defined in {{openapi-discovery}} and
-{{well-known-fallback}}.
+schema. The only universal contract is the OpenAPI
+discovery mechanism defined in {{openapi-discovery}}.
 
 # Comparison with Prior Art
 
@@ -719,9 +496,9 @@ registration, which better suits HTTP services.
 
 The A2A Protocol {{A2A}} uses
 `/.well-known/agent-card.json` as a self-describing
-service endpoint. This specification follows a similar
-pattern but uses OpenAPI as the primary mechanism,
-providing richer schema information.
+service endpoint. This specification uses OpenAPI as
+the discovery mechanism, providing richer schema
+information.
 
 ## MCP Registry
 
@@ -823,118 +600,6 @@ the `x-service-info` OpenAPI extension.
           "format": "uri"
         },
         "llms": {
-          "type": "string",
-          "format": "uri"
-        }
-      }
-    }
-  }
-}
-~~~
-
-# JSON Schema for Well-Known Manifest
-
-The following JSON Schema defines the structure of
-the `/.well-known/payment` service manifest. Service
-operators SHOULD validate their manifests against
-this schema before hosting them.
-
-~~~json
-{
-  "$schema":
-    "https://json-schema.org/draft/2020-12/schema",
-  "title": "Payment Service Manifest",
-  "type": "object",
-  "required": ["version", "name", "description"],
-  "properties": {
-    "version": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "name": {
-      "type": "string",
-      "minLength": 1
-    },
-    "description": {
-      "type": "string",
-      "minLength": 1
-    },
-    "categories": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "endpoints": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["method", "path"],
-        "properties": {
-          "method": {
-            "type": "string",
-            "enum": ["GET", "POST", "PUT",
-              "PATCH", "DELETE", "HEAD",
-              "OPTIONS"]
-          },
-          "path": {
-            "type": "string",
-            "pattern": "^/"
-          },
-          "description": {
-            "type": "string"
-          },
-          "payment": {
-            "oneOf": [
-              { "type": "null" },
-              {
-                "type": "object",
-                "required": ["intent", "method",
-                  "amount"],
-                "properties": {
-                  "intent": {
-                    "type": "string"
-                  },
-                  "method": {
-                    "type": "string"
-                  },
-                  "amount": {
-                    "oneOf": [
-                      { "type": "null" },
-                      {
-                        "type": "string",
-                        "pattern":
-                          "^(0|[1-9][0-9]*)$"
-                      }
-                    ]
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  }
-                }
-              }
-            ]
-          }
-        }
-      }
-    },
-    "docs": {
-      "type": "object",
-      "properties": {
-        "apiReference": {
-          "type": "string",
-          "format": "uri"
-        },
-        "homepage": {
-          "type": "string",
-          "format": "uri"
-        },
-        "llms": {
-          "type": "string",
-          "format": "uri"
-        },
-        "openapi": {
           "type": "string",
           "format": "uri"
         }
