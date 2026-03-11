@@ -14,4 +14,5 @@ node_modules/
 # Generated artifacts
 artifacts/
 !artifacts/.gitkeep
+pages/problems/
 __pycache__/

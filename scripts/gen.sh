@@ -100,3 +100,6 @@ find "$SPECS_DIR" -name "*.md" -type f | xargs -P4 -I{} bash -c 'process_spec "$
 
 echo ""
 echo "Done. Output in $OUT_DIR/"
+
+# Generate problem-type pages (always runs after spec build)
+python3 "$SCRIPT_DIR/gen_problems.py"

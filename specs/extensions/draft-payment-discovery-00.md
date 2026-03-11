@@ -1,5 +1,5 @@
 ---
-title: Payment Method Discovery Mechanisms for HTTP Payment Authentication
+title: Service Discovery for HTTP Payment Authentication
 abbrev: Payment Discovery
 docname: draft-payment-discovery-00
 version: 00
@@ -9,55 +9,109 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - name: Jake Moxey
-    ins: J. Moxey
-    email: jake@tempo.xyz
-    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
     org: Tempo Labs
-  - name: Tom Meagher
-    ins: T. Meagher
-    email: thomas@tempo.xyz
+  - name: Jake Moxey
+    ins: J. Moxey
+    email: jake@tempo.xyz
     org: Tempo Labs
 
 normative:
   RFC2119:
+  RFC3986:
   RFC8174:
-  RFC8615:
+  RFC8259:
+  RFC9110:
+  OPENAPI:
+    title: "OpenAPI Specification v3.1.0"
+    target: https://spec.openapis.org/oas/v3.1.0
+    author:
+      - org: OpenAPI Initiative
+    date: 2021
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
     author:
-      - name: Jake Moxey
+      - name: Brendan Ryan
     date: 2026-01
+
+informative:
+  RFC9176:
+  A2A:
+    title: "Agent2Agent Protocol Specification"
+    target: https://github.com/a2aproject/A2A
+    author:
+      - org: Google
+    date: 2025
+  MCP-REGISTRY:
+    title: "Model Context Protocol Registry"
+    target: https://github.com/modelcontextprotocol/registry
+    author:
+      - org: Anthropic
+    date: 2025
+  X402:
+    title: "x402: HTTP Payment Protocol"
+    target: https://github.com/coinbase/x402
+    author:
+      - org: Coinbase
+    date: 2025
+  ERC-8004:
+    title: "ERC-8004: Trustless Agents Registry"
+    target: https://eips.ethereum.org/EIPS/eip-8004
+    date: 2025
+  LLMS-TXT:
+    title: "llms.txt - A Proposal to Standardise
+      LLM-Friendly Documentation"
+    target: https://llmstxt.org/
+    date: 2024
 ---
 
 --- abstract
 
-This document defines discovery mechanisms for the "Payment" HTTP
-authentication scheme {{I-D.httpauth-payment}}. It specifies how clients
-can discover a server's payment capabilities before initiating requests,
-including supported payment methods, accepted currencies, and intents.
+This document defines a service discovery framework for
+the "Payment" HTTP authentication scheme. Services
+publish an OpenAPI document annotated with payment
+extensions that describe pricing, payment methods, and
+intent types. The OpenAPI document serves as the
+canonical machine-readable contract, providing both
+payment metadata and input schemas so that agents can
+discover and invoke endpoints. The runtime 402
+challenge remains authoritative for all payment
+parameters.
 
 --- middle
 
 # Introduction
 
-The "Payment" HTTP authentication scheme {{I-D.httpauth-payment}} enables
-servers to require payment for resource access. While the 402 response
-with `WWW-Authenticate: Payment` header provides all information needed
-to complete a paid exchange, clients may benefit from discovering payment
-capabilities before making requests.
+The "Payment" HTTP authentication scheme
+{{I-D.httpauth-payment}} enables servers to require
+payment for resource access using the HTTP 402 status
+code. While the 402 challenge provides all information
+needed to complete a single paid exchange, clients and
+agents benefit from discovering payment-enabled services
+before initiating requests.
 
-This specification defines an optional discovery mechanism using a
-well-known HTTP endpoint that returns structured payment capability
-information.
+This specification defines a discovery mechanism based
+on OpenAPI {{OPENAPI}}. Services publish an OpenAPI
+document annotated with two extensions:
 
-Discovery is OPTIONAL. Servers MAY implement this mechanism to improve
-client experience. Clients MUST NOT require discovery to function; the
-402 challenge provides all information needed to complete payment.
+- `x-service-info`: Top-level service metadata
+  including categories and documentation links.
+
+- `x-payment-info`: Per-operation payment requirements
+  including intent type, payment method, amount, and
+  currency.
+
+OpenAPI provides both payment metadata and input
+schemas, enabling agents to discover and invoke
+endpoints without additional documentation.
+
+Discovery is OPTIONAL. Servers MAY implement this
+mechanism to improve client experience. Clients MUST
+NOT require discovery to function; the 402 challenge in
+{{I-D.httpauth-payment}} is always authoritative.
 
 # Requirements Language
 
@@ -65,156 +119,500 @@ client experience. Clients MUST NOT require discovery to function; the
 
 # Terminology
 
-Currency
-: An identifier for an accepted unit of value, using the same formats
-  defined in the "charge" intent specification's Currency Formats
-  section. This includes ISO 4217 codes (e.g., `"usd"`) and
-  method-defined identifiers (e.g., token contract addresses).
+Service
+: An HTTP origin that accepts payment via the "Payment"
+  authentication scheme.
 
-Discovery
-: The process by which a client learns a server's payment capabilities
-  before initiating a request that may require paid access.
+Payable Operation
+: An API operation that requires payment, indicated by
+  a 402 response and `x-payment-info` extension in the
+  OpenAPI document.
 
-Payment Capabilities
-: The set of payment methods, intents, and accepted currencies that a
-  server accepts as payment.
+# OpenAPI Discovery {#openapi-discovery}
 
-# Well-Known Endpoint
+Services that support discovery MUST publish an OpenAPI
+3.x {{OPENAPI}} document that describes their API
+surface, including payment-enabled operations.
 
-## Endpoint Location Section
+## Document Location
 
-Servers MAY expose payment capabilities at the following location:
+The OpenAPI document MUST be accessible at one of the
+following locations, tried in order:
 
 ~~~
-GET /.well-known/payment
+GET /openapi.json
+GET /.well-known/openapi.json
 ~~~
 
-## Request
+Clients MUST try `/openapi.json` first. If that returns
+a non-2xx response, clients SHOULD try
+`/.well-known/openapi.json`.
 
-The client issues a GET request to `/.well-known/payment`. The request
-SHOULD include an `Accept` header with `application/json`:
+The document MUST be served over HTTPS with
+`Content-Type: application/json`.
 
-~~~http
-GET /.well-known/payment HTTP/1.1
-Host: api.example.com
-Accept: application/json
-~~~
+## Required Top-Level Fields
 
-## Response
+The OpenAPI document MUST include the following
+standard fields:
 
-The server responds with a JSON object describing its payment capabilities.
-The response MUST use `Content-Type: application/json`.
+- `openapi`: The OpenAPI version (e.g., `"3.1.0"`).
+- `info.title`: The service name.
+- `info.version`: The API version.
+- `paths`: At least one path with operations.
 
-**Response Schema:**
+## Service Extension: x-service-info {#x-service-info}
+
+The OpenAPI document MAY include a top-level
+`x-service-info` extension object to provide service
+metadata that is not part of the standard OpenAPI
+specification.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `version` | integer | REQUIRED | Schema version. Currently `1`. |
-| `realm` | string | OPTIONAL | Default realm for payment challenges. |
-| `description` | string | OPTIONAL | Human-readable description of the service. |
-| `methods` | object | REQUIRED | Map of supported payment methods. |
+| `categories` | array | OPTIONAL | Service categories (see {{categories}}). |
+| `docs` | object | OPTIONAL | Documentation and reference links (see {{docs-schema}}). |
 
-**Method Object Schema:**
+### Categories {#categories}
 
-Each key in `methods` is a registered payment method identifier. The value
-is an object with:
+The `categories` field, when present, MUST be an array
+of strings. Category values are free-form; services
+MAY use any string value. The following values are
+RECOMMENDED as a starting vocabulary:
+
+~~~
+communication, compute, data, developer-tools,
+media, search, social, storage, travel
+~~~
+
+Category values SHOULD be lowercase, use hyphens for
+multi-word values, and be concise. Registries SHOULD
+limit services to no more than 5 categories. Clients
+SHOULD ignore category values they do not recognize.
+
+### Documentation Links {#docs-schema}
+
+The `docs` field, when present, MUST be a JSON object
+with the following optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `apiReference` | string (URI) | API reference documentation URL. |
+| `homepage` | string (URI) | Main documentation or landing page. |
+| `llms` | string (URI) | LLM-friendly documentation URL (see {{LLMS-TXT}}). |
+
+All URI values MUST conform to {{RFC3986}}.
+
+## Payment Extension: x-payment-info {#x-payment-info}
+
+Each payable operation MUST include the
+`x-payment-info` extension object on the operation.
+This extension describes the payment requirements for
+the operation.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `intents` | array | REQUIRED | Supported intent types. |
-| `currencies` | array | REQUIRED | Accepted currency identifiers, using the formats defined by the payment method specification (e.g., ISO 4217 codes, token addresses). |
+| `intent` | string | REQUIRED | `"charge"` (per-request) or `"session"` (pay-as-you-go). |
+| `method` | string | REQUIRED | Payment method identifier (e.g., `"tempo"`, `"stripe"`). |
+| `amount` | string or null | REQUIRED | Cost in base currency units. `null` indicates dynamic pricing. |
+| `currency` | string | OPTIONAL | Currency identifier. For blockchain methods: token contract address. For fiat: ISO 4217 code. |
+| `description` | string | OPTIONAL | Human-readable pricing note. |
 
-**Example Response:**
+The `amount` field is REQUIRED but its value MAY be
+`null` to support endpoints where pricing depends on
+request parameters (e.g., variable-cost operations).
+When non-null, the value MUST be a string of ASCII
+digits (`0`-`9`) representing a non-negative integer in
+the smallest denomination of the currency (e.g., cents
+for USD, wei for ETH). Leading zeros MUST NOT be used
+except for the value `"0"`. This format is consistent
+with the `amount` field defined in the request object
+of {{I-D.httpauth-payment}}.
+
+## 402 Response Declaration
+
+Each payable operation MUST include a `402` response
+in its `responses` object:
+
+~~~yaml
+responses:
+  "402":
+    description: "Payment Required"
+~~~
+
+This signals to clients that the operation may return
+a 402 challenge requiring payment.
+
+## Input Schema
+
+Each operation SHOULD define its input schema using
+the standard OpenAPI `requestBody` field:
+
+~~~yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          prompt:
+            type: string
+        required:
+          - prompt
+~~~
+
+Input schemas enable agents to construct valid requests
+without additional documentation. Operations that omit
+input schemas MAY be marked as "schema-missing" by
+discovery clients and registries.
+
+## Caching
+
+Servers SHOULD include `Cache-Control` headers. A
+maximum age of 5 minutes is RECOMMENDED for services
+whose capabilities change infrequently:
 
 ~~~http
-HTTP/1.1 200 OK
-Content-Type: application/json
 Cache-Control: max-age=300
+~~~
 
+Clients SHOULD respect cache headers and refetch when
+capabilities may have changed.
+
+## Example OpenAPI Document
+
+~~~json
 {
-  "version": 1,
-  "realm": "api.example.com",
-  "description": "AI inference API",
-  "methods": {
-    "tempo": {
-      "intents": ["charge", "session"],
-      "currencies": ["0x20c0000000000000000000000000000000000000"]
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Example AI API",
+    "version": "1.0.0"
+  },
+  "x-service-info": {
+    "categories": ["compute"],
+    "docs": {
+      "homepage": "https://api.example.com/docs",
+      "llms": "https://api.example.com/llms.txt",
+      "apiReference":
+        "https://api.example.com/reference"
+    }
+  },
+  "paths": {
+    "/v1/chat/completions": {
+      "post": {
+        "summary": "Chat completions",
+        "x-payment-info": {
+          "intent": "session",
+          "method": "tempo",
+          "amount": "500",
+          "currency":
+            "0x20c00000000000000000000000000000000000"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string" },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["role",
+                        "content"]
+                    }
+                  }
+                },
+                "required": ["model", "messages"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
     },
-    "lightning": {
-      "intents": ["charge"],
-      "currencies": ["sat"]
+    "/v1/embeddings": {
+      "post": {
+        "summary": "Text embeddings",
+        "x-payment-info": {
+          "intent": "charge",
+          "method": "tempo",
+          "amount": null,
+          "currency":
+            "0x20c00000000000000000000000000000000000",
+          "description": "Price varies by model
+            and token count."
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string" },
+                  "input": { "type": "string" }
+                },
+                "required": ["model", "input"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "402": {
+            "description": "Payment Required"
+          }
+        }
+      }
     }
   }
 }
 ~~~
 
-## Caching
+# Relationship to the 402 Challenge
 
-Servers SHOULD include `Cache-Control` headers with short durations to
-allow clients to detect capability changes. A maximum age of 5 minutes
-is RECOMMENDED:
+Discovery metadata is advisory. The 402 challenge
+defined in {{I-D.httpauth-payment}} is always
+authoritative.
 
-~~~http
-Cache-Control: max-age=300
-~~~
+Specifically:
 
-Longer durations (e.g., `max-age=3600`) MAY be used for capabilities that
-change infrequently. Clients SHOULD respect cache headers and refetch
-when capabilities may have changed (e.g., after receiving an unexpected
-402 challenge for a method not in the cached discovery response).
+- If discovery indicates a payment method that differs
+  from the 402 challenge, the 402 challenge takes
+  precedence.
+- If discovery indicates an amount that differs from
+  the 402 challenge, the 402 challenge takes
+  precedence.
+- Clients MUST NOT cache discovery data as a
+  substitute for processing 402 challenges.
 
-## Version Handling
-
-Clients MUST check the `version` field before processing the response.
-If the `version` value is higher than the version the client supports,
-the client SHOULD treat the response as unsupported and fall back to
-the 402 challenge flow. Clients MUST NOT assume forward compatibility
-with unknown schema versions.
-
-## Error Handling
-
-If the server does not support discovery, it SHOULD return 404 Not Found.
-Clients MUST NOT treat a 404 response as an error; it simply indicates
-discovery is unavailable.
+Discovery exists to help clients and agents find and
+evaluate services before making requests, not to
+replace the runtime payment negotiation defined by the
+core protocol.
 
 # Security Considerations
 
 ## Discovery Spoofing
 
-Discovery information is advisory and not cryptographically authenticated.
-Clients MUST NOT rely on discovery for security decisions. The actual
-payment challenge in the 402 response is authoritative.
-
-## Well-Known Endpoint Security
-
-The well-known endpoint MUST be served over HTTPS. Clients MUST NOT
-accept discovery information over unencrypted HTTP.
+Discovery information is not cryptographically
+authenticated beyond HTTPS transport security. Clients
+MUST NOT rely on discovery metadata for security
+decisions. The 402 challenge is authoritative for all
+payment parameters.
 
 ## Information Disclosure
 
-Discovery endpoints reveal payment capabilities to unauthenticated clients.
-Servers should consider whether this information disclosure is acceptable.
+OpenAPI documents reveal payment capabilities, endpoint
+structure, input schemas, and pricing to
+unauthenticated clients. Service operators SHOULD
+consider whether this disclosure is acceptable for
+their use case.
 
 ## Cross-Origin Requests
 
-Browser-based clients (e.g., wallets, payment agents) may need to access
-the discovery endpoint cross-origin. Servers that intend to support
-browser-based clients SHOULD include appropriate CORS headers
-(e.g., `Access-Control-Allow-Origin`) on responses to
-`/.well-known/payment`. This aligns with the cross-origin considerations
-defined in {{I-D.httpauth-payment}}.
+Browser-based clients may need to access discovery
+endpoints cross-origin. Servers that intend to support
+browser-based clients SHOULD include appropriate CORS
+headers on OpenAPI document responses.
 
 # IANA Considerations
 
-## Well-Known URI Registration
-
-This document registers the following well-known URI in the "Well-Known
-URIs" registry established by {{!RFC8615}}:
-
-- **URI Suffix**: payment
-- **Change Controller**: IETF
-- **Reference**: This document, Section 4
-- **Status**: permanent
-- **Related Information**: None
+This document has no IANA actions.
 
 --- back
+
+# Registry and Aggregator Guidance
+
+This appendix provides informative guidance for
+building registries and aggregators on top of the
+discovery mechanism defined in this specification.
+
+## Registries
+
+A registry is a server that discovers, validates, and
+indexes payment-enabled services into a searchable
+catalog. Registries MAY discover services by:
+
+- Crawling OpenAPI documents from submitted domains.
+- Accepting domain submissions from service operators.
+- Consuming snapshots from other registries.
+
+If a domain serves a valid OpenAPI document with
+`x-payment-info` extensions over HTTPS, that
+constitutes sufficient proof of domain ownership.
+
+Registries SHOULD re-crawl services periodically (at
+least every 24 hours is RECOMMENDED). If the discovery
+document becomes invalid or unreachable, the registry
+SHOULD delist the service after 7 or more consecutive
+failures.
+
+Registries SHOULD enforce crawl constraints: HTTPS
+only, 10-second timeouts, 64 KB size limits, and
+rate limiting.
+
+## Aggregators
+
+Aggregators consume registry data and layer on their
+own views: curating (filtering by quality or vertical),
+enriching (adding trust scores, uptime, volume data),
+reshaping (exposing agent-native formats such as
+llms.txt {{LLMS-TXT}}), or federating (merging data
+from multiple registries).
+
+Aggregators are not required to use the registry API
+schema. The only universal contract is the OpenAPI
+discovery mechanism defined in {{openapi-discovery}}.
+
+# Comparison with Prior Art
+
+## CoRE Resource Directory (RFC 9176)
+
+The CoRE Resource Directory {{RFC9176}} defines push
+registration with leased lifetimes for constrained IoT
+devices. This specification uses crawl-based
+registration, which better suits HTTP services.
+
+## Agent2Agent Protocol (A2A)
+
+The A2A Protocol {{A2A}} uses
+`/.well-known/agent-card.json` as a self-describing
+service endpoint. This specification uses OpenAPI as
+the discovery mechanism, providing richer schema
+information.
+
+## MCP Registry
+
+The MCP Registry {{MCP-REGISTRY}} implements a
+three-layer architecture with reverse-DNS namespacing
+and SHA-256 package integrity. This specification
+uses domain authority rather than OAuth-based
+registration.
+
+## x402 Protocol
+
+The x402 protocol {{X402}} uses HTTP 402 responses as
+the primary payment signal. This specification
+separates discovery (pre-request) from the payment
+challenge (at-request).
+
+## OpenAPI-First Discovery (x402scan)
+
+The x402scan project uses OpenAPI documents as the
+canonical discovery signal, with `/.well-known/x402`
+as a fallback. This specification adopts the same
+OpenAPI-first approach, using `x-payment-info` as
+the payment extension with fields consistent with the
+Payment authentication scheme.
+
+## ERC-8004 (Trustless Agents)
+
+ERC-8004 {{ERC-8004}} defines on-chain identity
+registries and domain verification. This specification
+operates entirely off-chain but is compatible with
+future on-chain anchoring.
+
+# JSON Schema for x-payment-info
+
+The following JSON Schema defines the structure of
+the `x-payment-info` OpenAPI extension. Tooling
+authors SHOULD validate payment extensions against
+this schema.
+
+~~~json
+{
+  "$schema":
+    "https://json-schema.org/draft/2020-12/schema",
+  "title": "x-payment-info",
+  "type": "object",
+  "required": ["intent", "method", "amount"],
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": ["charge", "session"]
+    },
+    "method": {
+      "type": "string"
+    },
+    "amount": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      ]
+    },
+    "currency": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}
+~~~
+
+# JSON Schema for x-service-info
+
+The following JSON Schema defines the structure of
+the `x-service-info` OpenAPI extension.
+
+~~~json
+{
+  "$schema":
+    "https://json-schema.org/draft/2020-12/schema",
+  "title": "x-service-info",
+  "type": "object",
+  "properties": {
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "docs": {
+      "type": "object",
+      "properties": {
+        "apiReference": {
+          "type": "string",
+          "format": "uri"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "llms": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    }
+  }
+}
+~~~
+
+# Acknowledgments
+{:numbered="false"}
+
+The authors thank the contributors to the MPP
+Registry reference implementation and the x402scan
+project, whose operational experience informed this
+specification.
