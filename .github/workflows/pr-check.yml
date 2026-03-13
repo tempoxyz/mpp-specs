@@ -56,6 +56,15 @@ jobs:
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/check.sh
 
+      - name: Verify index page is up to date
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/gen_index.py
+          if ! git diff --quiet pages/index.html; then
+            echo "::error::pages/index.html is out of date. Run 'python3 scripts/gen_index.py' and commit the result."
+            git diff pages/index.html
+            exit 1
+          fi
+
       - name: Download main branch artifacts
         if: github.event_name == 'pull_request'
         uses: dawidd6/action-download-artifact@v6
