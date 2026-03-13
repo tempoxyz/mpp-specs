@@ -1,6 +1,6 @@
 ---
-title: "Payment Authentication Scheme: MCP Transport"
-abbrev: Payment MCP Transport
+title: "Payment Authentication Scheme: JSON-RPC & MCP Transport"
+abbrev: Payment JSON-RPC & MCP Transport
 docname: draft-payment-transport-mcp-00
 version: 00
 category: info
@@ -20,12 +20,13 @@ author:
 
 normative:
   RFC2119:
-  RFC8785:
   RFC3339:
   RFC5246:
+  RFC6455:
   RFC8174:
   RFC8259:
   RFC8446:
+  RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
@@ -45,36 +46,72 @@ informative:
 --- abstract
 
 This document defines how the Payment HTTP Authentication Scheme
-operates over the Model Context Protocol (MCP). It specifies the
-mapping of payment challenges to JSON-RPC error responses using
-implementation-defined error codes, credential transmission via MCP
-metadata fields, and receipt delivery in successful responses.
+operates over JSON-RPC 2.0 transports. It specifies the mapping
+of payment challenges to JSON-RPC error responses using
+implementation-defined error codes, credential transmission via
+metadata fields, receipt delivery in successful responses, and
+error handling conventions. This specification applies to any
+transport carrying JSON-RPC 2.0 messages, including WebSocket,
+HTTP, stdio, and protocol frameworks such as the Model Context
+Protocol (MCP).
 
 --- middle
 
 # Introduction
 
-The Model Context Protocol (MCP) enables communication between AI
-applications and external tools, resources, and services using JSON-RPC
-2.0 messages. This document extends MCP to support payment requirements
-using the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}.
+JSON-RPC 2.0 {{JSON-RPC}} is a stateless, lightweight remote
+procedure call protocol using JSON {{RFC8259}}. Many modern
+protocols layer JSON-RPC over various transports including HTTP,
+WebSocket {{RFC6455}}, and stdio. Protocol frameworks such as the
+Model Context Protocol (MCP) {{MCP}} also use JSON-RPC 2.0 as
+their message format. This document defines how the Payment HTTP
+Authentication Scheme {{I-D.httpauth-payment}} operates within
+JSON-RPC 2.0 messages, independent of the underlying transport.
 
-This transport enables MCP servers to require payment for:
+This specification defines:
 
-- Tool invocations (`tools/call`)
-- Resource access (`resources/read`)
-- Prompt retrieval (`prompts/get`)
+- Error codes for payment signaling
+- Challenge structure in JSON-RPC error responses
+- Credential transmission via `_meta` metadata fields
+- Receipt delivery via `_meta` metadata fields
+- Error handling conventions
+- Notification behavior
+- Capability advertisement
+
+## Applicability
+
+This specification applies to any system that exchanges JSON-RPC
+2.0 messages, including but not limited to:
+
+- **WebSocket**: JSON-RPC over persistent `wss://` connections
+  for real-time APIs, streaming services, and subscriptions.
+
+- **HTTP**: JSON-RPC 2.0 over standard HTTP request-response
+  exchanges.
+
+- **stdio**: JSON-RPC 2.0 over standard input/output streams
+  for local process communication.
+
+This specification also defines MCP-specific conventions for
+the Model Context Protocol {{MCP}}, which uses JSON-RPC 2.0
+for tool invocations (`tools/call`), resource access
+(`resources/read`), and prompt retrieval (`prompts/get`).
+
+Transport-specific security requirements (e.g., TLS for
+WebSocket, process isolation for stdio) are addressed in
+{{transport-security}}.
 
 ## Design Goals
 
 1. **Native JSON**: Use JSON objects directly rather than base64url
    encoding, leveraging JSON-RPC's native capabilities.
 
-2. **Transport Agnostic**: Work identically over stdio and Streamable
-   HTTP MCP transports.
+2. **Transport Independent**: Define payment semantics at the
+   JSON-RPC layer, applicable to any transport carrying JSON-RPC
+   messages.
 
-3. **Minimal Overhead**: Add payment data only when needed via the
-   standard `_meta` extension mechanism.
+3. **Minimal Overhead**: Add payment data only when needed via
+   the `_meta` extension mechanism.
 
 4. **Multiple Options**: Support servers offering multiple payment
    methods in a single challenge.
@@ -96,45 +133,77 @@ Credential
 Receipt
 : Server acknowledgment of successful payment.
 
-Additionally:
-
-MCP Endpoint
-: An MCP server operation that may require payment (tool call,
-  resource read, or prompt get).
-
 # Protocol Overview
 
+The payment flow follows three phases within JSON-RPC message
+exchanges:
+
 ~~~
-Client                                                     Server
-   │                                                          │
-   │  (1) tools/call {name: "api"}                            │
-   ├─────────────────────────────────────────────────────────>│
-   │                                                          │
-   │  (2) JSON-RPC Error                                      │
-   │      {code: -32042, data: {challenges: [...]}}           │
-   │<─────────────────────────────────────────────────────────┤
-   │                                                          │
-   │  (3) Client fulfills challenge                           │
-   │                                                          │
-   │  (4) tools/call {                                        │
-   │        name: "api",                                      │
-   │        _meta: {"org.paymentauth/credential": {...}}      │
-   │      }                                                   │
-   ├─────────────────────────────────────────────────────────>│
-   │                                                          │
-   │  (5) Result {                                            │
-   │        content: [...],                                   │
-   │        _meta: {"org.paymentauth/receipt": {...}}         │
-   │      }                                                   │
-   │<─────────────────────────────────────────────────────────┤
+Client                                                 Server
+   │                                                      │
+   │  (1) JSON-RPC Request                                │
+   │      {method: "...", params: {...}}                   │
+   ├─────────────────────────────────────────────────────>│
+   │                                                      │
+   │  (2) JSON-RPC Error                                  │
+   │      {code: -32042, data: {challenges: [...]}}       │
+   │<─────────────────────────────────────────────────────┤
+   │                                                      │
+   │  (3) Client fulfills challenge                       │
+   │                                                      │
+   │  (4) JSON-RPC Request                                │
+   │      {method: "...",                                 │
+   │       _meta: {credential: {...}}}                    │
+   ├─────────────────────────────────────────────────────>│
+   │                                                      │
+   │  (5) JSON-RPC Result                                 │
+   │      {result: {...}, _meta: {receipt: {...}}}         │
+   │<─────────────────────────────────────────────────────┤
 ~~~
 
 # Capability Advertisement
 
-## Server Capabilities
+Servers and clients SHOULD advertise supported payment methods
+and intents before payment flows begin. The capability object
+SHOULD contain:
 
-Servers supporting payment SHOULD advertise this in the `InitializeResult`
-using the `experimental` namespace per {{MCP}} conventions:
+**`methods`** (REQUIRED): Object mapping payment method
+  identifiers (as registered in the IANA HTTP Payment Methods
+  registry) to their configuration. Each method object MUST
+  contain an `intents` array listing the supported payment
+  intent types (as registered in the IANA HTTP Payment Intents
+  registry) for that method.
+
+Example capability object:
+
+~~~json
+{
+  "methods": {
+    "tempo": { "intents": ["charge"] },
+    "stripe": { "intents": ["charge"] }
+  }
+}
+~~~
+
+The mechanism for advertising capabilities depends on the
+transport:
+
+- **WebSocket**: Servers MAY send a `payment.capabilities`
+  JSON-RPC notification after connection establishment.
+
+- **MCP**: See {{mcp-capability-advertisement}}.
+
+Clients MAY use capability information to determine
+compatibility before invoking paid methods. Clients MUST NOT
+rely solely on capability advertisement to determine payment
+support; malicious servers could claim capabilities they don't
+properly implement. Clients SHOULD validate challenge structure
+before fulfilling payment.
+
+## MCP Capability Advertisement {#mcp-capability-advertisement}
+
+For MCP specifically, servers SHOULD advertise payment support
+in the `InitializeResult`:
 
 ~~~json
 {
@@ -144,8 +213,10 @@ using the `experimental` namespace per {{MCP}} conventions:
     "resources": {},
     "experimental": {
       "payment": {
-        "methods": ["tempo", "stripe"],
-        "intents": ["charge"]
+        "methods": {
+          "tempo": { "intents": ["charge"] },
+          "stripe": { "intents": ["charge"] }
+        }
       }
     }
   },
@@ -156,21 +227,7 @@ using the `experimental` namespace per {{MCP}} conventions:
 }
 ~~~
 
-The `experimental.payment` capability object contains:
-
-**`methods`** (REQUIRED): Array of supported payment method identifiers
-  as registered in the IANA HTTP Payment Methods registry.
-
-**`intents`** (REQUIRED): Array of supported payment intent types as
-  registered in the IANA HTTP Payment Intents registry.
-
-Clients MAY use this information to determine compatibility before
-invoking paid endpoints.
-
-## Client Capabilities
-
-Clients supporting payment SHOULD advertise this in the
-`InitializeRequest` using the `experimental` namespace:
+Clients SHOULD advertise in the `InitializeRequest`:
 
 ~~~json
 {
@@ -178,8 +235,9 @@ Clients supporting payment SHOULD advertise this in the
   "capabilities": {
     "experimental": {
       "payment": {
-        "methods": ["tempo"],
-        "intents": ["charge"]
+        "methods": {
+          "tempo": { "intents": ["charge"] }
+        }
       }
     }
   },
@@ -190,17 +248,17 @@ Clients supporting payment SHOULD advertise this in the
 }
 ~~~
 
-Servers MAY use client capabilities to filter which payment options
-to offer in challenges.
+Servers MAY use client capabilities to filter which payment
+options to offer in challenges.
 
 # Payment Challenge
 
 ## Signaling Payment Required
 
-When an MCP endpoint requires payment, the server MUST respond with a
-JSON-RPC error using code `-32042` (Payment Required). This code is
-within the JSON-RPC implementation-defined server error range (-32000
-to -32099) per {{JSON-RPC}}:
+When a JSON-RPC method requires payment, the server MUST respond
+with a JSON-RPC error using code `-32042` (Payment Required).
+This code is within the JSON-RPC implementation-defined server
+error range (-32000 to -32099) per {{JSON-RPC}}:
 
 ~~~json
 {
@@ -237,9 +295,9 @@ to -32099) per {{JSON-RPC}}:
 }
 ~~~
 
-The `error.data.httpStatus` field SHOULD be included with value `402`
-to indicate the corresponding HTTP status code for Streamable HTTP
-transport compatibility.
+The `error.data.httpStatus` field SHOULD be included with value
+`402` to indicate the corresponding HTTP status code for
+transports that bridge to HTTP (e.g., MCP Streamable HTTP).
 
 ## Challenge Structure
 
@@ -268,15 +326,13 @@ Each challenge object MUST contain:
 **`intent`** (REQUIRED): Payment intent type as registered in the
   IANA HTTP Payment Intents registry.
 
-**`request`** (REQUIRED): Method-specific payment request data as a
-  native JSON object. Unlike the HTTP transport where the `request`
-  parameter is base64url-encoded JSON per {{I-D.httpauth-payment}}; the MCP
-  transport uses native JSON objects for the `request`
-  field. Servers MUST NOT base64url-encode the request when using
-  JSON-RPC transport. For challenge binding and challenge ID
-  verification, both parties MUST canonicalize `request` using JSON
-  Canonicalization Scheme (JCS) {{RFC8785}} and hash the canonicalized
-  bytes. The schema is defined by the payment method specification.
+**`request`** (REQUIRED): Method-specific payment request data
+  as a native JSON object. Servers MUST NOT base64url-encode the
+  request when using JSON-RPC transport. For challenge binding
+  and challenge ID verification, both parties MUST canonicalize
+  `request` using JSON Canonicalization Scheme (JCS) {{RFC8785}}
+  and hash the canonicalized bytes. The schema is defined by the
+  payment method specification.
 
 Each challenge object MAY contain:
 
@@ -340,11 +396,31 @@ to a single selected challenge.
 
 # Payment Credential
 
-## Transmitting Payment Data
+## Metadata Placement {#metadata-placement}
 
-Clients send payment credentials using the `_meta` field with key
-`org.paymentauth/credential`. The key uses reverse-DNS naming per
-{{MCP}} conventions to avoid collisions:
+This specification defines two placement strategies for the
+`_meta` field, depending on the protocol:
+
+**Root-level `_meta`** (Generic JSON-RPC): The `_meta` field
+  is placed at the root of the JSON-RPC message object. This
+  approach works with any JSON-RPC method regardless of whether
+  `params` is an object or an array:
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", false],
+  "_meta": {
+    "org.paymentauth/credential": { ... }
+  }
+}
+~~~
+
+**Nested `_meta`** (MCP): The `_meta` field is placed inside
+  `params` (for requests) or `result` (for responses), per MCP
+  conventions where `params` is always an object:
 
 ~~~json
 {
@@ -353,41 +429,51 @@ Clients send payment credentials using the `_meta` field with key
   "method": "tools/call",
   "params": {
     "name": "expensive-api",
-    "arguments": {
-      "query": "example"
-    },
     "_meta": {
-      "org.paymentauth/credential": {
-        "challenge": {
-          "id": "qB3wErTyU7iOpAsD9fGhJk",
-          "realm": "api.example.com",
-          "method": "tempo",
-          "intent": "charge",
-          "request": {
-            "amount": "1000",
-            "currency": "usd",
-            "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
-          },
-          "expires": "2025-01-15T12:05:00Z"
-        },
-        "payload": {
-          "signature": "0x1b2c3d4e5f..."
-        }
-      }
+      "org.paymentauth/credential": { ... }
     }
   }
 }
 ~~~
 
-Payment credentials are supported on the following MCP operations:
+Servers MUST check both locations for `_meta` and MUST NOT
+require clients to use a specific placement. Servers MUST
+ignore `org.paymentauth/credential` on methods that do not
+require payment.
 
-- `tools/call` - Tool invocations
-- `resources/read` - Resource access
-- `prompts/get` - Prompt retrieval
+## Transmitting Payment Data
 
-Servers MUST ignore `org.paymentauth/credential` on operations that
-do not require payment. Clients MUST place the credential in
-`params._meta`, not nested elsewhere.
+Clients send payment credentials using the `_meta` field with
+key `org.paymentauth/credential`. The key uses reverse-DNS
+naming to avoid collisions with other extensions:
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", false],
+  "_meta": {
+    "org.paymentauth/credential": {
+      "challenge": {
+        "id": "qB3wErTyU7iOpAsD9fGhJk",
+        "realm": "api.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1000",
+          "currency": "usd",
+          "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+        },
+        "expires": "2025-01-15T12:05:00Z"
+      },
+      "payload": {
+        "signature": "0x1b2c3d4e5f..."
+      }
+    }
+  }
+}
+~~~
 
 ## Credential Structure
 
@@ -409,29 +495,27 @@ The credential object MAY contain:
 
 ## Successful Payment Response
 
-After successful payment verification and settlement, servers MUST
-include a receipt in the response using `_meta` with key
-`org.paymentauth/receipt`:
+After successful payment verification and settlement, servers
+MUST include a receipt using `_meta` with key
+`org.paymentauth/receipt`. The `_meta` field placement follows
+the same rules as {{metadata-placement}}: root-level for generic
+JSON-RPC, nested in `result` for MCP.
 
 ~~~json
 {
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "content": [
-      {
-        "type": "text",
-        "text": "API response data..."
-      }
-    ],
-    "_meta": {
-      "org.paymentauth/receipt": {
-        "status": "success",
-        "method": "tempo",
-        "timestamp": "2025-01-15T12:00:30Z",
-        "reference": "tx_abc123...",
-        "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
-      }
+    "number": "0x1348c9",
+    "hash": "0x7736fab79e05dc611604d22470dadad2..."
+  },
+  "_meta": {
+    "org.paymentauth/receipt": {
+      "status": "success",
+      "method": "tempo",
+      "timestamp": "2025-01-15T12:00:30Z",
+      "reference": "tx_abc123...",
+      "challengeId": "qB3wErTyU7iOpAsD9fGhJk"
     }
   }
 }
@@ -459,7 +543,9 @@ The receipt object MAY contain:
 **`reference`** (OPTIONAL): Method-specific settlement reference
   (e.g., transaction hash, invoice ID).
 
-# Covered Operations
+# MCP Covered Operations
+
+The following MCP operations support payment flows.
 
 ## Tool Calls
 
@@ -650,25 +736,28 @@ Used for malformed credentials or missing required fields:
 
 # Notifications
 
-MCP notifications are JSON-RPC requests without an `id` field that
+JSON-RPC notifications are requests without an `id` field that
 expect no response. Since payment challenges require a response,
 notifications cannot support payment flows.
 
 ## Server Behavior
 
 Servers MUST NOT process payment-gated operations invoked as
-notifications. Servers SHOULD silently drop such notifications per
-JSON-RPC 2.0 semantics.
+notifications. Servers SHOULD silently drop such notifications
+per JSON-RPC 2.0 semantics.
 
-Servers MAY log dropped payment-required notifications for debugging
-purposes.
+Servers MAY log dropped payment-required notifications for
+debugging purposes.
+
+Servers MAY send JSON-RPC notifications to deliver data after
+a client has fulfilled a prior payment challenge (e.g.,
+streaming subscription updates over WebSocket).
 
 ## Client Guidance
 
-Clients SHOULD NOT invoke payment-gated operations as notifications.
-Operations that may require payment (e.g., `tools/call`,
-`resources/read`, `prompts/get`) SHOULD always include a request `id`
-to receive payment challenges and results.
+Clients SHOULD NOT invoke payment-gated operations as
+notifications. Operations that may require payment SHOULD always
+include a request `id` to receive payment challenges and results.
 
 # Security Considerations
 
@@ -701,14 +790,18 @@ parameters) and maintain only a post-use replay set.
 When two concurrent requests race using the same challenge, servers
 MUST ensure only one succeeds via atomic check-and-mark operations.
 
-## Transport Security
+## Transport Security {#transport-security}
 
-When using Streamable HTTP transport, all MCP communication MUST
-occur over TLS 1.2 {{RFC5246}} or later (TLS 1.3 {{RFC8446}}
-RECOMMENDED).
+When using network transports (HTTP, WebSocket), all
+communication MUST occur over TLS 1.2 {{RFC5246}} or later
+(TLS 1.3 {{RFC8446}} RECOMMENDED).
 
 For stdio transport, security depends on the process isolation
 provided by the operating system.
+
+For persistent transports (e.g., WebSocket), servers SHOULD
+additionally rate limit connection establishment and close
+connections that exceed challenge request thresholds.
 
 ## Credential Confidentiality
 
@@ -720,27 +813,21 @@ dumps, distributed tracing, and analytics telemetry.
 ## Metadata Stripping
 
 On-path attackers or malicious intermediaries could strip
-`org.paymentauth/credential` from requests (causing repeated payment
-challenges) or `org.paymentauth/receipt` from responses (affecting
-auditability). For Streamable HTTP transport, TLS provides integrity.
-For stdio transport, rely on process isolation.
+`org.paymentauth/credential` from requests (causing repeated
+payment challenges) or `org.paymentauth/receipt` from responses
+(affecting auditability). For network transports, TLS provides
+integrity. For stdio transport, rely on process isolation.
 
 ## Confused Deputy
 
-Clients may be tricked into paying for unintended resources if tool
-descriptions or realms are misleading. Client implementations SHOULD:
+Clients may be tricked into paying for unintended operations if
+method names or realms are misleading. Client implementations
+SHOULD:
 
 - Display `realm`, `amount`, `currency`, and `recipient` to users
   before fulfilling payment challenges
 - Allow users to configure payment policies per realm
 - Validate that challenge parameters match the requested operation
-
-## Capability Spoofing
-
-Clients MUST NOT rely solely on server capability advertisement to
-determine payment support. Malicious servers could claim capabilities
-they don't properly implement. Clients SHOULD validate challenge
-structure before fulfilling payment.
 
 ## Denial of Service
 
@@ -768,9 +855,123 @@ These codes are within the JSON-RPC server error range (-32000 to
 
 --- back
 
-# Complete Example Flow
+# Example: Ethereum JSON-RPC over WebSocket
 
-A complete tool call with payment:
+An `eth_getBlockByNumber` call over WebSocket with payment
+required for RPC access:
+
+**Connection:**
+
+~~~http
+GET / HTTP/1.1
+Host: rpc.example.com
+Upgrade: websocket
+Connection: Upgrade
+~~~
+
+**Step 1: Initial Request**
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", false]
+}
+~~~
+
+**Step 2: Payment Challenge**
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32042,
+    "message": "Payment Required",
+    "data": {
+      "httpStatus": 402,
+      "challenges": [{
+        "id": "ch_ws_789",
+        "realm": "rpc.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1",
+          "currency": "usd",
+          "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+        },
+        "expires": "2025-01-15T12:05:00Z",
+        "description": "Ethereum RPC call"
+      }]
+    }
+  }
+}
+~~~
+
+**Step 3: Request with Credential**
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "eth_getBlockByNumber",
+  "params": ["latest", false],
+  "_meta": {
+    "org.paymentauth/credential": {
+      "challenge": {
+        "id": "ch_ws_789",
+        "realm": "rpc.example.com",
+        "method": "tempo",
+        "intent": "charge",
+        "request": {
+          "amount": "1",
+          "currency": "usd",
+          "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
+        },
+        "expires": "2025-01-15T12:05:00Z"
+      },
+      "source": "0x1234567890abcdef...",
+      "payload": {
+        "signature": "0xabc123..."
+      }
+    }
+  }
+}
+~~~
+
+**Step 4: Success with Receipt**
+
+~~~json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "number": "0x1348c9",
+    "hash": "0x7736fab79e05dc611604d22470dadad2...",
+    "parentHash": "0x61cdb2a09ab99abf791d474f20c2ea...",
+    "timestamp": "0x56ffeff8",
+    "gasLimit": "0x47e7c4",
+    "gasUsed": "0x38658",
+    "miner": "0xf8b483dba2c3b7176a3da549ad41a48b...",
+    "transactions": []
+  },
+  "_meta": {
+    "org.paymentauth/receipt": {
+      "status": "success",
+      "method": "tempo",
+      "timestamp": "2025-01-15T12:00:15Z",
+      "reference": "0xtx789...",
+      "challengeId": "ch_ws_789"
+    }
+  }
+}
+~~~
+
+# Example: MCP Tool Call
+
+A complete MCP tool call with payment, using nested `_meta`
+per MCP conventions:
 
 **Step 1: Initial Request**
 
