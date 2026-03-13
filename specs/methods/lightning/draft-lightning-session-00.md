@@ -46,6 +46,12 @@ normative:
     date: 2026-01
 
 informative:
+  I-D.lightning-charge:
+    title: "Lightning Network Charge Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-lightning-charge/
+    author:
+      - org: Lightspark
+    date: 2026
   SSE:
     title: "Server-Sent Events"
     target: https://html.spec.whatwg.org/multipage/server-sent-events.html
@@ -69,7 +75,8 @@ informative:
 --- abstract
 
 This document defines the "session" intent for the "lightning" payment
-method in the Payment HTTP Authentication Scheme. It specifies a prepaid
+method using BOLT11 invoices on the Lightning Network, within the
+Payment HTTP Authentication Scheme. It specifies a prepaid
 session model for incremental, metered payments suitable for streaming
 services such as LLM token generation, where the per-request cost is
 unknown upfront.
@@ -94,7 +101,12 @@ This model is well-suited to streaming responses (e.g., Server-Sent Events
 for LLM token generation) where the total cost is unknown upfront and
 per-request Lightning round-trips would introduce unacceptable latency.
 This design is inspired by the session intent defined for EVM payment
-channels in {{draft-tempo-session-00}}.
+channels in {{draft-tempo-session-00}}. The proof mechanism differs:
+Lightning session uses a prepaid balance with the deposit preimage as a
+bearer token, while Tempo session uses cumulative vouchers against
+on-chain escrow. Both implementations share the same abstract intent:
+prepaid deposit, per-unit billing, and refund of unspent balance on
+close.
 
 ## Use Case: LLM Token Streaming
 
@@ -275,15 +287,14 @@ base64url-encoded JSON object (see {{encoding}})
 with the following fields:
 
 amount
-: REQUIRED. Cost per unit of service expressed as an integer count
-  of satoshis (1 BTC = 100,000,000 satoshis), as a decimal string
-  (e.g., "2"). For streaming responses, this is the cost per
-  emitted chunk. The value MUST be a positive integer.
+: REQUIRED. Cost per unit of service in base units (satoshis), as a
+  decimal string (e.g., "2"). For streaming responses, this is the
+  cost per emitted chunk. The value MUST be a positive integer.
 
 currency
-: REQUIRED. Names the asset being transferred. MUST be the string
-  "BTC". Note that "BTC" identifies the asset; the unit of
-  `amount` is always satoshis, not whole BTC.
+: REQUIRED. Identifies the unit for `amount`. MUST be the string
+  "sat" (lowercase). "sat" denotes satoshis, the base unit used for
+  Lightning/Bitcoin amounts.
 
 description
 : OPTIONAL. Human-readable description of the service. This field
@@ -299,9 +310,9 @@ unitType
   MAY display this to users.
 
 depositInvoice
-: REQUIRED. BOLT11 invoice the client must pay to open or top up the
-  session. MUST be an empty string for bearer and close challenges, where
-  no payment is required.
+: CONDITIONAL. BOLT11 invoice the client must pay to open or top up
+  the session. REQUIRED for open and topUp challenges; MUST be absent
+  for bearer and close challenges, where no payment is required.
 
 paymentHash
 : REQUIRED. SHA-256 hash of the deposit invoice preimage, as a lowercase
@@ -312,6 +323,8 @@ depositAmount
   present, MUST equal the amount encoded in depositInvoice. Informs the
   client of the deposit size before it inspects the invoice. The BOLT11
   invoice encodes a fixed amount; the client pays exactly that amount.
+  This document uses "depositAmount" (not "suggestedDeposit") intentionally:
+  the client cannot deposit a different amount than the invoice specifies.
 
 idleTimeout
 : OPTIONAL. The server's idle timeout policy for open sessions, in
@@ -422,8 +435,8 @@ a bearer token allows the server to verify ownership with a single
 SHA-256 check against the stored paymentHash, without ever storing the
 secret. An alternative design using per-request HMAC tokens would require
 the server to store the preimage, which is a worse security posture.
-Implementations MUST use TLS; the preimage carries the same threat model
-as any API bearer token.
+Implementations MUST use TLS (TLS 1.2 or higher; TLS 1.3 RECOMMENDED);
+the preimage carries the same threat model as any API bearer token.
 
 Example credential (decoded):
 
@@ -462,9 +475,11 @@ topUpPreimage
   this top-up.
 
 To obtain a challenge for a top-up, the client submits an
-unauthenticated request (no Authorization header) to any
-protected endpoint. The server issues a fresh deposit invoice,
-assigns a new challenge `id`, and returns 402. The client
+unauthenticated request (no Authorization header) to a protected
+endpoint. The request MAY target the same resource URI that required
+the top-up (e.g., the paused stream) or a different protected resource
+URI in the same realm; the server issues a fresh deposit invoice in
+either case. The server assigns a new challenge `id` and returns 402. The client
 pays the invoice, obtains the preimage, and submits a topUp
 credential echoing that challenge. The server MUST verify the
 echoed `challenge.id` exists, has not expired, and has
@@ -518,9 +533,18 @@ After verifying the preimage and marking the session closed, the server
 MUST:
 
 1. Compute refundSats = session.depositSats - session.spent
-2. If refundSats > 0, pay session.returnInvoice with
-   amountSatsToSend = refundSats
-3. Return HTTP 200 with body {"status":"closed","refundSats":N}
+2. If refundSats > 0, attempt to pay session.returnInvoice with
+   amountSatsToSend = refundSats. If refundSats is zero, the server
+   MUST NOT attempt to pay the return invoice.
+3. Return HTTP 200 with a Payment-Receipt header (per {{receipt}}) and
+   body {"status":"closed","refundSats":N,"refundStatus":"succeeded"|"failed"|"skipped"}.
+   If refundSats is zero, set refundStatus to "skipped". If the refund
+   payment succeeded, set refundStatus to "succeeded". If the refund
+   payment failed (e.g., the return invoice has expired or cannot be
+   routed), set refundStatus to "failed"; the server MUST still close the
+   session and MUST NOT reopen it. The server SHOULD log failed refunds
+   for auditability. The server MUST NOT retry the refund indefinitely;
+   a single best-effort attempt is sufficient.
 
 Clients MUST NOT submit further actions on a closed session. Servers MUST
 reject any action on a closed session.
@@ -544,10 +568,37 @@ Example credential (decoded):
 }
 ~~~
 
-Example response body:
+Example response (decoded receipt in Payment-Receipt header, body).
+Success:
 
 ~~~json
-{ "status": "closed", "refundSats": 140 }
+{ "status": "closed", "refundSats": 140, "refundStatus": "succeeded" }
+~~~
+
+Refund payment failed (session still closed):
+
+~~~json
+{ "status": "closed", "refundSats": 140, "refundStatus": "failed" }
+~~~
+
+No refund owed:
+
+~~~json
+{ "status": "closed", "refundSats": 0, "refundStatus": "skipped" }
+~~~
+
+The Payment-Receipt header MUST be present. For close, the receipt
+MUST also include refundSats and refundStatus (see {{receipt}}).
+Example decoded receipt for close (success):
+
+~~~json
+{"method":"lightning","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"succeeded"}
+~~~
+
+Close with refund failed:
+
+~~~json
+{"method":"lightning","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"failed"}
 ~~~
 
 # Deposit Amount {#deposit-amount}
@@ -579,11 +630,13 @@ is encoded in the BOLT11 invoice and cannot be changed by the client.
 4. Compute SHA-256(preimage) and verify it equals the paymentHash stored with the challenge
 5. Decode deposit amount from the BOLT11 invoice human-readable part
 6. Verify depositSats >= amount (at least one unit of service)
-7. Decode the returnInvoice and verify that the encoded amount
-   resolves to 0 satoshis. The invoice MAY omit the amount field
-   entirely, or MAY encode an explicit 0-satoshi amount; both are
-   accepted. Invoices encoding a non-zero amount MUST be rejected, as
-   the refund amount is determined by the server at close time.
+7. Verify the returnInvoice is a valid BOLT11 invoice on the same
+   network as the deposit invoice. Decode the returnInvoice and verify
+   that the encoded amount resolves to 0 satoshis. The invoice MAY omit
+   the amount field entirely, or MAY encode an explicit 0-satoshi
+   amount; both are accepted. Invoices encoding a non-zero amount MUST
+   be rejected, as the refund amount is determined by the server at
+   close time.
 8. Store session state: {paymentHash, depositSats, spent: 0,
    returnInvoice, status: "open"}
 9. Return a receipt with reference = paymentHash (the session ID)
@@ -617,9 +670,13 @@ billing is handled by the streaming layer (see
 2. Verify session.status == "open"
 3. Compute SHA-256(payload.preimage) and verify it equals session.paymentHash
 4. Mark session.status = "closed"
-5. If refundSats > 0, pay session.returnInvoice with
-   amountSatsToSend = refundSats
-6. Return HTTP 200 with {"status":"closed","refundSats":N}
+5. If refundSats > 0, attempt to pay session.returnInvoice with
+   amountSatsToSend = refundSats. If refundSats is zero, the server
+   MUST NOT attempt to pay the return invoice.
+6. Return HTTP 200 with a Payment-Receipt header and body
+   {"status":"closed","refundSats":N,"refundStatus":"succeeded"|"failed"|"skipped"}.
+   The server SHOULD log failed refunds. The server MUST NOT retry the
+   refund indefinitely.
 
 # Idempotency
 
@@ -652,7 +709,8 @@ a server initiates a close, it MUST:
 2. Compute refundSats = session.depositSats - session.spent
 3. If refundSats > 0, attempt to pay session.returnInvoice with
    amountSatsToSend = refundSats, subject to the same fee constraints as
-   a client-initiated close.
+   a client-initiated close. If refundSats is zero, the server MUST NOT
+   attempt to pay the return invoice.
 
 If the refund payment fails (e.g., the return invoice has expired or
 cannot be routed), the server MUST NOT reopen the session. The server
@@ -695,14 +753,18 @@ need to be explicitly notified which connection to resume. Any
 paused streams that observe sufficient balance after a top-up
 SHOULD resume autonomously. Servers SHOULD close any held
 connection if the balance does not become sufficient within a
-reasonable timeout (RECOMMENDED: 60 seconds).
+reasonable timeout (RECOMMENDED: 60 seconds). When the timeout fires,
+the server MUST close the SSE connection. The server SHOULD emit a
+final SSE event (e.g., event: session-timeout) with session balance
+details before closing (see {{session-timeout-event}}), so the client
+does not only observe a dropped connection.
 
 Holding the connection open preserves any upstream state the server
 maintains (e.g., an in-flight request to an upstream LLM provider).
 Clients benefit because they do not need to replay the original request
 or deduplicate partially-delivered content.
 
-## payment-need-topup Event
+## payment-need-topup Event {#payment-need-topup-event}
 
 For SSE {{SSE}} responses, the payment-need-topup event
 MUST be formatted as follows:
@@ -724,6 +786,24 @@ balanceSpent
 balanceRequired
 : REQUIRED. Satoshis needed for the next unit of service (i.e., the amount
   that could not be covered).
+
+## session-timeout Event {#session-timeout-event}
+
+When the server closes a held SSE connection because the balance did
+not become sufficient within the configured timeout, the server SHOULD
+emit a session-timeout event immediately before closing the connection.
+This allows the client to distinguish a timeout from a generic network
+drop and to show session balance details to the user.
+
+~~~
+event: session-timeout
+data: {"sessionId":"7f3a...","balanceSpent":300,"balanceRequired":2}
+~~~
+
+The event data MUST be a JSON object containing the same fields as
+the payment-need-topup event: sessionId, balanceSpent, and
+balanceRequired (see {{payment-need-topup-event}}). After emitting
+this event, the server MUST close the SSE connection.
 
 ## Client Top-Up Flow
 
@@ -801,9 +881,9 @@ in double-spending the same satoshis.
 
 # Receipt
 
-Upon successful verification of any action other than close, the server
+Upon successful verification of any action (including close), the server
 MUST attach a payment receipt to the response via the Payment-Receipt
-header per {{I-D.httpauth-payment}}. The header receipt
+header per {{I-D.httpauth-payment}} {#receipt}. The header receipt
 contains:
 
 method
@@ -817,6 +897,18 @@ status
 
 timestamp
 : REQUIRED. Settlement time in {{RFC3339}} format.
+
+refundSats
+: For close actions only. REQUIRED in the receipt when the action is
+  close. The unspent balance that was (or was attempted to be) refunded,
+  as a number. Omitted for non-close actions.
+
+refundStatus
+: For close actions only. REQUIRED in the receipt when the action is
+  close. One of "succeeded" (refund payment completed), "failed"
+  (refund payment did not complete, e.g., return invoice expired or
+  could not be routed), or "skipped" (refundSats was zero, no payment
+  attempted). Omitted for non-close actions.
 
 ## Streaming Receipt Event
 
@@ -864,36 +956,36 @@ RFC 9457 {{RFC9457}} Problem Details, with
 `Content-Type: application/problem+json`. The following
 problem types are defined for this intent:
 
-https://paymentauth.org/problems/malformed-credential
+https://paymentauth.org/problems/lightning/malformed-credential
 : HTTP 400. The credential token could not be decoded or parsed,
   or required fields are absent or have the wrong type.
 
-https://paymentauth.org/problems/unknown-challenge
+https://paymentauth.org/problems/lightning/unknown-challenge
 : HTTP 401. The `credential.challenge.id` does not match
   any challenge issued by this server, or has already been consumed.
 
-https://paymentauth.org/problems/invalid-preimage
+https://paymentauth.org/problems/lightning/invalid-preimage
 : HTTP 401. SHA-256(payload.preimage) or SHA-256(payload.topUpPreimage)
   does not equal the paymentHash stored for the identified challenge.
 
-https://paymentauth.org/problems/session-not-found
+https://paymentauth.org/problems/lightning/session-not-found
 : HTTP 401. The `payload.sessionId` does not match any
   session stored by this server.
 
-https://paymentauth.org/problems/session-closed
+https://paymentauth.org/problems/lightning/session-closed
 : HTTP 401. The session identified by `payload.sessionId`
   has status "closed". No further actions are accepted.
 
-https://paymentauth.org/problems/insufficient-balance
+https://paymentauth.org/problems/lightning/insufficient-balance
 : HTTP 402. The session balance is insufficient to cover the
   requested operation. The client SHOULD top up the session.
 
-https://paymentauth.org/problems/challenge-expired
+https://paymentauth.org/problems/lightning/challenge-expired
 : HTTP 401. The challenge identified by
   `credential.challenge.id` has passed its expiry time.
   The client MUST obtain a fresh challenge.
 
-https://paymentauth.org/problems/invalid-return-invoice
+https://paymentauth.org/problems/lightning/invalid-return-invoice
 : HTTP 400. The `payload.returnInvoice` in an open action
   is not a valid BOLT11 invoice, or encodes a non-zero amount.
 
@@ -902,7 +994,8 @@ https://paymentauth.org/problems/invalid-return-invoice
 ## Bearer Token Exposure
 
 The preimage is transmitted in every bearer request. Implementations
-MUST use TLS (HTTPS) for all endpoints protected by this method. The
+MUST use TLS (HTTPS) for all endpoints protected by this method (TLS 1.2
+or higher; TLS 1.3 RECOMMENDED). The
 preimage has the same exposure risk as any API bearer token; its security
 properties are equivalent to a 256-bit random secret transmitted over an
 encrypted channel.
@@ -954,6 +1047,10 @@ MUST reject any action submitted against a closed session.
 
 # IANA Considerations
 
+The "lightning" payment method is registered in the "HTTP Payment
+Methods" registry by {{I-D.lightning-charge}}; this document does not
+register it again.
+
 ## Payment Intent Registration
 
 This document requests registration of the following entry in
@@ -967,19 +1064,19 @@ the "HTTP Payment Intents" registry established by
 ## Problem Type Registrations
 
 This document defines the following problem type URIs under
-the `https://paymentauth.org/problems/` namespace,
+the `https://paymentauth.org/problems/lightning/` namespace,
 for use with RFC 9457 {{RFC9457}} Problem Details:
 
-| Type URI Suffix | HTTP Status | Description | Reference |
-|-----------------|-------------|-------------|-----------|
-| `malformed-credential` | 400 | Credential is unparseable or missing required fields | This document |
-| `unknown-challenge` | 401 | Challenge ID not found or already consumed | This document |
-| `invalid-preimage` | 401 | Preimage does not match stored payment hash | This document |
-| `session-not-found` | 401 | Session ID not found | This document |
-| `session-closed` | 401 | Session is closed; no further actions accepted | This document |
-| `insufficient-balance` | 402 | Session balance insufficient for requested operation | This document |
-| `challenge-expired` | 401 | Challenge has passed its expiry time | This document |
-| `invalid-return-invoice` | 400 | Return invoice invalid or encodes non-zero amount | This document |
+| Type URI | HTTP Status | Description | Reference |
+|----------|-------------|-------------|-----------|
+| `lightning/malformed-credential` | 400 | Credential is unparseable or missing required fields | This document |
+| `lightning/unknown-challenge` | 401 | Challenge ID not found or already consumed | This document |
+| `lightning/invalid-preimage` | 401 | Preimage does not match stored payment hash | This document |
+| `lightning/session-not-found` | 401 | Session ID not found | This document |
+| `lightning/session-closed` | 401 | Session is closed; no further actions accepted | This document |
+| `lightning/insufficient-balance` | 402 | Session balance insufficient for requested operation | This document |
+| `lightning/challenge-expired` | 401 | Challenge has passed its expiry time | This document |
+| `lightning/invalid-return-invoice` | 400 | Return invoice invalid or encodes non-zero amount | This document |
 
 --- back
 
@@ -1006,7 +1103,7 @@ Decoded `request`:
 ~~~json
 {
   "amount": "2",
-  "currency": "BTC",
+  "currency": "sat",
   "description": "LLM token stream",
   "depositInvoice": "lnbcrt1p5mzfsa...",
   "paymentHash": "7f3a1b2c4d5e6f...",
@@ -1120,11 +1217,11 @@ Schema draft version is required or assumed.
 {
   "type": "object",
   "required": [
-    "amount", "currency", "depositInvoice", "paymentHash"
+    "amount", "currency", "paymentHash"
   ],
   "properties": {
     "amount":          { "type": "string" },
-    "currency":        { "type": "string", "const": "BTC" },
+    "currency":        { "type": "string", "const": "sat" },
     "description":     { "type": "string" },
     "unitType":        { "type": "string" },
     "depositInvoice":  { "type": "string" },
@@ -1199,4 +1296,5 @@ Schema draft version is required or assumed.
 
 The authors thank the Spark SDK team, the Tempo Labs team for their
 prior work on the session intent for EVM-based payment channels, and the
-broader Lightning Network developer community.
+broader Lightning Network developer community. The authors also thank
+Brendan Ryan for his review of this document.

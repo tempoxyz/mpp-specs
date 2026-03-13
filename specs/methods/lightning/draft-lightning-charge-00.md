@@ -30,6 +30,14 @@ normative:
   RFC8259:
   RFC8785:
   RFC9457:
+  I-D.payment-intent-charge:
+    title: "'charge' Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-charge/
+    author:
+      - name: Jake Moxey
+      - name: Brendan Ryan
+      - name: Tom Meagher
+    date: 2026
   BOLT11:
     title: "BOLT #11: Invoice Protocol for Lightning Payments"
     target: https://github.com/lightning/bolts/blob/master/11-payment-encoding.md
@@ -60,11 +68,11 @@ informative:
 
 --- abstract
 
-This document specifies how clients and servers exchange one-time
-Lightning Network payments using BOLT11 invoices within the HTTP
-Payment Authentication framework. The server issues a BOLT11
-invoice as a challenge; the client pays it and proves payment by
-presenting the preimage as a credential.
+This document defines the "charge" intent for the "lightning" payment
+method within the Payment HTTP Authentication Scheme
+{{I-D.httpauth-payment}}. The server issues a BOLT11 invoice as a
+challenge; the client pays it and proves payment by presenting the
+preimage as a credential.
 
 --- middle
 
@@ -105,6 +113,13 @@ The flow proceeds as follows:
       |<--------------------------  |                             |
       |                             |                             |
 ~~~
+
+## Relationship to the Charge Intent
+
+This document inherits the shared request semantics of the "charge"
+intent from {{I-D.payment-intent-charge}}. It defines only the
+Lightning-specific `methodDetails`, `payload`, and settlement
+procedures for the "lightning" payment method.
 
 # Requirements Language
 
@@ -171,15 +186,14 @@ header contains a JCS-serialized, base64url-encoded JSON object
 included in that object:
 
 amount
-: REQUIRED. The invoice amount expressed as an integer count of
-  satoshis (1 BTC = 100,000,000 satoshis), encoded as a decimal
-  string (e.g., "100"). The value MUST be a positive integer.
+: REQUIRED. The invoice amount in base units (satoshis), encoded
+  as a decimal string (e.g., "100"). The value MUST be a positive
+  integer.
 
 currency
-: OPTIONAL. Names the asset being transferred. If present, MUST
-  be the string "BTC". Defaults to "BTC" if omitted. Note that
-  "BTC" identifies the asset; the unit of `amount` is
-  always satoshis, not whole BTC.
+: REQUIRED. Identifies the unit for `amount`. MUST be the string
+  "sat" (lowercase). "sat" denotes satoshis, the base unit used for
+  Lightning/Bitcoin amounts.
 
 description
 : OPTIONAL. A human-readable memo describing the resource or
@@ -188,6 +202,17 @@ description
   distinct from any `description` auth-param that the base
   {{I-D.httpauth-payment}} scheme may include at the
   header level.
+
+recipient
+: OPTIONAL. Payment recipient in method-native format, per
+  {{I-D.payment-intent-charge}}. Lightning implementations
+  typically do not use this field; the invoice payee is implied
+  by the BOLT11 invoice.
+
+externalId
+: OPTIONAL. Merchant's reference (e.g., order ID, invoice number),
+  per {{I-D.payment-intent-charge}}. May be used for
+  reconciliation or idempotency.
 
 ## Method Details
 
@@ -275,7 +300,13 @@ Upon receiving a request with a credential, the server MUST:
 3. Look up the stored challenge using `credential.challenge.id`.
    Retrieve the `paymentHash` recorded when the challenge was
    issued. If no matching challenge is found, reject the request.
-4. Compute sha256(hex_to_bytes(preimage)) and verify the result
+4. Verify that all fields in `credential.challenge` exactly match
+   the stored challenge auth-params (e.g., `id`, `realm`, `method`,
+   `intent`, `request`, `expires`).
+5. Decode the echoed `credential.challenge.request` and verify that
+   the `amount` and `currency` in it match the invoice parameters
+   stored with the challenge.
+6. Compute sha256(hex_to_bytes(preimage)) and verify the result
    equals the stored paymentHash.
 
 ## Challenge Binding
@@ -295,7 +326,7 @@ Lightning Network settlement is synchronous from the payer's
 perspective: the preimage is only revealed after the HTLC resolves
 (see {{BOLT4}}). Settlement is therefore considered
 complete at the moment the server successfully verifies the preimage
-(step 4 of {{verification}}). No out-of-band
+(step 6 of {{verification}}). No out-of-band
 confirmation is required.
 
 The server MUST atomically mark the challenge as consumed and
@@ -307,6 +338,9 @@ If resource delivery fails after the challenge is consumed, the
 server MUST return an appropriate HTTP error (e.g., 500) and MUST
 NOT reissue the same challenge. The client MUST treat such a
 response as a payment loss and MAY retry with a new payment.
+Unlike reversible payment methods, Lightning settlement is final
+once the preimage is revealed; the payment cannot be refunded
+through the payment channel.
 
 Servers MUST include `Cache-Control: no-store` on all HTTP
 402 responses. The challenge contains a single-use invoice; caching
@@ -330,11 +364,16 @@ triggered it.
 
 ## Receipt Generation
 
-The server SHOULD include a Payment-Receipt header in the 200
+The server MUST include a Payment-Receipt header in the 200
 response with the following fields:
 
 method
 : REQUIRED. The string "lightning".
+
+challengeId
+: REQUIRED. The challenge identifier (the `id` from the
+  WWW-Authenticate challenge) for audit and traceability
+  correlation.
 
 reference
 : REQUIRED. The payment hash (SHA-256 of the preimage) as a
@@ -354,6 +393,7 @@ Example (decoded):
 ~~~json
 {
   "method": "lightning",
+  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "reference": "bc230847...",
   "status": "success",
   "timestamp": "2026-03-10T21:00:00Z"
@@ -368,22 +408,22 @@ RFC 9457 {{RFC9457}} Problem Details, with
 `Content-Type: application/problem+json`. The following
 problem types are defined for this intent:
 
-https://paymentauth.org/problems/malformed-credential
+https://paymentauth.org/problems/lightning/malformed-credential
 : HTTP 400. The credential token could not be decoded, the JSON
   could not be parsed, or required fields (`challenge`,
   `payload`, `payload.preimage`) are absent or have
   the wrong type.
 
-https://paymentauth.org/problems/unknown-challenge
+https://paymentauth.org/problems/lightning/unknown-challenge
 : HTTP 401. The value of `credential.challenge.id` does not
   match any challenge issued by this server, or the challenge has
   already been consumed.
 
-https://paymentauth.org/problems/invalid-preimage
+https://paymentauth.org/problems/lightning/invalid-preimage
 : HTTP 401. `SHA-256(payload.preimage)` does not equal the
   `paymentHash` stored for the identified challenge.
 
-https://paymentauth.org/problems/expired-invoice
+https://paymentauth.org/problems/lightning/expired-invoice
 : HTTP 401. The BOLT11 invoice associated with the challenge has
   passed its expiry time, or the challenge `expires`
   auth-param indicates the challenge has expired.
@@ -392,7 +432,7 @@ Example error response body:
 
 ~~~json
 {
-  "type": "https://paymentauth.org/problems/invalid-preimage",
+  "type": "https://paymentauth.org/problems/lightning/invalid-preimage",
   "title": "Invalid Preimage",
   "status": 401,
   "detail": "SHA-256 of the provided preimage does not match the stored payment hash"
@@ -423,8 +463,11 @@ preimage could be replayed.
 
 ## Preimage Confidentiality
 
-The payment preimage MUST only be transmitted over HTTPS. Exposure of
-the preimage allows any party to present it as a valid credential
+The payment preimage MUST only be transmitted over HTTPS. Servers,
+clients, and intermediaries MUST NOT log, persist, or include
+preimages in error responses, analytics, or diagnostic output.
+Exposure of the preimage allows any party to present it as a valid
+credential
 until the challenge has been consumed or the invoice has expired.
 Servers MUST invalidate a challenge on first successful use to
 enforce consume-once semantics. The acceptance check and
@@ -440,9 +483,11 @@ This document requests registration of the following entry in
 the "HTTP Payment Methods" registry established by
 {{I-D.httpauth-payment}}:
 
-| Method Identifier | Description | Reference | Contact |
-|-------------------|-------------|-----------|---------|
-| `lightning` | Lightning Network BOLT11 invoice payment | This document | Lightspark (<contact@lightspark.com>) |
+| Method Identifier | Description | Reference |
+|-------------------|-------------|-----------|
+| `lightning` | Lightning Network BOLT11 invoice payment | This document |
+
+Contact: Lightspark (<contact@lightspark.com>)
 
 ## Payment Intent Registration
 
@@ -450,9 +495,9 @@ This document requests registration of the following entry in
 the "HTTP Payment Intents" registry established by
 {{I-D.httpauth-payment}}:
 
-| Intent | Applicable Methods | Description | Reference | Contact |
-|--------|-------------------|-------------|-----------|---------|
-| `charge` | `lightning` | One-time BOLT11 invoice payment gating access to a resource | This document | Lightspark (<contact@lightspark.com>) |
+| Intent | Applicable Methods | Description | Reference |
+|--------|-------------------|-------------|-----------|
+| `charge` | `lightning` | One-time BOLT11 invoice payment gating access to a resource | This document |
 
 --- back
 
@@ -479,7 +524,7 @@ Decoded `request`:
 ~~~json
 {
   "amount": "100",
-  "currency": "BTC",
+  "currency": "sat",
   "description": "Weather report for 94107",
   "methodDetails": {
     "invoice": "lnbc1u1p...",
@@ -501,6 +546,18 @@ Payment-Receipt: eyJtZXRob2QiOiJsaWdodG5pbmciLCJyZWZlcmVuY2UiOiJhM2YxLi4uZTIwOSI
 Content-Type: application/json
 
 {"temperature": 72, "condition": "sunny"}
+~~~
+
+Decoded receipt:
+
+~~~json
+{
+  "method": "lightning",
+  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "reference": "bc230847...",
+  "status": "success",
+  "timestamp": "2026-03-10T21:00:00Z"
+}
 ~~~
 
 Decoded credential:
@@ -525,4 +582,5 @@ Decoded credential:
 # Acknowledgements
 
 The authors thank the Spark SDK team and the broader Lightning
-Network developer community.
+Network developer community. The authors also thank Brendan Ryan for
+his review of this document.
