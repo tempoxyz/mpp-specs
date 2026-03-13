@@ -402,31 +402,36 @@ Example (decoded):
 
 # Error Responses
 
-When rejecting a credential, the server MUST return an appropriate
-HTTP error status and SHOULD include a response body conforming to
-RFC 9457 {{RFC9457}} Problem Details, with
+When rejecting a credential, the server MUST return HTTP 402 (Payment
+Required) with a fresh `WWW-Authenticate: Payment` challenge per
+{{I-D.httpauth-payment}}. The server SHOULD include a response body
+conforming to RFC 9457 {{RFC9457}} Problem Details, with
 `Content-Type: application/problem+json`. The following
 problem types are defined for this intent:
 
 https://paymentauth.org/problems/lightning/malformed-credential
-: HTTP 400. The credential token could not be decoded, the JSON
+: HTTP 402. The credential token could not be decoded, the JSON
   could not be parsed, or required fields (`challenge`,
   `payload`, `payload.preimage`) are absent or have
-  the wrong type.
+  the wrong type. A fresh challenge MUST be included in
+  `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/unknown-challenge
-: HTTP 401. The value of `credential.challenge.id` does not
+: HTTP 402. The value of `credential.challenge.id` does not
   match any challenge issued by this server, or the challenge has
-  already been consumed.
+  already been consumed. A fresh challenge MUST be included in
+  `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/invalid-preimage
-: HTTP 401. `SHA-256(payload.preimage)` does not equal the
-  `paymentHash` stored for the identified challenge.
+: HTTP 402. `SHA-256(payload.preimage)` does not equal the
+  `paymentHash` stored for the identified challenge. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/expired-invoice
-: HTTP 401. The BOLT11 invoice associated with the challenge has
+: HTTP 402. The BOLT11 invoice associated with the challenge has
   passed its expiry time, or the challenge `expires`
-  auth-param indicates the challenge has expired.
+  auth-param indicates the challenge has expired. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
 
 Example error response body:
 
@@ -434,7 +439,7 @@ Example error response body:
 {
   "type": "https://paymentauth.org/problems/lightning/invalid-preimage",
   "title": "Invalid Preimage",
-  "status": 401,
+  "status": 402,
   "detail": "SHA-256 of the provided preimage does not match the stored payment hash"
 }
 ~~~

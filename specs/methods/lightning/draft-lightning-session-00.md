@@ -950,44 +950,54 @@ data: [DONE]
 
 # Error Responses
 
-When rejecting a credential, the server MUST return an appropriate
-HTTP error status and SHOULD include a response body conforming to
-RFC 9457 {{RFC9457}} Problem Details, with
+When rejecting a credential, the server MUST return HTTP 402 (Payment
+Required) with a fresh `WWW-Authenticate: Payment` challenge per
+{{I-D.httpauth-payment}}. The server SHOULD include a response body
+conforming to RFC 9457 {{RFC9457}} Problem Details, with
 `Content-Type: application/problem+json`. The following
 problem types are defined for this intent:
 
 https://paymentauth.org/problems/lightning/malformed-credential
-: HTTP 400. The credential token could not be decoded or parsed,
-  or required fields are absent or have the wrong type.
+: HTTP 402. The credential token could not be decoded or parsed,
+  or required fields are absent or have the wrong type. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/unknown-challenge
-: HTTP 401. The `credential.challenge.id` does not match
+: HTTP 402. The `credential.challenge.id` does not match
   any challenge issued by this server, or has already been consumed.
+  A fresh challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/invalid-preimage
-: HTTP 401. SHA-256(payload.preimage) or SHA-256(payload.topUpPreimage)
+: HTTP 402. SHA-256(payload.preimage) or SHA-256(payload.topUpPreimage)
   does not equal the paymentHash stored for the identified challenge.
+  A fresh challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/session-not-found
-: HTTP 401. The `payload.sessionId` does not match any
-  session stored by this server.
+: HTTP 402. The `payload.sessionId` does not match any
+  session stored by this server. A fresh challenge MUST be included
+  in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/session-closed
-: HTTP 401. The session identified by `payload.sessionId`
-  has status "closed". No further actions are accepted.
+: HTTP 402. The session identified by `payload.sessionId`
+  has status "closed". No further actions are accepted. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/insufficient-balance
 : HTTP 402. The session balance is insufficient to cover the
-  requested operation. The client SHOULD top up the session.
+  requested operation. The client SHOULD top up the session. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/challenge-expired
-: HTTP 401. The challenge identified by
+: HTTP 402. The challenge identified by
   `credential.challenge.id` has passed its expiry time.
-  The client MUST obtain a fresh challenge.
+  The client MUST obtain a fresh challenge. A fresh challenge MUST be
+  included in `WWW-Authenticate`.
 
 https://paymentauth.org/problems/lightning/invalid-return-invoice
-: HTTP 400. The `payload.returnInvoice` in an open action
-  is not a valid BOLT11 invoice, or encodes a non-zero amount.
+: HTTP 402. The `payload.returnInvoice` in an open action
+  is not a valid BOLT11 invoice, or encodes a non-zero amount. A fresh
+  challenge MUST be included in `WWW-Authenticate`.
+
 
 # Security Considerations
 
@@ -1069,14 +1079,14 @@ for use with RFC 9457 {{RFC9457}} Problem Details:
 
 | Type URI | HTTP Status | Description | Reference |
 |----------|-------------|-------------|-----------|
-| `lightning/malformed-credential` | 400 | Credential is unparseable or missing required fields | This document |
-| `lightning/unknown-challenge` | 401 | Challenge ID not found or already consumed | This document |
-| `lightning/invalid-preimage` | 401 | Preimage does not match stored payment hash | This document |
-| `lightning/session-not-found` | 401 | Session ID not found | This document |
-| `lightning/session-closed` | 401 | Session is closed; no further actions accepted | This document |
+| `lightning/malformed-credential` | 402 | Credential is unparseable or missing required fields | This document |
+| `lightning/unknown-challenge` | 402 | Challenge ID not found or already consumed | This document |
+| `lightning/invalid-preimage` | 402 | Preimage does not match stored payment hash | This document |
+| `lightning/session-not-found` | 402 | Session ID not found | This document |
+| `lightning/session-closed` | 402 | Session is closed; no further actions accepted | This document |
 | `lightning/insufficient-balance` | 402 | Session balance insufficient for requested operation | This document |
-| `lightning/challenge-expired` | 401 | Challenge has passed its expiry time | This document |
-| `lightning/invalid-return-invoice` | 400 | Return invoice invalid or encodes non-zero amount | This document |
+| `lightning/challenge-expired` | 402 | Challenge has passed its expiry time | This document |
+| `lightning/invalid-return-invoice` | 402 | Return invoice invalid or encodes non-zero amount | This document |
 
 --- back
 
