@@ -194,7 +194,7 @@ The client fulfills this by signing a Key Authorization with:
 # Credential Schema
 
 The credential in the `Authorization` header contains a base64url-encoded
-JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
+JSON object per {{I-D.httpauth-payment}}.
 
 ## Credential Structure
 
@@ -314,7 +314,7 @@ The AccountKeychain precompile enforces periodic spending limits:
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}.
+per {{I-D.httpauth-payment}}.
 
 The receipt payload for Tempo subscription:
 
