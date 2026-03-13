@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☰</text></svg>">
+  <title>Machine Payments Protocol Specifications</title>
+  <style>
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("fonts/BerkeleyMono-Regular.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Berkeley Mono";
+      src: url("fonts/BerkeleyMono-Bold.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --color-link: #0066cc;
+      --color-text: #333;
+    }
+
+    body {
+      font-family: "Berkeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 16px;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+      color: var(--color-text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .tree {
+      font-size: 0.9rem;
+    }
+
+    .folder {
+      margin: 1.5rem 0 0.5rem 0;
+      font-weight: 600;
+      font-size: 1.15rem;
+    }
+
+    .spec-entry {
+      margin: 0.25rem 0;
+      padding-left: 2rem;
+    }
+
+    .branch {
+      color: #666;
+      user-select: none;
+      display: inline-block;
+      width: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .spec-title {
+      font-weight: 700;
+      color: #000;
+      display: inline-block;
+      min-width: 6ch;
+      text-decoration: none;
+    }
+
+    a.spec-title:hover {
+      color: var(--color-link);
+      text-decoration: underline;
+    }
+
+    .formats {
+      display: inline;
+      padding-left: 0.5rem;
+      font-size: 0.6rem;
+    }
+
+    .formats a {
+      color: var(--color-link);
+      text-decoration: none;
+      font-weight: 400;
+    }
+
+    .formats a:hover {
+      text-decoration: underline;
+    }
+
+    .sep {
+      color: #999;
+      margin: 0 0.25rem;
+    }
+
+    .header-links {
+      font-size: 0.8rem;
+      margin-top: 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--color-text);
+    }
+
+    .header-links a {
+      color: var(--color-link);
+      text-decoration: none;
+    }
+
+    .header-links a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      .spec-entry {
+        padding-left: 0.5rem;
+      }
+
+      .spec-title {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+
+      .formats {
+        padding-left: 0;
+        margin-top: 0.25rem;
+      }
+
+      .branch {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Machine Payments Protocol Specifications</h1>
+  <p class="header-links"><a href="https://github.com/tempoxyz/mpp-specs">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/mpp-specs/blob/main/CONTRIBUTING.md">Contributing</a></p>
+
+  <div class="tree">
+{% for section in sections %}
+{% if section.docname %}
+    <div class="folder"><a href="{{ section.docname }}.html" class="spec-title"><span class="folder-icon">~/</span>{{ section.title }}</a> <span class="formats"><a href="{{ section.docname }}.txt">TXT</a><span class="sep">·</span><a href="{{ section.docname }}.xml">XML</a><span class="sep">·</span><a href="{{ section.docname }}.pdf">PDF</a></span></div>
+{% else %}
+    <div class="folder"><span class="folder-icon">~/</span>{{ section.title }}</div>
+{% endif %}
+{% for child in section.children %}
+{% if loop.last %}
+    <div class="spec-entry">
+      <span class="branch">└──</span> <a href="{{ child.docname }}.html" class="spec-title">{{ child.title }}</a>
+      <span class="formats"><a href="{{ child.docname }}.txt">TXT</a><span class="sep">·</span><a href="{{ child.docname }}.xml">XML</a><span class="sep">·</span><a href="{{ child.docname }}.pdf">PDF</a></span>
+    </div>
+{% else %}
+    <div class="spec-entry">
+      <span class="branch">├──</span> <a href="{{ child.docname }}.html" class="spec-title">{{ child.title }}</a>
+      <span class="formats"><a href="{{ child.docname }}.txt">TXT</a><span class="sep">·</span><a href="{{ child.docname }}.xml">XML</a><span class="sep">·</span><a href="{{ child.docname }}.pdf">PDF</a></span>
+    </div>
+{% endif %}
+{% endfor %}
+{% endfor %}
+  </div>
+</body>
+</html>

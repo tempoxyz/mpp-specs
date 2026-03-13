@@ -79,25 +79,6 @@
       text-decoration: underline;
     }
 
-    .maturity {
-      padding: 0.1rem 0.4rem;
-      border-radius: 3px;
-      font-size: 0.65rem;
-      margin-left: 0.5rem;
-      font-weight: 500;
-      background: #e7f3ff;
-      color: #0066cc;
-      text-align: center;
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    .category {
-      font-size: 0.65rem;
-      color: #666;
-      margin-left: 0.5rem;
-    }
-
     .formats {
       display: inline;
       padding-left: 0.5rem;
@@ -145,11 +126,6 @@
         margin-bottom: 0.25rem;
       }
 
-      .maturity, .category {
-        margin-left: 0;
-        margin-right: 0.5rem;
-      }
-
       .formats {
         padding-left: 0;
         margin-top: 0.25rem;
@@ -163,26 +139,94 @@
 </head>
 <body>
   <h1>Machine Payments Protocol Specifications</h1>
-  <p class="header-links"><a href="https://github.com/tempoxyz/payment-auth-spec">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/payment-auth-spec/blob/main/CONTRIBUTING.md">Contributing</a></p>
+  <p class="header-links"><a href="https://github.com/tempoxyz/mpp-specs">Source</a><span class="sep">·</span><a href="https://github.com/tempoxyz/mpp-specs/blob/main/CONTRIBUTING.md">Contributing</a></p>
 
   <div class="tree">
-    <div class="folder"><a href="draft-httpauth-payment-00.html" class="spec-title"><span class="folder-icon">~/</span>The &#34;Payment&#34; HTTP Authentication Scheme</a> <span class="formats"><a href="draft-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-httpauth-payment-00.pdf">PDF</a></span></div>
+
+
+    <div class="folder"><a href="draft-httpauth-payment-00.html" class="spec-title"><span class="folder-icon">~/</span>The "Payment" HTTP Authentication Scheme</a> <span class="formats"><a href="draft-httpauth-payment-00.txt">TXT</a><span class="sep">·</span><a href="draft-httpauth-payment-00.xml">XML</a><span class="sep">·</span><a href="draft-httpauth-payment-00.pdf">PDF</a></span></div>
+
+
+
+
+    <div class="folder"><a href="draft-payment-intent-authorize-00.html" class="spec-title"><span class="folder-icon">~/</span>Authorize</a> <span class="formats"><a href="draft-payment-intent-authorize-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-authorize-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-authorize-00.pdf">PDF</a></span></div>
+
+
+
+    <div class="spec-entry">
+      <span class="branch">└──</span> <a href="draft-tempo-authorize-00.html" class="spec-title">Tempo</a>
+      <span class="formats"><a href="draft-tempo-authorize-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-authorize-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-authorize-00.pdf">PDF</a></span>
+    </div>
+
+
+
+
     <div class="folder"><a href="draft-payment-intent-charge-00.html" class="spec-title"><span class="folder-icon">~/</span>Charge</a> <span class="formats"><a href="draft-payment-intent-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-charge-00.pdf">PDF</a></span></div>
+
+
+
+    <div class="spec-entry">
+      <span class="branch">├──</span> <a href="draft-lightning-charge-00.html" class="spec-title">Lightning</a>
+      <span class="formats"><a href="draft-lightning-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-lightning-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-lightning-charge-00.pdf">PDF</a></span>
+    </div>
+
+
+
     <div class="spec-entry">
       <span class="branch">├──</span> <a href="draft-stripe-charge-00.html" class="spec-title">Stripe</a>
       <span class="formats"><a href="draft-stripe-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-stripe-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-stripe-charge-00.pdf">PDF</a></span>
     </div>
+
+
+
     <div class="spec-entry">
       <span class="branch">└──</span> <a href="draft-tempo-charge-00.html" class="spec-title">Tempo</a>
       <span class="formats"><a href="draft-tempo-charge-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-charge-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-charge-00.pdf">PDF</a></span>
     </div>
+
+
+
+
     <div class="folder"><span class="folder-icon">~/</span>Session</div>
+
+
+
+    <div class="spec-entry">
+      <span class="branch">├──</span> <a href="draft-lightning-session-00.html" class="spec-title">Lightning</a>
+      <span class="formats"><a href="draft-lightning-session-00.txt">TXT</a><span class="sep">·</span><a href="draft-lightning-session-00.xml">XML</a><span class="sep">·</span><a href="draft-lightning-session-00.pdf">PDF</a></span>
+    </div>
+
+
+
     <div class="spec-entry">
       <span class="branch">└──</span> <a href="draft-tempo-session-00.html" class="spec-title">Tempo</a>
       <span class="formats"><a href="draft-tempo-session-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-session-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-session-00.pdf">PDF</a></span>
     </div>
-    <div class="folder"><a href="draft-payment-transport-mcp-00.html" class="spec-title"><span class="folder-icon">~/</span>JSON-RPC &amp; MCP Transport</a> <span class="formats"><a href="draft-payment-transport-mcp-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.pdf">PDF</a></span></div>
+
+
+
+
+    <div class="folder"><a href="draft-payment-intent-subscription-00.html" class="spec-title"><span class="folder-icon">~/</span>Subscription</a> <span class="formats"><a href="draft-payment-intent-subscription-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-intent-subscription-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-intent-subscription-00.pdf">PDF</a></span></div>
+
+
+
+    <div class="spec-entry">
+      <span class="branch">└──</span> <a href="draft-tempo-subscription-00.html" class="spec-title">Tempo</a>
+      <span class="formats"><a href="draft-tempo-subscription-00.txt">TXT</a><span class="sep">·</span><a href="draft-tempo-subscription-00.xml">XML</a><span class="sep">·</span><a href="draft-tempo-subscription-00.pdf">PDF</a></span>
+    </div>
+
+
+
+
     <div class="folder"><a href="draft-payment-discovery-00.html" class="spec-title"><span class="folder-icon">~/</span>Discovery</a> <span class="formats"><a href="draft-payment-discovery-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-discovery-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-discovery-00.pdf">PDF</a></span></div>
+
+
+
+
+    <div class="folder"><a href="draft-payment-transport-mcp-00.html" class="spec-title"><span class="folder-icon">~/</span>JSON-RPC & MCP Transport</a> <span class="formats"><a href="draft-payment-transport-mcp-00.txt">TXT</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.xml">XML</a><span class="sep">·</span><a href="draft-payment-transport-mcp-00.pdf">PDF</a></span></div>
+
+
+
   </div>
 </body>
 </html>
