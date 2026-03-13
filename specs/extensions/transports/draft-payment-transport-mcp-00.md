@@ -167,19 +167,21 @@ Servers and clients SHOULD advertise supported payment methods
 and intents before payment flows begin. The capability object
 SHOULD contain:
 
-**`methods`** (REQUIRED): Array of supported payment method
-  identifiers as registered in the IANA HTTP Payment Methods
-  registry.
-
-**`intents`** (REQUIRED): Array of supported payment intent
-  types as registered in the IANA HTTP Payment Intents registry.
+**`methods`** (REQUIRED): Object mapping payment method
+  identifiers (as registered in the IANA HTTP Payment Methods
+  registry) to their configuration. Each method object MUST
+  contain an `intents` array listing the supported payment
+  intent types (as registered in the IANA HTTP Payment Intents
+  registry) for that method.
 
 Example capability object:
 
 ~~~json
 {
-  "methods": ["tempo", "stripe"],
-  "intents": ["charge"]
+  "methods": {
+    "tempo": { "intents": ["charge"] },
+    "stripe": { "intents": ["charge"] }
+  }
 }
 ~~~
 
@@ -211,8 +213,10 @@ in the `InitializeResult`:
     "resources": {},
     "experimental": {
       "payment": {
-        "methods": ["tempo", "stripe"],
-        "intents": ["charge"]
+        "methods": {
+          "tempo": { "intents": ["charge"] },
+          "stripe": { "intents": ["charge"] }
+        }
       }
     }
   },
@@ -231,8 +235,9 @@ Clients SHOULD advertise in the `InitializeRequest`:
   "capabilities": {
     "experimental": {
       "payment": {
-        "methods": ["tempo"],
-        "intents": ["charge"]
+        "methods": {
+          "tempo": { "intents": ["charge"] }
+        }
       }
     }
   },
