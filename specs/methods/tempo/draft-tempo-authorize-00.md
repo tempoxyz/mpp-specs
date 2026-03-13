@@ -192,7 +192,7 @@ client MUST sign a transaction with `fee_token` set to pay fees themselves.
 # Credential Schema
 
 The credential in the `Authorization` header contains a base64url-encoded
-JSON object per Section 5.2 of {{I-D.httpauth-payment}}.
+JSON object per {{I-D.httpauth-payment}}.
 
 ## Credential Structure
 
@@ -395,7 +395,7 @@ an authorization granting the server permission to charge up to a limit:
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
-per Section 5.3 of {{I-D.httpauth-payment}}.
+per {{I-D.httpauth-payment}}.
 
 The receipt payload for Tempo authorize:
 
