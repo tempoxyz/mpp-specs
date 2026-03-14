@@ -1,5 +1,5 @@
 ---
-title: Card charge Intent for HTTP Payment Authentication
+title: Card Network Charge Intent for HTTP Payment Authentication
 abbrev: Card Charge
 docname: draft-card-charge-00
 version: 00
@@ -66,7 +66,7 @@ Authentication Scheme {{I-D.httpauth-payment}}.  The charge intent
 enables one-time card payments where the server processes the payment
 immediately upon receiving the credential.
 
-The card method is PSP-Agnostic.  Client Enablers SHOULD provision
+The card method is PSP-agnostic.  Client Enablers SHOULD provision
 agent-specific payment tokens using network services such as
 {{VISA-INTELLIGENT-COMMERCE}}.
 
@@ -138,6 +138,11 @@ Payment Data
 Client Enabler (CE)
 : See {{client-enabler-profile}}.
 
+Payment Service Provider (PSP)
+: An entity that provides payment processing services,
+  including transaction authorization, settlement, and
+  related functions.
+
 Vault Provider
 : Entity that stores sensitive card material and mediates
   calls to token service providers.
@@ -149,7 +154,7 @@ Token Service Provider (TSP)
   processor, or a vault provider with direct network connections.
 
 Server Enabler
-: A payment service provider or processing entity
+: A PSP or processing entity
   on the server side that decrypts and processes the encrypted
   network token credential.
 
@@ -218,7 +223,7 @@ Cache-Control: no-store
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in smallest currency unit (e.g., "4999" = $49.99). |
 | `currency` | string | REQUIRED | ISO 4217 code, lowercase (e.g., "usd"). |
-| `recipient` | string | OPTIONAL | Merchant identifier in the method-native format.  For card payments, this is the merchant ID used by the Server Enabler. |
+| `recipient` | string | OPTIONAL | Merchant identifier as registered with the Server Enabler (acquirer).  For card payments, this is the merchant ID assigned by the acquiring PSP (e.g., "merch_abc123"). |
 | `description` | string | OPTIONAL | Human-readable description of the payment. |
 | `externalId` | string | OPTIONAL | Merchant's external reference (order ID, invoice number, etc.). |
 
@@ -228,10 +233,10 @@ Cache-Control: no-store
 |-------|------|----------|-------------|
 | `methodDetails.acceptedNetworks` | array | REQUIRED | Card networks accepted (e.g., \["visa", "mastercard"\]). |
 | `methodDetails.merchantName` | string | REQUIRED | Human-readable merchant name for display (e.g., "Acme Corp"). |
-| `methodDetails.encryptionJwk` | object | CONDIT. | Embedded JWK ({{RFC7517}} Section 4) containing the server's RSA public encryption key.  REQUIRED if `jwksUri` is absent. |
+| `methodDetails.encryptionJwk` | object | CONDIT. | Embedded JWK ({{RFC7517}} Section 4) containing the server's RSA public encryption key.  REQUIRED if `jwksUri` is absent; MUST NOT be present if `jwksUri` is present. |
 | `methodDetails.jwksUri` | string | OPTIONAL | HTTPS URI of a JWK Set ({{RFC7517}} Section 5).  MUST be on the same origin as the realm.  When present, `kid` MUST also be present. |
 | `methodDetails.kid` | string | CONDIT. | Key ID referencing a key in the JWKS.  REQUIRED when `jwksUri` is present. |
-| `methodDetails.billingRequired` | bool | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-data}}. |
+| `methodDetails.billingRequired` | boolean | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-data}}. |
 
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}} and
@@ -311,7 +316,7 @@ decrypts the token for processing.
   "amount": "4999",
   "currency": "usd",
   "recipient": "merch_abc123",
-  "description": "Pro plan -- monthly subscription",
+  "description": "Pro plan — monthly subscription",
   "methodDetails": {
     "acceptedNetworks": ["visa", "mastercard", "amex"],
     "merchantName": "Acme Corp",
@@ -538,8 +543,11 @@ retried requests.
 
 Replay behavior:
 
-- Same `challenge.id`, credential already processed: server MUST
-  return the cached receipt (HTTP 200) or HTTP 409 Conflict.
+- Same `challenge.id`, credential already successfully processed:
+  server MUST return the cached 200 response with Payment-Receipt.
+
+- Same `challenge.id`, prior processing failed: server MUST return
+  HTTP 409 Conflict.
 
 - Same `challenge.id`, challenge expired: server MUST return HTTP
   402 with a fresh challenge.
@@ -657,7 +665,7 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 | Intent | Applicable Methods | Description | Reference |
 |--------|-------------------|-------------|-----------|
-| `charge` | `card` | One-time card payment | This document |
+| `charge` | `card` | One-time card payment via encrypted network token | This document |
 
 --- back
 
@@ -822,7 +830,7 @@ Decoded request:
   "amount": "4999",
   "currency": "usd",
   "recipient": "merch_abc123",
-  "description": "Pro plan -- monthly subscription",
+  "description": "Pro plan — monthly subscription",
   "externalId": "order_12345",
   "methodDetails": {
     "acceptedNetworks": ["visa", "mastercard", "amex"],
@@ -929,5 +937,7 @@ Decoded receipt:
 
 # Acknowledgements
 
-The authors thank the Tempo community for their feedback on this
-specification.
+The authors thank Visa's acceptance and tokenization partners
+for their contributions to the card payment ecosystem that
+informed this specification.  The authors also thank Brendan
+Ryan for his review of this document.
