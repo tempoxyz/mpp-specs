@@ -57,6 +57,10 @@ jobs:
           Contains HTML, TXT, XML, and PDF renderings of all IETF Payment Auth specifications." \
             --latest
 
+      - name: Generate index page
+        run: |
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest python3 /data/scripts/gen_index.py
+
       - name: Prepare GitHub Pages
         run: |
           mkdir -p _site/fonts
