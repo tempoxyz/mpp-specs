@@ -19,7 +19,10 @@ normative:
   RFC3339:
   RFC7517:
   RFC8017:
+  RFC4648:
+  RFC8259:
   RFC8174:
+  RFC9110:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
@@ -39,16 +42,19 @@ informative:
     title: Visa Intelligent Commerce
     author:
       - org: Visa Inc.
+  VISA-TAP:
+    target: https://developer.visa.com/capabilities/trusted-agent-protocol/
+    title: Visa Trusted Agent Protocol
+    author:
+      - org: Visa Inc.
 ---
 
 --- abstract
 
 This document defines the "card" payment method and its
-implementation of the "charge" intent
-{{I-D.payment-intent-charge}} within the Payment HTTP
-Authentication Scheme {{I-D.httpauth-payment}}.  It specifies
-how clients and servers exchange one-time card payments using
-encrypted network tokens.
+implementation of the "charge" intent within the Payment HTTP
+Authentication Scheme.  It specifies how clients and servers
+exchange one-time card payments using encrypted network tokens.
 
 --- middle
 
@@ -60,7 +66,7 @@ Authentication Scheme {{I-D.httpauth-payment}}.  The charge intent
 enables one-time card payments where the server processes the payment
 immediately upon receiving the credential.
 
-The card method is PSP-Agnostic.  Client Enablers should provision
+The card method is PSP-Agnostic.  Client Enablers SHOULD provision
 agent-specific payment tokens using network services such as
 {{VISA-INTELLIGENT-COMMERCE}}.
 
@@ -81,8 +87,7 @@ The card method implements the charge intent flow defined in
 7. Server Enabler decrypts and processes the payment.
 8. Server returns 200 with Payment-Receipt and the resource.
 
-The client may include
-[Trusted Agent Protocol](https://developer.visa.com/capabilities/trusted-agent-protocol/)
+The client may include Trusted Agent Protocol {{VISA-TAP}}
 signature headers for additional identity assurance.
 
 The following diagram illustrates the flow:
@@ -134,8 +139,8 @@ Client Enabler (CE)
 : See {{client-enabler-profile}}.
 
 Vault Provider
-: Entity that stores sensitive card material (PAN or
-  network token) and mediates calls to token service providers.
+: Entity that stores sensitive card material and mediates
+  calls to token service providers.
   A vault provider is one type of Client Enabler.
 
 Token Service Provider (TSP)
@@ -149,9 +154,8 @@ Server Enabler
   network token credential.
 
 Network Token
-: A card-network-issued token that replaces the Primary
-  Account Number (PAN) for transaction processing.  Never exposed to
-  the client or server.
+: A card-network-issued token used for transaction
+  processing.  Never exposed to the client or server.
 
 Cryptogram
 : A one-time-use value generated alongside a network token
@@ -181,7 +185,7 @@ reversibility) are defined in
 {{I-D.payment-intent-charge}}.  For the card method, reversibility
 is subject to card network chargeback rules.
 
-**Fulfillment mechanism:*-The client obtains an encrypted network
+**Fulfillment mechanism:** The client obtains an encrypted network
 token from its Client Enabler and submits it in an
 Authorization: Payment header.  The Server Enabler decrypts and
 processes the payment through existing card network rails.
@@ -222,12 +226,12 @@ Cache-Control: no-store
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.accepted_networks` | array | REQUIRED | Card networks accepted (e.g., \["visa", "mastercard"\]). |
-| `methodDetails.merchant_name` | string | REQUIRED | Human-readable merchant name for display (e.g., "Acme Corp"). |
-| `methodDetails.encryption_jwk` | object | CONDIT. | Embedded JWK ({{RFC7517}} Section 4) containing the server's RSA public encryption key.  REQUIRED if `jwks_uri` is absent. |
-| `methodDetails.jwks_uri` | string | OPTIONAL | HTTPS URI of a JWK Set ({{RFC7517}} Section 5).  MUST be on the same origin as the realm.  When present, `kid` MUST also be present. |
-| `methodDetails.kid` | string | CONDIT. | Key ID referencing a key in the JWKS.  REQUIRED when `jwks_uri` is present. |
-| `methodDetails.billing_required` | bool | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-data}}. |
+| `methodDetails.acceptedNetworks` | array | REQUIRED | Card networks accepted (e.g., \["visa", "mastercard"\]). |
+| `methodDetails.merchantName` | string | REQUIRED | Human-readable merchant name for display (e.g., "Acme Corp"). |
+| `methodDetails.encryptionJwk` | object | CONDIT. | Embedded JWK ({{RFC7517}} Section 4) containing the server's RSA public encryption key.  REQUIRED if `jwksUri` is absent. |
+| `methodDetails.jwksUri` | string | OPTIONAL | HTTPS URI of a JWK Set ({{RFC7517}} Section 5).  MUST be on the same origin as the realm.  When present, `kid` MUST also be present. |
+| `methodDetails.kid` | string | CONDIT. | Key ID referencing a key in the JWKS.  REQUIRED when `jwksUri` is present. |
+| `methodDetails.billingRequired` | bool | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-data}}. |
 
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}} and
@@ -239,15 +243,15 @@ the expiry value.
 The server provides its RSA public encryption key using one of
 two mechanisms:
 
-1. Embedded JWK (`encryption_jwk`) -- The server includes a JSON
+1. Embedded JWK (`encryptionJwk`) -- The server includes a JSON
     Web Key {{RFC7517}} directly in methodDetails.  This is
     the RECOMMENDED approach for most deployments.  It requires
     no additional infrastructure and works in environments where
     the Client Enabler cannot make outbound HTTP calls.
 
-2. JWKS URI (`jwks_uri` + `kid`) -- The server hosts a JWK Set at
+2. JWKS URI (`jwksUri` + `kid`) -- The server hosts a JWK Set at
     an HTTPS endpoint and references the key by its `kid`.  The
-    `jwks_uri` MUST be on the same origin as the challenge realm.
+    `jwksUri` MUST be on the same origin as the challenge realm.
     This approach supports centralized key rotation and is
     suitable for large platforms managing keys across many
     merchants.
@@ -269,14 +273,14 @@ Key requirements:
 
 Key resolution procedure:
 
-1. If `jwks_uri` is present in methodDetails, the Client Enabler
+1. If `jwksUri` is present in methodDetails, the Client Enabler
     MUST verify the URI is on the same origin as the challenge
     realm.  If the origins differ, the CE MUST reject the
     challenge.  The CE MUST fetch the JWK Set from the URI over
     HTTPS and select the key matching `kid`.  If the `kid` is not
     found, the CE MUST reject the challenge.
 
-2. Otherwise, if `encryption_jwk` is present in methodDetails, the
+2. Otherwise, if `encryptionJwk` is present in methodDetails, the
     CE MUST use the embedded key directly.
 
 3. If neither is present, the CE MUST reject the challenge.
@@ -284,9 +288,9 @@ Key resolution procedure:
 4. The CE MUST validate the resolved key: `kty` MUST be "RSA",
     `alg` MUST be "RSA-OAEP-256", and `use` MUST be "enc".
 
-When `encryption_jwk` is used, the `kid` value is taken from
+When `encryptionJwk` is used, the `kid` value is taken from
 within the JWK object.  A top-level `kid` field MUST NOT be
-present when `encryption_jwk` is used.  When `jwks_uri` is used,
+present when `encryptionJwk` is used.  When `jwksUri` is used,
 the top-level `kid` field identifies which key to select from
 the JWK Set.
 
@@ -309,9 +313,9 @@ decrypts the token for processing.
   "recipient": "merch_abc123",
   "description": "Pro plan -- monthly subscription",
   "methodDetails": {
-    "accepted_networks": ["visa", "mastercard", "amex"],
-    "merchant_name": "Acme Corp",
-    "encryption_jwk": {
+    "acceptedNetworks": ["visa", "mastercard", "amex"],
+    "merchantName": "Acme Corp",
+    "encryptionJwk": {
       "kty": "RSA",
       "kid": "enc-2026-01",
       "use": "enc",
@@ -359,9 +363,9 @@ The decoded credential follows the standard MPP format:
     "expirationYear": "2028",
     "eci": "07",
     "billing": {
-      "first_name": "Jane",
-      "last_name": "Smith",
-      "postal_code": "94102",
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "postalCode": "94102",
       "country": "US"
     }
   }
@@ -377,18 +381,15 @@ The `payload` field contains the card-specific payment proof.
 |-------|------|----------|-------------|
 | `token` | string | REQUIRED | Encrypted token ({{token-format}}).  Client and server MUST NOT parse. |
 | `network` | string | REQUIRED | Card network: "visa", "mastercard", "amex", "discover". |
-| `lastFour` | string | OPTIONAL | Last four digits of the card number as displayed to the cardholder.  Display metadata only. |
-| `expirationMonth` | string | OPTIONAL | Token expiration month (e.g., "06").  Display metadata only. |
-| `expirationYear` | string | OPTIONAL | Token expiration year.  MUST be four digits (e.g., "2028") when present.  Display metadata only. |
-| `eci` | string | OPTIONAL | Electronic Commerce Indicator (e.g., "05", "07").  Present when network_token type. |
+| `lastFour` | string | OPTIONAL | Last four digits of the card number as displayed to the cardholder. |
+| `expirationMonth` | string | OPTIONAL | Token expiration month (e.g., "06"). |
+| `expirationYear` | string | OPTIONAL | Token expiration year.  MUST be four digits (e.g., "2028") when present. |
+| `eci` | string | OPTIONAL | Electronic Commerce Indicator (e.g., "05", "07"). |
 | `billing` | object | OPTIONAL | Billing information ({{billing-data}}). |
 
 The `token` field is the only REQUIRED proof element.  The `network`
-field is REQUIRED for routing.  The `lastFour`, `expirationMonth`,
-`expirationYear`, and `eci` fields are display metadata; the Server
-Enabler obtains authoritative values from inside the decrypted
-token ({{token-format}}).  The `billing` field is operational data
-used for address verification and fulfillment ({{billing-data}}).
+field is REQUIRED for routing.  The `billing` field is operational
+data used for address verification and fulfillment ({{billing-data}}).
 
 ## Token Format {#token-format}
 
@@ -397,39 +398,27 @@ fields required to process the charge.  The plaintext MUST be a
 minified UTF-8 encoded JSON object.  The `type` field determines
 the variant.
 
-Network token (type: "network_token"):
-
 ~~~ json
 {
   "type": "network_token",
   "dpan": "4242424242424242",
-  "exp": "0628",
+  "expirationMonth": "06",
+  "expirationYear": "2028",
   "cryptogram": "AmDDBjkH/4A=",
   "eci": "07",
   "par": "PAR9876543210987654321012345"
 }
 ~~~
 
-Raw PAN (type: "pan"):
-
-~~~ json
-{
-  "type": "pan",
-  "pan": "4111111111111234",
-  "exp": "0628",
-  "par": "PAR9876543210987654321012345"
-}
-~~~
-
 | Field | Required | Description |
 |-------|----------|-------------|
-| `type` | REQUIRED | "network_token" or "pan". |
-| `dpan` | REQUIRED if network_token | Network token number (DPAN) as issued by the TSP. |
-| `pan` | REQUIRED if pan | Primary Account Number. |
-| `exp` | REQUIRED | Expiration as MMYY (e.g., "0628"). |
-| `cryptogram` | REQUIRED if network_token | Base64-encoded cryptogram (TAVV). |
-| `eci` | REQUIRED if network_token | Electronic Commerce Indicator. |
-| `par` | OPTIONAL | Payment Account Reference. |
+| `type` | REQUIRED | "network_token". |
+| `dpan` | REQUIRED | Network token number (DPAN) as issued by the TSP. |
+| `expirationMonth` | REQUIRED | Two-digit expiration month (e.g., "06"). |
+| `expirationYear` | REQUIRED | Four-digit expiration year (e.g., "2028"). |
+| `cryptogram` | REQUIRED | Base64-encoded cryptogram (TAVV). |
+| `eci` | REQUIRED | Electronic Commerce Indicator. |
+| `par` | SHOULD | Payment Account Reference.  Client Enablers SHOULD include when available from the TSP. |
 
 The CE encrypts this JSON object using RSA-OAEP with SHA-256 and
 the encryption key resolved per {{encryption-key}}, then
@@ -447,7 +436,7 @@ Clients and servers MUST NOT parse the `token` field.
 
 ## Billing Data {#billing-data}
 
-When `billing_required` is true in the challenge methodDetails,
+When `billingRequired` is true in the challenge methodDetails,
 the Client Enabler SHOULD include billing
 information in the credential payload.
 
@@ -456,33 +445,33 @@ object with the following OPTIONAL fields:
 
 ~~~ json
 {
-  "first_name": "Jane",
-  "last_name": "Smith",
-  "address_line1": "123 Main St",
-  "address_line2": "Apt 4B",
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "addressLine1": "123 Main St",
+  "addressLine2": "Apt 4B",
   "city": "San Francisco",
   "state": "CA",
-  "postal_code": "94102",
+  "postalCode": "94102",
   "country": "US"
 }
 ~~~
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `first_name` | string | OPTIONAL | Cardholder first name (given name). |
-| `last_name` | string | OPTIONAL | Cardholder last name (family name). |
-| `address_line1` | string | OPTIONAL | Street address, line 1. |
-| `address_line2` | string | OPTIONAL | Street address, line 2. |
+| `firstName` | string | OPTIONAL | Cardholder first name (given name). |
+| `lastName` | string | OPTIONAL | Cardholder last name (family name). |
+| `addressLine1` | string | OPTIONAL | Street address, line 1. |
+| `addressLine2` | string | OPTIONAL | Street address, line 2. |
 | `city` | string | OPTIONAL | City or locality. |
 | `state` | string | OPTIONAL | State, province, or region. |
-| `postal_code` | string | OPTIONAL | Postal or ZIP code. |
+| `postalCode` | string | OPTIONAL | Postal or ZIP code. |
 | `country` | string | OPTIONAL | ISO 3166-1 alpha-2 country code (e.g., "US"). |
 
 All billing fields are OPTIONAL within the billing object.
 Client Enablers SHOULD include whichever fields are available
 from the cardholder's stored billing profile.
 
-If `billing_required` is true but the credential omits the
+If `billingRequired` is true but the credential omits the
 `billing` field, the server MAY reject the credential or
 proceed at its discretion.
 
@@ -504,7 +493,7 @@ method:
 4. Verify the method: confirm `challenge.method` equals "card".
 
 5. Verify network acceptance: confirm `payload.network` is in the
-    `accepted_networks` list from methodDetails.
+    `acceptedNetworks` list from methodDetails.
 
 6. Reject replays: confirm this `challenge.id` has not been previously
     fulfilled.  Mark it as consumed.
@@ -563,102 +552,6 @@ Replay behavior:
 
 - Servers SHOULD purge challenge state after the TTL expires.
 
-# Client Enabler Profile {#client-enabler-profile}
-
-A Client Enabler (CE) is any entity that accepts challenge
-context from a client, provisions a network token and
-cryptogram, encrypts the result using the server's encryption
-key ({{encryption-key}}), and returns the credential payload.
-Client Enablers include vault providers, token service
-providers, and PSPs acting as issuers.  This section defines
-a minimal HTTP interface that CEs SHOULD implement for
-interoperability.
-
-## Token Request Interface
-
-The client sends a request to the Client Enabler with the
-card identifier and the full challenge context (including the
-encryption key from methodDetails as `encryption_jwk` or
-`jwks_uri` + `kid`).  Authentication to the Client Enabler is out of
-scope of this specification; the Bearer token shown below is
-illustrative.  The endpoint URL, path, and authentication mechanism
-are CE-defined; the example below uses `POST /v1/payment-tokens`
-for illustration.
-
-**Request:**
-
-~~~ http
-POST /v1/payment-tokens HTTP/1.1
-Host: api.vault-provider.com
-Content-Type: application/json
-Authorization: Bearer <agent_api_key>
-~~~
-
-~~~ json
-{
-  "card_id": "card_abc123",
-  "challenge": {
-    "id": "ch_9xK2mR4vB7nQ",
-    "realm": "api.merchant.com",
-    "amount": "4999",
-    "currency": "usd",
-    "accepted_networks": ["visa", "mastercard"],
-    "merchant_name": "Acme Corp",
-    "encryption_jwk": {
-      "kty": "RSA",
-      "kid": "enc-2026-01",
-      "use": "enc",
-      "alg": "RSA-OAEP-256",
-      "n": "0vx7agoebGcQSuu...",
-      "e": "AQAB"
-    }
-  }
-}
-~~~
-
-The Client Enabler MUST:
-
-- Validate that the `card_id` exists and belongs to the
-  authenticated client.
-
-- Provision a network token and cryptogram (or raw PAN) for
-  the transaction.
-
-- Resolve the encryption key per the procedure in
-  {{encryption-key}}: use `encryption_jwk` directly, or fetch
-  `jwks_uri` and select by `kid`.
-
-- Validate the key: `kty` MUST be "RSA", `alg` MUST be
-  "RSA-OAEP-256", `use` MUST be "enc".
-
-- Encrypt the token payload using RSA-OAEP with SHA-256
-  and the resolved key ({{token-format}}).
-
-- Return the encrypted token along with display metadata and
-  authentication context.
-
-**Response:**
-
-~~~ http
-HTTP/1.1 200 OK
-Content-Type: application/json
-~~~
-
-~~~ json
-{
-  "token": "<base64-encoded RSA-OAEP ciphertext>",
-  "network": "visa",
-  "lastFour": "4242",
-  "expirationMonth": "06",
-  "expirationYear": "2028",
-  "eci": "07"
-}
-~~~
-
-The response body contains the credential payload fields
-defined in {{payload-fields}}.  The client includes these fields directly
-in the credential payload.
-
 # Settlement Procedure
 
 After credential verification, the Server Enabler decrypts the
@@ -713,19 +606,17 @@ All MPP exchanges MUST occur over TLS 1.2 or higher (TLS 1.3
 recommended).  Plain HTTP MUST be rejected.  Clients SHOULD verify
 the server's TLS certificate.
 
-## Credential and PAN Security
+## Credential Security
 
 The `token` field is not readable by the client ({{token-format}}).  The
 Client Enabler encrypts the token using the server's
 encryption key ({{encryption-key}}), provided as a JWK via
-`encryption_jwk` or resolved from `jwks_uri` in methodDetails.
+`encryptionJwk` or resolved from `jwksUri` in methodDetails.
 Only the Server Enabler holding the corresponding private key
 can decrypt and process it.
 
-Raw Primary Account Numbers MUST never appear in MPP messages,
-logs, or client memory.  Only encrypted network tokens travel
-in the credential.  The client never has access to decrypted
-token material.
+Only encrypted network tokens travel in the credential.  The
+client never has access to decrypted token material.
 
 ## Billing Data Handling
 
@@ -750,32 +641,124 @@ applicable privacy regulations (e.g., GDPR, CCPA).
 
 ## Payment Method Registration
 
-This specification registers the "card" payment method in the
-Payment Method Registry per {{I-D.httpauth-payment}}:
+This document registers the following payment method in the "HTTP Payment
+Methods" registry established by {{I-D.httpauth-payment}}:
 
-- **Method**: card
-
-- **Description**: Card payment via encrypted network token credential
-
-- **Specification**: [this document]
-
-## Payment Intent Registration
-
-This specification registers the "charge" intent for the "card"
-payment method in the Payment Intent Registry per
-{{I-D.httpauth-payment}}:
-
-- **Intent**: charge
-
-- **Method**: card
-
-- **Specification**: [this document]
+| Method Identifier | Description | Reference |
+|-------------------|-------------|-----------|
+| `card` | Card payment via encrypted network token credential | This document |
 
 Contact: Visa (<jbrans@visa.com>)
 
+## Payment Intent Registration
+
+This document registers the following payment intent in the "HTTP Payment
+Intents" registry established by {{I-D.httpauth-payment}}:
+
+| Intent | Applicable Methods | Description | Reference |
+|--------|-------------------|-------------|-----------|
+| `charge` | `card` | One-time card payment | This document |
+
 --- back
 
+# Client Enabler Profile {#client-enabler-profile}
+
+This appendix describes an illustrative HTTP interface for
+Client Enablers (CEs).  A Client Enabler is any entity that
+accepts challenge context from a client, provisions a network
+token and cryptogram, encrypts the result using the server's
+encryption key ({{encryption-key}}), and returns the credential
+payload.  Client Enablers include vault providers, token
+service providers, and PSPs acting as issuers.
+
+The interface described here is informative.  Endpoint URLs,
+paths, and authentication mechanisms are CE-defined.
+
+## Token Request Interface
+
+The client sends a request to the Client Enabler with the
+card identifier and the full challenge context (including the
+encryption key from methodDetails as `encryptionJwk` or
+`jwksUri` + `kid`).  The Bearer token shown below is
+illustrative.
+
+**Request:**
+
+~~~ http
+POST /v1/payment-tokens HTTP/1.1
+Host: api.vault-provider.com
+Content-Type: application/json
+Authorization: Bearer <agent_api_key>
+~~~
+
+~~~ json
+{
+  "cardId": "card_abc123",
+  "challenge": {
+    "id": "ch_9xK2mR4vB7nQ",
+    "realm": "api.merchant.com",
+    "amount": "4999",
+    "currency": "usd",
+    "acceptedNetworks": ["visa", "mastercard"],
+    "merchantName": "Acme Corp",
+    "encryptionJwk": {
+      "kty": "RSA",
+      "kid": "enc-2026-01",
+      "use": "enc",
+      "alg": "RSA-OAEP-256",
+      "n": "0vx7agoebGcQSuu...",
+      "e": "AQAB"
+    }
+  }
+}
+~~~
+
+A conforming Client Enabler is expected to:
+
+- Validate that the `cardId` exists and belongs to the
+  authenticated client.
+
+- Provision a network token and cryptogram for the transaction.
+
+- Resolve the encryption key per the procedure in
+  {{encryption-key}}: use `encryptionJwk` directly, or fetch
+  `jwksUri` and select by `kid`.
+
+- Validate the key: `kty` is "RSA", `alg` is
+  "RSA-OAEP-256", `use` is "enc".
+
+- Encrypt the token payload using RSA-OAEP with SHA-256
+  and the resolved key ({{token-format}}).
+
+- Return the encrypted token along with display metadata and
+  authentication context.
+
+**Response:**
+
+~~~ http
+HTTP/1.1 200 OK
+Content-Type: application/json
+~~~
+
+~~~ json
+{
+  "token": "<base64-encoded RSA-OAEP ciphertext>",
+  "network": "visa",
+  "lastFour": "4242",
+  "expirationMonth": "06",
+  "expirationYear": "2028",
+  "eci": "07"
+}
+~~~
+
+The response body contains the credential payload fields
+defined in {{payload-fields}}.  The client includes these fields
+directly in the credential payload.
+
 # ABNF Collected
+
+This appendix imports `quoted-string`, `token`, and `base64url`
+from {{I-D.httpauth-payment}}.
 
 ~~~ abnf
 card-challenge = "Payment" 1*SP
@@ -813,9 +796,12 @@ WWW-Authenticate: Payment
   request="eyJhbW91bnQiOiI0OTk5IiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNp
     cGllbnQiOiJtZXJjaF9hYmMxMjMiLCJkZXNjcmlwdGlvbiI6IlBybyBw
     bGFuIC0tIG1vbnRobHkgc3Vic2NyaXB0aW9uIiwiZXh0ZXJuYWxJZCI6
-    Im9yZGVyXzEyMzQ1IiwibWV0aG9kRGV0YWlscyI6eyJhY2NlcHRlZF9u
-    ZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyY2FyZCIsImFtZXgiXSwibWVy
-    Y2hhbnRfbmFtZSI6IkFjbWUgQ29ycCJ9fQ"
+    Im9yZGVyXzEyMzQ1IiwibWV0aG9kRGV0YWlscyI6eyJhY2NlcHRlZE5l
+    dHdvcmtzIjpbInZpc2EiLCJtYXN0ZXJjYXJkIiwiYW1leCJdLCJtZXJj
+    aGFudE5hbWUiOiJBY21lIENvcnAiLCJiaWxsaW5nUmVxdWlyZWQiOnRy
+    dWUsImVuY3J5cHRpb25Kd2siOnsia3R5IjoiUlNBIiwia2lkIjoiZW5j
+    LTIwMjYtMDEiLCJ1c2UiOiJlbmMiLCJhbGciOiJSU0EtT0FFUC0yNTYi
+    LCJuIjoiMHZ4N2Fnb2ViR2NRU3V1Li4uIiwiZSI6IkFRQUIifX19"
 Cache-Control: no-store
 Content-Type: application/problem+json
 ~~~
@@ -839,10 +825,10 @@ Decoded request:
   "description": "Pro plan -- monthly subscription",
   "externalId": "order_12345",
   "methodDetails": {
-    "accepted_networks": ["visa", "mastercard", "amex"],
-    "merchant_name": "Acme Corp",
-    "billing_required": true,
-    "encryption_jwk": {
+    "acceptedNetworks": ["visa", "mastercard", "amex"],
+    "merchantName": "Acme Corp",
+    "billingRequired": true,
+    "encryptionJwk": {
       "kty": "RSA",
       "kid": "enc-2026-01",
       "use": "enc",
@@ -869,9 +855,15 @@ GET /api/data HTTP/1.1
 Host: api.merchant.com
 Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF85eEsy
   bVI0dkI3blEiLCJyZWFsbSI6ImFwaS5tZXJjaGFudC5jb20iLCJtZXRo
-  b2QiOiJjYXJkIiwiaW50ZW50IjoiY2hhcmdlIn0sInBheWxvYWQiOnsi
-  cGF5bWVudF9kYXRhIjp7InR5cGUiOiJDQVJEIiwiaW5mbyI6eyJjYXJk
-  TmV0d29yayI6IlZJU0EiLCJjYXJkRGV0YWlscyI6IjQyNDIifX19fQ
+  b2QiOiJjYXJkIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5
+  SmhiVzkxYm5RaU9pSTBPVGs1SWk0dUxuMCIsImV4cGlyZXMiOiIyMDI2
+  LTAyLTE5VDEyOjEwOjAwWiJ9LCJwYXlsb2FkIjp7InRva2VuIjoiPGJh
+  c2U2NC1lbmNvZGVkIFJTQS1PQUVQIGNpcGhlcnRleHQ-IiwibmV0d29y
+  ayI6InZpc2EiLCJsYXN0Rm91ciI6IjQyNDIiLCJleHBpcmF0aW9uTW9u
+  dGgiOiIwNiIsImV4cGlyYXRpb25ZZWFyIjoiMjAyOCIsImVjaSI6IjA3
+  IiwiYmlsbGluZyI6eyJmaXJzdE5hbWUiOiJKYW5lIiwibGFzdE5hbWUi
+  OiJTbWl0aCIsInBvc3RhbENvZGUiOiI5NDEwMiIsImNvdW50cnkiOiJV
+  UyJ9fX0
 ~~~
 
 Decoded credential:
@@ -894,9 +886,9 @@ Decoded credential:
     "expirationYear": "2028",
     "eci": "07",
     "billing": {
-      "first_name": "Jane",
-      "last_name": "Smith",
-      "postal_code": "94102",
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "postalCode": "94102",
       "country": "US"
     }
   }
