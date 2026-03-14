@@ -27,4 +27,6 @@ test:
 	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest test_lint_frontmatter.py -v
 
 site: build
+	@python3 scripts/gen_index.py
+	@python3 scripts/gen_problems.py
 	@python3 scripts/serve.py
