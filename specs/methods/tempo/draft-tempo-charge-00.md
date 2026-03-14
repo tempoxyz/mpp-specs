@@ -19,7 +19,7 @@ author:
     organization: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
-    email: thomas@tempo.xyz
+    email: tom@tempo.xyz
     organization: Tempo Labs
 
 normative:
