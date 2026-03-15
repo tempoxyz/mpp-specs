@@ -328,7 +328,7 @@ decrypts the JWE to recover the token payload for processing.
   "amount": "4999",
   "currency": "usd",
   "recipient": "merch_abc123",
-  "description": "Pro plan -- monthly subscription",
+  "description": "Pro plan — monthly subscription",
   "methodDetails": {
     "acceptedNetworks": ["visa", "mastercard", "amex"],
     "merchantName": "Acme Corp",
@@ -899,13 +899,13 @@ WWW-Authenticate: Payment
   expires="2026-02-19T12:10:00Z",
   request="eyJhbW91bnQiOiI0OTk5IiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNp
     cGllbnQiOiJtZXJjaF9hYmMxMjMiLCJkZXNjcmlwdGlvbiI6IlBybyBw
-    bGFuIC0tIG1vbnRobHkgc3Vic2NyaXB0aW9uIiwiZXh0ZXJuYWxJZCI6
-    Im9yZGVyXzEyMzQ1IiwibWV0aG9kRGV0YWlscyI6eyJhY2NlcHRlZE5l
-    dHdvcmtzIjpbInZpc2EiLCJtYXN0ZXJjYXJkIiwiYW1leCJdLCJtZXJj
-    aGFudE5hbWUiOiJBY21lIENvcnAiLCJiaWxsaW5nUmVxdWlyZWQiOnRy
-    dWUsImVuY3J5cHRpb25Kd2siOnsia3R5IjoiUlNBIiwia2lkIjoiZW5j
-    LTIwMjYtMDEiLCJ1c2UiOiJlbmMiLCJhbGciOiJSU0EtT0FFUC0yNTYi
-    LCJuIjoiMHZ4N2Fnb2ViR2NRU3V1Li4uIiwiZSI6IkFRQUIifX19"
+    bGFuIOKAlCBtb250aGx5IHN1YnNjcmlwdGlvbiIsImV4dGVybmFsSWQi
+    OiJvcmRlcl8xMjM0NSIsIm1ldGhvZERldGFpbHMiOnsiYWNjZXB0ZWRO
+    ZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyY2FyZCIsImFtZXgiXSwibWVy
+    Y2hhbnROYW1lIjoiQWNtZSBDb3JwIiwiYmlsbGluZ1JlcXVpcmVkIjp0
+    cnVlLCJlbmNyeXB0aW9uSndrIjp7Imt0eSI6IlJTQSIsImtpZCI6ImVu
+    Yy0yMDI2LTAxIiwidXNlIjoiZW5jIiwiYWxnIjoiUlNBLU9BRVAtMjU2
+    IiwibiI6IjB2eDdhZ29lYkdjUVN1dS4uLiIsImUiOiJBUUFCIn19fQ"
 Cache-Control: no-store
 Content-Type: application/problem+json
 ~~~
@@ -926,7 +926,7 @@ Decoded request:
   "amount": "4999",
   "currency": "usd",
   "recipient": "merch_abc123",
-  "description": "Pro plan -- monthly subscription",
+  "description": "Pro plan — monthly subscription",
   "externalId": "order_12345",
   "methodDetails": {
     "acceptedNetworks": ["visa", "mastercard", "amex"],
