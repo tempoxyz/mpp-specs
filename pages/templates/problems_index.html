@@ -1,9 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☰</text></svg>">
+  {% include "head-meta.html" %}
   <title>Problem Types – Payment Auth</title>
   <style>
     @font-face {
@@ -22,21 +20,7 @@
       font-display: swap;
     }
 
-    :root {
-      --color-link: #0066cc;
-      --color-text: #333;
-    }
-
-    body {
-      font-family: "Berkeley Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      font-size: 16px;
-      max-width: 900px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      line-height: 1.6;
-      color: var(--color-text);
-      -webkit-font-smoothing: antialiased;
-    }
+    {% include "base-styles.html" %}
 
     h1 {
       font-size: 2rem;
@@ -63,11 +47,6 @@
 
     .header-links a:hover {
       text-decoration: underline;
-    }
-
-    .sep {
-      color: #999;
-      margin: 0 0.25rem;
     }
 
     table {
