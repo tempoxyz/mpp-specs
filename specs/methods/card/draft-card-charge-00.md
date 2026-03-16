@@ -17,7 +17,9 @@ author:
 normative:
   RFC2119:
   RFC3339:
+  RFC7516:
   RFC7517:
+  RFC7518:
   RFC8017:
   RFC4648:
   RFC8259:
@@ -37,6 +39,12 @@ normative:
     date: 2026-03
 
 informative:
+  EMV-SRC-API:
+    target: https://www.emvco.com/emv-technologies/secure-remote-commerce/
+    title: "EMV Secure Remote Commerce - API Specification"
+    author:
+      - org: EMVCo, LLC
+    date: 2025-10
   VISA-INTELLIGENT-COMMERCE:
     target: https://developer.visa.com/capabilities/visa-intelligent-commerce
     title: Visa Intelligent Commerce
@@ -236,7 +244,7 @@ Cache-Control: no-store
 | `methodDetails.encryptionJwk` | object | CONDIT. | Embedded JWK ({{RFC7517}} Section 4) containing the server's RSA public encryption key.  REQUIRED if `jwksUri` is absent; MUST NOT be present if `jwksUri` is present. |
 | `methodDetails.jwksUri` | string | OPTIONAL | HTTPS URI of a JWK Set ({{RFC7517}} Section 5).  MUST be on the same origin as the realm.  When present, `kid` MUST also be present. |
 | `methodDetails.kid` | string | CONDIT. | Key ID referencing a key in the JWKS.  REQUIRED when `jwksUri` is present. |
-| `methodDetails.billingRequired` | boolean | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-data}}. |
+| `methodDetails.billingRequired` | boolean | OPTIONAL | When true, the Client Enabler SHOULD include billing info in the credential payload.  See {{billing-address-data}}. |
 
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}} and
@@ -302,12 +310,16 @@ the JWK Set.
 The Server Enabler (or its delegated infrastructure) is
 responsible for key pair generation and private key management.
 
-The Client Enabler MUST encrypt the token payload using
-RSA-OAEP with SHA-256 {{RFC8017}} before returning it to the
-client.  Implementations MUST NOT use PKCS#1 v1.5 padding.
-The client forwards the encrypted token to the server without inspecting it.
+The Client Enabler MUST encrypt the token payload as a JWE
+{{RFC7516}} compact serialization using the key management
+algorithm from the JWK (`alg`, which MUST be "RSA-OAEP-256")
+and content encryption algorithm AES-256-GCM (`enc`:
+"A256GCM") per {{RFC7518}}.  The JWE protected header MUST
+include `alg`, `enc`, and `kid`.  Implementations MUST NOT
+use PKCS#1 v1.5 padding or direct RSA encryption.  The client
+forwards the JWE token to the server without inspecting it.
 The Server Enabler holds the corresponding private key and
-decrypts the token for processing.
+decrypts the JWE to recover the token payload for processing.
 
 **Example (embedded JWK in methodDetails):**
 
@@ -361,18 +373,17 @@ The decoded credential follows the standard MPP format:
     "expires": "2026-02-19T12:10:00Z"
   },
   "payload": {
-    "token": "<base64-encoded RSA-OAEP ciphertext>",
+    "encryptedPayload": "<base64-encoded RSA-OAEP ciphertext>",
     "network": "visa",
-    "lastFour": "4242",
-    "expirationMonth": "06",
-    "expirationYear": "2028",
-    "eci": "07",
-    "billing": {
-      "firstName": "Jane",
-      "lastName": "Smith",
-      "postalCode": "94102",
-      "country": "US"
-    }
+    "panLastFour": "4242",
+    "panExpirationMonth": "06",
+    "panExpirationYear": "2028",
+    "billingAddress": {
+      "zip": "94102",
+      "countryCode": "US"
+    },
+    "cardholderFullName": "Jane Smith",
+    "paymentAccountReference": "PAR9876543210987654321012345"
   }
 }
 ~~~
@@ -382,102 +393,169 @@ The `payload` field contains the card-specific payment proof.
 
 ## Payload Fields {#payload-fields}
 
+The payload field largely conforms to {{EMV-SRC-API}}.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `token` | string | REQUIRED | Encrypted token ({{token-format}}).  Client and server MUST NOT parse. |
+| `encryptedPayload` | string | REQUIRED | Encrypted Payload ({{encrypted-payload-format}}).  Client and server MUST NOT parse. |
 | `network` | string | REQUIRED | Card network: "visa", "mastercard", "amex", "discover". |
-| `lastFour` | string | OPTIONAL | Last four digits of the card number as displayed to the cardholder. |
-| `expirationMonth` | string | OPTIONAL | Token expiration month (e.g., "06"). |
-| `expirationYear` | string | OPTIONAL | Token expiration year.  MUST be four digits (e.g., "2028") when present. |
-| `eci` | string | OPTIONAL | Electronic Commerce Indicator (e.g., "05", "07"). |
-| `billing` | object | OPTIONAL | Billing information ({{billing-data}}). |
+| `panLastFour` | string | REQUIRED | Last four digits of the card number as displayed to the cardholder. |
+| `panExpirationMonth` | string | REQUIRED | PAN expiration month (e.g., "06"). |
+| `panExpirationYear` | string | REQUIRED | PAN expiration year.  MUST be four digits (e.g., "2028") when present. |
+| `billingAddress` | object | CONDITIONAL | If `billingRequired` is true, Billing Address information ({{billing-address-data}}) is present. |
+| `cardholderFullName` | string | OPTIONAL | Cardholder full name.  Client Enablers SHOULD include when available from the TSP or the CE's cardholder records. |
+| `paymentAccountReference` | string | CONDITIONAL | Also known as PAR.  REQUIRED when available from the TSP.  Client Enablers MUST include when the TSP provides it. |
 
-The `token` field is the only REQUIRED proof element.  The `network`
-field is REQUIRED for routing.  The `billing` field is operational
-data used for address verification and fulfillment ({{billing-data}}).
+The `encryptedPayload` field is required for payment processing,
+typically used by Server Enabler.  The `network`, `panLastFour`,
+`panExpirationMonth`, and `panExpirationYear` fields may be used
+by Server for cardholder UX purposes.  The `billingAddress` field
+may be used by Server for their business process (e.g., tax
+calculation) and may also be forwarded to Server Enabler for
+address verification ({{billing-address-data}}).  The
+`cardholderFullName` field may be used for both payment as well as
+cardholder communication purposes.  The `paymentAccountReference`
+may be used to identify cardholder across several channels and/or
+developers without storing sensitive information.
 
-## Token Format {#token-format}
+## Encrypted Payload Format {#encrypted-payload-format}
 
-The `token` field carries an encrypted JSON object containing all
-fields required to process the charge.  The plaintext MUST be a
-minified UTF-8 encoded JSON object.  The `type` field determines
-the variant.
+The `encryptedPayload` field is a JWE {{RFC7516}} compact
+serialization containing an encrypted JSON object with all
+fields required to process the charge.  The plaintext MUST be
+a minified UTF-8 encoded JSON object.
+
+The JWE protected header MUST contain:
+
+~~~ json
+{"alg": "RSA-OAEP-256", "enc": "A256GCM", "kid": "enc-2026-01"}
+~~~
+
+The `alg` value MUST match the `alg` in the server's JWK.
+The `kid` value MUST match the `kid` of the encryption key
+resolved per {{encryption-key}}.  The `enc` value MUST be
+"A256GCM".  The protected header MUST NOT include `zip`
+(compression); compressing before encryption can enable
+information leakage attacks.
+
+The decrypted plaintext is a JSON object with two REQUIRED
+fields:
 
 ~~~ json
 {
-  "type": "network_token",
-  "dpan": "4242424242424242",
-  "expirationMonth": "06",
-  "expirationYear": "2028",
-  "cryptogram": "AmDDBjkH/4A=",
-  "eci": "07",
-  "par": "PAR9876543210987654321012345"
+  "token": {
+    "paymentToken": "4242424242424242",
+    "tokenExpirationMonth": "06",
+    "tokenExpirationYear": "2034",
+    "eci": "07"
+  },
+  "dynamicData": {
+    "dynamicDataValue": "AmDDBjkH/4A=",
+    "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
+    "dynamicDataExpiration": 1746296464
+  }
 }
 ~~~
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `type` | REQUIRED | "network_token". |
-| `dpan` | REQUIRED | Network token number (DPAN) as issued by the TSP. |
-| `expirationMonth` | REQUIRED | Two-digit expiration month (e.g., "06"). |
-| `expirationYear` | REQUIRED | Four-digit expiration year (e.g., "2028"). |
-| `cryptogram` | REQUIRED | Base64-encoded cryptogram (TAVV). |
+| `token` | REQUIRED | Token object ({{token-data}}).  Client and Server MUST NOT parse. |
+| `dynamicData` | REQUIRED | Dynamic data format ({{dynamic-data}}). |
+
+The CE constructs the JWE as follows:
+
+1.  Generate a random 256-bit Content Encryption Key (CEK).
+
+2.  Encrypt the CEK with the server's RSA public key using
+    RSA-OAEP-256 ({{RFC7518}} Section 4.3).
+
+3.  Encrypt the minified JSON plaintext with AES-256-GCM
+    using the CEK and a random 96-bit IV.
+
+4.  Assemble the JWE compact serialization:
+    `BASE64URL(header).BASE64URL(encryptedKey).BASE64URL(iv).BASE64URL(ciphertext).BASE64URL(tag)`
+
+The Server Enabler decrypts the JWE using the corresponding
+RSA private key to recover the CEK, then decrypts the
+ciphertext with AES-256-GCM to obtain the token payload.
+
+Clients and servers MUST NOT parse the `encryptedPayload` field.
+
+## Token Data {#token-data}
+
+The `token` field in the `encryptedPayload` object is a JSON object with the
+following REQUIRED fields:
+
+~~~ json
+{
+  "paymentToken": "4242424242424242",
+  "tokenExpirationMonth": "06",
+  "tokenExpirationYear": "2034",
+  "eci": "07"
+}
+~~~
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `paymentToken` | REQUIRED | Network token number as issued by the TSP. |
+| `tokenExpirationMonth` | REQUIRED | Two-digit expiration month (e.g., "06"). |
+| `tokenExpirationYear` | REQUIRED | Four-digit expiration year (e.g., "2028"). |
 | `eci` | REQUIRED | Electronic Commerce Indicator. |
-| `par` | SHOULD | Payment Account Reference.  Client Enablers SHOULD include when available from the TSP. |
 
-The CE encrypts this JSON object using RSA-OAEP with SHA-256 and
-the encryption key resolved per {{encryption-key}}, then
-base64-encodes the ciphertext.  The Server Enabler decrypts the
-token to recover the full payment payload.
+## Dynamic Data {#dynamic-data}
 
-NOTE: The plaintext MUST NOT exceed the RSA key modulus size
-minus OAEP padding overhead (e.g., 190 bytes for a 2048-bit
-key with SHA-256).  Implementations that require larger
-payloads SHOULD use 4096-bit keys.  The plaintext is the
-minified UTF-8 JSON; implementations MUST NOT include
-unnecessary whitespace.
+The `dynamicData` field in the `encryptedPayload` object is a JSON object with the
+following REQUIRED fields:
 
-Clients and servers MUST NOT parse the `token` field.
+~~~ json
+{
+  "dynamicDataValue": "AmDDBjkH/4A=",
+  "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
+  "dynamicDataExpiration": 1746296464
+}
+~~~
 
-## Billing Data {#billing-data}
+| Field | Required | Description |
+|-------|----------|-------------|
+| `dynamicDataValue` | REQUIRED | Cryptogram issued by the TSP.  MUST be provided when `dynamicDataType` is not "NONE". |
+| `dynamicDataType` | REQUIRED | Cryptogram type per {{EMV-SRC-API}}.  Valid values: "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM", "CARD_APPLICATION_CRYPTOGRAM_LONG_FORM", "CARDHOLDER_AUTHENTICATION_CRYPTOGRAM", "NONE". |
+| `dynamicDataExpiration` | REQUIRED | Unix Epoch Format. |
+
+## Billing Address Data {#billing-address-data}
 
 When `billingRequired` is true in the challenge methodDetails,
 the Client Enabler SHOULD include billing
 information in the credential payload.
 
-The `billing` field in the credential payload is a JSON
+The `billingAddress` field in the credential payload is a JSON
 object with the following OPTIONAL fields:
 
 ~~~ json
 {
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "addressLine1": "123 Main St",
-  "addressLine2": "Apt 4B",
+  "line1": "123 Main St",
+  "line2": "Apt 4B",
   "city": "San Francisco",
   "state": "CA",
-  "postalCode": "94102",
-  "country": "US"
+  "zip": "94102",
+  "countryCode": "US"
 }
 ~~~
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `firstName` | string | OPTIONAL | Cardholder first name (given name). |
-| `lastName` | string | OPTIONAL | Cardholder last name (family name). |
-| `addressLine1` | string | OPTIONAL | Street address, line 1. |
-| `addressLine2` | string | OPTIONAL | Street address, line 2. |
+| `line1` | string | OPTIONAL | Street address, line 1. |
+| `line2` | string | OPTIONAL | Street address, line 2. |
 | `city` | string | OPTIONAL | City or locality. |
 | `state` | string | OPTIONAL | State, province, or region. |
-| `postalCode` | string | OPTIONAL | Postal or ZIP code. |
-| `country` | string | OPTIONAL | ISO 3166-1 alpha-2 country code (e.g., "US"). |
+| `zip` | string | OPTIONAL | Postal or ZIP code. |
+| `countryCode` | string | OPTIONAL | ISO 3166-1 alpha-2 country code (e.g., "US"). |
 
 All billing fields are OPTIONAL within the billing object.
 Client Enablers SHOULD include whichever fields are available
 from the cardholder's stored billing profile.
 
 If `billingRequired` is true but the credential omits the
-`billing` field, the server MAY reject the credential or
+billing field, the server MAY reject the credential or
 proceed at its discretion.
 
 # Verification Procedure
@@ -544,7 +622,7 @@ retried requests.
 Replay behavior:
 
 - Same `challenge.id`, credential already successfully processed:
-  server MUST return the cached 200 response with Payment-Receipt.
+  server MUST return the cached 200 response with `Payment-Receipt`.
 
 - Same `challenge.id`, prior processing failed: server MUST return
   HTTP 409 Conflict.
@@ -616,28 +694,43 @@ the server's TLS certificate.
 
 ## Credential Security
 
-The `token` field is not readable by the client ({{token-format}}).  The
-Client Enabler encrypts the token using the server's
-encryption key ({{encryption-key}}), provided as a JWK via
-`encryptionJwk` or resolved from `jwksUri` in methodDetails.
-Only the Server Enabler holding the corresponding private key
-can decrypt and process it.
+The `encryptedPayload` field is a JWE {{RFC7516}} compact
+token not readable by the client ({{encrypted-payload-format}}).
+The Client Enabler encrypts the token payload using JWE with
+the server's encryption key ({{encryption-key}}), provided as
+a JWK via `encryptionJwk` or resolved from `jwksUri` in
+methodDetails.  The JWE provides both confidentiality
+(RSA-OAEP-256 key wrapping + AES-256-GCM content encryption)
+and integrity (GCM authentication tag).  Only the Server
+Enabler holding the corresponding private key can decrypt and
+process it.
 
 Only encrypted network tokens travel in the credential.  The
 client never has access to decrypted token material.
 
 ## Billing Data Handling
 
-Billing information ({{billing-data}}) is personally identifiable
-information (PII) and SHOULD be handled in accordance with
-applicable privacy regulations (e.g., GDPR, CCPA).
+Billing information ({{billing-address-data}}),
+`cardholderFullName`, and `paymentAccountReference` are
+personally identifiable information (PII) and SHOULD be
+handled in accordance with applicable privacy regulations
+(e.g., GDPR, CCPA).
 
-- Billing data is transmitted as a plaintext JSON object
-  within the credential payload, protected by TLS in transit
-  ({{transport-security}}).
+- Billing data, `cardholderFullName`, and
+  `paymentAccountReference` are transmitted as plaintext
+  within the credential payload, protected by TLS in
+  transit ({{transport-security}}).
 
-- Servers and intermediaries SHOULD NOT log billing data
-  in plaintext unless required for order fulfillment or
+- `paymentAccountReference` (PAR) is a persistent
+  cross-channel identifier that can correlate a cardholder
+  across merchants and payment methods.  Servers SHOULD
+  treat PAR with the same care as billing data and SHOULD
+  NOT use it for cross-merchant tracking beyond the
+  server's own business relationship with the cardholder.
+
+- Servers and intermediaries SHOULD NOT log billing data,
+  `cardholderFullName`, or `paymentAccountReference` in
+  plaintext unless required for order fulfillment or
   dispute resolution.
 
 - Servers SHOULD retain billing data only as long as needed
@@ -735,8 +828,10 @@ A conforming Client Enabler is expected to:
 - Validate the key: `kty` is "RSA", `alg` is
   "RSA-OAEP-256", `use` is "enc".
 
-- Encrypt the token payload using RSA-OAEP with SHA-256
-  and the resolved key ({{token-format}}).
+- Encrypt the token payload as a JWE {{RFC7516}} compact
+  serialization using the resolved key, with `alg` set to
+  "RSA-OAEP-256" and `enc` set to "A256GCM"
+  ({{encrypted-payload-format}}).
 
 - Return the encrypted token along with display metadata and
   authentication context.
@@ -750,12 +845,13 @@ Content-Type: application/json
 
 ~~~ json
 {
-  "token": "<base64-encoded RSA-OAEP ciphertext>",
+  "encryptedPayload": "<JWE compact serialization>",
   "network": "visa",
-  "lastFour": "4242",
-  "expirationMonth": "06",
-  "expirationYear": "2028",
-  "eci": "07"
+  "panLastFour": "4242",
+  "panExpirationMonth": "06",
+  "panExpirationYear": "2028",
+  "cardholderFullName": "Jane Smith",
+  "paymentAccountReference": "PAR9876543210987654321012345"
 }
 ~~~
 
@@ -803,13 +899,13 @@ WWW-Authenticate: Payment
   expires="2026-02-19T12:10:00Z",
   request="eyJhbW91bnQiOiI0OTk5IiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNp
     cGllbnQiOiJtZXJjaF9hYmMxMjMiLCJkZXNjcmlwdGlvbiI6IlBybyBw
-    bGFuIC0tIG1vbnRobHkgc3Vic2NyaXB0aW9uIiwiZXh0ZXJuYWxJZCI6
-    Im9yZGVyXzEyMzQ1IiwibWV0aG9kRGV0YWlscyI6eyJhY2NlcHRlZE5l
-    dHdvcmtzIjpbInZpc2EiLCJtYXN0ZXJjYXJkIiwiYW1leCJdLCJtZXJj
-    aGFudE5hbWUiOiJBY21lIENvcnAiLCJiaWxsaW5nUmVxdWlyZWQiOnRy
-    dWUsImVuY3J5cHRpb25Kd2siOnsia3R5IjoiUlNBIiwia2lkIjoiZW5j
-    LTIwMjYtMDEiLCJ1c2UiOiJlbmMiLCJhbGciOiJSU0EtT0FFUC0yNTYi
-    LCJuIjoiMHZ4N2Fnb2ViR2NRU3V1Li4uIiwiZSI6IkFRQUIifX19"
+    bGFuIOKAlCBtb250aGx5IHN1YnNjcmlwdGlvbiIsImV4dGVybmFsSWQi
+    OiJvcmRlcl8xMjM0NSIsIm1ldGhvZERldGFpbHMiOnsiYWNjZXB0ZWRO
+    ZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyY2FyZCIsImFtZXgiXSwibWVy
+    Y2hhbnROYW1lIjoiQWNtZSBDb3JwIiwiYmlsbGluZ1JlcXVpcmVkIjp0
+    cnVlLCJlbmNyeXB0aW9uSndrIjp7Imt0eSI6IlJTQSIsImtpZCI6ImVu
+    Yy0yMDI2LTAxIiwidXNlIjoiZW5jIiwiYWxnIjoiUlNBLU9BRVAtMjU2
+    IiwibiI6IjB2eDdhZ29lYkdjUVN1dS4uLiIsImUiOiJBUUFCIn19fQ"
 Cache-Control: no-store
 Content-Type: application/problem+json
 ~~~
@@ -861,17 +957,18 @@ the result.
 ~~~ http
 GET /api/data HTTP/1.1
 Host: api.merchant.com
-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF85eEsy
-  bVI0dkI3blEiLCJyZWFsbSI6ImFwaS5tZXJjaGFudC5jb20iLCJtZXRo
-  b2QiOiJjYXJkIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5
-  SmhiVzkxYm5RaU9pSTBPVGs1SWk0dUxuMCIsImV4cGlyZXMiOiIyMDI2
-  LTAyLTE5VDEyOjEwOjAwWiJ9LCJwYXlsb2FkIjp7InRva2VuIjoiPGJh
-  c2U2NC1lbmNvZGVkIFJTQS1PQUVQIGNpcGhlcnRleHQ-IiwibmV0d29y
-  ayI6InZpc2EiLCJsYXN0Rm91ciI6IjQyNDIiLCJleHBpcmF0aW9uTW9u
-  dGgiOiIwNiIsImV4cGlyYXRpb25ZZWFyIjoiMjAyOCIsImVjaSI6IjA3
-  IiwiYmlsbGluZyI6eyJmaXJzdE5hbWUiOiJKYW5lIiwibGFzdE5hbWUi
-  OiJTbWl0aCIsInBvc3RhbENvZGUiOiI5NDEwMiIsImNvdW50cnkiOiJV
-  UyJ9fX0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJjaF85eEsyb
+  VI0dkI3blEiLCJyZWFsbSI6ImFwaS5tZXJjaGFudC5jb20iLCJtZXRob2QiO
+  iJjYXJkIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxY
+  m5RaU9pSTBPVGs1SWk0dUxuMCIsImV4cGlyZXMiOiIyMDI2LTAyLTE5VDEyO
+  jEwOjAwWiJ9LCJwYXlsb2FkIjp7ImVuY3J5cHRlZFBheWxvYWQiOiJleUpoY
+  kdjaU9pSlNVMEV0Li4uPEpXRSBjb21wYWN0Pi4uLlhGQm9NWVVab2RldFpkd
+  lRpRnZTa1EiLCJuZXR3b3JrIjoidmlzYSIsInBhbkxhc3RGb3VyIjoiNDI0M
+  iIsInBhbkV4cGlyYXRpb25Nb250aCI6IjA2IiwicGFuRXhwaXJhdGlvblllY
+  XIiOiIyMDI4IiwiYmlsbGluZ0FkZHJlc3MiOnsiemlwIjoiOTQxMDIiLCJjb
+  3VudHJ5Q29kZSI6IlVTIn0sImNhcmRob2xkZXJGdWxsTmFtZSI6IkphbmUgU
+  21pdGgiLCJwYXltZW50QWNjb3VudFJlZmVyZW5jZSI6IlBBUjk4NzY1NDMyM
+  TA5ODc2NTQzMjEwMTIzNDUifX0
 ~~~
 
 Decoded credential:
@@ -883,22 +980,21 @@ Decoded credential:
     "realm": "api.merchant.com",
     "method": "card",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiI0OTk5Ii4uLn0",
+    "request": "eyJhbW91bnQiOiI0OTk5Ii...",
     "expires": "2026-02-19T12:10:00Z"
   },
   "payload": {
-    "token": "<base64-encoded RSA-OAEP ciphertext>",
+    "encryptedPayload": "<base64-encoded RSA-OAEP ciphertext>",
     "network": "visa",
-    "lastFour": "4242",
-    "expirationMonth": "06",
-    "expirationYear": "2028",
-    "eci": "07",
-    "billing": {
-      "firstName": "Jane",
-      "lastName": "Smith",
-      "postalCode": "94102",
-      "country": "US"
-    }
+    "panLastFour": "4242",
+    "panExpirationMonth": "06",
+    "panExpirationYear": "2028",
+    "billingAddress": {
+      "zip": "94102",
+      "countryCode": "US"
+    },
+    "cardholderFullName": "Jane Smith",
+    "paymentAccountReference": "PAR9876543210987654321012345"
   }
 }
 ~~~
@@ -937,7 +1033,7 @@ Decoded receipt:
 
 # Acknowledgements
 
-The authors thank Visa's acceptance and tokenization partners
-for their contributions to the card payment ecosystem that
-informed this specification.  The authors also thank Brendan
-Ryan for his review of this document.
+The authors thank Visa's acceptance and tokenization partners for
+their contributions to the card payment ecosystem that informed this
+specification.  The authors also thank Brendan Ryan for his review
+of this document.
