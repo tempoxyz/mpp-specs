@@ -17,6 +17,14 @@ author:
     ins: J. Moxey
     email: jake@tempo.xyz
     org: Tempo Labs
+  - name: Ryan Sproule
+    ins: R. Sproule
+    email: ryan@merit.systems
+    org: Merit Systems
+  - name: Sam Ragsdale
+    ins: S. Ragsdale
+    email: sam@merit.systems
+    org: Merit Systems
 
 normative:
   RFC2119:
@@ -136,17 +144,11 @@ surface, including payment-enabled operations.
 
 ## Document Location
 
-The OpenAPI document MUST be accessible at one of the
-following locations, tried in order:
+The OpenAPI document MUST be accessible at:
 
 ~~~
 GET /openapi.json
-GET /.well-known/openapi.json
 ~~~
-
-Clients MUST try `/openapi.json` first. If that returns
-a non-2xx response, clients SHOULD try
-`/.well-known/openapi.json`.
 
 The document MUST be served over HTTPS with
 `Content-Type: application/json`.
