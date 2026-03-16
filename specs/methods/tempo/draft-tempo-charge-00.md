@@ -132,7 +132,7 @@ Fee Payer
 The `request` parameter in the `WWW-Authenticate` challenge contains a
 base64url-encoded JSON object. The JSON MUST be serialized using JSON
 Canonicalization Scheme (JCS) {{RFC8785}} before base64url encoding,
-per Section 5.1.2 of {{I-D.httpauth-payment}}.
+per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
@@ -413,7 +413,7 @@ The receipt payload for Tempo charge:
 | `reference` | string | Transaction hash of the settlement transaction |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} settlement time |
-| `externalId` | string | OPTIONAL. Echoed from credential payload |
+| `externalId` | string | OPTIONAL. Echoed from the challenge request |
 
 # Security Considerations
 

@@ -118,7 +118,7 @@ The `request` parameter for a "charge" intent is a JSON object with
 shared fields defined by this specification and optional method-specific
 extensions in the `methodDetails` field. The `request` JSON MUST be
 serialized using JSON Canonicalization Scheme (JCS) and base64url-encoded
-without padding per Section 5.1.2 of {{I-D.httpauth-payment}}.
+without padding per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
@@ -220,7 +220,7 @@ for their implementation of the "charge" intent.
 
 ## Payload
 
-The credential structure follows Section 5.2 of {{I-D.httpauth-payment}},
+The credential structure follows {{I-D.httpauth-payment}},
 containing `challenge`, `payload`, and an optional `source` field
 identifying the payer. The `payload` for a "charge" intent MUST contain
 proof that payment has been made or authorized. The proof type is
