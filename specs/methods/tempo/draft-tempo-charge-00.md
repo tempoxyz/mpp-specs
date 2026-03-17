@@ -28,6 +28,7 @@ normative:
   RFC4648:
   RFC8174:
   RFC8259:
+  RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
@@ -129,7 +130,9 @@ Fee Payer
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
-base64url-encoded JSON object.
+base64url-encoded JSON object. The JSON MUST be serialized using JSON
+Canonicalization Scheme (JCS) {{RFC8785}} before base64url encoding,
+per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
@@ -138,6 +141,8 @@ base64url-encoded JSON object.
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
 | `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Recipient address |
+| `description` | string | OPTIONAL | Human-readable payment description |
+| `externalId` | string | OPTIONAL | Merchant's reference (order ID, invoice number, etc.) |
 
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}}.
@@ -148,6 +153,7 @@ Challenge expiry is conveyed by the `expires` auth-param in
 |-------|------|----------|-------------|
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
+| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
 
 **Example:**
 
@@ -376,6 +382,22 @@ the transaction. The server verifies the transaction onchain:
 - Cannot be used with `feePayer: true` (client must pay their own fees)
 - Server cannot modify or enhance the transaction
 
+## Transaction Verification {#transaction-verification}
+
+Before broadcasting a transaction credential, servers MUST verify:
+
+1. Deserialize the RLP-encoded transaction from `payload.signature`
+2. Verify the transaction contains a `transfer(recipient, amount)` or
+   `transferWithMemo(recipient, amount, memo)` call matching the challenge request
+3. Verify the call target matches the `currency` token address
+4. Verify the `amount` matches the challenge request amount
+5. Verify the `recipient` matches the challenge request recipient
+6. If `methodDetails.memo` is present, verify the transaction uses
+   `transferWithMemo` with the matching memo value
+For hash credentials, servers MUST fetch the transaction receipt and
+verify the emitted `Transfer` or `TransferWithMemo` event logs match
+the challenge parameters.
+
 ## Receipt Generation
 
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
@@ -391,6 +413,7 @@ The receipt payload for Tempo charge:
 | `reference` | string | Transaction hash of the settlement transaction |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} settlement time |
+| `externalId` | string | OPTIONAL. Echoed from the challenge request |
 
 # Security Considerations
 
@@ -448,6 +471,22 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 --- back
 
+# ABNF Collected
+
+~~~ abnf
+tempo-charge-challenge = "Payment" 1*SP
+  "id=" quoted-string ","
+  "realm=" quoted-string ","
+  "method=" DQUOTE "tempo" DQUOTE ","
+  "intent=" DQUOTE "charge" DQUOTE ","
+  "request=" base64url-nopad
+
+tempo-charge-credential = "Payment" 1*SP base64url-nopad
+
+; Base64url encoding without padding per RFC 4648 Section 5
+base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
+~~~
+
 # Example
 
 **Challenge:**
@@ -460,6 +499,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   intent="charge",
   request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxfX0",
   expires="2025-01-06T12:00:00Z"
+Cache-Control: no-store
 ~~~
 
 The `request` decodes to:
