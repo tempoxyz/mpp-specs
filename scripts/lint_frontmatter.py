@@ -23,10 +23,12 @@ def lint_file(path: Path) -> list[str]:
         if field not in meta:
             errors.append(f"missing required field '{field}'")
 
-    # Check version format (can be string "00" or int 0)
+    # Check version format (two-digit string like "00", "01", … or int 0)
     version = meta.get("version")
-    if version not in ("00", 0):
-        errors.append(f"version should be '00' or 0, got '{version}'")
+    if not (isinstance(version, int) and 0 <= version <= 99) and not (
+        isinstance(version, str) and len(version) == 2 and version.isdigit()
+    ):
+        errors.append(f"version should be a two-digit revision (e.g. '00'), got '{version}'")
 
     # Check title starts with capital letter
     title = meta.get("title", "")
