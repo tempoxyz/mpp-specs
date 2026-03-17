@@ -1,0 +1,75 @@
+name: Submit Draft to IETF
+
+# Automatically submits the core spec to the IETF datatracker when a version
+# bump lands on main. One of the listed authors must still confirm via email.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "specs/core/draft-httpauth-payment-*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: ietf-spec-tools:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build XML
+        run: |
+          mkdir -p .cache
+          docker run --rm --user $(id -u):$(id -g) -e HOME=/data \
+            -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+
+      - name: Detect spec version
+        id: detect
+        run: |
+          SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
+          DOCNAME=$(grep '^docname:' "$SPEC" | awk '{print $2}')
+          echo "docname=$DOCNAME" >> "$GITHUB_OUTPUT"
+          echo "Submitting $DOCNAME"
+
+      - name: Submit to IETF datatracker
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -F "user=${{ secrets.IETF_USER }}" \
+            -F "xml=@artifacts/${{ steps.detect.outputs.docname }}.xml" \
+            https://datatracker.ietf.org/api/submission)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+
+          if [[ "$HTTP_CODE" -ge 400 ]]; then
+            echo "::error::Submission failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          STATUS_URL=$(echo "$BODY" | jq -r '.status_url // empty')
+          if [[ -n "$STATUS_URL" ]]; then
+            echo "Polling status at $STATUS_URL"
+            for i in $(seq 1 10); do
+              sleep 5
+              STATE=$(curl -s "$STATUS_URL" | jq -r '.state')
+              echo "  Attempt $i: state=$STATE"
+              if [[ "$STATE" != "validating" ]]; then
+                break
+              fi
+            done
+          fi
+
+          echo "::notice::Submission complete — an author must confirm via email."
