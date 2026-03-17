@@ -1,13 +1,9 @@
 name: Resubmit IETF Draft
 
 # IETF I-Ds expire after 185 days (~6 months).
-# This runs roughly every 5.5 months to bump the revision and open a PR.
-# Merging that PR triggers the deploy workflow which publishes the artifacts.
-#
-# After merging, manually submit the built XML to the IETF datatracker:
-#   curl -F "user=brendan@tempo.xyz" -F "xml=@draft-httpauth-payment-XX.xml" \
-#     https://datatracker.ietf.org/api/submission
-# One of the listed authors must then confirm via email.
+# This checks weekly and opens a version-bump PR once 165 days have passed.
+# Merging the PR triggers submit-draft.yml which submits to the IETF
+# datatracker automatically. An author must then confirm via email.
 
 on:
   schedule:
@@ -65,11 +61,6 @@ jobs:
             --title "chore: bump IETF draft to revision -${{ steps.bump.outputs.new_ver }}" \
             --body "Automated revision bump to prevent the IETF Internet-Draft from expiring (185-day limit).
 
-          After merging, submit the built XML to the datatracker:
-          \`\`\`
-          curl -F \"user=brendan@tempo.xyz\" \\
-            -F \"xml=@artifacts/draft-httpauth-payment-${{ steps.bump.outputs.new_ver }}.xml\" \\
-            https://datatracker.ietf.org/api/submission
-          \`\`\`
-          Then confirm via the email sent to the listed authors." \
+          Merging this PR will automatically submit the new revision to the IETF datatracker.
+          An author must then confirm via the email sent by the IETF." \
             --base main
