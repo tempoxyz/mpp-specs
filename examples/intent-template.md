@@ -4,7 +4,7 @@ abbrev: "{name}" Intent
 docname: draft-payment-intent-{name}-00
 version: 00
 category: std
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: IETF
 consensus: true
 

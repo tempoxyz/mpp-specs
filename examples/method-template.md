@@ -4,7 +4,7 @@ abbrev: "{Network}" Payment Method
 docname: draft-{network}-payment-method-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: IETF
 consensus: true
 
