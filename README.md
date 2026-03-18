@@ -32,7 +32,7 @@ sequenceDiagram
 
 ## Design Principles
 
-MPP is deighed to be simple, secure, and performant, holding the following design principles as guides:
+MPP is designed to be simple, secure, and performant, holding the following design principles as guides:
 
 * **Extensible core**: Minimal protocol designed for safe extension.
 * **Network agnostic and multi-rail**: Designed to support a number of payment networks and settlement layers, including bank rails, credit cards, and stablecoins.
