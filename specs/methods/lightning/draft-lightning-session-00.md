@@ -4,7 +4,7 @@ abbrev: Lightning Session Intent
 docname: draft-lightning-session-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: independent
 consensus: false
 
