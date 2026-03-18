@@ -1915,7 +1915,7 @@ interface ITempoStreamChannel {
 ## Contract Source
 
 The reference implementation is available at:
-https://github.com/tempoxyz/ai-payments/tree/main/packages/stream-channels
+https://github.com/tempoxyz/tempo/tree/main/tips/ref-impls/src/TempoStreamChannel.sol
 
 # Schema Definitions (JSON Schema)
 
