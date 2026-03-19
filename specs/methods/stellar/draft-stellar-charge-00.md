@@ -218,7 +218,7 @@ defined in {{I-D.payment-intent-charge}}.
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units |
-| `currency` | string | REQUIRED | SEP-41 token contract address |
+| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address |
 | `recipient` | string | REQUIRED | Recipient address |
 | `description` | string | OPTIONAL | Payment description |
 | `externalId` | string | OPTIONAL | Merchant reference |
@@ -647,7 +647,7 @@ in the HTTP Payment Methods registry established by
 | Field | Value |
 |-------|-------|
 | Method Identifier | `stellar` |
-| Description | Stellar SEP-41 token transfer |
+| Description | Stellar SEP-41 {{SEP-41}} token transfer |
 | Reference | This document |
 | Contact | marcelo@stellar.org |
 
@@ -659,7 +659,7 @@ established by {{I-D.httpauth-payment}}:
 
 | Intent | Methods | Description | Reference |
 |--------|---------|-------------|-----------|
-| `charge` | `stellar` | One-time SEP-41 token transfer | This document |
+| `charge` | `stellar` | One-time SEP-41 {{SEP-41}} token transfer | This document |
 
 --- back
 
