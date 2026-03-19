@@ -88,9 +88,8 @@ informative:
 This document defines the "charge" intent for the "stellar"
 payment method in the Payment HTTP Authentication Scheme.
 It specifies how clients and servers exchange one-time
-Stellar Asset Contract (SAC) token transfers on the
-Stellar blockchain, with optional server-sponsored
-transaction fees.
+SEP-41 token transfers on the Stellar blockchain, with
+optional server-sponsored transaction fees.
 
 --- middle
 
@@ -102,9 +101,10 @@ The server may settle the payment any time before the
 challenge `expires` auth-param timestamp.
 
 This document specifies how to implement the `charge` intent
-using Stellar Asset Contracts (SAC) {{SAC}}, which expose the
-SEP-41 token interface {{SEP-41}} on the Soroban smart
-contract platform.
+using SEP-41 {{SEP-41}} tokens on the Soroban smart contract
+platform. SEP-41 {{SEP-41}} defines a standard token interface
+for Soroban contracts, including Stellar Asset Contracts
+(SAC) {{SAC}} and custom token implementations.
 
 The `stellar` method supports two modes via the
 `methodDetails.payFees` field:
@@ -173,10 +173,13 @@ Client              Server           Stellar Network
 
 # Terminology
 
-SAC (Stellar Asset Contract)
-: A Soroban smart contract that wraps a classic Stellar
-  asset, exposing it through the SEP-41 token interface
-  {{SEP-41}}. Identified by a C-prefixed contract address.
+SEP-41 Token
+: A Soroban smart contract implementing the SEP-41
+  {{SEP-41}} token interface, exposing `transfer`,
+  `balance`, and related functions. Identified by a
+  C-prefixed Soroban contract address. Stellar Asset
+  Contracts (SAC) {{SAC}} are a common SEP-41 {{SEP-41}}
+  implementation that wrap classic Stellar assets.
 
 Authorization Entry
 : A signed data structure scoping a Soroban contract
@@ -215,7 +218,7 @@ defined in {{I-D.payment-intent-charge}}.
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units |
-| `currency` | string | REQUIRED | SAC contract address |
+| `currency` | string | REQUIRED | SEP-41 token contract address |
 | `recipient` | string | REQUIRED | Recipient address |
 | `description` | string | OPTIONAL | Payment description |
 | `externalId` | string | OPTIONAL | Merchant reference |
@@ -231,11 +234,13 @@ defined in {{I-D.payment-intent-charge}}.
 
 `amount`
 : A stringified non-negative integer representing the
-  transfer amount in the SAC token's base units.
+  transfer amount in the SEP-41 {{SEP-41}} token's
+  base units.
 
 `currency`
-: The Stellar Asset Contract address (C-prefixed Soroban
-  contract ID) identifying the token to transfer.
+: The SEP-41 {{SEP-41}} token contract address
+  (C-prefixed Soroban contract ID) identifying the
+  token to transfer.
 
 `recipient`
 : The Stellar account address (G-prefixed) of the
@@ -310,8 +315,8 @@ the payer's Stellar address (e.g.,
 | `transaction` | string | REQUIRED | Base64-encoded XDR |
 
 `type`
-: MUST be `"sep41"`. Identifies this as a Soroban SAC
-  token transfer per the SEP-41 interface {{SEP-41}}.
+: MUST be `"sep41"`. Identifies this as a Soroban
+  SEP-41 {{SEP-41}} token transfer.
 
 `transaction`
 : Base64-encoded XDR of a Stellar transaction as defined
@@ -387,7 +392,7 @@ When `methodDetails.payFees` is `true`:
 2. The client builds an `invokeHostFunction` transaction
    with the all-zeros source account, containing a
    single operation calling `transfer(from, to, amount)`
-   on the SAC contract. The client simulates the
+   on the SEP-41 {{SEP-41}} token contract. The client simulates the
    transaction to identify the required authorization
    entries.
 
@@ -422,7 +427,8 @@ When `methodDetails.payFees` is `false` or absent:
 
 2. The client builds a fully signed `invokeHostFunction`
    transaction containing a single operation calling
-   `transfer(from, to, amount)` on the SAC contract,
+   `transfer(from, to, amount)` on the SEP-41
+   {{SEP-41}} token contract,
    including sequence number, fee, and `timeBounds`.
 
 3. The client encodes the complete, signed transaction
@@ -484,7 +490,8 @@ response, and MUST NOT settle the credential.
 
 10. The `rootInvocation` of each auth entry MUST NOT
     contain `subInvocations` that authorize additional
-    contract invocations beyond the single SAC transfer.
+    contract invocations beyond the single SEP-41
+    {{SEP-41}} token transfer.
 
 11. The authorization entry expiration MUST NOT exceed
     `currentLedger +
@@ -640,7 +647,7 @@ in the HTTP Payment Methods registry established by
 | Field | Value |
 |-------|-------|
 | Method Identifier | `stellar` |
-| Description | Stellar SAC token transfer |
+| Description | Stellar SEP-41 token transfer |
 | Reference | This document |
 | Contact | marcelo@stellar.org |
 
@@ -652,7 +659,7 @@ established by {{I-D.httpauth-payment}}:
 
 | Intent | Methods | Description | Reference |
 |--------|---------|-------------|-----------|
-| `charge` | `stellar` | One-time SAC transfer | This document |
+| `charge` | `stellar` | One-time SEP-41 token transfer | This document |
 
 --- back
 
