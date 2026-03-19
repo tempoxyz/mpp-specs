@@ -126,6 +126,7 @@ The `stellar` method supports two modes via the
       |-------------------------->  |                         |
       |                             |                         |
       |  (2) 402 Payment Required   |                         |
+      |      intent="charge"        |                         |
       |      payFees: true          |                         |
       |<--------------------------  |                         |
       |                             |                         |
@@ -151,6 +152,7 @@ The `stellar` method supports two modes via the
       |-------------------------->  |                         |
       |                             |                         |
       |  (2) 402 Payment Required   |                         |
+      |      intent="charge"        |                         |
       |      payFees: false         |                         |
       |<--------------------------  |                         |
       |                             |                         |
