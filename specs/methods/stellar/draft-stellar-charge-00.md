@@ -120,51 +120,51 @@ The `stellar` method supports two modes via the
 ## Sponsored Fee Flow {#flow-sponsored}
 
 ~~~
-Client              Server           Stellar Network
-  |                    |                    |
-  | GET /resource      |                    |
-  |------------------>|                    |
-  |                    |                    |
-  | 402 + challenge    |                    |
-  | payFees: true      |                    |
-  |<------------------|                    |
-  |                    |                    |
-  | Sign auth entries  |                    |
-  |                    |                    |
-  | Authorization:     |                    |
-  | Payment <cred>     |                    |
-  |------------------>|                    |
-  |                    | Rebuild + submit   |
-  |                    |------------------>|
-  |                    | Confirmed          |
-  |                    |<------------------|
-  | 200 OK + Receipt   |                    |
-  |<------------------|                    |
+   Client                        Server                Stellar Network
+      |                             |                         |
+      |  (1) GET /resource          |                         |
+      |-------------------------->  |                         |
+      |                             |                         |
+      |  (2) 402 Payment Required   |                         |
+      |      payFees: true          |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
+      |  (3) Sign auth entries      |                         |
+      |                             |                         |
+      |  (4) Authorization: Payment |                         |
+      |-------------------------->  |                         |
+      |                             |  (5) Rebuild + submit   |
+      |                             |---------------------->  |
+      |                             |  (6) Confirmed          |
+      |                             |<----------------------  |
+      |  (7) 200 OK + Receipt       |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
 ~~~
 
 ## Client-Paid Fee Flow {#flow-unsponsored}
 
 ~~~
-Client              Server           Stellar Network
-  |                    |                    |
-  | GET /resource      |                    |
-  |------------------>|                    |
-  |                    |                    |
-  | 402 + challenge    |                    |
-  | payFees: false     |                    |
-  |<------------------|                    |
-  |                    |                    |
-  | Build + sign tx    |                    |
-  |                    |                    |
-  | Authorization:     |                    |
-  | Payment <cred>     |                    |
-  |------------------>|                    |
-  |                    | Verify + submit    |
-  |                    |------------------>|
-  |                    | Confirmed          |
-  |                    |<------------------|
-  | 200 OK + Receipt   |                    |
-  |<------------------|                    |
+   Client                        Server                Stellar Network
+      |                             |                         |
+      |  (1) GET /resource          |                         |
+      |-------------------------->  |                         |
+      |                             |                         |
+      |  (2) 402 Payment Required   |                         |
+      |      payFees: false         |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
+      |  (3) Build + sign tx        |                         |
+      |                             |                         |
+      |  (4) Authorization: Payment |                         |
+      |-------------------------->  |                         |
+      |                             |  (5) Verify + submit    |
+      |                             |---------------------->  |
+      |                             |  (6) Confirmed          |
+      |                             |<----------------------  |
+      |  (7) 200 OK + Receipt       |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
 ~~~
 
 # Requirements Language
