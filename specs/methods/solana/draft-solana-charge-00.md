@@ -362,16 +362,32 @@ feePayerKey
   `false` or omitted. The client uses this key as the
   transaction fee payer when constructing the transaction.
 
-feePayerFee
-: OPTIONAL. An additional amount in base units that the
-  client MUST include as a separate transfer to the
-  `feePayerKey` address to compensate the server for
-  transaction fees. When present, the client MUST add
-  a native SOL transfer instruction for this amount
-  to the fee payer's account, in addition to the primary
-  payment transfer. This allows servers to recover the
-  cost of sponsoring transaction fees. MUST NOT be
-  present when `feePayer` is `false` or omitted.
+splits
+: OPTIONAL. An array of additional payment splits. Each
+  entry is a JSON object with the following fields:
+
+  - `recipient` (REQUIRED): Base58-encoded public key of
+    the split recipient.
+  - `amount` (REQUIRED): Amount in the same base units
+    and asset as the primary `amount`.
+  - `memo` (OPTIONAL): Human-readable label for this
+    split (e.g., "platform fee", "referral").
+
+  When present, the client MUST include a transfer
+  instruction for each split in addition to the primary
+  transfer to `recipient`. All splits use the same asset
+  as the primary payment (native SOL or the `splToken`).
+
+  The top-level `amount` is the total the client pays.
+  The primary `recipient` receives `amount` minus the sum
+  of all split amounts. Servers MUST verify that the sum
+  of all split amounts is less than `amount`. Servers
+  MUST verify each split transfer on-chain during
+  credential verification.
+
+  This mechanism can be used for platform fees, revenue
+  sharing, referral commissions, or fee payer cost
+  recovery.
 
 recentBlockhash
 : OPTIONAL. A base58-encoded recent blockhash for the
@@ -437,6 +453,30 @@ This requests a transfer of 1 USDC (1,000,000 base units).
 
 This requests a transfer of 0.01 SOL where the server pays
 transaction fees.
+
+### Payment Splits Example
+
+~~~json
+{
+  "amount": "1050000",
+  "currency": "USDC",
+  "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "description": "Marketplace purchase",
+  "methodDetails": {
+    "network": "mainnet-beta",
+    "splToken": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "decimals": 6,
+    "reference": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "splits": [
+      { "recipient": "3pF8Kg2aHbNvJkLMwEqR7YtDxZ5sGhJn4UV6mWcXrT9A", "amount": "50000", "memo": "platform fee" }
+    ]
+  }
+}
+~~~
+
+This requests a total payment of 1.05 USDC. The platform
+receives 0.05 USDC and the primary recipient (seller)
+receives 1.00 USDC.
 
 # Credential Schema
 
