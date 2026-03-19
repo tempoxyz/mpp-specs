@@ -21,9 +21,9 @@ Before submitting a PR:
 | Change Type | Process |
 |-------------|---------|
 | Typo/editorial fix | Direct PR to `main` |
-| New intent | Use [intent template](templates/intent-template.md), add to `specs/intents/` |
-| New method | Use [method template](templates/method-template.md), add to `specs/methods/` |
-| New extension | Use [extension template](templates/extension-template.md), add to `specs/extensions/` |
+| New intent | Use [intent template](examples/intent-template.md), add to `specs/intents/` |
+| New method | Use [method template](examples/method-template.md), add to `specs/methods/` |
+| New extension | Use [extension template](examples/extension-template.md), add to `specs/extensions/` |
 | New method with experimental intent | Define intent in method spec, add to `specs/methods/` |
 | Core protocol change | Open an issue first for discussion |
 
