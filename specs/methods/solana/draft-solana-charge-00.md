@@ -922,14 +922,22 @@ receipt.
 
 ## Finality
 
-Solana provides probabilistic finality at the
-`confirmed` level (optimistic confirmation from a
-supermajority of validators) and deterministic
-finality at the `finalized` level (~31 slots,
-approximately 12 seconds). Servers accepting
-`confirmed` transactions SHOULD be aware that
-in rare cases a confirmed transaction may not
-reach finality.
+Solana provides two commitment levels relevant to
+payment verification:
+
+- `confirmed`: optimistic confirmation from a
+  supermajority of validators (~400ms). Sufficient
+  for most payment use cases.
+- `finalized`: deterministic finality after ~31 slots
+  (~12 seconds). Required for high-value transactions
+  where rollback risk is unacceptable.
+
+In theory, a `confirmed` transaction could be rolled
+back if validators shift consensus to a competing fork
+that excludes the confirmed block. In practice, this
+has never occurred on Solana mainnet. The `confirmed`
+level is RECOMMENDED as the default for payment
+verification to minimize latency.
 
 ## Receipt Generation
 
