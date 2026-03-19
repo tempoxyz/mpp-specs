@@ -134,7 +134,8 @@ The `stellar` method supports two modes via the
       |                             |                         |
       |  (4) Authorization: Payment |                         |
       |-------------------------->  |                         |
-      |                             |  (5) Rebuild + submit   |
+      |                             |  (5) Verify + rebuild   |
+      |                             |      + submit           |
       |                             |---------------------->  |
       |                             |  (6) Confirmed          |
       |                             |<----------------------  |
