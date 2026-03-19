@@ -400,15 +400,16 @@ splits
   as the primary payment (native SOL or the `splToken`).
 
   The top-level `amount` is the total the client pays.
-  The primary `recipient` receives `amount` minus the sum
-  of all split amounts. Servers MUST verify that the sum
-  of all split amounts is less than `amount`. Servers
-  MUST verify each split transfer on-chain during
-  credential verification.
+  The sum of all split amounts MUST NOT exceed `amount`.
+  The primary `recipient` receives `amount` minus the
+  sum of all split amounts; this remainder MUST be
+  greater than zero. Servers MUST reject challenges
+  where splits consume the entire amount. Servers MUST
+  verify each split transfer on-chain during credential
+  verification.
 
-  This mechanism can be used for platform fees, revenue
-  sharing, referral commissions, or fee payer cost
-  recovery.
+  This mechanism can be used for fee payer cost recovery,
+  platform fees, revenue sharing, or referral commissions.
 
 recentBlockhash
 : OPTIONAL. A base58-encoded recent blockhash for the
