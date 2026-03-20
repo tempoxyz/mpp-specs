@@ -382,7 +382,7 @@ feePayerKey
   transaction fee payer when constructing the transaction.
 
 splits
-: OPTIONAL. An array of at most 32 additional payment
+: OPTIONAL. An array of at most 8 additional payment
   splits. Each entry is a JSON object with the following
   fields:
 
