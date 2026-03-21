@@ -114,7 +114,7 @@ field:
   network-ready transaction. The server verifies and submits it without
   modification.
 
-## Sponsored Fee Flow {#flow-sponsored}
+## Charge Flow
 
 ~~~
    Client                        Server                Stellar Network
@@ -124,37 +124,9 @@ field:
       |                             |                         |
       |  (2) 402 Payment Required   |                         |
       |      intent="charge"        |                         |
-      |      feePayer: true          |                         |
       |<--------------------------  |                         |
       |                             |                         |
-      |  (3) Sign auth entries      |                         |
-      |                             |                         |
-      |  (4) Authorization: Payment |                         |
-      |-------------------------->  |                         |
-      |                             |  (5) Verify + rebuild   |
-      |                             |      + submit           |
-      |                             |---------------------->  |
-      |                             |  (6) Confirmed          |
-      |                             |<----------------------  |
-      |  (7) 200 OK + Receipt       |                         |
-      |<--------------------------  |                         |
-      |                             |                         |
-~~~
-
-## Client-Paid Fee Flow {#flow-unsponsored}
-
-~~~
-   Client                        Server                Stellar Network
-      |                             |                         |
-      |  (1) GET /resource          |                         |
-      |-------------------------->  |                         |
-      |                             |                         |
-      |  (2) 402 Payment Required   |                         |
-      |      intent="charge"        |                         |
-      |      feePayer: false         |                         |
-      |<--------------------------  |                         |
-      |                             |                         |
-      |  (3) Build + sign tx        |                         |
+      |  (3) Sign tx or auth entries|                         |
       |                             |                         |
       |  (4) Authorization: Payment |                         |
       |-------------------------->  |                         |
@@ -166,6 +138,11 @@ field:
       |<--------------------------  |                         |
       |                             |                         |
 ~~~
+
+When `feePayer` is `true`, step (3) signs only authorization entries and
+step (5) includes the server rebuilding the transaction as source. When
+`feePayer` is `false`, step (3) builds and signs a complete transaction
+and the server submits it without modification.
 
 # Requirements Language
 
@@ -212,44 +189,25 @@ This specification implements the shared request fields defined in
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount in base units |
-| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address |
-| `recipient` | string | REQUIRED | Recipient address |
-| `description` | string | OPTIONAL | Payment description |
-| `externalId` | string | OPTIONAL | Merchant reference |
+| `amount` | string | REQUIRED | Stringified non-negative integer in the SEP-41 {{SEP-41}} token's base units |
+| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address (C-prefixed Soroban contract ID) |
+| `recipient` | string | REQUIRED | Stellar account address of the payment recipient |
+| `description` | string | OPTIONAL | Human-readable payment description |
+| `externalId` | string | OPTIONAL | Merchant reference (order ID, invoice number, etc.) |
+
+Challenge expiry is conveyed by the `expires` auth-param in
+`WWW-Authenticate` per {{I-D.httpauth-payment}}.
 
 ## Method Details
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `methodDetails.network` | string | REQUIRED | CAIP-2 identifier |
-| `methodDetails.feePayer` | boolean | OPTIONAL | Server pays fees |
+| `methodDetails.network` | string | REQUIRED | CAIP-2 Stellar chain identifier (`stellar:pubnet` or `stellar:testnet`) |
+| `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 
-**Field Definitions:**
-
-`amount`
-: A stringified non-negative integer representing the transfer amount in
-  the SEP-41 {{SEP-41}} token's base units.
-
-`currency`
-: The SEP-41 {{SEP-41}} token contract address (C-prefixed Soroban
-  contract ID) identifying the token to transfer.
-
-`recipient`
-: The Stellar account address of the payment recipient.
-
-`methodDetails.network`
-: A CAIP-2 Stellar chain identifier. MUST be one of `stellar:pubnet` or
-  `stellar:testnet`.
-
-`methodDetails.feePayer`
-: When `true`, the server sponsors transaction fees per {{sponsored}}.
-  When `false` or absent, the client MUST build a fully signed,
-  network-ready transaction per {{unsponsored}}. Defaults to `false`.
-
-Note: per {{I-D.payment-intent-charge}}, request objects MUST NOT include
-an `expires` field; expiry is conveyed by the `expires` auth-param in
-`WWW-Authenticate`.
+If `methodDetails.feePayer` is `true`, the server sponsors transaction
+fees per {{sponsored}}. If `false` or omitted, the client MUST build a
+fully signed, network-ready transaction per {{unsponsored}}.
 
 **Example:**
 
@@ -418,63 +376,48 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 ## Common Checks
 
-1. The challenge `id` matches an outstanding, unsettled challenge issued by
-   this server.
+1. The challenge `id` matches an outstanding, unsettled challenge issued
+   by this server, and the current time is before the challenge `expires`
+   auth-param.
 
-2. The current time is before the challenge `expires` auth-param.
+2. `payload.type` is `"sep41"`.
 
-3. `payload.type` is `"sep41"`.
+3. The decoded transaction contains exactly one `invokeHostFunction`
+   operation with function type `hostFunctionTypeInvokeContract`.
 
-4. The decoded transaction contains exactly one operation total, of type
-   `invokeHostFunction` with function type
-   `hostFunctionTypeInvokeContract`.
+4. The invoked function is `transfer(from, to, amount)` on the contract
+   matching `currency`. The `to` argument MUST equal `recipient` and the
+   `amount` argument MUST equal `amount` (as i128) from the challenge
+   request.
 
-5. The invoked function name is `transfer` with exactly three arguments:
-   - Argument 0 (`from`): the payer's address.
-   - Argument 1 (`to`): MUST equal `recipient` from the challenge request.
-   - Argument 2 (`amount`): MUST equal `amount` from the challenge request
-     (as i128).
+5. The transaction's network passphrase MUST correspond to
+   `methodDetails.network`.
 
-6. The contract address MUST equal `currency` from the challenge request.
-
-7. The transaction's Stellar network passphrase MUST correspond to
-   `methodDetails.network` in the challenge request.
-
-## Sponsored Flow Additional Checks
-
-8. The transaction source account is the all-zeros account
-   (`GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF`).
-
-9. Authorization entries MUST use credential type
-   `sorobanCredentialsAddress` only.
-
-10. The `rootInvocation` of each auth entry MUST NOT contain
-    `subInvocations` that authorize additional contract invocations beyond
-    the single SEP-41 {{SEP-41}} token transfer.
-
-11. The authorization entry expiration MUST NOT exceed
-    `currentLedger +
-    ceil((expires - now) / DEFAULT_LEDGER_CLOSE_TIME)`.
-
-12. The server's address MUST NOT appear as the `from` argument or in any
-    authorization entry.
-
-13. The server MUST simulate the rebuilt transaction via Soroban RPC. The
-    simulation MUST succeed and MUST emit events showing only the expected
-    balance changes: a decrease of `amount` for the payer and an increase
-    of `amount` for the recipient. Any other balance change MUST cause
-    verification to fail.
-
-## Unsponsored Flow Additional Checks
-
-8. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
-   challenge.
-
-9. The server MUST simulate the transaction via Soroban RPC. The
+6. The server MUST simulate the transaction via Soroban RPC. The
    simulation MUST succeed and MUST emit events showing only the expected
    balance changes: a decrease of `amount` for the payer and an increase
    of `amount` for the recipient. Any other balance change MUST cause
    verification to fail.
+
+## Sponsored Flow Additional Checks
+
+7. The transaction source account is the all-zeros account
+   (`GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF`).
+
+8. Authorization entries MUST use credential type
+   `sorobanCredentialsAddress` only, and MUST NOT contain
+   `subInvocations` beyond the single SEP-41 {{SEP-41}} token transfer.
+
+9. The authorization entry expiration MUST NOT exceed `currentLedger +
+   ceil((expires - now) / DEFAULT_LEDGER_CLOSE_TIME)`.
+
+10. The server's address MUST NOT appear as the `from` argument or in
+    any authorization entry.
+
+## Unsponsored Flow Additional Checks
+
+7. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
+   challenge.
 
 # Settlement Procedure {#settlement}
 
@@ -714,3 +657,8 @@ Authorization: Payment eyJjaGFsbGVuZ2Ui...
   "timestamp": "2025-02-05T12:04:41Z"
 }
 ~~~
+
+# Acknowledgements
+
+The author thanks the Stellar community for their input and
+feedback on this specification.
