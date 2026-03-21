@@ -53,8 +53,8 @@ informative:
     author:
       - org: Chain Agnostic Standards Alliance
     date: 2023
-  SOROBAN-AUTH:
-    title: "Soroban Authorization Framework"
+  STELLAR-AUTH:
+    title: "Stellar Contracts Authorization Framework"
     target: >
       https://developers.stellar.org/docs/learn/encyclopedia/security/authorization
     author:
@@ -75,8 +75,8 @@ informative:
     target: https://github.com/stellar/stellar-xdr
     author:
       - org: Stellar Development Foundation
-  SOROBAN-RPC:
-    title: "Soroban RPC Reference"
+  STELLAR-RPC:
+    title: "Stellar RPC Reference"
     target: >
       https://developers.stellar.org/docs/data/rpc/api-reference
     author:
@@ -99,15 +99,15 @@ defined in {{I-D.payment-intent-charge}}. The server may settle the payment
 any time before the challenge `expires` auth-param timestamp.
 
 This document specifies how to implement the `charge` intent using SEP-41
-{{SEP-41}} tokens on the Soroban smart contract platform. SEP-41 {{SEP-41}}
-defines a standard token interface for Soroban contracts, including Stellar
+{{SEP-41}} tokens on the Stellar smart contract platform. SEP-41 {{SEP-41}}
+defines a standard token interface for Stellar smart contracts, including Stellar
 Asset Contracts (SAC) {{SAC}} and custom token implementations.
 
 The `stellar` method supports two modes via the `methodDetails.feePayer`
 field:
 
 - When `feePayer` is `true`, the server sponsors transaction fees. The client
-  signs only Soroban authorization entries; the server rebuilds the
+  signs only contract authorization entries; the server rebuilds the
   transaction as source and submits.
 
 - When `feePayer` is `false`, the client builds and signs a complete,
@@ -151,15 +151,15 @@ and the server submits it without modification.
 # Terminology
 
 SEP-41 Token
-: A Soroban smart contract implementing the SEP-41 {{SEP-41}} token
+: A Stellar smart contract implementing the SEP-41 {{SEP-41}} token
   interface, exposing `transfer`, `balance`, and related functions.
-  Identified by a C-prefixed Soroban contract address. Stellar Asset
+  Identified by a C-prefixed Stellar smart contract address. Stellar Asset
   Contracts (SAC) {{SAC}} are a common SEP-41 {{SEP-41}} implementation
   that wrap classic Stellar assets.
 
 Authorization Entry
-: A signed data structure scoping a Soroban contract invocation to a
-  specific invoker and ledger sequence range. See {{SOROBAN-AUTH}}.
+: A signed data structure scoping a Stellar smart contract invocation to a
+  specific invoker and ledger sequence range. See {{STELLAR-AUTH}}.
 
 Fee Sponsorship
 : An arrangement where the server pays Stellar network fees on behalf of
@@ -190,7 +190,7 @@ This specification implements the shared request fields defined in
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Stringified non-negative integer in the SEP-41 {{SEP-41}} token's base units |
-| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address (C-prefixed Soroban contract ID) |
+| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address (C-prefixed Stellar smart contract ID) |
 | `recipient` | string | REQUIRED | Stellar account address of the payment recipient |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant reference (order ID, invoice number, etc.) |
@@ -249,7 +249,7 @@ with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
 | `transaction` | string | REQUIRED | Base64-encoded XDR |
 
 `type`
-: MUST be `"sep41"`. Identifies this as a Soroban SEP-41 {{SEP-41}} token
+: MUST be `"sep41"`. Identifies this as a SEP-41 {{SEP-41}} token
   transfer.
 
 `transaction`
@@ -301,8 +301,8 @@ ledgerExpiration =
 ~~~
 
 where `DEFAULT_LEDGER_CLOSE_TIME` is 5 seconds. `currentLedger` MUST be
-obtained from the Stellar network via Soroban RPC `getLatestLedger`
-{{SOROBAN-RPC}}.
+obtained from the Stellar network via Stellar RPC `getLatestLedger`
+{{STELLAR-RPC}}.
 
 When `feePayer` is `true`, clients MUST set the authorization entry
 expiration ledger to this value.
@@ -317,7 +317,7 @@ be valid beyond the challenge expiry.
 
 When `methodDetails.feePayer` is `true`:
 
-1. The client obtains `currentLedger` via Soroban RPC `getLatestLedger`
+1. The client obtains `currentLedger` via Stellar RPC `getLatestLedger`
    and computes the authorization entry expiration per
    {{ledger-expiration}}.
 
@@ -370,7 +370,7 @@ Before settling a charge credential, servers MUST enforce all of the
 following checks. If any check fails, the server MUST return a
 `verification-failed` error per {{I-D.httpauth-payment}}.
 
-If the Soroban RPC is unavailable for a required simulation step, servers
+If the Stellar RPC is unavailable for a required simulation step, servers
 MUST treat this as a server error (HTTP 5xx) rather than a
 `verification-failed` response, and MUST NOT settle the credential.
 
@@ -393,7 +393,7 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 5. The transaction's network passphrase MUST correspond to
    `methodDetails.network`.
 
-6. The server MUST simulate the transaction via Soroban RPC. The
+6. The server MUST simulate the transaction via Stellar RPC. The
    simulation MUST succeed and MUST emit events showing only the expected
    balance changes: a decrease of `amount` for the payer and an increase
    of `amount` for the recipient. Any other balance change MUST cause
@@ -434,7 +434,7 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 4. Sign the rebuilt transaction with the server's key.
 
-5. Submit via Soroban RPC `sendTransaction` {{SOROBAN-RPC}}.
+5. Submit via Stellar RPC `sendTransaction` {{STELLAR-RPC}}.
 
 6. Verify the submission returns `PENDING` status, then poll until
    `SUCCESS` or `FAILED`.
@@ -449,8 +449,8 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 1. Verify the transaction per {{verification}}.
 
-2. Submit the received transaction as-is via Soroban RPC
-   `sendTransaction` {{SOROBAN-RPC}}. The server MUST NOT modify the
+2. Submit the received transaction as-is via Stellar RPC
+   `sendTransaction` {{STELLAR-RPC}}. The server MUST NOT modify the
    transaction.
 
 3. Poll until `SUCCESS` or `FAILED`.
