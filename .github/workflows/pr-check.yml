@@ -11,7 +11,6 @@ concurrency:
 permissions:
   actions: read
   contents: read
-  pull-requests: write
 
 jobs:
   ci-gate:
@@ -106,66 +105,14 @@ jobs:
           path: artifacts/diffs/
           retention-days: 30
 
-      - name: Comment on PR
+      - name: Save PR number
         if: github.event_name == 'pull_request'
-        continue-on-error: true
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        run: echo "${{ github.event.number }}" > artifacts/pr-number.txt
+
+      - name: Upload PR metadata
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const artifactsDir = 'artifacts';
-            const diffsDir = path.join(artifactsDir, 'diffs');
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
-            let table = '| Spec | Changed |\n|------|--------|\n';
-
-            const htmlFiles = fs.readdirSync(artifactsDir)
-              .filter(f => f.startsWith('draft-') && f.endsWith('.html'))
-              .sort();
-
-            for (const file of htmlFiles) {
-              const name = file.replace('.html', '');
-              const diffFile = path.join(diffsDir, `${name}-diff.txt`);
-              let changed = '-';
-              if (fs.existsSync(diffFile)) {
-                const content = fs.readFileSync(diffFile, 'utf8');
-                if (content.trim() && !content.includes('New spec')) {
-                  changed = 'Yes';
-                }
-              }
-              table += `| \`${name}\` | ${changed} |\n`;
-            }
-
-            const body = `<!-- ietf-spec-preview -->
-            ## Spec Preview
-
-            ${table}
-
-            **[Download spec artifacts](${runUrl}#artifacts)** (HTML, TXT, XML, PDF)
-            `;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const existingComment = comments.find(c => c.body.includes('<!-- ietf-spec-preview -->'));
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body
-              });
-            }
+          name: pr-metadata
+          path: artifacts/pr-number.txt
+          retention-days: 5
