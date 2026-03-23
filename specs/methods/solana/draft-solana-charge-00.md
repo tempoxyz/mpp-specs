@@ -294,8 +294,8 @@ amount
   in a 64-bit unsigned integer (max 18,446,744,073,709,551,615).
 
 currency
-: REQUIRED. For native SOL, MUST be the string (lowercase)
-  . For SPL tokens, MUST be the base58-encoded
+: REQUIRED. For native SOL, MUST be the lowercase
+  string `"sol"`. For SPL tokens, MUST be the base58-encoded
   mint address (e.g.,
   `"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"`
   for USDC). The mint address uniquely identifies the token
@@ -356,14 +356,6 @@ tokenProgram
   lookup. MUST NOT be present when `currency` is
   `"sol"`.
 
-reference
-: REQUIRED. A server-generated unique identifier for this
-  payment challenge, encoded as a string. MUST NOT exceed
-  128 characters. The server uses this value to correlate
-  incoming credentials with issued challenges and to
-  enforce single-use semantics. MUST be unique per
-  challenge.
-
 feePayer
 : OPTIONAL. A boolean indicating whether the server will
   pay transaction fees on behalf of the client. Defaults
@@ -404,8 +396,10 @@ splits
   verify each split transfer on-chain during credential
   verification.
 
-  This mechanism can be used for fee payer cost recovery,
-  platform fees, revenue sharing, or referral commissions.
+  This mechanism is a Solana-specific extension to the
+  base `charge` intent. It can be used for fee payer cost
+  recovery, platform fees, revenue sharing, or referral
+  commissions.
 
 recentBlockhash
 : OPTIONAL. A base58-encoded recent blockhash for the
@@ -413,8 +407,10 @@ recentBlockhash
   provided, clients SHOULD use this blockhash instead of
   fetching one from an RPC node. This avoids an extra
   RPC round-trip and ensures the server can verify
-  blockhash freshness. If omitted, clients MUST fetch
-  a recent blockhash themselves.
+  blockhash freshness. This field is advisory and
+  short-lived; it MUST NOT be assumed to remain valid for
+  the full lifetime of the payment challenge. If omitted,
+  clients MUST fetch a recent blockhash themselves.
 
 ### Native SOL Example
 
@@ -425,8 +421,7 @@ recentBlockhash
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Weather API access",
   "methodDetails": {
-    "network": "mainnet-beta",
-    "reference": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+    "network": "mainnet-beta"
   }
 }
 ~~~
@@ -444,7 +439,7 @@ This requests a transfer of 0.01 SOL (10,000,000 lamports).
   "methodDetails": {
     "network": "mainnet-beta",
     "decimals": 6,
-    "reference": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
   }
 }
 ~~~
@@ -461,7 +456,6 @@ This requests a transfer of 1 USDC (1,000,000 base units).
   "description": "Weather API access",
   "methodDetails": {
     "network": "mainnet-beta",
-    "reference": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
     "feePayer": true,
     "feePayerKey": "9aE3Fg7HjKLmNpQr5TuVwXyZ2AbCdEf8GhIjKlMnOp1R"
   }
@@ -482,7 +476,6 @@ transaction fees.
   "methodDetails": {
     "network": "mainnet-beta",
     "decimals": 6,
-    "reference": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     "splits": [
       { "recipient": "3pF8Kg2aHbNvJkLMwEqR7YtDxZ5sGhJn4UV6mWcXrT9A", "amount": "50000", "memo": "platform fee" }
     ]
@@ -698,32 +691,41 @@ For credentials with `type="transaction"`:
 
 1. Decode the base64 `payload.transaction` value.
 
-2. If `feePayer` is `true`, deserialize the transaction,
-   add the server's fee payer signature using the
-   `feePayerKey`, and re-serialize. The transaction
-   MUST have the server's `feePayerKey` set as the fee
-   payer account.
+2. Deserialize the transaction and verify that it
+   structurally matches the challenge request:
+   - the fee payer matches the challenge policy;
+   - the transfer authority is signed by the client;
+   - the transaction contains only expected transfer,
+     ATA-creation, memo, and compute-budget instructions;
+   - the payment semantics match the challenge request,
+     as described in {{sol-verification}} or
+     {{spl-verification}}.
 
-3. Simulate the transaction using the `simulateTransaction`
+3. If `feePayer` is `true`, add the server's fee payer
+   signature using the `feePayerKey` and re-serialize.
+   The transaction MUST have the server's `feePayerKey`
+   set as the fee payer account.
+
+4. Simulate the transaction using the `simulateTransaction`
    RPC method. If simulation fails, reject the credential.
    This catches invalid transactions without spending fees,
    which is especially important in fee payer mode (see
    {{transaction-simulation}}).
 
-4. Broadcast the transaction to the Solana network using
+5. Broadcast the transaction to the Solana network using
    `sendTransaction`.
 
-5. Wait for confirmation at the required commitment level.
+6. Wait for confirmation at the required commitment level.
 
-6. Fetch the confirmed transaction using `getTransaction`
+7. Fetch the confirmed transaction using `getTransaction`
    with `jsonParsed` encoding and verify the transfer
-   details match the challenge request, as described in
+   details still match the challenge request, as described in
    {{sol-verification}} or {{spl-verification}}.
 
-7. Record the transaction signature as consumed to
+8. Record the transaction signature as consumed to
    prevent replay (see {{replay-protection}}).
 
-8. Return the resource with a Payment-Receipt header.
+9. Return the resource with a Payment-Receipt header.
 
 ## Push Mode Verification {#signature-verification}
 
@@ -774,15 +776,15 @@ the server MUST reject the credential.
 
 ## SPL Token Verification {#spl-verification}
 
-For SPL token payments (`currency` is a mint address (not `"sol"`) in
-`methodDetails`), the server MUST:
+For SPL token payments (`currency` is a mint address,
+not `"sol"`), the server MUST:
 
 1. Locate a `transferChecked` instruction from the
    appropriate token program (Token Program or
    Token-2022) in the transaction's parsed instructions.
 
-2. Verify the `mint` field matches the `currency` from
-   `methodDetails`.
+2. Verify the `mint` field matches the top-level
+   `currency` field from the challenge request.
 
 3. Verify the `tokenAmount.amount` field matches the
    `amount` from the challenge request.
@@ -1238,8 +1240,7 @@ Decoded `request`:
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Weather API access",
   "methodDetails": {
-    "network": "mainnet-beta",
-    "reference": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+    "network": "mainnet-beta"
   }
 }
 ~~~
@@ -1286,6 +1287,7 @@ Decoded receipt:
 ~~~json
 {
   "method": "solana",
+  "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
   "reference": "4vJ9YFuPzUgdLkWYJf3KqfNM8cTnBp3jXx...",
   "status": "success",
   "timestamp": "2026-03-15T12:04:58Z"
@@ -1310,7 +1312,6 @@ Decoded `request`:
     "network": "mainnet-beta",
     "decimals": 6,
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-    "reference": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "feePayer": true,
     "feePayerKey": "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
     "recentBlockhash": "EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N"
@@ -1321,7 +1322,8 @@ Decoded `request`:
 The client uses `recentBlockhash` from the challenge (no RPC
 call needed), sets `feePayerKey` as the transaction fee payer,
 and partially signs with its own key only. The server
-co-signs as fee payer and broadcasts.
+verifies the transaction contents, co-signs as fee payer,
+and broadcasts.
 
 Decoded credential:
 
@@ -1368,7 +1370,6 @@ Decoded `request`:
   "methodDetails": {
     "network": "mainnet-beta",
     "decimals": 6,
-    "reference": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     "splits": [
       {
         "recipient": "3pF8Kg2aHbNvJkLMwEqR7YtDxZ5sGhJn4UV6mWcXrT9A",
@@ -1382,6 +1383,8 @@ Decoded `request`:
 
 The client builds a transaction with two transfers: 1,000,000
 base units to the primary recipient and 50,000 to the platform.
+The total paid remains 1,050,000 base units, matching the
+top-level `amount`.
 
 # Acknowledgements
 
