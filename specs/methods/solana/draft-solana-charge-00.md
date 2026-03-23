@@ -351,10 +351,13 @@ tokenProgram
   (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`).
   If omitted, clients MUST determine the correct token
   program by fetching the mint account from the network
-  and inspecting its owner program. Servers SHOULD
-  include this field as a hint to avoid the extra RPC
-  lookup. MUST NOT be present when `currency` is
-  `"sol"`.
+  and inspecting its owner program. If that lookup
+  fails, returns an unexpected owner, or cannot be
+  verified, clients MUST reject the challenge rather
+  than falling back to the Token Program. Servers
+  SHOULD include this field as a hint to avoid the
+  extra RPC lookup. MUST NOT be present when
+  `currency` is `"sol"`.
 
 feePayer
 : OPTIONAL. A boolean indicating whether the server will
@@ -706,11 +709,16 @@ For credentials with `type="transaction"`:
    The transaction MUST have the server's `feePayerKey`
    set as the fee payer account.
 
-4. Simulate the transaction using the `simulateTransaction`
-   RPC method. If simulation fails, reject the credential.
-   This catches invalid transactions without spending fees,
-   which is especially important in fee payer mode (see
-   {{transaction-simulation}}).
+4. If `feePayer` is `true`, simulate the transaction
+   using the `simulateTransaction` RPC method. The
+   server MUST reject the credential if simulation
+   fails. If `feePayer` is `false` or omitted, the
+   server SHOULD simulate the transaction before
+   broadcast and SHOULD reject the credential if
+   simulation indicates the transaction will fail.
+   This catches invalid transactions without spending
+   fees, which is especially important in fee payer
+   mode (see {{transaction-simulation}}).
 
 5. Broadcast the transaction to the Solana network using
    `sendTransaction`.
@@ -1110,6 +1118,20 @@ challenge binding (the credential echoes the challenge
 enforcement mitigate this: only the party that received
 the challenge can construct a valid credential.
 
+Push mode does not require the on-chain transaction to
+carry a challenge-specific marker. It proves that a
+payment matching the challenged terms was made, but not
+necessarily that the payment was created for one unique
+challenge instance. If multiple valid challenges have
+identical terms, the same confirmed transaction could
+satisfy any one of them, and the first accepted
+presentation wins.
+
+Requiring an on-chain marker such as a Memo carrying
+the challenge `id` would provide stronger binding, but
+would also reveal extra correlation metadata on chain.
+This specification does not require such a marker.
+
 Pull mode is not susceptible to front-running because
 the transaction is not broadcast until the server
 receives and validates the credential.
@@ -1127,7 +1149,9 @@ Denial of Service via Bad Transactions
 
   - **Transaction simulation**: `simulateTransaction`
     catches most failures before broadcast, without
-    spending fees. Servers SHOULD simulate all pull
+    spending fees. Servers MUST simulate fee-sponsored
+    pull mode transactions before broadcasting.
+    Servers SHOULD simulate non-fee-sponsored pull
     mode transactions before broadcasting.
   - **Rate limiting**: per client address, per IP, or
     per time window.
