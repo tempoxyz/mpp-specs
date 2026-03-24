@@ -397,7 +397,10 @@ splits
   greater than zero. Servers MUST reject challenges
   where splits consume the entire amount. Servers MUST
   verify each split transfer on-chain during credential
-  verification.
+  verification. If the same recipient appears more than
+  once in `splits`, each occurrence is a distinct
+  payment leg and MUST be verified separately; servers
+  MUST NOT implicitly aggregate such entries.
 
   This mechanism is a Solana-specific extension to the
   base `charge` intent. It can be used for fee payer cost
@@ -782,6 +785,12 @@ the server MUST:
    additional System Program `transfer` instruction whose
    `destination` and `lamports` fields match that split.
 
+   Each required payment leg MUST be matched to a
+   distinct transfer instruction. A single transfer
+   instruction MUST NOT satisfy more than one required
+   payment leg, even if multiple legs share the same
+   recipient.
+
 If any required transfer instruction is missing, the
 server MUST reject the credential.
 
@@ -812,6 +821,12 @@ not `"sol"`), the server MUST:
    verify that at least one additional `transferChecked`
    instruction uses that ATA as `destination` and has
    `tokenAmount.amount` equal to the split amount.
+
+   Each required payment leg MUST be matched to a
+   distinct `transferChecked` instruction. A single
+   instruction MUST NOT satisfy more than one required
+   payment leg, even if multiple legs resolve to the
+   same destination ATA.
 
 If any required `transferChecked` instruction is missing,
 the server MUST reject the credential.
