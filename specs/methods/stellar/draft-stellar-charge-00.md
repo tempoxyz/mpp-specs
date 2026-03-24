@@ -245,12 +245,7 @@ with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | MUST be `"sep41"` |
 | `transaction` | string | REQUIRED | Base64-encoded XDR |
-
-`type`
-: MUST be `"sep41"`. Identifies this as a SEP-41 {{SEP-41}} token
-  transfer.
 
 `transaction`
 : Base64-encoded XDR of a Stellar transaction as defined in
@@ -281,7 +276,6 @@ with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
     "expires": "2025-02-05T12:05:00Z"
   },
   "payload": {
-    "type": "sep41",
     "transaction": "AAAAAgAAAABriIN4..."
   },
   "source": "did:pkh:stellar:testnet:GABC..."
@@ -380,20 +374,18 @@ MUST treat this as a server error (HTTP 5xx) rather than a
    by this server, and the current time is before the challenge `expires`
    auth-param.
 
-2. `payload.type` is `"sep41"`.
-
-3. The decoded transaction contains exactly one `invokeHostFunction`
+2. The decoded transaction contains exactly one `invokeHostFunction`
    operation with function type `hostFunctionTypeInvokeContract`.
 
-4. The invoked function is `transfer(from, to, amount)` on the contract
+3. The invoked function is `transfer(from, to, amount)` on the contract
    matching `currency`. The `to` argument MUST equal `recipient` and the
    `amount` argument MUST equal `amount` (as i128) from the challenge
    request.
 
-5. The transaction's network passphrase MUST correspond to
+4. The transaction's network passphrase MUST correspond to
    `methodDetails.network`.
 
-6. The server MUST simulate the transaction via Stellar RPC. The
+5. The server MUST simulate the transaction via Stellar RPC. The
    simulation MUST succeed and MUST emit events showing only the expected
    balance changes: a decrease of `amount` for the payer and an increase
    of `amount` for the recipient. Any other balance change MUST cause
@@ -401,22 +393,22 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 ## Sponsored Flow Additional Checks
 
-7. The transaction source account is the all-zeros account
+6. The transaction source account is the all-zeros account
    (`GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF`).
 
-8. Authorization entries MUST use credential type
+7. Authorization entries MUST use credential type
    `sorobanCredentialsAddress` only, and MUST NOT contain
    `subInvocations` beyond the single SEP-41 {{SEP-41}} token transfer.
 
-9. The authorization entry expiration MUST NOT exceed `currentLedger +
+8. The authorization entry expiration MUST NOT exceed `currentLedger +
    ceil((expires - now) / DEFAULT_LEDGER_CLOSE_TIME)`.
 
-10. The server's address MUST NOT appear as the `from` argument or in
+9. The server's address MUST NOT appear as the `from` argument or in
     any authorization entry.
 
 ## Unsponsored Flow Additional Checks
 
-7. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
+6. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
    challenge.
 
 # Settlement Procedure {#settlement}
