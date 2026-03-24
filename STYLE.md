@@ -38,7 +38,7 @@ When in doubt, deny access. Invalid credentials, expired challenges, and verific
 
 ### 1. IETF Conformance
 
-All specificication should adhere to the standard IETF format and style guide [ref](https://authors.ietf.org/).
+All specifications should adhere to the standard IETF format and style guide [ref](https://authors.ietf.org/).
 
 ### 2. Requirements Language
 
@@ -54,7 +54,7 @@ Use RFC 2119 keywords precisely:
 
 ### 3. Structure
 
-Following IETF guidelines, ever spec should follow the below structure:
+Following IETF guidelines, every spec should follow the structure below:
 
 ```bash
 1. Abstract           - What this document does (2-3 sentences)
