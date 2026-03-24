@@ -718,7 +718,7 @@ For credentials with `type="transaction"`:
    simulation indicates the transaction will fail.
    This catches invalid transactions without spending
    fees, which is especially important in fee payer
-   mode (see {{transaction-simulation}}).
+   mode (see {{fee-payer-risks}}).
 
 5. Broadcast the transaction to the Solana network using
    `sendTransaction`.
@@ -770,40 +770,50 @@ transfer verification logic defined in
 For native SOL payments (`currency` is `"sol"`),
 the server MUST:
 
-1. Locate a System Program `transfer` instruction in the
-   transaction's parsed instructions.
+1. Compute the primary payment amount as the top-level
+   `amount` minus the sum of all `splits`, if any.
 
-2. Verify the `destination` field matches the `recipient`
-   from the challenge request.
+2. Locate a System Program `transfer` instruction in the
+   transaction's parsed instructions whose `destination`
+   matches the top-level `recipient` and whose `lamports`
+   field matches that primary payment amount.
 
-3. Verify the `lamports` field matches the `amount` from
-   the challenge request.
+3. For each split in `splits`, if any, locate an
+   additional System Program `transfer` instruction whose
+   `destination` and `lamports` fields match that split.
 
-If no matching System Program transfer instruction is found,
-the server MUST reject the credential.
+If any required transfer instruction is missing, the
+server MUST reject the credential.
 
 ## SPL Token Verification {#spl-verification}
 
 For SPL token payments (`currency` is a mint address,
 not `"sol"`), the server MUST:
 
-1. Locate a `transferChecked` instruction from the
+1. Compute the primary payment amount as the top-level
+   `amount` minus the sum of all `splits`, if any.
+
+2. Locate a `transferChecked` instruction from the
    appropriate token program (Token Program or
-   Token-2022) in the transaction's parsed instructions.
+   Token-2022) in the transaction's parsed instructions
+   whose `mint` field matches the top-level `currency`
+   field from the challenge request.
 
-2. Verify the `mint` field matches the top-level
-   `currency` field from the challenge request.
+3. Derive the expected destination associated token
+   account for the top-level `recipient` from the
+   `recipient`, `currency`, and `tokenProgram` in the
+   challenge request. Verify that at least one matching
+   `transferChecked` instruction uses that derived ATA
+   as `destination` and has `tokenAmount.amount` equal
+   to the primary payment amount.
 
-3. Verify the `tokenAmount.amount` field matches the
-   `amount` from the challenge request.
+4. For each split in `splits`, if any, derive the
+   expected destination ATA for that split recipient and
+   verify that at least one additional `transferChecked`
+   instruction uses that ATA as `destination` and has
+   `tokenAmount.amount` equal to the split amount.
 
-4. Derive the expected destination associated token
-   account from the `recipient`, `currency`, and
-   `tokenProgram` in the challenge request. Verify the
-   `destination` field in the instruction matches this
-   derived ATA address.
-
-If no matching `transferChecked` instruction is found,
+If any required `transferChecked` instruction is missing,
 the server MUST reject the credential.
 
 ## Replay Protection {#replay-protection}
@@ -1070,7 +1080,7 @@ All communication MUST use TLS 1.2 or higher. Solana
 credentials MUST only be transmitted over HTTPS
 connections.
 
-## Replay Protection
+## Replay Protection Considerations
 
 Servers MUST track consumed transaction signatures and
 reject any signature that has already been accepted.
