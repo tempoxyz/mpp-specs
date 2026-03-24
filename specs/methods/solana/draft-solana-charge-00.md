@@ -1140,7 +1140,9 @@ presentation wins.
 Requiring an on-chain marker such as a Memo carrying
 the challenge `id` would provide stronger binding, but
 would also reveal extra correlation metadata on chain.
-This specification does not require such a marker.
+This specification does not require such a marker in
+the base flow, but implementations MAY define a
+backward-compatible profile that does.
 
 Pull mode is not susceptible to front-running because
 the transaction is not broadcast until the server
