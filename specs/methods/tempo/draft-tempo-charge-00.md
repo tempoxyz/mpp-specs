@@ -192,11 +192,8 @@ sharing, and marketplace payouts.
 
 The top-level `amount` represents the total amount the client pays. Each
 entry in `splits` specifies a recipient and the amount they receive. The
-primary `recipient` receives the remainder: `amount` minus the sum of all
-split amounts.
-
-Servers MUST ensure the sum of all split amounts is strictly less than
-`amount`. Clients MUST verify this invariant before signing.
+primary recipient (the top-level `recipient`) receives the remainder:
+`amount` minus the sum of all split amounts.
 
 ### Split Entry Schema
 
@@ -206,14 +203,38 @@ Each entry in the `splits` array is a JSON object:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units for this recipient |
 | `memo` | string | OPTIONAL | A `bytes32` hex value for `transferWithMemo` |
-| `recipient` | string | REQUIRED | Recipient address for this split |
+| `recipient` | string | REQUIRED | Recipient address |
+
+The `amount` field in each split entry MUST be a base-10 integer string
+with no sign, decimal point, exponent, or surrounding whitespace. Each
+`splits[i].amount` MUST be greater than zero. The syntax and encoding
+requirements for `splits[i].memo` are identical to those for
+`methodDetails.memo`, but apply only to that split transfer. Address
+fields are compared by decoded 20-byte value, not by string form.
 
 ### Constraints
 
-- The `splits` array MUST contain at most 10 entries.
-- The sum of all `splits[].amount` values MUST be strictly less than the
-  top-level `amount`.
+Servers MUST NOT generate a request where the sum of `splits[].amount`
+values is greater than or equal to `amount`. Clients MUST reject any
+request that violates this constraint. This ensures the primary
+recipient always receives a non-zero remainder, avoiding the need to
+define zero-value transfer semantics.
+
+Additional constraints:
+
+- If present, `splits` MUST contain at least 1 and at most 10 entries.
+  The limit of 10 bounds the transaction to 11 calls (1 primary +
+  10 splits), capping additional gas at approximately 290,000 gas
+  (10 x ~29,000 gas per TIP-20 precompile transfer execution) and
+  keeping the transaction within a single block's gas budget.
 - All transfers MUST target the same `currency` token address.
+
+### Ordering
+
+The order of entries in `splits` is significant. Clients MUST emit
+calls in array order. Servers MUST verify calls in that order.
+Implementations MUST NOT reorder or coalesce split entries, even if
+two or more entries share the same `recipient`.
 
 ### Example
 
@@ -228,12 +249,12 @@ Each entry in the `splits` array is a JSON object:
     "splits": [
       {
         "amount": "50000",
-        "recipient": "0xPlatformFeeAddress000000000000000000000000"
+        "recipient": "0xA1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
       },
       {
         "amount": "10000",
         "memo": "0x00000000000000000000000000000000000000000000000000000000deadbeef",
-        "recipient": "0xAffiliateAddress0000000000000000000000000000"
+        "recipient": "0xC4D5E6F7A8B9C4D5E6F7A8B9C4D5E6F7A8B9C4D5"
       }
     ]
   }
@@ -465,8 +486,9 @@ the transaction. The server verifies the transaction onchain:
 
 **Limitations:**
 
-- Cannot be used with `feePayer: true` (client must pay their own fees)
-- Server cannot modify or enhance the transaction
+- Clients MUST NOT use `type="hash"` when `methodDetails.feePayer` is
+  `true`. Servers MUST reject such credentials.
+- Server cannot modify or enhance the transaction.
 
 ## Transaction Verification {#transaction-verification}
 
@@ -490,10 +512,11 @@ Before broadcasting a transaction credential, servers MUST verify:
    e. If `splits[i].memo` is present, verify the corresponding call uses
       `transferWithMemo` with the matching memo value
 
-For hash credentials, servers MUST fetch the transaction receipt and
-verify the emitted `Transfer` or `TransferWithMemo` event logs match
-the challenge parameters. When `splits` are present, servers MUST verify
-that all expected transfer events are present in the receipt logs.
+For hash credentials, servers MUST fetch both the transaction and the
+transaction receipt. Servers MUST verify the receipt indicates successful
+execution, decode the transaction's call data, and apply the same
+structural checks as steps 1 through 7 above. Event logs alone are not
+sufficient for conformance verification.
 
 ## Receipt Generation
 
@@ -541,12 +564,19 @@ When `splits` are present, additional risks apply:
 recipients are unknown. A malicious server could route the majority of
 a payment to an attacker-controlled address via splits.
 
-**Gas Overhead**: Each additional split adds gas cost (~5,000 gas per
-transfer call). Servers sponsoring fees via `feePayer: true` MUST budget
-for the increased gas limit.
+**User Presentation**: Where a human approval step exists, clients
+SHOULD present the total amount and each split recipient/amount to the
+user before signing. Clients SHOULD highlight when the primary recipient
+receives a small remainder relative to the total `amount`.
 
-**Split Count Bound**: The `splits` array is limited to 10 entries to
-bound transaction size and gas consumption.
+**Gas Overhead**: Each additional split adds approximately 29,000 gas
+for the TIP-20 precompile transfer execution. A charge with 10 splits
+adds approximately 290,000 gas beyond a single-transfer charge. Servers
+sponsoring fees via `feePayer: true` MUST budget for the increased gas
+limit.
+
+**Split Count Bound**: The `splits` array is limited to 10 entries.
+See {{split-payments}} for rationale.
 
 ## Server-Paid Fees
 
@@ -667,7 +697,7 @@ The `request` decodes to:
     "splits": [
       {
         "amount": "50000",
-        "recipient": "0xPlatform00000000000000000000000000000000"
+        "recipient": "0xA1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
       }
     ]
   }
@@ -679,7 +709,7 @@ This requests a total payment of 1.00 pathUSD. The platform receives
 a Tempo Transaction with two calls in the `calls` array:
 
 1. `transfer(0x742d...fE00, 950000)` — merchant receives remainder
-2. `transfer(0xPlat...0000, 50000)` — platform fee
+2. `transfer(0xA1B2...A1B2, 50000)` — platform fee
 
 # Acknowledgements
 
