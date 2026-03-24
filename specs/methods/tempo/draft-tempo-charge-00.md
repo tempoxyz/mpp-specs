@@ -379,8 +379,9 @@ the transaction. The server verifies the transaction onchain:
 
 **Limitations:**
 
-- Cannot be used with `feePayer: true` (client must pay their own fees)
-- Server cannot modify or enhance the transaction
+- Clients MUST NOT use `type="hash"` when `methodDetails.feePayer` is
+  `true`. Servers MUST reject such credentials.
+- Server cannot modify or enhance the transaction.
 
 ## Transaction Verification {#transaction-verification}
 
