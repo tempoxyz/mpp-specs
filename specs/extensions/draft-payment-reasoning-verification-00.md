@@ -84,7 +84,7 @@ This extension:
 - DOES: Define how a server can require reasoning verification before
   accepting payment credentials
 - DOES: Specify the verification request/response format
-- DOES: Support multiple stake levels (micro → critical) with
+- DOES: Support multiple stake levels (low → critical) with
   proportional verification depth
 - DOES NOT: Define the verification algorithm (implementations vary)
 - DOES NOT: Replace identity or authorization checks
@@ -178,7 +178,7 @@ New parameters:
 |-----------|----------|-------------|
 | `reasoning-verification` | OPTIONAL | `"required"` or `"recommended"` |
 | `verification-endpoint` | CONDITIONAL | URL of the verification service (required if reasoning-verification is set) |
-| `stake-level` | OPTIONAL | `"micro"`, `"low"`, `"medium"`, `"high"`, `"critical"` — defaults to `"medium"` |
+| `stake-level` | OPTIONAL | `"low"`, `"medium"`, `"high"`, `"critical"` — defaults to `"medium"` |
 
 ### 4.2. Verification Request
 
@@ -245,14 +245,14 @@ Servers SHOULD use stake levels to control verification depth:
 
 | Stake Level | Typical Latency | Models | Cost | Threshold |
 |-------------|-----------------|--------|------|-----------|
-| `low` | ~15–25s | 2 | $0.005 | 0.50 |
+| `low` | ~15–25s | 2 | $0.01 | 0.50 |
 | `medium` | ~30–45s | 3 | $0.01 | 0.60 |
 | `high` | ~45–60s | 3+ | $0.10 | 0.75 |
 | `critical` | ~60s+ | 4+ | $1.00 | 0.85 |
 
 Servers MAY set `reasoning-verification="required"` only above a
 certain payment amount. Payments below the threshold proceed without
-verification — there is no "micro" stake level because sub-threshold
+verification — there is no "micro" stake level; the minimum is "low"
 payments skip this extension entirely.
 
 ### 4.5. Error Handling
