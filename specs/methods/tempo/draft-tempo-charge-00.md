@@ -154,6 +154,7 @@ Challenge expiry is conveyed by the `expires` auth-param in
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 | `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
+| `methodDetails.splits` | array | OPTIONAL | Additional recipients that receive a portion of `amount`. See {{split-payments}}. |
 
 **Example:**
 
@@ -181,6 +182,87 @@ If `methodDetails.feePayer` is `true`, the client signs with
 server to sponsor fees. If `feePayer` is `false` or omitted, the client
 MUST set `fee_token` and pay fees themselves.
 
+## Split Payments {#split-payments}
+
+The `splits` field enables a single charge to distribute payment across
+multiple recipients atomically. This is useful for platform fees, revenue
+sharing, and marketplace payouts.
+
+### Semantics
+
+The top-level `amount` represents the total amount the client pays. Each
+entry in `splits` specifies a recipient and the amount they receive. The
+primary `recipient` receives the remainder: `amount` minus the sum of all
+split amounts.
+
+Servers MUST ensure the sum of all split amounts is strictly less than
+`amount`. Clients MUST verify this invariant before signing.
+
+### Split Entry Schema
+
+Each entry in the `splits` array is a JSON object:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | string | REQUIRED | Amount in base units for this recipient |
+| `memo` | string | OPTIONAL | A `bytes32` hex value for `transferWithMemo` |
+| `recipient` | string | REQUIRED | Recipient address for this split |
+
+### Constraints
+
+- The `splits` array MUST contain at most 10 entries.
+- The sum of all `splits[].amount` values MUST be strictly less than the
+  top-level `amount`.
+- All transfers MUST target the same `currency` token address.
+
+### Example
+
+~~~json
+{
+  "amount": "1000000",
+  "currency": "0x20c0000000000000000000000000000000000000",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "methodDetails": {
+    "chainId": 42431,
+    "feePayer": true,
+    "splits": [
+      {
+        "amount": "50000",
+        "recipient": "0xPlatformFeeAddress000000000000000000000000"
+      },
+      {
+        "amount": "10000",
+        "memo": "0x00000000000000000000000000000000000000000000000000000000deadbeef",
+        "recipient": "0xAffiliateAddress0000000000000000000000000000"
+      }
+    ]
+  }
+}
+~~~
+
+This requests a total payment of 1.00 pathUSD (1,000,000 base units).
+The platform receives 0.05 pathUSD, the affiliate receives 0.01 pathUSD
+(with a memo), and the primary recipient receives the remaining
+0.94 pathUSD (940,000 base units).
+
+### Client Behavior
+
+When `splits` is present, the client MUST construct a Tempo Transaction
+with multiple calls in the `calls` array, leveraging Tempo's native call
+batching {{TEMPO-TX-SPEC}}:
+
+1. Call 0: `transfer` or `transferWithMemo` to the primary `recipient`
+   for `amount - sum(splits[].amount)`.
+2. Calls 1..N: `transfer` or `transferWithMemo` to each `splits[i].recipient`
+   for `splits[i].amount`. If `splits[i].memo` is present, use
+   `transferWithMemo`.
+
+All calls MUST target the `currency` token address. The top-level
+`methodDetails.memo`, if present, applies to the primary transfer (call 0).
+
+The transaction is signed and submitted as a single atomic unit. If any
+call fails, the entire transaction reverts.
+
 # Credential Schema
 
 The credential in the `Authorization` header contains a base64url-encoded
@@ -203,6 +285,8 @@ When `type` is `"transaction"`, `signature` contains the complete signed
 Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
 `0x` prefix. The transaction MUST contain a `transfer(recipient, amount)`
 or `transferWithMemo(recipient, amount, memo)` call on the TIP-20 token.
+When `splits` are present, the transaction MUST contain additional calls
+for each split entry (see {{split-payments}}).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -311,8 +395,10 @@ When acting as fee payer, servers:
 # Settlement Procedure
 
 For `intent="charge"` fulfilled via transaction, the client signs a
-transaction containing a `transfer` or `transferWithMemo` call. If `feePayer: true`, the server
-adds its fee payer signature before broadcasting:
+transaction containing one or more `transfer` or `transferWithMemo` calls.
+When `splits` are present, the transaction contains multiple calls (see
+{{split-payments}}). If `feePayer: true`, the server adds its fee payer
+signature before broadcasting:
 
 ~~~
    Client                           Server                        Tempo Network
@@ -394,9 +480,20 @@ Before broadcasting a transaction credential, servers MUST verify:
 5. Verify the `recipient` matches the challenge request recipient
 6. If `methodDetails.memo` is present, verify the transaction uses
    `transferWithMemo` with the matching memo value
+7. If `methodDetails.splits` is present:
+   a. Verify the transaction contains exactly `1 + len(splits)` calls
+   b. Verify call 0 transfers `amount - sum(splits[].amount)` to the
+      primary `recipient`
+   c. Verify calls 1..N each transfer `splits[i].amount` to
+      `splits[i].recipient`
+   d. Verify all calls target the `currency` token address
+   e. If `splits[i].memo` is present, verify the corresponding call uses
+      `transferWithMemo` with the matching memo value
+
 For hash credentials, servers MUST fetch the transaction receipt and
 verify the emitted `Transfer` or `TransferWithMemo` event logs match
-the challenge parameters.
+the challenge parameters. When `splits` are present, servers MUST verify
+that all expected transfer events are present in the receipt logs.
 
 ## Receipt Generation
 
@@ -433,6 +530,23 @@ Clients MUST parse and verify the `request` payload before signing:
 1. Verify `amount` is reasonable for the service
 2. Verify `currency` is the expected token address
 3. Verify `recipient` is controlled by the expected party
+4. If `splits` is present, verify the sum of split amounts is strictly
+   less than `amount` and that all split recipients are expected
+
+## Split Payment Risks
+
+When `splits` are present, additional risks apply:
+
+**Recipient Enumeration**: Clients SHOULD warn users when split
+recipients are unknown. A malicious server could route the majority of
+a payment to an attacker-controlled address via splits.
+
+**Gas Overhead**: Each additional split adds gas cost (~5,000 gas per
+transfer call). Servers sponsoring fees via `feePayer: true` MUST budget
+for the increased gas limit.
+
+**Split Count Bound**: The `splits` array is limited to 10 entries to
+bound transaction size and gas consumption.
 
 ## Server-Paid Fees
 
@@ -524,6 +638,48 @@ GET /api/resource HTTP/1.1
 Host: api.example.com
 Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsic2lnbmF0dXJlIjoiMHg3NmY5MDEuLi4iLCJ0eXBlIjoidHJhbnNhY3Rpb24ifSwic291cmNlIjoiZGlkOnBraDplaXAxNTU6NDI0MzE6MHgxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4In0
 ~~~
+
+# Split Payment Example
+
+**Challenge with splits:**
+
+~~~http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="sP1itPaym3ntEx4mple",
+  realm="marketplace.example.com",
+  method="tempo",
+  intent="charge",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJmZWVQYXllciI6dHJ1ZSwic3BsaXRzIjpbeyJhbW91bnQiOiI1MDAwMCIsInJlY2lwaWVudCI6IjB4UGxhdGZvcm0wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCJ9XX19",
+  expires="2025-06-01T12:00:00Z"
+Cache-Control: no-store
+~~~
+
+The `request` decodes to:
+
+~~~json
+{
+  "amount": "1000000",
+  "currency": "0x20c0000000000000000000000000000000000000",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "methodDetails": {
+    "chainId": 42431,
+    "feePayer": true,
+    "splits": [
+      {
+        "amount": "50000",
+        "recipient": "0xPlatform00000000000000000000000000000000"
+      }
+    ]
+  }
+}
+~~~
+
+This requests a total payment of 1.00 pathUSD. The platform receives
+0.05 pathUSD and the merchant receives 0.95 pathUSD. The client signs
+a Tempo Transaction with two calls in the `calls` array:
+
+1. `transfer(0x742d...fE00, 950000)` — merchant receives remainder
+2. `transfer(0xPlat...0000, 50000)` — platform fee
 
 # Acknowledgements
 
