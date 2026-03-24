@@ -415,6 +415,20 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 6. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
    challenge.
 
+# Error Codes {#error-codes}
+
+This specification defines the following additional error code beyond those
+in {{I-D.httpauth-payment}}:
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `settlement-failed` | 402 | Credential valid but on-chain settlement failed |
+
+Servers MUST return `settlement-failed` when a credential passes
+verification but the Stellar transaction fails on-chain (e.g., insufficient
+funds or sequence number conflict). This is distinct from
+`verification-failed`, which indicates the credential failed validation checks.
+
 # Settlement Procedure {#settlement}
 
 ## Sponsored Flow
@@ -437,7 +451,7 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 7. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, the server
    MUST return a `settlement-failed` error per
-   {{I-D.httpauth-payment}}. The credential was valid but the on-chain
+   {{error-codes}}. The credential was valid but the on-chain
    transaction failed (e.g., insufficient funds or sequence number
    conflict).
 
@@ -453,7 +467,7 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 
 4. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, the server
    MUST return a `settlement-failed` error per
-   {{I-D.httpauth-payment}}. The credential was valid but the on-chain
+   {{error-codes}}. The credential was valid but the on-chain
    transaction failed (e.g., insufficient funds or sequence number
    conflict).
 

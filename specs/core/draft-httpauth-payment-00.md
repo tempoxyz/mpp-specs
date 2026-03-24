@@ -576,7 +576,6 @@ below, and the canonical base URI for problem types is
 | `method-unsupported` | 400 | Method not accepted |
 | `malformed-credential` | 402 | Invalid credential format |
 | `invalid-challenge` | 402 | Challenge ID unknown, expired, or already used |
-| `settlement-failed` | 402 | Credential valid but settlement failed |
 
 ## Retry Behavior
 
