@@ -286,7 +286,10 @@ with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
 
 Stellar uses ledger sequence numbers for transaction and authorization
 entry expiration rather than wall-clock timestamps. Clients MUST derive the
-ledger expiration from the challenge `expires` auth-param as follows:
+ledger expiration from the challenge `expires` auth-param as follows.
+
+If `expires` is absent, clients SHOULD default to 5 minutes from the
+current time.
 
 ~~~
 ledgerExpiration =
@@ -342,9 +345,10 @@ Servers acting as fee sponsors:
 
 When `methodDetails.feePayer` is `false` or absent:
 
-1. The client sets `timeBounds.maxTime` to the `expires` auth-param value
-   (a Unix timestamp). The transaction MUST NOT be valid beyond the
-   challenge expiry. See {{ledger-expiration}}.
+1. The client sets `timeBounds.maxTime` to the `expires` auth-param value,
+   or 5 minutes from the current time if `expires` is absent. The
+   transaction MUST NOT be valid beyond the challenge expiry. See
+   {{ledger-expiration}}.
 
 2. The client builds a fully signed `invokeHostFunction` transaction
    containing a single operation calling `transfer(from, to, amount)` on
