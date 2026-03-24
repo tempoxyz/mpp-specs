@@ -219,17 +219,46 @@ transfer. All splits use the same token as the primary
 payment (`currency`).
 
 The top-level `amount` is the total the client pays.
-The sum of all split amounts MUST NOT exceed `amount`.
-The primary `recipient` receives `amount` minus the sum
-of all split amounts; this remainder MUST be greater
-than zero. Servers MUST reject challenges where splits
-consume the entire amount. Servers MUST verify each
-split transfer on-chain during credential verification.
+Servers MUST NOT generate a request where the sum of
+`splits[].amount` values is greater than or equal to
+`amount`. Clients MUST reject any request that violates
+this constraint. The primary `recipient` receives the
+remainder: `amount` minus the sum of all split amounts.
+This remainder MUST be greater than zero.
 
-At most 8 splits MAY be specified. This mechanism
-enables platform fees, revenue sharing, referral
-commissions, and fee payer cost recovery without
-additional infrastructure.
+If present, `splits` MUST contain at least 1 and at
+most 8 entries. Servers MUST verify each split transfer
+on-chain during credential verification.
+
+The order of entries in `splits` is significant.
+Clients MUST emit Permit2 calls in array order
+(primary transfer first, then splits in order). Servers
+MUST verify transfers in that order. Implementations
+MUST NOT reorder or coalesce split entries, even if
+two or more entries share the same `recipient`.
+
+This mechanism enables platform fees, revenue sharing,
+referral commissions, and fee payer cost recovery
+without additional infrastructure.
+
+### Atomicity
+
+Unlike chains with native call batching, Permit2 splits
+on MegaETH require separate
+`permitWitnessTransferFrom()` calls — one for the
+primary transfer and one per split. These are not
+atomic within a single transaction.
+
+Servers MUST execute the primary transfer before any
+split transfers. If a split transfer fails after the
+primary succeeds, the server MUST still return a
+receipt for the primary transfer and SHOULD log the
+partial failure. Clients SHOULD be prepared for partial
+execution when splits are present.
+
+Servers MAY mitigate partial execution risk by
+simulating all transfers via `eth_call` before
+submitting any on-chain.
 
 **Example (Permit2 with splits):**
 
@@ -391,10 +420,17 @@ the payload contains only the transaction hash:
 ## Hash Settlement
 
 1. Server receives credential with `type: "hash"`
-2. Server fetches the transaction receipt from the chain
-3. Server verifies the emitted `Transfer` event logs
-   match the challenge parameters (token, from, to,
-   amount) including any `splits`
+2. Server fetches both the transaction and the
+   transaction receipt from the chain
+3. Server verifies the receipt indicates successful
+   execution
+4. Server decodes the transaction's call data and
+   applies the same structural checks as Permit2
+   verification (token, from, to, amount, and splits
+   if present). Event logs alone are not sufficient
+   for conformance verification.
+5. Hash credentials MUST NOT be used with
+   `feePayer: true`
 
 ## Transaction Submission
 
@@ -428,6 +464,15 @@ Before broadcasting, servers MUST verify:
 5. The token address matches the challenge `currency`
 6. The `from` address has sufficient Permit2 allowance
 7. Validity timestamps are current
+8. If `splits` are present:
+   a. Each split has a valid Permit2 signature from
+      the same `from` address
+   b. Each `splits[i].amount` transfers to the
+      corresponding `splits[i].recipient`
+   c. All split transfers target the `currency` token
+   d. The primary transfer amount equals
+      `amount - sum(splits[].amount)`
+   e. Transfers are verified in array order
 
 ## Receipt Generation
 
@@ -528,6 +573,27 @@ Clients MUST verify before signing:
 
 Clients MUST NOT rely on the `description` field for
 payment verification.
+
+## Split Payment Risks
+
+When `splits` are present, additional risks apply:
+
+**Recipient Enumeration**: Clients SHOULD warn users
+when split recipients are unknown. A malicious server
+could route the majority of a payment to an
+attacker-controlled address via splits.
+
+**User Presentation**: Where a human approval step
+exists, clients SHOULD present the total amount and
+each split recipient/amount to the user before signing.
+Clients SHOULD highlight when the primary recipient
+receives a small remainder relative to the total
+`amount`.
+
+**Partial Execution**: Because Permit2 splits require
+separate on-chain calls, partial execution is possible.
+See the Atomicity section under Payment Splits for
+mitigation guidance.
 
 ## Fee Payer Risks
 
@@ -636,7 +702,7 @@ WWW-Authenticate: Payment id="mE9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="megaeth",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwMDAwMDAwMDAwMDAwIiwiY3VycmVuY3kiOiIweEZBZkRkYmIzRkM3Njg4NDk0OTcxYTc5Y2M2NURDYTNFRjgyMDc5RTciLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQzMjYsImFzc2V0VHJhbnNmZXJNZXRob2QiOiJwZXJtaXQyIiwiZmVlUGF5ZXIiOnRydWV9fQ",
+  request="eyJhbW91bnQiOiIxMDAwMDAwMDAwMDAwMDAwMDAwIiwiY3VycmVuY3kiOiIweEZBZkRkYmIzRkM3Njg4NDk0OTcxYTc5Y2M2NURDYTNFRjgyMDc5RTciLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQzMjYsImZlZVBheWVyIjpmYWxzZX19",
   expires="2026-03-20T12:05:00Z"
 ~~~
 
