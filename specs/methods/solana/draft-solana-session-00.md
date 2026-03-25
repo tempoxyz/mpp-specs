@@ -13,6 +13,10 @@ author:
     ins: L. Galabru
     email: ludo.galabru@solana.org
     org: Solana Foundation
+  - name: Jo
+    ins: Desormeaux
+    email: jo.desormeaux@solana.org
+    org: Solana Foundation
 
 normative:
   RFC2119:
@@ -240,16 +244,16 @@ Each channel is represented by an on-chain account
 (typically a PDA derived from payer, payee, asset,
 and a salt) with the following logical fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `payer` | Pubkey | Client who deposited funds |
-| `payee` | Pubkey | Server authorized to settle |
-| `token` | Pubkey | Token mint (or system program for SOL) |
-| `authorizedSigner` | Pubkey | Voucher signer (payer if not delegated) |
-| `deposit` | u64 | Total amount deposited |
-| `settled` | u64 | Cumulative amount settled to payee |
-| `closeRequestedAt` | i64 | Unix timestamp of close request (0 if none) |
-| `finalized` | bool | Whether channel is closed |
+| Field | Type | Storage | Description |
+|-------|------|---------|-------------|
+| `payer` | Pubkey | Seed + Account state | Client who deposited funds |
+| `payee` | Pubkey | Seed + Account state | Server authorized to settle |
+| `token` | Pubkey | Seed only | Token mint |
+| `authorizedSigner` | Pubkey | Seed + Account state | Voucher signer (payer if not delegated) |
+| `deposit` | u64 | Account state | Total amount deposited |
+| `settled` | u64 | Account state | Cumulative amount settled to payee |
+| `closeRequestedAt` | i64 | Account state | Unix timestamp of close request (0 if none) |
+| `bump` | u8 | Account state | Canonical PDA bump |
 
 The `channelId` is the base58-encoded address of the
 channel account (PDA). Channel programs MUST derive
@@ -290,6 +294,18 @@ atomic transaction with multiple instructions.
 The payer authority for the funding transfer MUST be a
 signer on the transaction.
 
+Before initializing, the program MUST check whether the
+target PDA already exists. If the account discriminator
+matches `ClosedChannel`, the program MUST reject the
+instruction. Reopening a previously finalized channel
+PDA is forbidden regardless of seed inputs.
+
+If the token mint has a Token-2022 transfer hook
+extension, the deposit transfer instruction MUST
+include the extra accounts required by the hook program.
+Clients MUST resolve hook extra accounts from on-chain
+mint state before constructing the open transaction.
+
 ### settle
 
 Payee presents a signed voucher. The program verifies
@@ -304,6 +320,12 @@ accumulated funds without closing the channel.
 
 The payee authority for settlement MUST be a signer on
 the transaction.
+
+If the token mint has a Token-2022 transfer hook
+extension, the token transfer instruction MUST include
+the extra accounts required by the hook program.
+Servers MUST resolve current hook extra accounts from
+on-chain mint state before building this transaction.
 
 ### topUp
 
@@ -336,6 +358,13 @@ marks the channel as finalized.
 The payer authority receiving the refund MUST be a
 signer on the transaction.
 
+On completion, the `withdraw` instruction MUST NOT
+fully deallocate the channel account. The program MUST
+realloc the account data to 8 bytes, write the
+`ClosedChannel` discriminator, and return the difference
+between the pre-close rent-exempt balance and the 8-byte
+tombstone rent-exempt minimum to the payer.
+
 ### close
 
 Payee closes the channel by settling any final delta
@@ -354,6 +383,19 @@ The payee authority initiating cooperative close MUST
 be a signer on the transaction. Fee-payer signatures
 MUST NOT be treated as satisfying payer or payee
 authority checks.
+
+On completion, the `close` instruction MUST NOT
+fully deallocate the channel account. The program MUST
+realloc the account data to 8 bytes, write the
+`ClosedChannel` discriminator, and return the difference
+between the pre-close rent-exempt balance and the 8-byte
+tombstone rent-exempt minimum to the payer.
+
+If the token mint has a Token-2022 transfer hook
+extension, the token transfer instruction MUST include
+the extra accounts required by the hook program.
+Servers MUST resolve current hook extra accounts from
+on-chain mint state before building this transaction.
 
 ## Grace Period
 
@@ -382,10 +424,8 @@ the server has time to settle.
 ## Shared Fields
 
 amount
-: REQUIRED. Price per unit of service in base units,
-  encoded as a decimal string. For native SOL, the
-  amount is in lamports. For SPL tokens, the amount is
-  in the token's smallest unit.
+: REQUIRED. Price per unit of service in the token's
+  smallest unit, encoded as a decimal string.
 
 unitType
 : OPTIONAL. Unit being priced (for example,
@@ -401,8 +441,11 @@ recipient
   account that will receive settlement funds.
 
 currency
-: REQUIRED. `"sol"` for native SOL, or a base58-encoded
-  SPL token mint address.
+: REQUIRED. Base58-encoded SPL token mint address.
+  Native SOL is not supported; clients wishing to pay
+  in SOL MUST wrap it to wSOL
+  (`So11111111111111111111111111111111111111112`)
+  before opening a channel.
 
 description
 : OPTIONAL. Human-readable description of the service
@@ -602,7 +645,9 @@ The server MUST verify each voucher:
    idempotent retry handled per
    "Concurrency and Idempotency".
 
-6. Verify the channel is not finalized.
+6. Verify the channel account discriminator is not
+   `ClosedChannel` (i.e., the channel has not been
+   finalized via close or withdraw).
 
 7. Verify `closeRequestedAt == 0`. Servers MUST reject
    new voucher acceptance on channels with a pending
@@ -1006,8 +1051,17 @@ top-up.
 
 If delegated signing is used, a compromised delegated
 key can authorize spend up to the delegation's limit.
-Implementations SHOULD use short TTLs for delegated
-keys and provide mechanisms to revoke them.
+The `authorizedSigner` is bound into the PDA seed set
+at open time and cannot be changed without closing and
+reopening the channel. If a delegated signing key is
+compromised, the payer's only recourse is to call
+`requestClose`, but the attacker retains the ability
+to sign vouchers up to the full deposit cap throughout
+the entire grace period before funds can be recovered.
+Implementations MUST treat delegated keys as
+short-lived, single-session credentials with TTLs on
+the order of minutes to bound exposure in the event
+of a key compromise.
 
 ## Channel Program Trust
 
