@@ -90,6 +90,12 @@ in the Payment HTTP Authentication Scheme. It specifies how clients and
 servers exchange one-time SEP-41 token transfers on the Stellar blockchain,
 with optional server-sponsored transaction fees.
 
+Two credential types are supported: `type="transaction"` (default),
+where the client sends the signed transaction to the server for
+submission, and `type="hash"` (fallback), where the client broadcasts
+the transaction directly to the network and presents the on-chain transaction
+hash for server verification.
+
 --- middle
 
 # Introduction
@@ -103,18 +109,11 @@ This document specifies how to implement the `charge` intent using SEP-41
 defines a standard token interface for Stellar smart contracts, including Stellar
 Asset Contracts (SAC) {{SAC}} and custom token implementations.
 
-The `stellar` method supports two modes via the `methodDetails.feePayer`
-field:
+## Pull Mode (Default) {#pull-mode}
 
-- When `feePayer` is `true`, the server sponsors transaction fees. The client
-  signs only contract authorization entries; the server rebuilds the
-  transaction as source and submits.
-
-- When `feePayer` is `false`, the client builds and signs a complete,
-  network-ready transaction. The server verifies and submits it without
-  modification.
-
-## Charge Flow
+The default flow, called "pull mode", uses `type="transaction"`
+credentials. The client signs the transaction (or authorization entries)
+and the server "pulls" it for submission to the Stellar network:
 
 ~~~
    Client                        Server                Stellar Network
@@ -139,10 +138,50 @@ field:
       |                             |                         |
 ~~~
 
+In this model the server controls transaction submission, enabling
+fee sponsorship ({{sponsored}}) and server-side retry logic.
 When `feePayer` is `true`, step (3) signs only authorization entries and
 step (5) includes the server rebuilding the transaction as source. When
 `feePayer` is `false`, step (3) builds and signs a complete transaction
 and the server submits it without modification.
+
+## Push Mode (Fallback) {#push-mode}
+
+The fallback flow, called "push mode", uses `type="hash"` credentials. The client
+"pushes" the transaction to the network itself and presents the confirmed transaction hash:
+
+~~~
+   Client                        Server                Stellar Network
+      |                             |                         |
+      |  (1) GET /resource          |                         |
+      |-------------------------->  |                         |
+      |                             |                         |
+      |  (2) 402 Payment Required   |                         |
+      |      intent="charge"        |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
+      |  (3) Build & sign tx        |                         |
+      |                             |                         |
+      |  (4) Send transaction       |                         |
+      |------------------------------------------------------>|
+      |  (5) Confirmation           |                         |
+      |<------------------------------------------------------|
+      |                             |                         |
+      |  (6) Authorization: Payment |                         |
+      |      (with txHash)          |                         |
+      |-------------------------->  |                         |
+      |                             |  (7) getTransaction     |
+      |                             |---------------------->  |
+      |                             |  (8) Verified           |
+      |                             |<----------------------  |
+      |  (9) 200 OK + Receipt       |                         |
+      |<--------------------------  |                         |
+      |                             |                         |
+~~~
+
+This flow is useful when the client cannot or does not wish to
+delegate submission to the server. The server verifies the payment
+by fetching and inspecting the on-chain transaction via RPC.
 
 # Requirements Language
 
@@ -174,6 +213,19 @@ DEFAULT_LEDGER_CLOSE_TIME
 CAIP-2 Network Identifier
 : A chain identifier per the CAIP-2 Stellar namespace
   {{CAIP-2-STELLAR}} (e.g., `stellar:pubnet`).
+
+Pull Mode
+: The default settlement flow where the client signs the transaction
+  (or authorization entries) and the server submits it
+  (`type="transaction"`). The server "pulls" the signed transaction
+  from the credential. Enables fee sponsorship and server-side retry
+  logic.
+
+Push Mode
+: The fallback settlement flow where the client broadcasts the
+  transaction itself and presents the confirmed transaction hash
+  (`type="hash"`). The client "pushes" the transaction to the network
+  directly. Cannot be used with fee sponsorship.
 
 # Request Schema {#request-schema}
 
@@ -207,7 +259,9 @@ Challenge expiry is conveyed by the `expires` auth-param in
 
 If `methodDetails.feePayer` is `true`, the server sponsors transaction
 fees per {{sponsored}}. If `false` or omitted, the client MUST build a
-fully signed, network-ready transaction per {{unsponsored}}.
+fully signed, network-ready transaction per {{unsponsored}}. Fee
+sponsorship is only available in pull mode (`type="transaction"`);
+push mode (`type="hash"`) MUST NOT be used with `feePayer: true`.
 
 **Example:**
 
@@ -241,10 +295,11 @@ The `source` field, if present, SHOULD use the `did:pkh` method {{DID-PKH}}
 with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
 `did:pkh:stellar:testnet:GABC...`).
 
-## Payload Structure
+## Transaction Payload — Pull Mode (type="transaction") {#transaction-payload}
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"transaction"` |
 | `transaction` | string | REQUIRED | Base64-encoded XDR |
 
 `transaction`
@@ -276,7 +331,44 @@ with the CAIP-2 network identifier and the payer's Stellar address (e.g.,
     "expires": "2025-02-05T12:05:00Z"
   },
   "payload": {
+    "type": "transaction",
     "transaction": "AAAAAgAAAABriIN4..."
+  },
+  "source": "did:pkh:stellar:testnet:GABC..."
+}
+~~~
+
+## Hash Payload — Push Mode (type="hash") {#hash-payload}
+
+In push mode (`type="hash"`), the client has already broadcast the
+transaction to the Stellar network. The `hash` field contains the
+transaction hash for the server to verify on-chain.
+
+| Field | Type | Presence | Description |
+|-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"hash"` |
+| `hash` | string | REQUIRED | Stellar transaction hash (64-character hex string) |
+
+Push mode MUST NOT be used when `feePayer` is `true` in the challenge
+request. Since the client has already broadcast the transaction, the
+server cannot act as fee sponsor. Servers MUST reject `type="hash"`
+credentials when the challenge specifies `feePayer: true`.
+
+**Example:**
+
+~~~json
+{
+  "challenge": {
+    "id": "pT7yHnKmQ2wErXsZ5vCbNl",
+    "realm": "api.example.com",
+    "method": "stellar",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
+  "payload": {
+    "type": "hash",
+    "hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
   },
   "source": "did:pkh:stellar:testnet:GABC..."
 }
@@ -372,7 +464,7 @@ If the Stellar RPC is unavailable for a required simulation step, servers
 MUST treat this as a server error (HTTP 5xx) rather than a
 `verification-failed` response, and MUST NOT settle the credential.
 
-## Common Checks
+## Common Checks (Pull Mode)
 
 1. The challenge `id` matches an outstanding, unsettled challenge issued
    by this server, and the current time is before the challenge `expires`
@@ -415,6 +507,21 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 6. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
    challenge.
 
+## Push Mode Verification {#hash-checks}
+
+For push mode credentials (`type="hash"`), the server MUST fetch the
+transaction via Stellar RPC `getTransaction` {{STELLAR-RPC}} and verify:
+
+1. The challenge `id` matches an outstanding, unsettled challenge issued
+   by this server.
+
+2. The transaction exists and has status `SUCCESS`.
+
+3. The transaction contains exactly one `invokeHostFunction` operation
+   calling `transfer(from, to, amount)` on the contract matching
+   `currency`. The `to` argument MUST equal `recipient` and the `amount`
+   argument MUST equal `amount` (as i128) from the challenge request.
+
 # Error Codes {#error-codes}
 
 This specification defines the following additional error code beyond those
@@ -431,7 +538,7 @@ funds or sequence number conflict). This is distinct from
 
 # Settlement Procedure {#settlement}
 
-## Sponsored Flow
+## Pull Mode Settlement — Sponsored
 
 1. Parse the base64 XDR transaction from `payload.transaction`.
 
@@ -455,7 +562,7 @@ funds or sequence number conflict). This is distinct from
    transaction failed (e.g., insufficient funds or sequence number
    conflict).
 
-## Unsponsored Flow
+## Pull Mode Settlement — Unsponsored
 
 1. Verify the transaction per {{verification}}.
 
@@ -470,6 +577,17 @@ funds or sequence number conflict). This is distinct from
    {{error-codes}}. The credential was valid but the on-chain
    transaction failed (e.g., insufficient funds or sequence number
    conflict).
+
+## Push Mode Settlement (type="hash")
+
+For push mode credentials, the client has already broadcast the
+transaction. The server verifies the transaction on-chain per
+{{hash-checks}} and returns a receipt per {{receipt}}.
+
+**Limitations:**
+
+- MUST NOT be used with `feePayer: true` (client must pay their own fees)
+- Server cannot modify or enhance the transaction
 
 ## Receipt {#receipt}
 
@@ -567,7 +685,7 @@ base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 
 # Examples
 
-## Sponsored Flow
+## Pull Mode — Sponsored (type="transaction")
 
 **Challenge:**
 
@@ -619,7 +737,7 @@ Authorization: Payment eyJjaGFsbGVuZ2Ui...
 }
 ~~~
 
-## Unsponsored Flow
+## Pull Mode — Unsponsored (type="transaction")
 
 **Challenge:**
 
@@ -665,6 +783,23 @@ Authorization: Payment eyJjaGFsbGVuZ2Ui...
   "reference": "b2c3d4e5f6789012345678901234567890ab",
   "status": "success",
   "timestamp": "2025-02-05T12:04:41Z"
+}
+~~~
+
+## Push Mode (type="hash")
+
+The client broadcasts the transaction itself and presents the confirmed
+hash. Cannot be used with fee sponsorship.
+
+**Credential:**
+
+~~~json
+{
+  "challenge": { "..." : "echoed challenge" },
+  "payload": {
+    "type": "hash",
+    "hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
+  }
 }
 ~~~
 
