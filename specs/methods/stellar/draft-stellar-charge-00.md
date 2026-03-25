@@ -87,7 +87,7 @@ informative:
 
 This document defines the "charge" intent for the "stellar" payment method
 in the Payment HTTP Authentication Scheme. It specifies how clients and
-servers exchange one-time SEP-41 token transfers on the Stellar blockchain,
+servers exchange one-time {{SEP-41}} token transfers on the Stellar blockchain,
 with optional server-sponsored transaction fees.
 
 Two credential types are supported: `type="transaction"` (default),
@@ -105,7 +105,7 @@ defined in {{I-D.payment-intent-charge}}. The server may settle the payment
 any time before the challenge `expires` auth-param timestamp.
 
 This document specifies how to implement the `charge` intent using SEP-41
-{{SEP-41}} tokens on the Stellar smart contract platform. SEP-41 {{SEP-41}}
+{{SEP-41}} tokens on the Stellar smart contract platform. {{SEP-41}}
 defines a standard token interface for Stellar smart contracts, including Stellar
 Asset Contracts (SAC) {{SAC}} and custom token implementations.
 
@@ -183,6 +183,13 @@ This flow is useful when the client cannot or does not wish to
 delegate submission to the server. The server verifies the payment
 by fetching and inspecting the on-chain transaction via RPC.
 
+## Relationship to the Charge Intent
+
+This document inherits the shared request semantics of the "charge"
+intent from {{I-D.payment-intent-charge}}. It defines only the
+Stellar-specific `methodDetails`, `payload`, and verification procedures
+for the "stellar" payment method.
+
 # Requirements Language
 
 {::boilerplate bcp14-tagged}
@@ -190,10 +197,10 @@ by fetching and inspecting the on-chain transaction via RPC.
 # Terminology
 
 SEP-41 Token
-: A Stellar smart contract implementing the SEP-41 {{SEP-41}} token
+: A Stellar smart contract implementing the {{SEP-41}} token
   interface, exposing `transfer`, `balance`, and related functions.
   Identified by a C-prefixed Stellar smart contract address. Stellar Asset
-  Contracts (SAC) {{SAC}} are a common SEP-41 {{SEP-41}} implementation
+  Contracts (SAC) {{SAC}} are a common {{SEP-41}} implementation
   that wrap classic Stellar assets.
 
 Authorization Entry
@@ -203,16 +210,22 @@ Authorization Entry
 Fee Sponsorship
 : An arrangement where the server pays Stellar network fees on behalf of
   the client. The client signs only authorization entries; the server acts
-  as the transaction source account.
+  as the transaction source account. Servers MAY additionally wrap the
+  rebuilt transaction in a fee bump transaction to adjust fees without
+  invalidating the client's authorization entries.
 
 DEFAULT_LEDGER_CLOSE_TIME
 : The normative fallback value for the average Stellar ledger close time:
   5 seconds. Used to convert wall-clock expiry to a ledger sequence number
-  when network-provided estimates are unavailable.
+  when network-provided estimates are unavailable or impractical.
+
+DEFAULT_CHALLENGE_EXPIRY
+: The normative fallback challenge expiry duration: 5 minutes. Used when
+  the `expires` auth-param is absent from the challenge.
 
 CAIP-2 Network Identifier
 : A chain identifier per the CAIP-2 Stellar namespace
-  {{CAIP-2-STELLAR}} (e.g., `stellar:pubnet`).
+  {{CAIP-2-STELLAR}} (e.g., `stellar:pubnet`, `stellar:testnet`).
 
 Pull Mode
 : The default settlement flow where the client signs the transaction
@@ -241,8 +254,8 @@ This specification implements the shared request fields defined in
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Stringified non-negative integer in the SEP-41 {{SEP-41}} token's base units |
-| `currency` | string | REQUIRED | SEP-41 {{SEP-41}} token contract address (C-prefixed Stellar smart contract ID) |
+| `amount` | string | REQUIRED | Stringified non-negative integer in the {{SEP-41}} token's base units (e.g., `"100000"` for 0.01 USDC with 7 decimals) |
+| `currency` | string | REQUIRED | {{SEP-41}} token contract address (C-prefixed Stellar smart contract ID) |
 | `recipient` | string | REQUIRED | Stellar account address of the payment recipient |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant reference (order ID, invoice number, etc.) |
@@ -287,7 +300,7 @@ JSON object per {{I-D.httpauth-payment}}.
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `challenge` | object | REQUIRED | Echo of the challenge |
+| `challenge` | object | REQUIRED | Echo of the challenge auth-params from `WWW-Authenticate` per {{I-D.httpauth-payment}} |
 | `payload` | object | REQUIRED | Stellar-specific payload |
 | `source` | string | OPTIONAL | Payer DID |
 
@@ -380,8 +393,8 @@ Stellar uses ledger sequence numbers for transaction and authorization
 entry expiration rather than wall-clock timestamps. Clients MUST derive the
 ledger expiration from the challenge `expires` auth-param as follows.
 
-If `expires` is absent, clients SHOULD default to 5 minutes from the
-current time.
+If `expires` is absent, clients SHOULD default to
+`DEFAULT_CHALLENGE_EXPIRY` (5 minutes) from the current time.
 
 ~~~
 ledgerExpiration =
@@ -402,7 +415,9 @@ be valid beyond the challenge expiry.
 
 # Fee Payment {#fee-payment}
 
-## Server-Sponsored Fees {#sponsored}
+## Pull Mode {#fee-pull}
+
+### Server-Sponsored Fees {#sponsored}
 
 When `methodDetails.feePayer` is `true`:
 
@@ -412,7 +427,7 @@ When `methodDetails.feePayer` is `true`:
 
 2. The client builds an `invokeHostFunction` transaction with the all-zeros
    source account, containing a single operation calling
-   `transfer(from, to, amount)` on the SEP-41 {{SEP-41}} token contract.
+   `transfer(from, to, amount)` on the {{SEP-41}} token contract.
    The client simulates the transaction to identify the required
    authorization entries.
 
@@ -433,18 +448,18 @@ Servers acting as fee sponsors:
 - MAY reject new challenges when XLM balance is below a safe operational
   threshold.
 
-## Client-Paid Fees {#unsponsored}
+### Client-Paid Fees {#unsponsored}
 
 When `methodDetails.feePayer` is `false` or absent:
 
 1. The client sets `timeBounds.maxTime` to the `expires` auth-param value,
-   or 5 minutes from the current time if `expires` is absent. The
+   or `DEFAULT_CHALLENGE_EXPIRY` from the current time if absent. The
    transaction MUST NOT be valid beyond the challenge expiry. See
    {{ledger-expiration}}.
 
 2. The client builds a fully signed `invokeHostFunction` transaction
    containing a single operation calling `transfer(from, to, amount)` on
-   the SEP-41 {{SEP-41}} token contract, including sequence number, fee,
+   the {{SEP-41}} token contract, including sequence number, fee,
    and `timeBounds`.
 
 3. The client encodes the complete, signed transaction as base64 XDR in
@@ -454,17 +469,26 @@ When `methodDetails.feePayer` is `false` or absent:
    {{verification}} and submits the transaction without modification per
    {{settlement}}.
 
+## Push Mode {#fee-push}
+
+In push mode, the client builds, signs, and broadcasts the transaction
+independently. The client pays all fees. Fee sponsorship is not available
+in push mode.
+
 # Verification {#verification}
 
-Before settling a charge credential, servers MUST enforce all of the
-following checks. If any check fails, the server MUST return a
-`verification-failed` error per {{I-D.httpauth-payment}}.
+Before settling a charge credential, servers MUST first validate that
+`payload.type` is `"transaction"` or `"hash"`, then proceed with the
+appropriate verification path. If any check fails, the server MUST return
+a `verification-failed` error per {{I-D.httpauth-payment}}.
 
 If the Stellar RPC is unavailable for a required simulation step, servers
 MUST treat this as a server error (HTTP 5xx) rather than a
 `verification-failed` response, and MUST NOT settle the credential.
 
-## Common Checks (Pull Mode)
+## Pull Mode Verification {#pull-verification}
+
+### Sponsored Flow Checks
 
 1. The challenge `id` matches an outstanding, unsettled challenge issued
    by this server, and the current time is before the challenge `expires`
@@ -487,14 +511,12 @@ MUST treat this as a server error (HTTP 5xx) rather than a
    of `amount` for the recipient. Any other balance change MUST cause
    verification to fail.
 
-## Sponsored Flow Additional Checks
-
 6. The transaction source account is the all-zeros account
    (`GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF`).
 
 7. Authorization entries MUST use credential type
    `sorobanCredentialsAddress` only, and MUST NOT contain
-   `subInvocations` beyond the single SEP-41 {{SEP-41}} token transfer.
+   `subInvocations` beyond the single {{SEP-41}} token transfer.
 
 8. The authorization entry expiration MUST NOT exceed `currentLedger +
    ceil((expires - now) / DEFAULT_LEDGER_CLOSE_TIME)`.
@@ -502,7 +524,28 @@ MUST treat this as a server error (HTTP 5xx) rather than a
 9. The server's address MUST NOT appear as the `from` argument or in
     any authorization entry.
 
-## Unsponsored Flow Additional Checks
+### Unsponsored Flow Checks
+
+1. The challenge `id` matches an outstanding, unsettled challenge issued
+   by this server, and the current time is before the challenge `expires`
+   auth-param.
+
+2. The decoded transaction contains exactly one `invokeHostFunction`
+   operation with function type `hostFunctionTypeInvokeContract`.
+
+3. The invoked function is `transfer(from, to, amount)` on the contract
+   matching `currency`. The `to` argument MUST equal `recipient` and the
+   `amount` argument MUST equal `amount` (as i128) from the challenge
+   request.
+
+4. The transaction's network passphrase MUST correspond to
+   `methodDetails.network`.
+
+5. The server MUST simulate the transaction via Stellar RPC. The
+   simulation MUST succeed and MUST emit events showing only the expected
+   balance changes: a decrease of `amount` for the payer and an increase
+   of `amount` for the recipient. Any other balance change MUST cause
+   verification to fail.
 
 6. `timeBounds.maxTime` MUST NOT exceed the `expires` timestamp from the
    challenge.
@@ -515,12 +558,17 @@ transaction via Stellar RPC `getTransaction` {{STELLAR-RPC}} and verify:
 1. The challenge `id` matches an outstanding, unsettled challenge issued
    by this server.
 
-2. The transaction exists and has status `SUCCESS`.
+2. The transaction hash has not been previously consumed (see
+   {{replay-protection}}).
 
-3. The transaction contains exactly one `invokeHostFunction` operation
+3. The transaction exists and has status `SUCCESS`.
+
+4. The transaction contains exactly one `invokeHostFunction` operation
    calling `transfer(from, to, amount)` on the contract matching
    `currency`. The `to` argument MUST equal `recipient` and the `amount`
    argument MUST equal `amount` (as i128) from the challenge request.
+
+5. Mark the transaction hash as consumed.
 
 # Error Codes {#error-codes}
 
@@ -556,11 +604,8 @@ funds or sequence number conflict). This is distinct from
 6. Verify the submission returns `PENDING` status, then poll until
    `SUCCESS` or `FAILED`.
 
-7. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, the server
-   MUST return a `settlement-failed` error per
-   {{error-codes}}. The credential was valid but the on-chain
-   transaction failed (e.g., insufficient funds or sequence number
-   conflict).
+7. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, return a
+   `settlement-failed` error per {{error-codes}}.
 
 ## Pull Mode Settlement — Unsponsored
 
@@ -572,17 +617,15 @@ funds or sequence number conflict). This is distinct from
 
 3. Poll until `SUCCESS` or `FAILED`.
 
-4. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, the server
-   MUST return a `settlement-failed` error per
-   {{error-codes}}. The credential was valid but the on-chain
-   transaction failed (e.g., insufficient funds or sequence number
-   conflict).
+4. On `SUCCESS`, return a receipt per {{receipt}}. On `FAILED`, return a
+   `settlement-failed` error per {{error-codes}}.
 
 ## Push Mode Settlement (type="hash")
 
 For push mode credentials, the client has already broadcast the
-transaction. The server verifies the transaction on-chain per
-{{hash-checks}} and returns a receipt per {{receipt}}.
+transaction. The server checks the transaction hash against consumed
+hashes per {{replay-push}}, verifies the transaction on-chain per
+{{hash-checks}}, and returns a receipt per {{receipt}}.
 
 **Limitations:**
 
@@ -616,11 +659,20 @@ transfer argument or in any authorization entry before signing. Servers
 MUST re-simulate the rebuilt transaction and MUST reject any credential
 whose simulation emits unexpected balance changes.
 
-## Replay Protection
+## Replay Protection {#replay-protection}
+
+### Pull Mode {#replay-pull}
 
 Authorization entry expiration (keyed to ledger sequence) and Stellar
 sequence number consumption prevent transaction replay. Servers MUST reject
 credentials referencing an expired or already-settled challenge `id`.
+
+### Push Mode {#replay-push}
+
+Servers MUST maintain a set of consumed transaction hashes. Before accepting
+a push mode credential, the server MUST check whether the hash has already
+been consumed and reject the credential if it has. After successful verification,
+the server MUST atomically mark the hash as consumed.
 
 ## Amount and Asset Verification
 
@@ -652,7 +704,7 @@ Methods" registry established by {{I-D.httpauth-payment}}:
 
 | Method Identifier | Description | Reference |
 |-------------------|-------------|-----------|
-| `stellar` | Stellar SEP-41 {{SEP-41}} token transfer | This document |
+| `stellar` | Stellar {{SEP-41}} token transfer | This document |
 
 Contact: Stellar Development Foundation (<developers@stellar.org>)
 
@@ -663,7 +715,7 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 | Intent | Applicable Methods | Description | Reference |
 |--------|-------------------|-------------|-----------|
-| `charge` | `stellar` | One-time SEP-41 {{SEP-41}} token transfer | This document |
+| `charge` | `stellar` | One-time {{SEP-41}} token transfer | This document |
 
 --- back
 
@@ -726,12 +778,32 @@ Host: api.example.com
 Authorization: Payment eyJjaGFsbGVuZ2Ui...
 ~~~
 
+Decoded credential:
+
+~~~json
+{
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "stellar",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
+  "payload": {
+    "type": "transaction",
+    "transaction": "AAAAAgAAAABriIN4..."
+  },
+  "source": "did:pkh:stellar:testnet:GABC..."
+}
+~~~
+
 **Receipt:**
 
 ~~~json
 {
   "method": "stellar",
-  "reference": "a1b2c3d4e5f6789012345678901234567890",
+  "reference": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
   "status": "success",
   "timestamp": "2025-02-05T12:04:32Z"
 }
@@ -775,12 +847,32 @@ Host: api.example.com
 Authorization: Payment eyJjaGFsbGVuZ2Ui...
 ~~~
 
+Decoded credential:
+
+~~~json
+{
+  "challenge": {
+    "id": "pT7yHnKmQ2wErXsZ5vCbNl",
+    "realm": "api.example.com",
+    "method": "stellar",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
+  "payload": {
+    "type": "transaction",
+    "transaction": "AAAAAgAAAABriIN4..."
+  },
+  "source": "did:pkh:stellar:testnet:GABC..."
+}
+~~~
+
 **Receipt:**
 
 ~~~json
 {
   "method": "stellar",
-  "reference": "b2c3d4e5f6789012345678901234567890ab",
+  "reference": "b2c3d4e5f6789012345678901234567890ab1234567890123456789012345678",
   "status": "success",
   "timestamp": "2025-02-05T12:04:41Z"
 }
