@@ -173,7 +173,7 @@ Challenge expiry is conveyed by the `expires` auth-param in
 The client fulfills this by signing a Tempo Transaction with
 `transfer(recipient, amount)` or `transferWithMemo(recipient, amount, memo)`
 on the specified `currency` (token address),
-with `validBefore` set to the challenge `expires` auth-param. The client SHOULD use a dedicated
+with `validBefore` no later than the challenge `expires` auth-param. The client MAY use a dedicated
 `nonceKey` (2D nonce lane) for payment transactions to avoid blocking
 other account activity if the transaction is not immediately settled.
 
@@ -222,19 +222,18 @@ define zero-value transfer semantics.
 
 Additional constraints:
 
-- If present, `splits` MUST contain at least 1 and at most 10 entries.
-  The limit of 10 bounds the transaction to 11 calls (1 primary +
-  10 splits), capping additional gas at approximately 290,000 gas
-  (10 x ~29,000 gas per TIP-20 precompile transfer execution) and
-  keeping the transaction within a single block's gas budget.
+- If present, `splits` MUST contain at least 1 entry. Servers
+  SHOULD limit splits to 10 entries to keep gas usage within a
+  single block's budget (~29,000 gas per additional TIP-20
+  transfer). Servers MAY reject requests exceeding their supported
+  split count.
 - All transfers MUST target the same `currency` token address.
 
 ### Ordering
 
-The order of entries in `splits` is significant. Clients MUST emit
-calls in array order. Servers MUST verify calls in that order.
-Implementations MUST NOT reorder or coalesce split entries, even if
-two or more entries share the same `recipient`.
+The order of entries in `splits` is not significant for verification.
+Clients SHOULD emit calls in array order. Servers MUST verify that the
+required payment effects are present regardless of call ordering.
 
 ### Example
 
@@ -304,10 +303,11 @@ chain ID applicable to the challenge and the payer's Ethereum address.
 
 When `type` is `"transaction"`, `signature` contains the complete signed
 Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
-`0x` prefix. The transaction MUST contain a `transfer(recipient, amount)`
-or `transferWithMemo(recipient, amount, memo)` call on the TIP-20 token.
-When `splits` are present, the transaction MUST contain additional calls
-for each split entry (see {{split-payments}}).
+`0x` prefix. The transaction MUST authorize payment in the requested
+TIP-20 token sufficient to satisfy the challenge parameters, using one
+or more `transfer` and/or `transferWithMemo` calls. When `splits` are
+present, the transaction MUST include transfers for each split entry
+(see {{split-payments}}).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -494,28 +494,33 @@ the transaction. The server verifies the transaction onchain:
 Before broadcasting a transaction credential, servers MUST verify:
 
 1. Deserialize the RLP-encoded transaction from `payload.signature`
-2. Verify the transaction contains a `transfer(recipient, amount)` or
-   `transferWithMemo(recipient, amount, memo)` call matching the challenge request
-3. Verify the call target matches the `currency` token address
-4. Verify the `amount` matches the challenge request amount
-5. Verify the `recipient` matches the challenge request recipient
-6. If `methodDetails.memo` is present, verify the transaction uses
+2. Verify the transaction contains `transfer` or `transferWithMemo`
+   calls on the `currency` token address
+3. Verify the `amount` matches the challenge request amount
+4. Verify the `recipient` matches the challenge request recipient
+5. If `methodDetails.memo` is present, verify the transaction uses
    `transferWithMemo` with the matching memo value
-7. If `methodDetails.splits` is present:
-   a. Verify the transaction contains exactly `1 + len(splits)` calls
-   b. Verify call 0 transfers `amount - sum(splits[].amount)` to the
-      primary `recipient`
-   c. Verify calls 1..N each transfer `splits[i].amount` to
-      `splits[i].recipient`
-   d. Verify all calls target the `currency` token address
-   e. If `splits[i].memo` is present, verify the corresponding call uses
-      `transferWithMemo` with the matching memo value
+6. If `methodDetails.splits` is present, verify the transaction
+   includes transfers satisfying each split entry: the primary
+   recipient receives `amount - sum(splits[].amount)`, each split
+   recipient receives its specified amount, and any required memo
+   values are present
 
-For hash credentials, servers MUST fetch both the transaction and the
-transaction receipt. Servers MUST verify the receipt indicates successful
-execution, decode the transaction's call data, and apply the same
-structural checks as steps 1 through 7 above. Event logs alone are not
-sufficient for conformance verification.
+Servers MAY impose additional structural requirements (such as
+exact call count or ordering) as local policy before broadcasting.
+
+## Hash Verification {#hash-verification}
+
+For hash credentials, servers MUST fetch the transaction receipt and
+verify that it indicates successful execution. Servers MUST verify
+that the receipt contains `Transfer` and/or `TransferWithMemo` event
+logs emitted by the `currency` token address whose payment effects
+satisfy the challenge parameters, including the primary recipient
+amount, any split amounts, and any required memo values.
+
+Servers MAY additionally inspect the transaction call data as a
+local-policy check, but call-data decoding is not required for
+conformance.
 
 ## Receipt Generation
 
@@ -574,7 +579,7 @@ adds approximately 290,000 gas beyond a single-transfer charge. Servers
 sponsoring fees via `feePayer: true` MUST budget for the increased gas
 limit.
 
-**Split Count Bound**: The `splits` array is limited to 10 entries.
+**Split Count Bound**: Servers SHOULD limit `splits` to 10 entries.
 See {{split-payments}} for rationale.
 
 ## Server-Paid Fees
