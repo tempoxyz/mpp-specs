@@ -122,10 +122,6 @@ ERC-20
   Tokens expose `transfer(address,uint256)` and emit `Transfer` events
   on successful transfers.
 
-Sei Transaction
-: An EIP-1559 (type 2) transaction {{EIP-1559}} submitted to the Sei
-  EVM. Sei transactions use standard Ethereum RLP encoding and signing.
-
 # Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
