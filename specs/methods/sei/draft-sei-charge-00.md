@@ -21,6 +21,7 @@ normative:
   RFC8174:
   RFC8259:
   RFC8785:
+  RFC9457:
   I-D.payment-intent-charge:
     title: "'charge' Intent for HTTP Payment Authentication"
     target: https://datatracker.ietf.org/doc/draft-payment-intent-charge/
@@ -48,7 +49,7 @@ informative:
     target: https://eips.ethereum.org/EIPS/eip-20
   SEI-DOCS:
     title: "Sei Documentation"
-    target: https://www.docs.sei.io
+    target: https://docs.sei.io
     author:
       - org: Sei Labs
 ---
@@ -137,7 +138,7 @@ per {{I-D.httpauth-payment}}.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Amount in base units (stringified number) |
-| `currency` | string | REQUIRED | ERC-20 token contract address (e.g., `"0x3894..."`) |
+| `currency` | string | REQUIRED | ERC-20 token contract address (e.g., `"0xe15f..."`) |
 | `recipient` | string | REQUIRED | Recipient address, EIP-55 encoded {{EIP-55}} |
 | `description` | string | OPTIONAL | Human-readable payment description |
 | `externalId` | string | OPTIONAL | Merchant's reference (order ID, invoice number, etc.) |
@@ -164,10 +165,10 @@ Supported chain IDs:
 {
   "amount": "1000000",
   "currency": "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 1329
-  }
+  },
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
 }
 ~~~
 
@@ -353,12 +354,13 @@ For hash credentials, servers MUST fetch the transaction receipt via
 Upon successful settlement, servers MUST return a `Payment-Receipt` header
 per {{I-D.httpauth-payment}}. Servers MUST NOT include a
 `Payment-Receipt` header on error responses; failures are communicated via
-HTTP status codes and Problem Details.
+HTTP status codes and Problem Details {{RFC9457}}.
 
 The receipt payload for Sei charge:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `challengeId` | string | The `id` from the original challenge |
 | `method` | string | `"sei"` |
 | `reference` | string | Transaction hash of the settlement transaction |
 | `status` | string | `"success"` |
@@ -442,7 +444,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="sei",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM4OTQwODVFZjdGZjBmMGFlRGY1MkUyQTI3MDQ5MjhkMUVjMDc0RjEiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjEzMjl9fQ",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweGUxNWZjMzhmNmQ4YzU2YWYwN2JiY2JlM2JhZjU3MDhhMmJmNDIzOTIiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjEzMjl9LCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAifQ",
   expires="2026-01-06T12:00:00Z"
 Cache-Control: no-store
 ~~~
@@ -453,10 +455,10 @@ The `request` decodes to:
 {
   "amount": "1000000",
   "currency": "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 1329
-  }
+  },
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00"
 }
 ~~~
 
