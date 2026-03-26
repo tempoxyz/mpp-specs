@@ -40,33 +40,17 @@ informative:
   EIP-1559:
     title: "Fee market change for ETH 1.0 chain"
     target: https://eips.ethereum.org/EIPS/eip-1559
-    author:
-      - name: Vitalik Buterin
-      - name: Eric Conner
-      - name: Rick Dudley
-      - name: Matthew Slipper
-      - name: Ian Norden
-      - name: Abdelhamid Bakhta
-    date: 2021-04
   EIP-55:
     title: "Mixed-case checksum address encoding"
     target: https://eips.ethereum.org/EIPS/eip-55
-    author:
-      - name: Vitalik Buterin
-    date: 2016-01
   ERC-20:
     title: "Token Standard"
     target: https://eips.ethereum.org/EIPS/eip-20
-    author:
-      - name: Fabian Vogelsteller
-      - name: Vitalik Buterin
-    date: 2015-11
   SEI-DOCS:
     title: "Sei Documentation"
     target: https://www.docs.sei.io
     author:
       - org: Sei Labs
-    date: 2026
 ---
 
 --- abstract
