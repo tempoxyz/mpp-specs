@@ -153,7 +153,7 @@ Supported chain IDs:
 | Chain ID | Network |
 |----------|---------|
 | 1329 | Sei Mainnet |
-| 713715 | Sei Testnet |
+| 1238 | Sei Testnet |
 
 **Example:**
 
