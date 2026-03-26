@@ -11,7 +11,7 @@ consensus: false
 author:
   - name: Kartik Bhat
     ins: K. Bhat
-    email: kartik@sei.io
+    email: kartik@seinetwork.io
     org: Sei Labs
 
 normative:
