@@ -163,7 +163,7 @@ Supported chain IDs:
 ~~~json
 {
   "amount": "1000000",
-  "currency": "0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1",
+  "currency": "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 1329
@@ -452,7 +452,7 @@ The `request` decodes to:
 ~~~json
 {
   "amount": "1000000",
-  "currency": "0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1",
+  "currency": "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 1329
@@ -476,8 +476,8 @@ The following ERC-20 tokens are available on Sei mainnet (chain ID 1329):
 
 | Token | Address | Decimals |
 |-------|---------|----------|
-| USDC | `0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1` | 6 |
-| USDT | `0xB75D0B03c06A926e488e2659DF1A861F860bD3d1` | 6 |
+| USDC | `0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392` | 6 |
+| USDT | `0x9151434b16b9763660705744891fa906f660ecc5` | 6 |
 
 # Acknowledgements
 
