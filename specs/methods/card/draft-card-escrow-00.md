@@ -164,13 +164,19 @@ The shared fields are identical to those in {{I-D.card-charge}}:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Maximum preauthorization amount in smallest currency unit |
 | `currency` | string | REQUIRED | ISO 4217 code, lowercase |
-| `recipient` | string | OPTIONAL | Merchant identifier at the Server Enabler |
+| `recipient` | string | REQUIRED | Merchant identifier at the Server Enabler (e.g. processor merchant ID, `acct_` reference) |
 | `description` | string | OPTIONAL | Human-readable description of the hold |
 | `externalId` | string | OPTIONAL | Merchant reference |
 
 The `amount` field represents the maximum hold, not the final
 charge. Clients SHOULD verify the amount is reasonable before
 authorizing.
+
+The `recipient` field identifies the merchant account that will
+receive captured funds. For card payments this is typically a
+processor merchant ID or platform account reference. Clients
+SHOULD verify the recipient matches the expected merchant before
+authorizing a hold.
 
 ## Method Details
 
