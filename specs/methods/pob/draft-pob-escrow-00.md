@@ -64,8 +64,9 @@ method within the Payment HTTP Authentication Scheme
 behind escrow-based payments using PoBERC20 tokens on a
 Proof-of-Balance (PoB) blockchain.
 
-The client places a hold on funds through an on-chain escrow contract.
-The server verifies the hold and grants access. The merchant later
+The client places a hold on funds through an on-chain escrow contract
+and presents the confirmed transaction hash as proof. The server
+verifies the hold on-chain and grants access. The merchant later
 settles or releases the held funds when the final amount is known.
 This pattern maps to preauthorization and capture in traditional
 payment systems and is intended for autonomous machine-to-machine
@@ -231,11 +232,13 @@ network before signing any transaction.
 The Authorization header carries a base64url-encoded JSON object
 with the structure defined by {{I-D.httpauth-payment}}.
 
-~~~
+~~~json
 {
   "challenge": { ... },
   "source": "did:pkh:eip155:42431:0xAbC123...",
-  "payload": { ... }
+  "payload": {
+    "holdTxHash": "0x<transaction hash>"
+  }
 }
 ~~~
 
@@ -243,110 +246,33 @@ The `challenge` object echoes all challenge parameters from the
 server. The `source` field is RECOMMENDED and SHOULD use the
 `did:pkh` format with the PoB chain namespace.
 
-## Transaction Payload (type="transaction") {#pull-payload}
+## Payload
 
-The client signs the `hold()` transaction and submits it to the
-server for broadcast. This is the default mode.
-
-~~~json
-{
-  "type": "transaction",
-  "approveTx": "0x<RLP-encoded signed approve() tx>",
-  "holdTx": "0x<RLP-encoded signed hold() tx>"
-}
-~~~
+The client broadcasts `approve()` and `hold()` transactions
+independently and presents the confirmed hold transaction hash
+for server-side verification.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | MUST be `"transaction"` |
-| `approveTx` | string | Yes | Hex-encoded RLP-serialized signed ERC-20 `approve()` transaction granting the merchant contract an allowance equal to or greater than `amount` |
-| `holdTx` | string | Yes | Hex-encoded RLP-serialized signed `hold()` transaction on the MerchantBase contract |
-
-Both transactions MUST include EIP-155 {{EIP-155}} chain ID
-protection matching the `chainId` in `methodDetails`.
-
-The `approveTx` MUST call `approve(spender, value)` on the token
-contract where `spender` is the `merchantContract` address and
-`value` is greater than or equal to `amount`.
-
-The `holdTx` MUST call `hold(holdAmount, merchantWallet)` on the
-`merchantContract` address where `holdAmount` equals `amount` and
-`merchantWallet` equals `recipient`.
-
-## Hash Payload (type="hash") {#push-payload}
-
-The client broadcasts both transactions independently and presents
-the confirmed hold transaction hash for server-side verification.
-
-~~~json
-{
-  "type": "hash",
-  "holdTxHash": "0x<transaction hash>"
-}
-~~~
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | Yes | MUST be `"hash"` |
 | `holdTxHash` | string | Yes | Hex-encoded transaction hash of the confirmed `hold()` call |
 
-The `approve()` transaction is not needed in the payload because
-the server verifies the hold state, not the approval.
+The `approve()` transaction hash is not needed in the payload
+because the server verifies the hold state on-chain, not the
+approval. If the hold succeeded, the approval necessarily
+preceded it.
 
-# Fee Payment
+# Verification Procedure {#verification}
 
-## Server-Paid Fees
+Upon receiving a credential, the server MUST:
 
-When the server pays transaction fees on behalf of the client, the
-credential type MUST be `"transaction"`. The server adds its own
-signature as fee payer before broadcasting.
+1. Verify `holdTxHash` has not been previously consumed.
 
-Servers that offer fee sponsorship SHOULD:
+2. Fetch the transaction receipt via `eth_getTransactionReceipt`.
 
-- Simulate both transactions before broadcast.
-- Rate-limit credential submissions per client.
-- Monitor the fee-payer account balance.
+3. Verify `status == 1` (successful execution).
 
-## Client-Paid Fees
-
-When the client pays fees, either credential type MAY be used.
-For `"transaction"` payloads, both transactions MUST be fully
-signed by the client including fee payment. For `"hash"` payloads,
-the client broadcasts and pays fees independently.
-
-# Verification Procedure
-
-## Transaction Verification (type="transaction") {#tx-verification}
-
-Upon receiving a credential with `type="transaction"`, the server
-MUST:
-
-1. Decode the `approveTx` RLP payload and verify:
-   - The `to` address matches `currency`.
-   - The calldata encodes `approve(spender, value)` where `spender`
-     matches `merchantContract` and `value` >= `amount`.
-   - The chain ID matches `chainId`.
-   - The signer's address is recoverable from the signature.
-
-2. Decode the `holdTx` RLP payload and verify:
-   - The `to` address matches `merchantContract`.
-   - The calldata encodes `hold(holdAmount, merchantWallet)` where
-     `holdAmount` equals `amount` and `merchantWallet` equals
-     `recipient`.
-   - The chain ID matches `chainId`.
-   - The signer matches the `approveTx` signer.
-
-3. If the server is fee payer, add its signature to both
-   transactions. Simulate both via `eth_call` before broadcast.
-
-4. Broadcast `approveTx` via `eth_sendRawTransaction` and wait for
-   a receipt with `status == 1`.
-
-5. Broadcast `holdTx` via `eth_sendRawTransaction` and wait for a
-   receipt with `status == 1`.
-
-6. Extract `txId` from the `TransactionHeld` event in the hold
-   receipt:
+4. Locate the `TransactionHeld` event in the receipt and extract
+   `txId`:
 
    ~~~
    event TransactionHeld(
@@ -357,33 +283,14 @@ MUST:
    )
    ~~~
 
-7. Call `getHeldBalance(txId)` on PoBERC20Escrow and verify:
-   - `customer` matches the signer.
-   - `merchantContract` matches `merchantContract`.
-   - `merchantWallet` matches `recipient`.
-   - `amount` >= the requested `amount`.
+5. Call `getHeldBalance(txId)` on PoBERC20Escrow and verify:
+   - `customer` matches the `source` in the credential.
+   - `merchantContract` matches the challenge `merchantContract`.
+   - `merchantWallet` matches the challenge `recipient`.
+   - `amount` >= the challenge `amount`.
 
-8. Record `txId` as consumed. Reject any future credential
+6. Record `txId` as consumed. Reject any future credential
    referencing the same `txId`.
-
-9. Return 200 with the resource and a `Payment-Receipt` header.
-
-## Hash Verification (type="hash") {#hash-verification}
-
-Upon receiving a credential with `type="hash"`, the server MUST:
-
-1. Verify `holdTxHash` has not been previously consumed.
-
-2. Fetch the transaction receipt via `eth_getTransactionReceipt`.
-
-3. Verify `status == 1` (successful execution).
-
-4. Locate the `TransactionHeld` event and extract `txId`.
-
-5. Call `getHeldBalance(txId)` on PoBERC20Escrow and verify the
-   same fields as in step 7 of {{tx-verification}}.
-
-6. Record `txId` as consumed.
 
 7. Return 200 with the resource and a `Payment-Receipt` header.
 
@@ -397,9 +304,7 @@ object {{RFC9457}} with one of the following `type` values:
 |-------------|-----------|
 | `malformed-credential` | Payload cannot be decoded or is missing required fields |
 | `invalid-challenge` | Challenge ID is unknown, expired, or already consumed |
-| `chain-mismatch` | Transaction chain ID does not match the challenge |
-| `verification-failed` | On-chain hold verification failed (wrong amount, recipient, or signer) |
-| `broadcast-failed` | Transaction broadcast or execution failed |
+| `verification-failed` | On-chain hold verification failed (wrong amount, recipient, signer, or transaction not found) |
 
 ## Receipt Generation
 
@@ -525,22 +430,10 @@ significantly exceeds the expected service cost.
 
 ## Approval Scope
 
-The `approve()` transaction grants the merchant contract a spending
-allowance. Clients MUST set the allowance to exactly the hold
+The client calls `approve()` on the token contract before calling
+`hold()`. Clients MUST set the allowance to exactly the hold
 `amount`, not an unlimited value. Unlimited approvals risk loss of
 all token balance if the merchant contract has a vulnerability.
-
-## Server-Paid Fee Exhaustion
-
-Servers that pay transaction fees on behalf of clients are exposed
-to fee exhaustion attacks. Malicious clients could submit
-syntactically valid but economically worthless credentials to drain
-the fee-payer account. Servers MUST:
-
-- Simulate transactions before broadcast.
-- Rate-limit submissions per authenticated client.
-- Monitor the fee-payer account balance.
-- Require client authentication before issuing challenges.
 
 ## Settlement Authorization
 
@@ -613,16 +506,9 @@ pob-escrow-challenge = "Payment" 1*SP
 
 pob-escrow-credential = "Payment" 1*SP base64url-nopad
 
-; Credential payload (transaction mode)
-pob-escrow-tx-payload = "{" DQUOTE "type" DQUOTE ":"
-  DQUOTE "transaction" DQUOTE ","
-  DQUOTE "approveTx" DQUOTE ":" quoted-string ","
-  DQUOTE "holdTx" DQUOTE ":" quoted-string "}"
-
-; Credential payload (hash mode)
-pob-escrow-hash-payload = "{" DQUOTE "type" DQUOTE ":"
-  DQUOTE "hash" DQUOTE ","
-  DQUOTE "holdTxHash" DQUOTE ":" quoted-string "}"
+; Credential payload
+pob-escrow-payload = "{" DQUOTE "holdTxHash" DQUOTE ":"
+  DQUOTE eth-tx-hash DQUOTE "}"
 
 ; Base64url encoding without padding per RFC 4648 Section 5
 base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
@@ -666,17 +552,18 @@ Content-Type: application/problem+json
 
 ## Credential (Client to Server)
 
+The client has already broadcast `approve()` and `hold()`
+transactions on-chain and received a confirmed hold receipt.
+
 ~~~
 POST /api/parking/book HTTP/1.1
 Host: api.parkco.example.com
 Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHF
     XdlQybkpySHNZNGFEZkViIiwicmVhbG0iOiJhcGkucGFya2NvLmV4
     YW1wbGUuY29tIiwibWV0aG9kIjoicG9iIiwiaW50ZW50IjoiZXNjcm
-    93IiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSTFNREF3TURB... "
-    "}LCJzb3VyY2UiOiJkaWQ6cGtoOmVpcDE1NTo0MjQzMToweEFiQzEy
-    My4uLiIsInBheWxvYWQiOnsidHlwZSI6InRyYW5zYWN0aW9uIiwiYX
-    Bwcm92ZVR4IjoiMHhmODY1Li4uIiwiaG9sZFR4IjoiMHhmODY1Li4
-    uIn19
+    93In0sInNvdXJjZSI6ImRpZDpwa2g6ZWlwMTU1OjQyNDMxOjB4QWJ
+    DMTIzLi4uIiwicGF5bG9hZCI6eyJob2xkVHhIYXNoIjoiMHhhYmMxM
+    jMuLi5kZWY0NTYifX0
 Content-Type: application/json
 
 {"lotId": "A", "vehicleId": "ABC-1234", "durationMinutes": 120}
