@@ -267,21 +267,22 @@ The platform receives 0.05 pathUSD, the affiliate receives 0.01 pathUSD
 
 ### Client Behavior
 
-When `splits` is present, the client MUST construct a Tempo Transaction
-with multiple calls in the `calls` array, leveraging Tempo's native call
-batching {{TEMPO-TX-SPEC}}:
+When `splits` is present, the client MUST produce a transaction whose
+on-chain effects include the following `Transfer` or `TransferWithMemo`
+events on the `currency` token address:
 
-1. Call 0: `transfer` or `transferWithMemo` to the primary `recipient`
-   for `amount - sum(splits[].amount)`.
-2. Calls 1..N: `transfer` or `transferWithMemo` to each `splits[i].recipient`
-   for `splits[i].amount`. If `splits[i].memo` is present, use
+1. The primary `recipient` receives `amount - sum(splits[].amount)`.
+2. Each `splits[i].recipient` receives `splits[i].amount`. If
+   `splits[i].memo` is present, the corresponding transfer MUST use
    `transferWithMemo`.
 
-All calls MUST target the `currency` token address. The top-level
-`methodDetails.memo`, if present, applies to the primary transfer (call 0).
+The top-level `methodDetails.memo`, if present, applies to the primary
+transfer.
 
-The transaction is signed and submitted as a single atomic unit. If any
-call fails, the entire transaction reverts.
+Clients MAY achieve these effects using any valid transaction structure,
+including batched calls, smart contract wallet invocations, or
+intermediary operations such as token swaps — provided all required
+transfer events are emitted atomically.
 
 # Credential Schema
 
@@ -564,14 +565,10 @@ Clients MUST parse and verify the `request` payload before signing:
 
 When `splits` are present, additional risks apply:
 
-**Recipient Enumeration**: Clients SHOULD warn users when split
-recipients are unknown. A malicious server could route the majority of
-a payment to an attacker-controlled address via splits.
-
-**User Presentation**: Where a human approval step exists, clients
-SHOULD present the total amount and each split recipient/amount to the
-user before signing. Clients SHOULD highlight when the primary recipient
-receives a small remainder relative to the total `amount`.
+**Recipient Transparency**: Where a human approval step exists, clients
+SHOULD present each split recipient and amount so the user can verify
+the payment distribution. Clients SHOULD highlight when the primary
+recipient receives a small remainder relative to the total `amount`.
 
 **Gas Overhead**: Each additional split adds approximately 29,000 gas
 for the TIP-20 precompile transfer execution. A charge with 10 splits
@@ -683,7 +680,7 @@ WWW-Authenticate: Payment id="sP1itPaym3ntEx4mple",
   realm="marketplace.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJmZWVQYXllciI6dHJ1ZSwic3BsaXRzIjpbeyJhbW91bnQiOiI1MDAwMCIsInJlY2lwaWVudCI6IjB4UGxhdGZvcm0wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCJ9XX19",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJmZWVQYXllciI6dHJ1ZSwic3BsaXRzIjpbeyJhbW91bnQiOiI1MDAwMCIsInJlY2lwaWVudCI6IjB4QTFCMkMzRDRFNUY2QTFCMkMzRDRFNUY2QTFCMkMzRDRFNUY2QTFCMiJ9XX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9",
   expires="2025-06-01T12:00:00Z"
 Cache-Control: no-store
 ~~~
@@ -709,11 +706,11 @@ The `request` decodes to:
 ~~~
 
 This requests a total payment of 1.00 pathUSD. The platform receives
-0.05 pathUSD and the merchant receives 0.95 pathUSD. The client signs
-a Tempo Transaction with two calls in the `calls` array:
+0.05 pathUSD and the merchant receives 0.95 pathUSD. The resulting
+transaction must emit the following transfer events:
 
-1. `transfer(0x742d...fE00, 950000)` — merchant receives remainder
-2. `transfer(0xA1B2...A1B2, 50000)` — platform fee
+1. 950,000 to `0x742d...fE00` — merchant receives remainder
+2. 50,000 to `0xA1B2...A1B2` — platform fee
 
 # Acknowledgements
 
