@@ -233,11 +233,15 @@ contains the following fields:
 
 Servers MUST verify Payment credentials for charge intent:
 
-1. Extract the `spt` from the credential payload
-2. Verify the challenge ID matches the one issued
-3. Verify the challenge has not expired
+1. Verify the challenge ID matches the one issued
+2. Verify the challenge has not expired
+3. Extract the `spt` from the credential payload
 4. Verify the SPT has not been previously used (replay protection)
 5. Validate the SPT exists and is valid via Stripe API (optional pre-check)
+
+Servers MUST complete challenge ID validation and expiry checks (steps 1-2)
+before processing credential material (steps 3-5). This ensures basic
+request validity is established before accessing payment tokens.
 
 ## Challenge Binding
 
