@@ -53,6 +53,12 @@ informative:
   ERC-20:
     title: "Token Standard"
     target: https://eips.ethereum.org/EIPS/eip-20
+  EIP-3009:
+    title: "Transfer With Authorization"
+    target: https://eips.ethereum.org/EIPS/eip-3009
+    author:
+      - name: Peter Jihoon Kim
+    date: 2019-09
   PERMIT2:
     title: "Permit2"
     target: https://github.com/Uniswap/permit2
@@ -68,9 +74,12 @@ method in the Payment HTTP Authentication Scheme
 exchange one-time ERC-20 token transfers on any EVM-compatible
 blockchain.
 
-Three credential types are supported: `type="permit2"`
+Four credential types are supported: `type="permit2"`
 (RECOMMENDED), where the client signs an off-chain Permit2
 authorization and the server submits the transfer;
+`type="authorization"` (opt-in for EIP-3009 tokens), where
+the client signs an off-chain transfer authorization and
+the server submits it directly to the token contract;
 `type="transaction"`, where the client signs and the server
 broadcasts a standard ERC-20 transfer transaction; and
 `type="hash"` (optional fallback), where the client
@@ -135,6 +144,17 @@ This specification defines two credential types:
   - Split payments are atomic via batch transfers
   - No nonce management burden on the client
   - `externalId` is cryptographically bound via witness data
+
+- **`type="authorization"` (opt-in)**: The client signs an
+  off-chain EIP-3009 {{EIP-3009}} `transferWithAuthorization`
+  message. The server submits it to the token contract. This
+  is available for tokens that natively implement EIP-3009
+  (e.g., USDC, EURC). Benefits:
+
+  - No Permit2 approval prerequisite — zero setup
+  - Server naturally sponsors gas
+  - Challenge binding via the on-chain nonce
+  - Simpler signature structure
 
 - **`type="transaction"`**: The client signs a complete ERC-20
   `transfer` transaction. The server broadcasts it. This is the
@@ -265,11 +285,14 @@ any particular set of chains.
 Servers MAY indicate accepted credential types via the
 `credentialTypes` field in `methodDetails`:
 
-Valid values: `"permit2"`, `"transaction"`, `"hash"`.
+Valid values: `"permit2"`, `"authorization"`, `"transaction"`,
+`"hash"`.
 
 If omitted, servers MUST accept `"transaction"` and SHOULD
 accept `"hash"`. Servers that support Permit2 SHOULD include
 `"permit2"` as the first entry to indicate preference.
+Servers SHOULD only include `"authorization"` when the
+`currency` token is known to implement EIP-3009.
 Clients SHOULD use the first type in the list that they
 support.
 
@@ -283,7 +306,8 @@ Splits REQUIRE `type="permit2"` credentials. The Permit2
 batch transfer mechanism ensures all transfers (primary +
 splits) execute atomically in a single on-chain transaction.
 Servers MUST reject split requests fulfilled with
-`type="transaction"` credentials.
+`type="transaction"`, `type="authorization"`, or
+`type="hash"` credentials.
 
 Each entry in the `splits` array is a JSON object:
 
@@ -552,6 +576,88 @@ This transfers 1.0 USDm to the primary recipient and 0.05 USDm
 to the platform — atomically, in a single transaction. The
 client signs one EIP-712 message covering both transfers.
 
+
+## Authorization Payload (type="authorization") {#authorization-payload}
+
+Opt-in credential type for tokens that implement EIP-3009
+{{EIP-3009}} (e.g., USDC, EURC). The client signs an off-chain
+`transferWithAuthorization` message. The server submits it
+directly to the token contract, paying gas from its own
+balance. The client never interacts with the chain directly.
+
+Unlike `type="permit2"`, this type requires no prior token
+approval — EIP-3009 authorization is built into the token
+contract itself.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"authorization"` |
+| `from` | string | REQUIRED | Payer address |
+| `to` | string | REQUIRED | Recipient address (MUST match challenge `recipient`) |
+| `value` | string | REQUIRED | Transfer amount in base units (MUST match challenge `amount`) |
+| `validAfter` | string | REQUIRED | Unix timestamp — authorization not valid before this time (stringified integer, typically `"0"`) |
+| `validBefore` | string | REQUIRED | Unix timestamp — authorization not valid after this time (stringified integer) |
+| `nonce` | string | REQUIRED | `bytes32` nonce — MUST be set to `challengeHash` (see below) |
+| `signature` | string | REQUIRED | EIP-712 signature (`0x`-prefixed) |
+
+### Challenge Binding
+
+The EIP-3009 `nonce` field is a random `bytes32` value chosen
+by the caller. This specification requires the nonce to be set
+to the `challengeHash`:
+
+~~~
+nonce = keccak256(abi.encodePacked(
+    challenge.id,
+    challenge.realm
+))
+~~~
+
+This provides cryptographic challenge binding equivalent to
+the Permit2 witness mechanism. The token contract enforces
+nonce uniqueness on-chain — a nonce that has been consumed
+cannot be reused, providing replay protection at the contract
+level.
+
+### Constraints
+
+- Splits are NOT supported. Servers MUST reject
+  `type="authorization"` credentials when the challenge
+  includes `splits`.
+- Servers SHOULD only advertise `"authorization"` in
+  `credentialTypes` when the `currency` token is known to
+  implement EIP-3009.
+- `validBefore` SHOULD correspond to the challenge `expires`
+  timestamp.
+- `to` MUST match the challenge `recipient`.
+- `value` MUST match the challenge `amount`.
+
+### Example
+
+~~~json
+{
+  "challenge": {
+    "id": "aB3cDeF4gHiJkLmN",
+    "realm": "api.example.com",
+    "method": "evm",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2026-04-01T12:05:00Z"
+  },
+  "payload": {
+    "type": "authorization",
+    "from": "0x1234567890abcdef1234567890abcdef12345678",
+    "to": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+    "value": "1000000",
+    "validAfter": "0",
+    "validBefore": "1743523500",
+    "nonce": "0x8a3b...f1c2",
+    "signature": "0x..."
+  },
+  "source": "did:pkh:eip155:4326:0x1234567890abcdef1234567890abcdef12345678"
+}
+~~~
+
 ## Transaction Payload (type="transaction") {#transaction-payload}
 
 The compatible fallback. The client signs a complete ERC-20
@@ -641,21 +747,46 @@ Constraints:
 }
 ~~~
 
+## Gas Sponsorship Model
+
+Gas sponsorship is structurally determined by the credential
+type — no explicit field is needed:
+
+| Credential Type | Who Pays Gas | Mechanism |
+|----------------|-------------|-----------|
+| `permit2` | Server | Client signs off-chain; server constructs and submits tx |
+| `authorization` | Server | Client signs off-chain; server submits to token contract |
+| `transaction` | Client | Client signs a full transaction with gas parameters |
+| `hash` | Client | Client broadcasts the transaction themselves |
+
+For `type="permit2"` and `type="authorization"`, the client
+signs only an off-chain message — they never submit a
+transaction and therefore cannot pay gas. The server MUST
+maintain sufficient native token balance to cover gas costs
+for these credential types.
+
+For `type="transaction"` and `type="hash"`, the client is
+responsible for gas. The server broadcasts or verifies the
+transaction but does not subsidize it.
+
 # Verification Procedure {#verification}
 
 Upon receiving a request with a credential, the server MUST:
 
 1. Decode the base64url credential and parse the JSON.
 2. Verify that `payload.type` is present and is one of
-   `"permit2"`, `"transaction"`, or `"hash"`.
+   `"permit2"`, `"authorization"`, `"transaction"`, or
+   `"hash"`.
 3. Look up the stored challenge using `credential.challenge.id`.
    If no matching challenge is found, reject the request.
 4. Verify that all fields in `credential.challenge` exactly
    match the stored challenge auth-params.
 5. If the challenge includes `splits` and `payload.type` is
-   not `"permit2"`, reject the request.
+   not `"permit2"`, reject the request. (Only Permit2
+   supports atomic batch transfers for splits.)
 6. Proceed with type-specific verification:
    - For `type="permit2"`: see {{permit2-verification}}.
+   - For `type="authorization"`: see {{authorization-verification}}.
    - For `type="transaction"`: see {{transaction-verification}}.
    - For `type="hash"`: see {{hash-verification}}.
 
@@ -690,6 +821,30 @@ After verification:
     `Permit2.permitBatchWitnessTransferFrom()`
 13. Verify the transaction receipt indicates success
 14. Verify `Transfer` event logs match all expected transfers
+
+Servers SHOULD simulate the transaction via `eth_call` before
+submitting to detect failures without spending gas.
+
+
+## Authorization Verification {#authorization-verification}
+
+Before submitting, servers MUST verify:
+
+1. The `currency` token implements EIP-3009
+2. The EIP-712 signature is valid and recovers to the
+   `from` address
+3. `to` matches the challenge `recipient`
+4. `value` matches the challenge `amount`
+5. `nonce` matches the expected `challengeHash` derived
+   from the challenge `id` and `realm`
+6. `validBefore` has not passed
+7. The signer has sufficient token balance
+8. Call `transferWithAuthorization(from, to, value,
+   validAfter, validBefore, nonce, v, r, s)` on the
+   `currency` token contract
+9. Verify the transaction receipt indicates success
+10. Verify the `Transfer` event log matches the expected
+    parameters
 
 Servers SHOULD simulate the transaction via `eth_call` before
 submitting to detect failures without spending gas.
@@ -761,6 +916,25 @@ For single transfers, the server calls
 server calls `permitBatchWitnessTransferFrom()`, executing the
 primary transfer and all splits atomically in a single
 transaction.
+
+## Authorization Settlement
+
+~~~
+Client                  Server               EVM Chain
+  |                        |                      |
+  | (1) Authorization:     |                      |
+  |     Payment <cred>     |                      |
+  |  (EIP-3009 signature)  |                      |
+  |----------------------->|                      |
+  |                        | (2) Verify sig       |
+  |                        | (3) Submit transfer- |
+  |                        |  WithAuthorization() |
+  |                        |--------------------->|
+  |                        | (4) Receipt          |
+  |                        |<---------------------|
+  | (5) 200 OK + Receipt   |                      |
+  |<-----------------------|                      |
+~~~
 
 ## Transaction Settlement
 
@@ -851,6 +1025,10 @@ The replay prevention token depends on the credential type:
 - **`type="permit2"`**: The combination of signer address
   and Permit2 nonce serves as the replay token. The nonce
   is consumed on-chain by the Permit2 contract.
+- **`type="authorization"`**: The combination of signer
+  address and EIP-3009 nonce serves as the replay token.
+  The nonce is consumed on-chain by the token contract
+  itself — providing contract-level replay protection.
 - **`type="transaction"`**: The transaction hash (derived
   after broadcast) serves as the replay token.
 - **`type="hash"`**: The transaction hash provided by the
@@ -923,12 +1101,13 @@ matching the challenge terms exists on-chain, but cannot
 prove the payment was created for a specific challenge
 instance.
 
-By contrast, `type="permit2"` credentials include a
-`challengeHash` in the EIP-712 witness data, cryptographically
-binding the signature to the specific challenge `id` and
-`realm`. This prevents signature reuse across challenges,
-even if payment parameters are identical. This is a key
-reason `type="permit2"` is the RECOMMENDED credential type.
+By contrast, `type="permit2"` and `type="authorization"`
+credentials include a `challengeHash` — in the EIP-712
+witness data (Permit2) or as the on-chain nonce (EIP-3009)
+— cryptographically binding the signature to the specific
+challenge `id` and `realm`. This prevents signature reuse
+across challenges, even if payment parameters are identical.
+This is a key reason off-chain signature types are preferred.
 
 Servers MAY mitigate this by:
 
@@ -1127,18 +1306,18 @@ Decoded receipt:
 }
 ~~~
 
-# Full Example: Transaction Charge on MegaETH
+# Full Example: Transaction Charge on Sei
 
-**Challenge** requests 1.0 USDm on MegaETH (chain 1329):
+**Challenge** requests 1.0 USDC on Sei (chain 1329):
 
 ~~~json
 {
-  "amount": "1000000000000000000",
-  "currency": "0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7",
+  "amount": "1000000",
+  "currency": "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "description": "Premium API call",
   "methodDetails": {
-    "chainId": 4326
+    "chainId": 1329
   }
 }
 ~~~
@@ -1163,3 +1342,10 @@ Decoded receipt:
 }
 ~~~
 
+# Acknowledgements
+
+The authors thank Georgios Konstantopoulos for guidance on
+consolidating chain-specific specs into a unified EVM method,
+Brendan Ryan and Jake Moxey at Tempo Labs for the MPP framework,
+and the Sei and MegaETH communities for their contributions to
+earlier drafts.
