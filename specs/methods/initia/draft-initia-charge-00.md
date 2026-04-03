@@ -69,14 +69,16 @@ informative:
 This document defines the "charge" intent for the "initia" payment
 method within the Payment HTTP Authentication Scheme
 {{I-D.httpauth-payment}}. It specifies how clients and servers complete
-one-time payments using any Cosmos SDK coin on Initia Stack mainnets using standard HTTP
+one-time Cosmos SDK coin transfers on Initia Stack chains using standard HTTP
 payment challenge, credential, and receipt artifacts.
 
-This v1 profile is intentionally constrained for interoperability and
-rollout safety. It is mainnet-only and transaction-
-credential-only (server-broadcast mode). The server verifies strict
-transfer semantics against challenge parameters, settles the transaction
-on-chain, and returns a receipt whose reference is the transaction hash.
+This v1 profile supports `type="transaction"` credentials only, where
+the client signs transaction bytes and the server verifies and
+broadcasts them. Optional fee sponsorship is supported through
+`methodDetails.feePayer`.
+
+This specification covers single-message `MsgSend` transfers only.
+Multi-message transactions and other message types are out of scope.
 
 --- middle
 
@@ -90,16 +92,26 @@ payments. This document registers the "charge" intent for the
 The Initia Stack comprises Initia mainnet and additional Cosmos SDK-
 based chains whose metadata is published in the Initia registry
 {{INITIA-MAINNETS}}. These chains share the same `MsgSend`-based payment
-shape, `init` bech32 addressing, and registry-driven chain and asset
-metadata {{INITIA-DOCS}}.
+shape and registry-driven chain and asset metadata {{INITIA-DOCS}},
+making it possible to define a single payment method that works across
+all of them.
 
 This specification defines an intentionally narrow first profile for
-mainnet transfers of Cosmos SDK coins on Initia Stack chains. The method
-is defined in terms of standard `MsgSend` semantics, where the
+Cosmos SDK coin transfers on Initia Stack chains. The method is defined
+in terms of standard `MsgSend` semantics, where the
 challenged payment amount is a Cosmos SDK coin identified by its denom
 and integer amount. The Initia mainnet (`interwoven-1`) chain entry and
 its asset list {{INITIA-CHAIN-REGISTRY}} {{INITIA-ASSETLIST}} are used
 in examples, but the method is not limited to that chain or asset set.
+
+## Design Rationale
+
+Earlier drafts focused on Initia mainnet-specific examples. However, the
+request structure, credential format, verification rules, and settlement
+flow are identical across Initia Stack chains — the main differences are
+chain ID, accepted denoms, and local RPC or fee policy. A unified
+`initia` method avoids fragmenting the registry while still allowing
+chain-specific behavior through `methodDetails` and deployment policy.
 
 ## V1 Profile Scope
 
@@ -108,8 +120,8 @@ This profile supports exactly one credential type:
 broadcasts them after verifying they match the challenge. Optional fee
 sponsorship is supported through `methodDetails.feePayer`.
 
-Future revisions MAY define additional credential types or broaden asset
-support, but those extensions are out of scope for this version.
+Future revisions MAY define additional credential types or broader
+message support, but those extensions are out of scope for this version.
 
 ## Charge Flow
 
@@ -154,9 +166,9 @@ and settlement procedures for the "initia" payment method.
 # Terminology
 
 Initia Stack Coin
-: A Cosmos SDK coin on a chain published in the Initia registry
-  `mainnets/` directory. In this specification, the `currency` field
-  carries the denom and the `amount` field carries the integer amount.
+: A Cosmos SDK coin on an Initia Stack chain. In this specification,
+  the `currency` field carries the denom and the `amount` field carries
+  the integer amount.
 
 iUSD
 : An Initia Stack Cosmos SDK coin used in the Initia mainnet examples in
@@ -191,14 +203,12 @@ base64url-encoded JSON object. The JSON MUST be a valid JSON text per
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Payment amount in base units. MUST be a positive integer string. |
 | `currency` | string | REQUIRED | Denom of the Cosmos SDK coin being transferred on the selected Initia Stack chain. |
-| `recipient` | string | REQUIRED | Initia Stack bech32 recipient address (`init...`). |
+| `recipient` | string | REQUIRED | Bech32 recipient address valid for the selected Initia Stack chain. Current registered Initia Stack chains use the `init...` prefix. |
 | `description` | string | OPTIONAL | Human-readable payment description. |
 | `externalId` | string | OPTIONAL | Merchant reference for reconciliation. |
 
-For this v1 profile, servers MUST source `recipient` from static method
-configuration. This method supports any Cosmos SDK coin on Initia Stack
-mainnets that can be transferred via a single `MsgSend`. Individual
-servers MAY
+This method supports any Cosmos SDK coin on Initia Stack chains that can
+be transferred via a single `MsgSend`. Individual servers MAY
 restrict which denoms they accept as local policy. Clients MUST reject
 challenges whose `currency` denom they do not support or do not expect.
 
@@ -209,10 +219,22 @@ Challenge expiry is conveyed by the `expires` auth-param in
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.version` | number | OPTIONAL | If present, MUST be `1`. |
-| `methodDetails.chainId` | string | OPTIONAL | If present, MUST match a chain ID published under the Initia registry `mainnets/` directory. |
+| `methodDetails.chainId` | string | REQUIRED | Chain ID of the selected Initia Stack chain. MUST match a chain ID published under the Initia registry `mainnets/` directory. |
 | `methodDetails.feePayer` | boolean | OPTIONAL | Fee sponsorship flag. Defaults to `false`. |
-| `methodDetails.feePayerAddress` | string | Conditional | REQUIRED when `feePayer=true`; MUST be an Initia Stack bech32 sponsor address. |
+| `methodDetails.feePayerAddress` | string | Conditional | REQUIRED when `feePayer=true`; MUST be a bech32 sponsor address valid for the selected Initia Stack chain. |
+
+### Chain Identification
+
+The `chainId` field is REQUIRED and identifies the target chain using
+the chain IDs published in the Initia registry `mainnets/` directory.
+Clients MUST reject challenges whose `chainId` does not match a chain
+they support.
+
+The Initia registry also publishes bech32 prefix metadata for each
+chain. This specification therefore does not define a separate
+`bech32Prefix` field in `methodDetails`; implementations derive address
+validation rules from the selected chain's registry entry. Current
+registered Initia Stack chains use the `init` bech32 prefix.
 
 Example:
 
@@ -245,7 +267,7 @@ encoded JSON object per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Exact echo of the challenge auth-params. |
 | `payload` | object | REQUIRED | Initia-specific payload object. |
-| `source` | string | OPTIONAL | Payer identifier; SHOULD be the payer's `init...` address on the selected Initia Stack chain. |
+| `source` | string | OPTIONAL | Payer identifier; SHOULD be the payer's bech32 address on the selected Initia Stack chain. |
 
 ## Transaction Payload {#transaction-payload}
 
@@ -341,7 +363,7 @@ For credentials with `type="transaction"`, servers MUST:
 7. Verify that the denom exactly matches the challenged `currency`.
 8. Verify that the amount exactly matches the challenged `amount`.
 9. Verify that the recipient exactly matches the challenged `recipient`.
-10. If `credential.source` is an Initia bech32 address, verify it
+10. If `credential.source` is a bech32 address for the selected chain, verify it
     equals `MsgSend.from_address`.
 
 Servers MAY impose additional structural requirements, such as allowed
@@ -352,12 +374,12 @@ Servers MUST reject reused consumed hashes.
 
 # Settlement Procedure
 
-Only transaction (server-broadcast) settlement is defined in v1.
+Only `type="transaction"` settlement is defined in v1.
 
 1. The client submits `Authorization: Payment <credential>`.
 2. The server verifies the credential per {{verification}}.
 3. If `feePayer=true`, the server adds sponsor signature material.
-4. The server broadcasts the transaction to the selected Initia Stack mainnet.
+4. The server broadcasts the transaction to the selected Initia Stack chain.
 5. The server waits for successful committed inclusion.
 6. The server derives `txHash` as the settlement reference.
 7. The server atomically marks `txHash` consumed in the replay store.
