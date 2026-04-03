@@ -392,6 +392,8 @@ The receipt payload for Initia charge:
 | `reference` | string | Transaction hash of the settlement transaction |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} settlement time |
+| `chainId` | string | Chain ID where settlement occurred |
+| `externalId` | string | OPTIONAL. Echoed from the challenge request |
 
 The `reference` field MUST contain the transaction hash only in v1.
 
@@ -412,6 +414,12 @@ Servers MUST include `Cache-Control: no-store` on failure responses and
 MUST NOT include `Payment-Receipt` on failure responses.
 
 # Security Considerations
+
+## Transport Security
+
+All communication MUST use TLS 1.2 or higher per
+{{I-D.httpauth-payment}}. Credentials MUST only be transmitted over
+HTTPS connections.
 
 ## Replay Protection
 
@@ -554,6 +562,7 @@ The receipt decodes to:
   "challengeId": "pA9xQv2mN8kJr4sT1dEfGh",
   "reference": "4FF83D6FBC3F1CA2B329850F11087A6007F06B166B9B61C67B457C61D1B2645",
   "status": "success",
-  "timestamp": "2026-04-01T12:04:11Z"
+  "timestamp": "2026-04-01T12:04:11Z",
+  "chainId": "interwoven-1"
 }
 ~~~
