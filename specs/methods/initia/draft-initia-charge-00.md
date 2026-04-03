@@ -9,10 +9,10 @@ submissiontype: IETF
 consensus: true
 
 author:
-  - name: tansawit
-    ins: T.
-    email: 12265853+tansawit@users.noreply.github.com
-    organization: Initia
+  - name: Sawit Trisirisatayawong
+    ins: S. Trisirisatayawong
+    email: sawit@initia.xyz
+    organization: Initia Labs
 
 normative:
   RFC2119:
@@ -450,7 +450,7 @@ Methods" registry established by {{I-D.httpauth-payment}}:
 |-------------------|-------------|-----------|
 | `initia` | Initia blockchain Cosmos SDK coin transfer payment method | This document |
 
-Contact: tansawit (<12265853+tansawit@users.noreply.github.com>)
+Contact: Sawit Trisirisatayawong (<sawit@initia.xyz>)
 
 ## Payment Intent Registration
 
