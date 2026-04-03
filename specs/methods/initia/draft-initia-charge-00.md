@@ -104,15 +104,6 @@ and integer amount. The Initia mainnet (`interwoven-1`) chain entry and
 its asset list {{INITIA-CHAIN-REGISTRY}} {{INITIA-ASSETLIST}} are used
 in examples, but the method is not limited to that chain or asset set.
 
-## Design Rationale
-
-Earlier drafts focused on Initia mainnet-specific examples. However, the
-request structure, credential format, verification rules, and settlement
-flow are identical across Initia Stack chains — the main differences are
-chain ID, accepted denoms, and local RPC or fee policy. A unified
-`initia` method avoids fragmenting the registry while still allowing
-chain-specific behavior through `methodDetails` and deployment policy.
-
 ## V1 Profile Scope
 
 This profile supports exactly one credential type:
@@ -332,11 +323,6 @@ If sponsorship cannot complete, for example due to insufficient sponsor
 balance or signer failure, the server MUST reject the request and MUST
 NOT silently downgrade the same attempt to client-paid mode.
 
-## Sponsor Concurrency Constraint
-
-For each sponsor key, the server MUST process at most one in-flight
-sponsored transaction at a time.
-
 # Verification Procedure {#verification}
 
 Upon receiving a request with an Initia credential, the server MUST:
@@ -457,10 +443,6 @@ SHOULD implement rate limiting and sponsor balance checks.
 **Fail-Closed Requirement**: Servers MUST reject requests when
 sponsorship cannot complete and MUST NOT silently fall back to client-
 paid mode.
-
-**Sponsor Sequence Safety**: The v1 serialized sponsor pipeline
-mitigates sequence races by permitting at most one in-flight sponsored
-transaction per sponsor key.
 
 ## Credential Handling
 
