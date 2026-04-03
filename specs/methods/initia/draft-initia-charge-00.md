@@ -12,7 +12,7 @@ author:
   - name: Sawit Trisirisatayawong
     ins: S. Trisirisatayawong
     email: sawit@initia.xyz
-    organization: Initia Labs
+    org: Initia Labs
 
 normative:
   RFC2119:
