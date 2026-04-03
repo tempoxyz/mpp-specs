@@ -40,15 +40,15 @@ normative:
 informative:
   INITIA-CHAIN-REGISTRY:
     title: "Initia chain registry"
-    target: https://github.com/cosmos/chain-registry/blob/master/initia/chain.json
+    target: https://github.com/initia-labs/initia-registry/blob/main/chain.json
     author:
-      - org: Cosmos Chain Registry
+      - org: Initia Labs
     date: 2026
   INITIA-ASSETLIST:
     title: "Initia asset list"
-    target: https://github.com/cosmos/chain-registry/blob/master/initia/assetlist.json
+    target: https://github.com/initia-labs/initia-registry/blob/main/assetlist.json
     author:
-      - org: Cosmos Chain Registry
+      - org: Initia Labs
     date: 2026
   INITIA-DOCS:
     title: "Initia documentation"
