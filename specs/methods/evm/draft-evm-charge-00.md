@@ -145,7 +145,7 @@ This specification defines two credential types:
   - No nonce management burden on the client
   - `externalId` is cryptographically bound via witness data
 
-- **`type="authorization"` (opt-in)**: The client signs an
+- **`type="authorization"`**: The client signs an
   off-chain EIP-3009 {{EIP-3009}} `transferWithAuthorization`
   message. The server submits it to the token contract. This
   is available for tokens that natively implement EIP-3009
