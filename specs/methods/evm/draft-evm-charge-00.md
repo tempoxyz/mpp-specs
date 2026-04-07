@@ -291,7 +291,7 @@ Valid values: `"permit2"`, `"authorization"`, `"transaction"`,
 If omitted, servers MUST accept `"transaction"` and SHOULD
 accept `"hash"`. Servers that support Permit2 SHOULD include
 `"permit2"` as the first entry to indicate preference.
-Servers SHOULD only include `"authorization"` when the
+Servers MUST only include `"authorization"` when the
 `currency` token is known to implement EIP-3009.
 Clients SHOULD use the first type in the list that they
 support.
