@@ -49,6 +49,11 @@ informative:
     author:
       - name: Vitalik Buterin
     date: 2016-01
+  TEMPO-ACCOUNT-KEYCHAIN:
+    title: "Account Keychain Precompile"
+    target: https://docs.tempo.xyz/protocol/precompiles/account-keychain
+    author:
+      - org: Tempo Labs
   TEMPO-TX-SPEC:
     title: "Tempo Transaction Specification"
     target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
@@ -142,7 +147,7 @@ Access Key
 
 AccountKeychain Precompile
 : The Tempo precompile that manages access-key registration, spending
-  limits, and periodic-limit enforcement.
+  limits, and periodic-limit enforcement {{TEMPO-ACCOUNT-KEYCHAIN}}.
 
 # Request Schema
 
@@ -271,13 +276,6 @@ field.
 }
 ~~~
 
-## Unsupported Payload Types
-
-Tempo subscriptions do not support `type="transaction"` or
-`type="hash"` payloads. Servers MUST reject such credentials with
-`402 Payment Required`, include a fresh `WWW-Authenticate` challenge,
-and describe the failure using Problem Details.
-
 # Settlement Procedure
 
 ## Activation and First-Period Charge
@@ -401,15 +399,17 @@ Clients MUST parse and verify the `request` payload before signing:
 ## Revocation
 
 Users can revoke subscription access keys at any time via the
-AccountKeychain precompile. Servers SHOULD handle revocation gracefully
-by returning a fresh subscription challenge.
+AccountKeychain precompile {{TEMPO-ACCOUNT-KEYCHAIN}}. Servers SHOULD
+handle revocation gracefully by returning a fresh subscription
+challenge.
 
 ## Duplicate Charge Prevention
 
 On-chain periodic limits prevent overspending within a billing period,
-but they do not by themselves make HTTP service delivery idempotent.
-Servers MUST implement durable local state to prevent duplicate renewal
-charges caused by retries or concurrent requests.
+but they do not by themselves make HTTP service delivery idempotent
+{{TEMPO-ACCOUNT-KEYCHAIN}}. Servers MUST implement durable local state
+to prevent duplicate renewal charges caused by retries or concurrent
+requests.
 
 ## Caching
 
