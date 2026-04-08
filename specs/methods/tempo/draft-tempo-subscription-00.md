@@ -41,22 +41,9 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-04
-
-informative:
-  EIP-55:
-    title: "Mixed-case checksum address encoding"
-    target: https://eips.ethereum.org/EIPS/eip-55
-    author:
-      - name: Vitalik Buterin
-    date: 2016-01
   TEMPO-ACCOUNT-KEYCHAIN:
     title: "Account Keychain Precompile"
     target: https://docs.tempo.xyz/protocol/precompiles/account-keychain
-    author:
-      - org: Tempo Labs
-  TEMPO-TX-SPEC:
-    title: "Tempo Transaction Specification"
-    target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
     author:
       - org: Tempo Labs
   TIP-1020:
@@ -167,6 +154,7 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 | `recipient` | string | REQUIRED | Recipient address authorized for subscription charges |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
+| `subscriptionId` | string | OPTIONAL | Server-issued opaque identifier for an existing subscription |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
@@ -180,17 +168,18 @@ surrounding whitespace. Leading zeros MUST NOT be used.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 42431 (Tempo mainnet). |
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 4217 (Tempo mainnet). |
 
-Challenge expiry is conveyed by the `expires` auth-param in
-`WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
-format. Request objects MUST NOT duplicate the challenge expiry value.
-The `subscriptionExpires` field instead defines when the subscription
-itself expires.
+Servers issuing `intent="subscription"` challenges SHOULD include the
+`expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
+using {{RFC3339}} format. Request objects MUST NOT duplicate the
+challenge expiry value. The `subscriptionExpires` field instead defines
+when the subscription itself expires.
 
-The `subscriptionExpires` value MUST be strictly later than the
-challenge `expires` timestamp. Servers MUST reject credentials where
-`subscriptionExpires` is at or before the challenge `expires`.
+If the challenge includes `expires`, the `subscriptionExpires` value
+MUST be strictly later than the challenge `expires` timestamp. Servers
+MUST reject credentials where `subscriptionExpires` is at or before the
+challenge `expires`.
 
 **Example:**
 
@@ -202,7 +191,7 @@ challenge `expires` timestamp. Servers MUST reject credentials where
   "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
@@ -225,7 +214,7 @@ base64url-encoded JSON object per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge from the server |
 | `payload` | object | REQUIRED | Tempo-specific payload object |
-| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
+| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:4217:0x...`) |
 
 The `source` field, if present, SHOULD use the `did:pkh` method with
 the chain ID applicable to the challenge and the payer's Ethereum
@@ -272,7 +261,7 @@ field.
     "signature": "0xf8c1...signed authorization bytes...",
     "type": "keyAuthorization"
   },
-  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -368,6 +357,10 @@ Upon successful activation or renewal, servers MUST return a
 `Payment-Receipt` header per {{I-D.httpauth-payment}}. Servers MUST NOT
 include a `Payment-Receipt` header on error responses.
 
+On activation, servers MUST include the `subscriptionId` defined by
+{{I-D.payment-intent-subscription}} in the receipt. On renewal, servers
+SHOULD return the same `subscriptionId` for the active subscription.
+
 The receipt payload for Tempo subscription:
 
 | Field | Type | Description |
@@ -375,6 +368,7 @@ The receipt payload for Tempo subscription:
 | `method` | string | `"tempo"` |
 | `reference` | string | Transaction hash of the settlement transaction |
 | `status` | string | `"success"` |
+| `subscriptionId` | string | Server-issued opaque identifier for the subscription |
 | `timestamp` | string | {{RFC3339}} settlement time |
 | `externalId` | string | OPTIONAL. Echoed from the challenge request |
 
@@ -423,16 +417,9 @@ receipts.
 
 # IANA Considerations
 
-## Payment Intent Registration
-
-This document registers the following payment intent in the "HTTP
-Payment Intents" registry established by {{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `subscription` | `tempo` | Recurring fixed-amount TIP-20 payment | This document |
-
-Contact: Tempo Labs (<contact@tempo.xyz>)
+The `subscription` payment intent is registered by
+{{I-D.payment-intent-subscription}}. This document does not register it
+again.
 
 --- back
 
@@ -461,7 +448,7 @@ The `request` decodes to:
   "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
@@ -485,24 +472,8 @@ seconds until 2026-01-01T00:00:00Z.
     "signature": "0xf8c1...signed authorization bytes...",
     "type": "keyAuthorization"
   },
-  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
-~~~
-
-# ABNF Collected
-
-~~~ abnf
-tempo-subscription-challenge = "Payment" 1*SP
-  "id=" quoted-string ","
-  "realm=" quoted-string ","
-  "method=" DQUOTE "tempo" DQUOTE ","
-  "intent=" DQUOTE "subscription" DQUOTE ","
-  "request=" base64url-nopad
-
-tempo-subscription-credential = "Payment" 1*SP base64url-nopad
-
-; Base64url encoding without padding per RFC 4648 Section 5
-base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
 ~~~
 
 # Acknowledgements

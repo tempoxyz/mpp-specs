@@ -31,7 +31,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -95,6 +95,11 @@ Renewal
 Cancellation
 : The act of ending a subscription before `subscriptionExpires`,
   preventing future renewals.
+
+Subscription Identifier
+: A server-issued opaque identifier for an activated subscription,
+  used by clients to re-authenticate into that subscription on later
+  requests.
 
 # Intent Semantics
 
@@ -186,17 +191,23 @@ surrounding whitespace. Leading zeros MUST NOT be used.
 | `recipient` | string | Payment recipient in method-native format |
 | `description` | string | Human-readable subscription description |
 | `externalId` | string | Merchant's reference for the subscription |
+| `subscriptionId` | string | Server-issued opaque identifier for an existing subscription |
 | `methodDetails` | object | Method-specific extension data |
 
-Challenge expiry is conveyed by the `expires` auth-param in
-`WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
-format. Request objects MUST NOT duplicate the challenge expiry value.
-The `subscriptionExpires` field instead defines when the subscription
-itself expires.
+The `subscriptionId` field is absent during initial activation. Servers
+MAY include it when issuing a challenge tied to an existing
+subscription.
 
-The `subscriptionExpires` value MUST be strictly later than the
-challenge `expires` timestamp. Servers MUST reject credentials where
-`subscriptionExpires` is at or before the challenge `expires`.
+Servers issuing `intent="subscription"` challenges SHOULD include the
+`expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
+using {{RFC3339}} format. Request objects MUST NOT duplicate the
+challenge expiry value. The `subscriptionExpires` field instead defines
+when the subscription itself expires.
+
+If the challenge includes `expires`, the `subscriptionExpires` value
+MUST be strictly later than the challenge `expires` timestamp. Servers
+MUST reject credentials where `subscriptionExpires` is at or before the
+challenge `expires`.
 
 The first billing period begins when the subscription is activated.
 Payment methods MAY define additional activation controls in
@@ -247,7 +258,7 @@ payment method specification.
   "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
@@ -287,7 +298,8 @@ When the server receives a "subscription" credential, it MUST:
 2. Activate the subscription
 3. Collect the first billing-period charge
 4. Initialize durable subscription state for later renewals
-5. Return success (200) with a `Payment-Receipt` for the first charge
+5. Return success (200) with a `Payment-Receipt` for the first charge,
+   including a `subscriptionId`
 
 ## Renewal
 
@@ -300,6 +312,25 @@ atomically with, delivering the corresponding service.
 
 Servers MUST NOT collect more than one renewal charge for the same
 billing period.
+
+## Reauthentication
+
+After successful activation, the server MUST return a `subscriptionId`
+in the `Payment-Receipt`. The value MUST be a base64url {{RFC4648}}
+string without padding and MUST be unique within the server's
+subscription namespace.
+
+Clients SHOULD retain the `subscriptionId` and, when intending to use an
+existing subscription on a later request, SHOULD send it in the
+`Subscription-Id` request header.
+
+If a request is associated with an existing subscription, the server MAY
+echo that identifier in the challenge `request.subscriptionId` field to
+bind the challenge to the intended subscription.
+
+Servers MUST authenticate or otherwise authorize the client's use of the
+identified subscription before granting access or collecting a renewal
+charge.
 
 ## Server Accounting and Idempotency
 
@@ -390,6 +421,14 @@ Responses containing `Payment-Receipt` headers MUST include
 receipts.
 
 # IANA Considerations
+
+## Header Field Registration
+
+This document registers the following header fields:
+
+| Field Name | Status | Reference |
+|------------|--------|-----------|
+| `Subscription-Id` | permanent | This document |
 
 ## Payment Intent Registration
 
