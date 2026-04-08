@@ -4,7 +4,7 @@ abbrev: Tempo Authorize
 docname: draft-tempo-authorize-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: IETF
 consensus: true
 
@@ -12,15 +12,15 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
     email: thomas@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
 
 normative:
   RFC2119:
@@ -55,6 +55,13 @@ informative:
     author:
       - name: Vitalik Buterin
     date: 2016-01
+  EIP-20:
+    title: "ERC-20 Token Standard"
+    target: https://eips.ethereum.org/EIPS/eip-20
+    author:
+      - name: Fabian Vogelsteller
+      - name: Vitalik Buterin
+    date: 2015-11
   TEMPO-TX-SPEC:
     title: "Tempo Transaction Specification"
     target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
@@ -70,9 +77,8 @@ informative:
 --- abstract
 
 This document defines the "authorize" intent for the "tempo" payment method
-in the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}. It
-specifies how clients grant servers spending limits with expiry on the
-Tempo blockchain.
+in the Payment HTTP Authentication Scheme. It specifies how clients grant
+servers spending limits with expiry on the Tempo blockchain.
 
 --- middle
 
@@ -162,10 +168,10 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Maximum spend amount in base units |
+| `amount` | string | REQUIRED | Amount in base units (stringified non-negative integer, no leading zeros) |
 | `currency` | string | REQUIRED | TIP-20 token address |
 | `authorizationExpires` | string | REQUIRED | Authorization expiry timestamp in {{RFC3339}} format |
-| `recipient` | string | OPTIONAL | Authorized spender address (required for transaction fulfillment) |
+| `recipient` | string | OPTIONAL | Authorized spender address; REQUIRED for `type="transaction"` fulfillment, OPTIONAL for `type="keyAuthorization"` |
 | `description` | string | OPTIONAL | Human-readable authorization description |
 | `externalId` | string | OPTIONAL | Merchant's reference (order ID, etc.) |
 
@@ -173,7 +179,7 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 42431 (Tempo mainnet). |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 | `methodDetails.validFrom` | string | OPTIONAL | Start timestamp in {{RFC3339}} format |
 
@@ -182,6 +188,10 @@ Challenge expiry is conveyed by the `expires` auth-param in
 format. Request objects MUST NOT duplicate the challenge expiry value.
 The `authorizationExpires` field instead defines when the authorization
 itself expires.
+
+The `authorizationExpires` value MUST be strictly later than the
+challenge `expires` timestamp. Servers MUST reject credentials where
+`authorizationExpires` is at or before the challenge `expires`.
 
 **Example:**
 
@@ -231,6 +241,10 @@ JSON object per {{I-D.httpauth-payment}}.
 | `challenge` | object | REQUIRED | Echo of the challenge from the server |
 | `payload` | object | REQUIRED | Tempo-specific payload object |
 | `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
+
+The `source` field, if present, SHOULD use the `did:pkh` method with
+the chain ID applicable to the challenge and the payer's Ethereum
+address.
 
 ## Transaction Payload (type="transaction")
 
@@ -502,11 +516,23 @@ Servers MUST verify the payer identity by:
 - For `type="hash"`: Retrieving the `from` address from the transaction
   receipt onchain
 
+## Caching
+
+Responses to authorization challenges (402 Payment Required) and
+responses that consume authorized value SHOULD include
+`Cache-Control: no-store` to prevent sensitive payment data from being
+cached by intermediaries.
+
 # IANA Considerations
 
-This document does not require any IANA actions. The `tempo` payment
-method is already registered, and the `authorize` intent is registered by
-{{I-D.payment-intent-authorize}}.
+## Payment Intent Registration
+
+This document registers the following payment intent in the "HTTP Payment
+Intents" registry established by {{I-D.httpauth-payment}}:
+
+| Intent | Applicable Methods | Description | Reference |
+|--------|-------------------|-------------|-----------|
+| `authorize` | `tempo` | Pre-authorization for future TIP-20 charges | This document |
 
 --- back
 
@@ -560,9 +586,25 @@ This requests approval for up to 50.00 alphaUSD (50000000 base units).
 }
 ~~~
 
+# ABNF Collected
+
+~~~ abnf
+tempo-authorize-challenge = "Payment" 1*SP
+  "id=" quoted-string ","
+  "realm=" quoted-string ","
+  "method=" DQUOTE "tempo" DQUOTE ","
+  "intent=" DQUOTE "authorize" DQUOTE ","
+  "request=" base64url-nopad
+
+tempo-authorize-credential = "Payment" 1*SP base64url-nopad
+
+; Base64url encoding without padding per RFC 4648 Section 5
+base64url-nopad = 1*( ALPHA / DIGIT / "-" / "_" )
+~~~
+
 # Acknowledgements
 
 The authors thank the MPP community for their feedback on this
 specification.
 
-TK: add other contributors.
+

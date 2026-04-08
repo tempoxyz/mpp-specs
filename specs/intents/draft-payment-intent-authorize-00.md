@@ -4,7 +4,7 @@ abbrev: Payment Intent Authorize
 docname: draft-payment-intent-authorize-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: IETF
 consensus: true
 
@@ -35,15 +35,20 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.ietf-httpapi-idempotency-key-header:
+    title: "The Idempotency-Key HTTP Header Field"
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+    author:
+      - name: Jayadeba Jena
+    date: 2024-06
 ---
 
 --- abstract
 
 This document defines the "authorize" payment intent for use with the
-Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}. The "authorize"
-intent represents a pre-authorization where the payer grants the server
-permission to charge up to a specified amount within a time window,
-without immediate payment.
+Payment HTTP Authentication Scheme. The "authorize" intent represents a
+pre-authorization where the payer grants the server permission to charge
+up to a specified amount within a time window, without immediate payment.
 
 --- middle
 
@@ -53,9 +58,14 @@ The "authorize" intent enables pre-authorized payments where the payer
 grants the server permission to charge up to a specified amount at a
 later time. This is useful for:
 
-- **Metered billing**: Pay-per-use APIs where total cost is unknown upfront
-- **Delayed fulfillment**: Services where delivery occurs after authorization
-- **Spending caps**: User-controlled limits on automated spending
+Metered billing:
+: Pay-per-use APIs where total cost is unknown upfront
+
+Delayed fulfillment:
+: Services where delivery occurs after authorization
+
+Spending caps:
+: User-controlled limits on automated spending
 
 Unlike the "charge" intent which requires immediate payment, "authorize"
 creates a payment capability that the server can exercise later.
@@ -165,9 +175,14 @@ to REQUIRED in their method specification.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `amount` | string | Maximum authorization amount in base units |
+| `amount` | string | Maximum authorization amount in base units (stringified non-negative integer, no leading zeros) |
 | `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
 | `authorizationExpires` | string | Authorization expiry timestamp in {{RFC3339}} format |
+
+The `amount` value MUST be a string representation of a non-negative
+integer in base 10 with no sign, decimal point, exponent, or
+surrounding whitespace. Leading zeros MUST NOT be used except for the
+value `"0"`.
 
 ### Optional Fields
 
@@ -183,6 +198,10 @@ Challenge expiry is conveyed by the `expires` auth-param in
 format. Request objects MUST NOT duplicate the challenge expiry value.
 The `authorizationExpires` field instead defines when the authorization
 itself expires.
+
+The `authorizationExpires` value MUST be strictly later than the
+challenge `expires` timestamp. Servers MUST reject credentials where
+`authorizationExpires` is at or before the challenge `expires`.
 
 ## Currency Formats {#currency-formats}
 
@@ -269,7 +288,8 @@ When the server receives an "authorize" credential:
 3. Initialize durable state for the authorization, including its
    remaining authorized amount
 4. Return success (200) to indicate authorization accepted
-5. Optionally return `Payment-Authorization` for session reuse
+5. Return success response; session reuse mechanisms are out of scope
+   for this specification
 
 Registration responses for `intent="authorize"` MUST NOT include a
 `Payment-Receipt` header. `Payment-Receipt` is reserved for later
@@ -291,7 +311,7 @@ When charging against an authorization, servers MUST perform the limit
 check and decrement atomically before, or atomically with, delivering the
 corresponding service.
 
-For retried requests, clients SHOULD send an `Idempotency-Key` header.
+For retried requests, clients SHOULD send an `Idempotency-Key` header per {{I-D.ietf-httpapi-idempotency-key-header}}.
 Servers MUST NOT decrement the remaining authorized amount more than once
 for a duplicate idempotent request.
 
@@ -321,6 +341,23 @@ mechanisms are method-specific:
 Servers MUST NOT charge against expired authorizations. Servers SHOULD
 provide a mechanism for payers to query authorization status.
 
+## Error Responses
+
+When an authorization cannot be used to fulfill a request, the server
+MUST return an appropriate HTTP status code:
+
+| Condition | Status Code | Behavior |
+|-----------|-------------|----------|
+| Authorization expired | 402 Payment Required | Issue new challenge |
+| Spending limit exhausted | 402 Payment Required | Issue new challenge |
+| Authorization revoked | 402 Payment Required | Issue new challenge |
+| Invalid credential | 401 Unauthorized | Reject credential |
+
+For all 402 responses, the server MUST include a `WWW-Authenticate`
+header with a fresh challenge. Clients receiving a 402 after a
+previously valid authorization SHOULD treat the authorization as
+exhausted and initiate a new authorization flow.
+
 # Security Considerations
 
 ## Limit Verification
@@ -345,6 +382,9 @@ Recommended maximum windows:
 | Daily usage | 24 hours |
 | Monthly billing | 30 days |
 
+These values are informational guidance. Deployments SHOULD evaluate
+their own risk tolerance and adjust authorization windows accordingly.
+
 ## Revocation Capability
 
 Payment methods implementing "authorize" SHOULD provide revocation
@@ -368,6 +408,13 @@ Servers holding authorizations are responsible for:
 - Providing transaction records to payers
 - Honoring revocation requests
 
+## Caching
+
+Responses to authorization challenges (402 Payment Required) and
+responses that consume authorized value SHOULD include
+`Cache-Control: no-store` to prevent sensitive payment data from being
+cached by intermediaries.
+
 # IANA Considerations
 
 ## Payment Intent Registration
@@ -386,4 +433,4 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 The authors thank the MPP community for their feedback on this
 specification.
 
-TK: add other contributors.
+
