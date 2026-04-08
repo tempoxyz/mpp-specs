@@ -24,7 +24,11 @@ author:
 
 normative:
   RFC2119:
+  RFC3339:
+  RFC4648:
   RFC8174:
+  RFC8259:
+  RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-httpauth-payment/
@@ -58,14 +62,10 @@ creates a payment capability that the server can exercise later.
 
 ## Relationship to Payment Methods
 
-Payment methods implement "authorize" using their native authorization
-mechanisms:
-
-| Method | Implementation |
-|--------|----------------|
-| Tempo | Access Keys with spending limits |
-| Stripe | SetupIntent + saved PaymentMethod |
-| EVM | ERC-20 `approve()` or EIP-3009 authorization |
+Payment methods implement "authorize" using method-specific
+authorization mechanisms. This document defines the abstract semantics
+and shared request fields; payment method specifications define how
+those semantics are enforced.
 
 # Requirements Language
 
@@ -100,7 +100,7 @@ within a specified time window.
 |----------|-------|
 | **Intent Identifier** | `authorize` |
 | **Payment Timing** | Deferred (server-initiated later) |
-| **Idempotency** | Reusable within limits |
+| **Idempotency** | Credential single-use; authorization reusable within limits |
 | **Reversibility** | Revocable before use |
 
 ## Flow
@@ -150,13 +150,16 @@ Unlike "charge", the "authorize" intent is non-atomic:
 
 The `request` parameter for an "authorize" intent is a JSON object with
 shared fields defined by this specification and optional method-specific
-extensions in the `methodDetails` field.
+extensions in the `methodDetails` field. The `request` JSON MUST be
+serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} and
+base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
 All payment methods implementing the "authorize" intent MUST support these
 shared fields, enabling clients to parse and display authorization requests
-consistently across methods.
+consistently across methods. Payment methods MAY elevate OPTIONAL fields
+to REQUIRED in their method specification.
 
 ### Required Fields
 
@@ -164,7 +167,7 @@ consistently across methods.
 |-------|------|-------------|
 | `amount` | string | Maximum authorization amount in base units |
 | `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
-| `expires` | string | Authorization expiry timestamp in ISO 8601 format |
+| `authorizationExpires` | string | Authorization expiry timestamp in {{RFC3339}} format |
 
 ### Optional Fields
 
@@ -175,6 +178,12 @@ consistently across methods.
 | `externalId` | string | Merchant's reference (order ID, etc.) |
 | `methodDetails` | object | Method-specific extension data |
 
+Challenge expiry is conveyed by the `expires` auth-param in
+`WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
+format. Request objects MUST NOT duplicate the challenge expiry value.
+The `authorizationExpires` field instead defines when the authorization
+itself expires.
+
 ## Currency Formats {#currency-formats}
 
 The `currency` field supports multiple formats to accommodate different
@@ -184,13 +193,10 @@ payment networks:
 |--------|---------|-------------|
 | ISO 4217 | `"usd"`, `"eur"` | Fiat currencies (lowercase) |
 | Token address | `"0x20c0..."` | ERC-20, TIP-20, or similar token contracts |
-| Well-known symbol | `"sat"`, `"btc"`, `"eth"` | Native blockchain assets |
+| Method-defined | (varies) | Payment method-specific currency identifiers |
 
-Clients can detect the format:
-
-- Starts with `0x`: Token contract address
-- Three lowercase letters: ISO 4217 currency code
-- Otherwise: Well-known symbol or method-specific identifier
+Payment method specifications MUST document which currency formats they
+support and how to interpret amounts for each format.
 
 ## Method Extensions
 
@@ -206,7 +212,7 @@ method specification.
 {
   "amount": "100000",
   "currency": "usd",
-  "expires": "2025-01-22T12:00:00Z",
+  "authorizationExpires": "2025-01-22T12:00:00Z",
   "description": "Pre-authorization for metered API usage",
   "methodDetails": {
     "captureMethod": "manual"
@@ -220,7 +226,7 @@ method specification.
 {
   "amount": "50000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "expires": "2025-02-05T12:00:00Z",
+  "authorizationExpires": "2025-02-05T12:00:00Z",
   "methodDetails": {
     "chainId": 42431
   }
@@ -242,10 +248,13 @@ authorization grant. The format is method-specific:
 
 ## Reusability
 
-Unlike "charge" credentials, "authorize" credentials may enable multiple
-subsequent charges. The authorization persists until:
+Each "authorize" credential MUST be usable only once per challenge.
+Servers MUST reject replayed credentials.
 
-- The expiry timestamp is reached
+A successfully registered authorization may enable multiple subsequent
+charges. The authorization persists until:
+
+- The `authorizationExpires` timestamp is reached
 - The spending limit is exhausted
 - The payer explicitly revokes it
 
@@ -257,8 +266,34 @@ When the server receives an "authorize" credential:
 
 1. Verify the authorization signature/proof
 2. Store the authorization for future use
-3. Return success (200) to indicate authorization accepted
-4. Optionally return `Payment-Authorization` for session reuse
+3. Initialize durable state for the authorization, including its
+   remaining authorized amount
+4. Return success (200) to indicate authorization accepted
+5. Optionally return `Payment-Authorization` for session reuse
+
+Registration responses for `intent="authorize"` MUST NOT include a
+`Payment-Receipt` header. `Payment-Receipt` is reserved for later
+successful responses that actually consume authorized value.
+
+## Server Accounting and Idempotency
+
+Servers MUST maintain durable authorization state sufficient to enforce
+remaining limits across concurrent requests and retries.
+
+At minimum, servers MUST track:
+
+- Authorization identifier
+- Remaining authorized amount
+- Authorization expiry
+- Revocation status
+
+When charging against an authorization, servers MUST perform the limit
+check and decrement atomically before, or atomically with, delivering the
+corresponding service.
+
+For retried requests, clients SHOULD send an `Idempotency-Key` header.
+Servers MUST NOT decrement the remaining authorized amount more than once
+for a duplicate idempotent request.
 
 ## Charging
 
@@ -267,7 +302,7 @@ When charging against an authorization:
 1. Verify the authorization is still valid (not expired, not revoked)
 2. Verify sufficient limit remains
 3. Execute the charge via method-specific mechanism
-4. Decrement the remaining limit
+4. Decrement the remaining limit atomically with service delivery
 5. Return `Payment-Receipt` with charge details
 
 ## Revocation
@@ -293,6 +328,9 @@ provide a mechanism for payers to query authorization status.
 Clients MUST verify the requested limit is acceptable before signing.
 Authorizations grant future spending capability without further user
 interaction.
+
+Clients MUST verify `authorizationExpires` is not unreasonably far in the
+future.
 
 ## Expiry Windows
 
@@ -340,3 +378,12 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 | Intent | Description | Reference |
 |--------|-------------|-----------|
 | `authorize` | Pre-authorization for future charges | This document |
+
+--- back
+
+# Acknowledgements
+
+The authors thank the MPP community for their feedback on this
+specification.
+
+TK: add other contributors.
