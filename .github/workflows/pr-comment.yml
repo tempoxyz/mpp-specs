@@ -29,7 +29,15 @@ jobs:
         id: pr
         run: echo "number=$(cat pr-number.txt)" >> "$GITHUB_OUTPUT"
 
+      - name: Check PR state
+        id: pr_state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "state=$(gh pr view ${{ steps.pr.outputs.number }} --repo ${{ github.repository }} --json state --jq .state)" >> "$GITHUB_OUTPUT"
+
       - name: Download spec artifacts
+        if: steps.pr_state.outputs.state == 'OPEN'
         uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -40,6 +48,7 @@ jobs:
         continue-on-error: true
 
       - name: Publish preview release assets
+        if: steps.pr_state.outputs.state == 'OPEN'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -78,6 +87,7 @@ jobs:
             --prerelease
 
       - name: Comment on PR
+        if: steps.pr_state.outputs.state == 'OPEN'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
