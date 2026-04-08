@@ -1,7 +1,7 @@
 name: Cleanup PR Spec Preview
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
 
 permissions:
@@ -16,6 +16,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          TAG: pr-${{ github.event.number }}-spec-preview
+          TAG: pr-${{ github.event.pull_request.number }}-spec-preview
         run: |
+          # This workflow intentionally avoids checking out or executing PR code.
+          # It only deletes the derived preview release for the closed PR.
           gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
