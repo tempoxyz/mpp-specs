@@ -7,6 +7,7 @@ on:
 
 permissions:
   actions: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -38,6 +39,44 @@ jobs:
           path: /tmp/pr-artifacts
         continue-on-error: true
 
+      - name: Publish preview release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          TAG="pr-${PR_NUMBER}-spec-preview"
+          TITLE="Spec preview for PR #${PR_NUMBER}"
+          NOTES="Auto-generated spec preview assets for PR #${PR_NUMBER}."
+          SPEC_DIR="$(find /tmp/pr-artifacts -mindepth 1 -maxdepth 1 -type d -name '*specs*' | head -n1)"
+
+          if [[ -z "${SPEC_DIR}" ]]; then
+            echo "No spec artifact directory found; skipping preview release"
+            exit 0
+          fi
+
+          shopt -s nullglob
+          files=(
+            "$SPEC_DIR"/draft-*.html
+            "$SPEC_DIR"/draft-*.txt
+            "$SPEC_DIR"/draft-*.xml
+            "$SPEC_DIR"/draft-*.pdf
+          )
+
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No spec files found; skipping preview release"
+            exit 0
+          fi
+
+          gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
+          gh release create "$TAG" "${files[@]}" \
+            --repo "$REPO" \
+            --title "$TITLE" \
+            --notes "$NOTES" \
+            --prerelease
+
       - name: Comment on PR
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
@@ -45,19 +84,33 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const prNumber = parseInt('${{ steps.pr.outputs.number }}');
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${{ github.event.workflow_run.id }}`;
+            const previewTag = `pr-${prNumber}-spec-preview`;
+            const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${previewTag}`;
+            const artifactsRoot = '/tmp/pr-artifacts';
 
             // Find spec artifacts
-            const specsDir = fs.readdirSync('/tmp/pr-artifacts').find(d => d.includes('specs'));
-            const diffsDir = fs.readdirSync('/tmp/pr-artifacts').find(d => d.includes('diffs'));
+            const artifactDirs = fs.existsSync(artifactsRoot) ? fs.readdirSync(artifactsRoot) : [];
+            const specsDir = artifactDirs.find(d => d.includes('specs'));
+            const diffsDir = artifactDirs.find(d => d.includes('diffs'));
 
-            let table = '| Spec | Changed |\n|------|--------|\n';
+            let table = '| Spec | Changed | Artifacts |\n|------|---------|-----------|\n';
 
             if (specsDir) {
               const specsPath = path.join('/tmp/pr-artifacts', specsDir);
               const htmlFiles = fs.readdirSync(specsPath)
                 .filter(f => f.startsWith('draft-') && f.endsWith('.html'))
                 .sort();
+
+              const linkFor = (name, ext, label) => {
+                const artifactFile = `${name}.${ext}`;
+                const artifactPath = path.join(specsPath, artifactFile);
+                if (!fs.existsSync(artifactPath)) {
+                  return label;
+                }
+
+                const assetUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${previewTag}/${encodeURIComponent(artifactFile)}`;
+                return `[${label}](${assetUrl})`;
+              };
 
               for (const file of htmlFiles) {
                 const name = file.replace('.html', '');
@@ -66,21 +119,37 @@ jobs:
                   const diffFile = path.join('/tmp/pr-artifacts', diffsDir, `${name}-diff.txt`);
                   if (fs.existsSync(diffFile)) {
                     const content = fs.readFileSync(diffFile, 'utf8');
-                    if (content.trim() && !content.includes('New spec')) {
+                    if (content.includes('New spec')) {
+                      changed = 'New';
+                    } else if (content.trim()) {
                       changed = 'Yes';
                     }
                   }
                 }
-                table += `| \`${name}\` | ${changed} |\n`;
+
+                const artifacts = [
+                  linkFor(name, 'html', 'HTML'),
+                  linkFor(name, 'txt', 'TXT'),
+                  linkFor(name, 'xml', 'XML'),
+                  linkFor(name, 'pdf', 'PDF'),
+                ].join(' · ');
+
+                table += `| \`${name}\` | ${changed} | ${artifacts} |\n`;
               }
+            } else {
+              table += '| _No preview artifacts generated_ | - | - |\n';
             }
+
+            const footer = specsDir
+              ? `[Browse preview release assets](${releaseUrl})`
+              : 'Preview assets unavailable for this run.';
 
             const body = `<!-- ietf-spec-preview -->
             ## Spec Preview
 
             ${table}
 
-            **[Download spec artifacts](${runUrl}#artifacts)** (HTML, TXT, XML, PDF)
+            ${footer}
             `;
 
             const { data: comments } = await github.rest.issues.listComments({

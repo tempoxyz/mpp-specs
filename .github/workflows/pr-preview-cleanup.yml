@@ -1,0 +1,21 @@
+name: Cleanup PR Spec Preview
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Delete preview release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete preview release and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: pr-${{ github.event.number }}-spec-preview
+        run: |
+          gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
