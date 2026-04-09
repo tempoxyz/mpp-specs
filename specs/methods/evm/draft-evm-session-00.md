@@ -212,15 +212,17 @@ The following diagrams illustrate the two open modes.
       |  txHash                     |                             |
       |<--------------------------------------------------------------|
       |                             |                             |
-      |  (4) Authorization: Payment |                             |
+      |  (4) Sign initial voucher   |                             |
+      |                             |                             |
+      |  (5) Authorization: Payment |                             |
       |      action="open"          |                             |
       |      type="hash"            |                             |
       |      hash=txHash            |                             |
       |-------------------------->  |                             |
-      |                             |  (5) verify deposit         |
+      |                             |  (6) verify deposit         |
       |                             |-------------------------->  |
       |                             |                             |
-      |  (6) 200 OK + Receipt       |                             |
+      |  (7) 200 OK + Receipt       |                             |
       |<--------------------------  |                             |
       |                             |                             |
       |  ... voucher / close flow (same for both modes) ...       |
