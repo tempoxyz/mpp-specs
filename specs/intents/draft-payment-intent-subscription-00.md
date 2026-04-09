@@ -184,6 +184,10 @@ The `periodSeconds` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
+`periodSeconds` defines fixed-duration billing periods measured in
+elapsed seconds. It does not, by itself, encode calendar-month or
+calendar-year alignment.
+
 ### Optional Fields
 
 | Field | Type | Description |
@@ -213,6 +217,10 @@ The first billing period begins when the subscription is activated.
 Payment methods MAY define additional activation controls in
 `methodDetails`, but MUST define exact activation semantics if they do
 so.
+
+The billing anchor for a subscription is the time activation succeeds.
+Billing periods are contiguous fixed-duration windows derived by adding
+`periodSeconds` to that anchor.
 
 ## Currency Formats {#currency-formats}
 
@@ -313,6 +321,11 @@ atomically with, delivering the corresponding service.
 Servers MUST NOT collect more than one renewal charge for the same
 billing period.
 
+If one or more billing periods elapse without a successful renewal
+charge, the subscription intent authorizes at most one charge for the
+then-current billing period. Servers MUST NOT treat missed billing
+periods as automatically accumulated authority for additional charges.
+
 ## Reauthentication
 
 After successful activation, the server MUST return a `subscriptionId`
@@ -340,8 +353,9 @@ per-period charging rules across retries and concurrent requests.
 At minimum, servers MUST track:
 
 - Subscription identifier
-- Current billing period start time
-- Whether the current billing period has been charged
+- Billing anchor or equivalent current billing-period start time
+- Last successfully charged billing-period index, or whether the
+  current billing period has been charged
 - Subscription expiry
 - Cancellation or revocation status
 
@@ -355,8 +369,15 @@ duplicate idempotent request.
 Payers SHOULD be able to cancel subscriptions before expiry.
 Cancellation mechanisms are method-specific.
 
-Servers MUST NOT collect renewal charges after cancellation takes
-effect.
+For an active subscription, cancellation takes effect at the end of the
+current paid billing period. Servers MUST continue honoring access
+already paid for through the end of that billing period.
+
+If there is no current paid billing period, cancellation takes effect
+immediately.
+
+Servers MUST NOT collect renewal charges for billing periods after
+cancellation takes effect.
 
 ## Error Responses
 
@@ -366,7 +387,7 @@ MUST return an appropriate HTTP status code:
 | Condition | Status Code | Behavior |
 |-----------|-------------|----------|
 | Subscription expired | 402 Payment Required | Issue new challenge |
-| Subscription cancelled or revoked | 402 Payment Required | Issue new challenge |
+| Cancellation effective or authorization revoked | 402 Payment Required | Issue new challenge |
 | Current billing period unpaid or renewal failed | 402 Payment Required | Issue new challenge |
 | Invalid credential | 402 Payment Required | Issue new challenge |
 
