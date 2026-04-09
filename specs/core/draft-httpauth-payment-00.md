@@ -565,9 +565,9 @@ intent-or-wildcard         = intent-token / "*"
 Examples:
 
 ~~~http
-Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5
-Accept-Payment: tempo/*, */session;q=0.3
-Accept-Payment: tempo/charge, tempo/session;q=0
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5, solana/charge;q=0.3
+Accept-Payment: tempo/*, solana/*;q=0.6, */session;q=0.3
+Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge
 ~~~
 
 When `Accept-Payment` is present, servers SHOULD consider it when
@@ -1029,17 +1029,82 @@ the server tailor the 402 response:
 ~~~http
 GET /resource HTTP/1.1
 Host: api.example.com
-Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5, solana/charge;q=0.3
 ~~~
 
-If the server supports `tempo/charge` and `stripe/charge`, it SHOULD
-prefer the higher-ranked `tempo/charge` challenge:
+If the server supports all four combinations, it SHOULD prefer the
+higher-ranked `tempo` challenges, then `stripe/charge`, then
+`solana/charge`:
 
 ~~~http
 HTTP/1.1 402 Payment Required
 Cache-Control: no-store
 WWW-Authenticate: Payment id="pT7yHnKmQ2wErXsZ5vCbNl", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="nH6xJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="tempo", intent="session", request="..."
 WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="kD4vLmNpQ2rStUwX5yAbCe", realm="api.example.com", method="solana", intent="charge", request="..."
+~~~
+
+When multiple entries omit `q`, they are equally preferred. In that
+case, the server MAY order the returned challenges according to its own
+policy:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, solana/charge
+~~~
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="sK9vLmQwErTyUiOpA2dFgH", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="rJ8uKnLpO3qWtYsA6wDcVb", realm="api.example.com", method="tempo", intent="charge", request="..."
+~~~
+
+Clients can also use wildcards to express broader support. In the
+following example, the client prefers any `tempo` payment method, then
+any `solana` method, and least prefers `stripe/charge`:
+
+~~~http
+GET /stream HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/*, solana/*;q=0.6, stripe/charge;q=0.2
+~~~
+
+If the server can offer `tempo/session`, `tempo/charge`,
+`solana/charge`, and `stripe/charge`, it SHOULD rank the `tempo` offers
+first, then `solana/charge`, then `stripe/charge`:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="tM4nOpQrS5uVwXyZ6aBcDe", realm="api.example.com", method="tempo", intent="session", request="..."
+WWW-Authenticate: Payment id="uN5oPqRsT6vWxYzA7bCdEf", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="qE3rFgHiJ4kLmNpO5sAtBu", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="vP6qRtSuV7wXyZaB8cDeFg", realm="api.example.com", method="stripe", intent="charge", request="..."
+~~~
+
+Clients can set `q=0` to declare that a capability is not acceptable.
+In this example, the client is able to use `tempo/session`, but does not
+wish to receive that challenge for this request:
+
+~~~http
+GET /download HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge;q=0.8, stripe/charge;q=0.4
+~~~
+
+If the server would otherwise offer `tempo/charge`, `tempo/session`,
+`solana/charge`, and `stripe/charge`, it SHOULD omit `tempo/session`
+from the ranked set:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="wQ7rStTuV8xYzAbC9dEfGh", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="yR5tUvWxY6zAbCdE7fGhIj", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="xR8sTuUvW9yZaBcD0eFgHi", realm="api.example.com", method="stripe", intent="charge", request="..."
 ~~~
 
 ## Signed Authorization
