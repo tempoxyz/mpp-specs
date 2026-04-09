@@ -46,6 +46,11 @@ normative:
     target: https://docs.tempo.xyz/protocol/precompiles/account-keychain
     author:
       - org: Tempo Labs
+  TIP-1011:
+    title: "TIP-1011: Enhanced Access Key Permissions"
+    target: https://docs.tempo.xyz/protocol/tips/tip-1011
+    author:
+      - name: Tanishk Goyal
   TIP-1020:
     title: "TIP-1020: Signature Verification Precompile"
     target: https://docs.tempo.xyz/protocol/tips/tip-1020
@@ -203,6 +208,23 @@ The client fulfills this by signing a key authorization with:
 - Billing period = `periodSeconds`
 - Destination restriction = `recipient`
 
+When {{TIP-1011}} is available on the chain identified by the
+challenge, the signed key authorization MUST additionally configure:
+
+- a `TokenLimit` for `currency` whose `amount` equals the challenge
+  `amount` and whose `period` equals `periodSeconds`
+- exactly one `allowed_calls` target scope whose `target` equals
+  `currency`
+- explicit selector rules for `transfer(address,uint256)`
+  (`0xa9059cbb`) and optionally
+  `transferWithMemo(address,uint256,bytes32)` (`0x95777d59`)
+- a recipient allowlist for each permitted selector containing only the
+  challenge `recipient`
+
+The signed key authorization MUST NOT use unrestricted target mode for
+the subscription token, and it MUST NOT authorize `approve` or any
+other non-transfer selector.
+
 # Credential Schema
 
 The credential in the `Authorization` header contains a
@@ -235,6 +257,7 @@ least:
 - the TIP-20 token spending limit
 - the billing-period limit configuration
 - the recipient restriction
+- the `allowed_calls` scope described above when {{TIP-1011}} is used
 
 The embedded signature MUST use a primitive signature type supported by
 {{TIP-1020}}. Keychain wrapper signatures MUST NOT be used for this
@@ -351,6 +374,29 @@ address from the signed key authorization using
 {{TIP-1020}}-compatible verification semantics over the encoded key
 authorization payload.
 
+## Authorization Scope Verification
+
+When validating a Tempo subscription credential, servers MUST verify
+that the signed key authorization expiry equals `subscriptionExpires`.
+Servers MUST also verify that the authorization contains a spending
+limit for `currency` whose amount equals `amount` and whose billing
+period equals `periodSeconds`.
+
+When {{TIP-1011}} is active on the target chain, servers MUST verify
+that the signed key authorization's `allowed_calls` scope:
+
+- contains exactly one target scope, and that scope is for `currency`
+- uses explicit selector rules rather than unrestricted target mode
+- allows `transfer(address,uint256)` and MAY additionally allow
+  `transferWithMemo(address,uint256,bytes32)`
+- does not allow `approve(address,uint256)` or any other non-transfer
+  selector
+- restricts the first ABI `address` argument for each permitted
+  selector to the challenge `recipient`
+
+Servers MUST reject authorizations that permit spending the subscription
+token through broader call scopes than those required above.
+
 ## Receipt Generation
 
 Upon successful activation or renewal, servers MUST return a
@@ -377,8 +423,9 @@ The receipt payload for Tempo subscription:
 ## Destination Scoping
 
 Tempo subscription access keys MUST be restricted to the `recipient`
-address in the request. Servers MUST reject credentials that do not
-enforce this restriction.
+address in the request. Where {{TIP-1011}} recipient-bound selector
+rules are available, servers MUST reject credentials that do not
+enforce this restriction through `allowed_calls`.
 
 ## Amount and Period Verification
 
@@ -404,6 +451,13 @@ but they do not by themselves make HTTP service delivery idempotent
 {{TEMPO-ACCOUNT-KEYCHAIN}}. Servers MUST implement durable local state
 to prevent duplicate renewal charges caused by retries or concurrent
 requests.
+
+## Key Scope Minimization
+
+Subscription access keys SHOULD use the narrowest {{TIP-1011}} scope
+needed to support recurring charges. Implementations SHOULD avoid
+unrestricted target scopes and SHOULD limit the key to the subscription
+token, the permitted transfer selectors, and the configured recipient.
 
 ## Caching
 
