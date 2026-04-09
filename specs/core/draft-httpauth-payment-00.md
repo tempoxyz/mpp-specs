@@ -545,6 +545,54 @@ WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", i
 Clients choose which challenge to respond to. Clients that do not
 recognize an intent SHOULD treat the challenge as unsupported.
 
+## Client Payment Preferences {#client-payment-preferences}
+
+Clients MAY send an `Accept-Payment` request header to declare which
+payment method and intent combinations they support.
+
+The header uses the same weighted-preference model as other HTTP
+negotiation fields: omitted `q` values are equivalent to `q=1`, and
+`q=0` means "do not use".
+
+~~~abnf
+Accept-Payment = #payment-range
+payment-range  = payment-token [ weight ]
+payment-token  = payment-method-or-wildcard "/" intent-or-wildcard
+payment-method-or-wildcard = payment-method-id / "*"
+intent-or-wildcard         = intent-token / "*"
+~~~
+
+Examples:
+
+~~~http
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5
+Accept-Payment: tempo/*, */session;q=0.3
+Accept-Payment: tempo/charge, tempo/session;q=0
+~~~
+
+When `Accept-Payment` is present, servers SHOULD consider it when
+choosing which Payment challenges to return.
+
+Specifically, servers SHOULD:
+
+- Filter challenges to those matching at least one declared range with `q>0`
+- Order matching challenges by descending client `q` value
+- Preserve server preference order when multiple matches have the same `q`
+- Prefer the most specific matching range when multiple ranges match the same challenge
+
+If `Accept-Payment` is absent, servers MUST behave as though the client
+accepts any method and intent combination.
+
+If `Accept-Payment` is malformed, servers MAY ignore it.
+
+If `Accept-Payment` is present but no available challenge matches a
+declared range with `q>0`, servers MAY ignore the header and return
+their normal set of challenges.
+
+The `WWW-Authenticate: Payment` challenge remains authoritative even
+when `Accept-Payment` is used. Clients MUST validate the returned
+challenge before authorizing payment.
+
 # Error Handling
 
 ## Error Response Format
@@ -807,6 +855,7 @@ This document registers the following header fields:
 
 | Field Name | Status | Reference |
 |------------|--------|-----------|
+| Accept-Payment | permanent | This document, {{client-payment-preferences}} |
 | Payment-Receipt | permanent | This document, {{payment-receipt-header}} |
 
 ## Payment Method Registry {#payment-method-registry}
@@ -851,6 +900,13 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; HTTP Authorization Credentials
 payment-credentials = "Payment" 1*SP base64url-nopad
+
+; Client payment preferences
+Accept-Payment = #payment-range
+payment-range = payment-token [ weight ]
+payment-token = payment-method-or-wildcard "/" intent-or-wildcard
+payment-method-or-wildcard = payment-method-id / "*"
+intent-or-wildcard = intent-token / "*"
 
 ; Payment-Receipt header field value
 Payment-Receipt = base64url-nopad
@@ -963,6 +1019,27 @@ Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiaW52b2ljZSIsInRpbWVzdGF
 Content-Type: application/json
 
 {"data": "..."}
+~~~
+
+## Challenge Negotiation with Accept-Payment
+
+The client can pre-declare its supported payment capabilities and let
+the server tailor the 402 response:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5
+~~~
+
+If the server supports `tempo/charge` and `stripe/charge`, it SHOULD
+prefer the higher-ranked `tempo/charge` challenge:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="pT7yHnKmQ2wErXsZ5vCbNl", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="stripe", intent="charge", request="..."
 ~~~
 
 ## Signed Authorization
