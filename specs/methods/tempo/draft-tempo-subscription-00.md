@@ -186,6 +186,13 @@ MUST be strictly later than the challenge `expires` timestamp. Servers
 MUST reject credentials where `subscriptionExpires` is at or before the
 challenge `expires`.
 
+Tempo subscriptions map `periodSeconds` to the {{TIP-1011}} `TokenLimit`
+`period` field and map `subscriptionExpires` to the Tempo key
+authorization expiry field. Servers MUST reject request objects where
+`periodSeconds` cannot be represented as an unsigned 64-bit integer.
+Servers MUST reject request objects where `subscriptionExpires` cannot
+be represented in the Tempo key authorization expiry field.
+
 **Example:**
 
 ~~~json
@@ -363,6 +370,13 @@ When granting access in a later billing period, servers MUST:
 
 For duplicate idempotent requests, servers MUST NOT charge the same
 billing period more than once.
+
+{{TIP-1011}} periodic spending limits reset to one billing period of
+capacity and do not accumulate across elapsed periods. If one or more
+billing periods elapse without a successful renewal charge, a later
+transaction authorizes at most one charge in the then-current billing
+period. Servers MUST NOT treat missed billing periods as additional
+on-chain spending capacity.
 
 ## Source Verification
 
