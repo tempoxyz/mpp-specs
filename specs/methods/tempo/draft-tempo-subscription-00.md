@@ -491,7 +491,11 @@ again.
 
 --- back
 
-# Example
+# Examples
+
+This section is non-normative.
+
+## Activation
 
 **Challenge:**
 
@@ -543,6 +547,138 @@ seconds until 2026-01-01T00:00:00Z.
   "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
+
+The activation transaction submitted by the server contains:
+
+- the signed `keyAuthorization`
+- one TIP-20 `transfer(recipient, amount)` call, or
+  `transferWithMemo(recipient, amount, memo)` if the implementation uses
+  a memo
+
+If activation settles at `2026-01-15T12:03:10Z`, the `Payment-Receipt`
+payload decodes to:
+
+~~~json
+{
+  "method": "tempo",
+  "reference": "0x8d7c6c0d94d8488cb4cf6ab7b8a2f9c3f8e0eac7e5b6d1e8c3d86f733c2b7c01",
+  "status": "success",
+  "subscriptionId": "c3ViXzAxMjM0NTY",
+  "timestamp": "2026-01-15T12:03:10Z"
+}
+~~~
+
+The server records at least:
+
+- `subscriptionId = "c3ViXzAxMjM0NTY"`
+- `billing anchor = 2026-01-15T12:03:10Z`
+- `periodSeconds = 2592000`
+- `last charged billing-period index = 0`
+
+## Renewal Across Multiple Periods
+
+Using the activation timestamp above, the Tempo subscription billing
+periods are:
+
+- Period 0: `[2026-01-15T12:03:10Z, 2026-02-14T12:03:10Z)`
+- Period 1: `[2026-02-14T12:03:10Z, 2026-03-16T12:03:10Z)`
+- Period 2: `[2026-03-16T12:03:10Z, 2026-04-15T12:03:10Z)`
+
+Requests during Period 0 can use the active subscription without a new
+authorization:
+
+~~~http
+GET /api/resource HTTP/1.1
+Host: api.example.com
+Subscription-Id: c3ViXzAxMjM0NTY
+~~~
+
+When Period 1 begins, the server determines that billing-period index 1
+has not yet been charged. The server submits one Tempo transaction using
+the registered access key to call the TIP-20 token at `currency` with:
+
+- `transfer(recipient, amount)`, or
+- `transferWithMemo(recipient, amount, memo)`
+
+If that transaction settles successfully, the renewal `Payment-Receipt`
+payload decodes to:
+
+~~~json
+{
+  "method": "tempo",
+  "reference": "0xb4bf2b4f8e3f0e6f3b6af3a5f6d3c8e32e1c32a19fa56bd9f9b3fd33af88e912",
+  "status": "success",
+  "subscriptionId": "c3ViXzAxMjM0NTY",
+  "timestamp": "2026-02-14T12:05:42Z"
+}
+~~~
+
+The server updates `last charged billing-period index = 1`. Additional
+requests during Period 1 do not permit another successful renewal
+charge for Period 1.
+
+## Cancellation At Period End
+
+Suppose the server has already successfully charged Period 2 and the
+payer cancels on `2026-03-20T09:00:00Z`.
+
+The server records cancellation with an effective time of
+`2026-04-15T12:03:10Z`, which is the end of Period 2. Requests before
+that time continue to succeed without another renewal charge:
+
+~~~http
+GET /api/resource HTTP/1.1
+Host: api.example.com
+Subscription-Id: c3ViXzAxMjM0NTY
+~~~
+
+Once `2026-04-15T12:03:10Z` is reached, the server stops submitting
+renewal transactions for this subscription. A later request receives a
+fresh challenge:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="n3xtP3ri0d",
+  realm="api.example.com",
+  method="tempo",
+  intent="subscription",
+  request="<base64url-encoded JSON below>"
+~~~
+
+## Failed Renewal And Lapse
+
+Suppose Period 3 begins and the server attempts a renewal transaction,
+but the Tempo transaction fails because the payer no longer has enough
+TIP-20 balance or fee-paying balance.
+
+The server does not grant access for Period 3 and returns:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="r3tryP3ri0d",
+  realm="api.example.com",
+  method="tempo",
+  intent="subscription",
+  request="<base64url-encoded JSON below>"
+~~~
+
+If a later retry during Period 3 succeeds, the server may grant access
+for Period 3 and update `last charged billing-period index = 3`.
+
+If Period 4 begins before any successful renewal occurs, the next
+successful Tempo transaction authorizes at most one charge for Period 4.
+The elapsed unpaid Period 3 does not become extra on-chain spending
+capacity, because {{TIP-1011}} periodic limits reset rather than
+accumulate.
+
+## Natural Expiry
+
+Suppose `subscriptionExpires` is `2026-07-14T12:00:00Z`. Once that time
+is reached, the signed key authorization no longer authorizes future
+renewals. Requests after that time receive a fresh challenge rather than
+another renewal attempt.
 
 # Acknowledgements
 

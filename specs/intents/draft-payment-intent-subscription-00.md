@@ -396,6 +396,65 @@ header with a fresh challenge. Clients receiving a 402 after a
 previously valid subscription SHOULD treat the subscription as no longer
 usable and initiate a new subscription flow.
 
+# Illustrative Lifecycle Examples
+
+This section is non-normative.
+
+## Monthly Billing Example
+
+Suppose a server offers a plan with these request fields:
+
+- `amount = "9900"`
+- `currency = "usd"`
+- `periodSeconds = "2592000"`
+- `subscriptionExpires = "2026-07-14T12:00:00Z"`
+
+If activation succeeds at `2026-01-15T12:03:10Z`, that time becomes the
+billing anchor. The resulting billing periods are:
+
+- Period 0: `[2026-01-15T12:03:10Z, 2026-02-14T12:03:10Z)`
+- Period 1: `[2026-02-14T12:03:10Z, 2026-03-16T12:03:10Z)`
+- Period 2: `[2026-03-16T12:03:10Z, 2026-04-15T12:03:10Z)`
+
+Activation collects the Period 0 charge. Requests during Period 0 do
+not require another renewal charge. When Period 1 begins, the server
+may collect one renewal charge for Period 1 before, or atomically with,
+granting access for that period. After that renewal succeeds, additional
+requests during Period 1 do not permit another charge for Period 1.
+
+## Cancellation Example
+
+Suppose the subscription above has already been charged through Period 2
+and the payer cancels on `2026-03-20T09:00:00Z`.
+
+Cancellation takes effect at the end of the current paid billing period,
+which is `2026-04-15T12:03:10Z` in this example. The server continues
+honoring access through that time. The server does not collect a
+renewal charge for Period 3. A request after
+`2026-04-15T12:03:10Z` receives `402 Payment Required` with a fresh
+challenge.
+
+## Failed Renewal Example
+
+Suppose Period 3 begins and the server attempts the renewal charge for
+that period, but the method-specific payment step fails.
+
+The server does not grant access for the unpaid period and returns
+`402 Payment Required` with a fresh challenge. If a later retry during
+Period 3 succeeds, the server may then grant access for Period 3.
+
+If Period 4 begins before any successful charge occurs, the subscription
+intent authorizes at most one charge for Period 4. The missed Period 3
+charge does not automatically accumulate into authority to collect both
+Period 3 and Period 4.
+
+## Natural Expiry Example
+
+Suppose `subscriptionExpires` is `2026-07-14T12:00:00Z`. Once that time
+is reached, the server stops treating the subscription as reusable for
+future billing periods. Requests after that time receive
+`402 Payment Required` with a fresh challenge.
+
 # Security Considerations
 
 ## Recurring Charge Awareness
