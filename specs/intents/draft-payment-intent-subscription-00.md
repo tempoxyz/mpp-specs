@@ -68,7 +68,14 @@ and other services with a stable price per billing period.
 Payment methods implement "subscription" using method-specific recurring
 authorization mechanisms. This document defines the abstract semantics
 and shared request fields. Payment method specifications define how
-those semantics are enforced.
+those semantics are enforced, which request shapes they support, and
+which requests they reject because they cannot be represented exactly on
+the underlying payment network.
+
+Payment method specifications MAY intentionally define a constrained
+subset of a richer underlying subscription system. A method MUST either
+preserve the semantics in this document exactly or reject the request;
+it MUST NOT approximate them.
 
 # Requirements Language
 
@@ -165,7 +172,8 @@ JSON MUST be serialized using JSON Canonicalization Scheme (JCS)
 
 All payment methods implementing the "subscription" intent MUST support
 these shared fields. Payment methods MAY elevate OPTIONAL fields to
-REQUIRED in their method specification.
+REQUIRED in their method specification, and MUST document any narrower
+supported subset.
 
 ### Required Fields
 
@@ -187,6 +195,11 @@ surrounding whitespace. Leading zeros MUST NOT be used.
 `periodSeconds` defines fixed-duration billing periods measured in
 elapsed seconds. It does not, by itself, encode calendar-month or
 calendar-year alignment.
+
+Payment methods MUST reject request objects whose `periodSeconds` value
+they cannot represent exactly. They MUST NOT approximate the requested
+period by rounding, truncating, or substituting a nearby network-native
+cadence.
 
 ### Optional Fields
 
@@ -222,6 +235,13 @@ The billing anchor for a subscription is the time activation succeeds.
 Billing periods are contiguous fixed-duration windows derived by adding
 `periodSeconds` to that anchor.
 
+The shared fields in this section are the canonical subscription
+contract. Payment method specifications MUST document how they map
+`amount`, `periodSeconds`, `subscriptionExpires`, and activation to the
+underlying payment system. If a payment method cannot represent those
+fields or semantics exactly, it MUST reject the request rather than
+approximate it.
+
 ## Currency Formats {#currency-formats}
 
 The `currency` field supports multiple formats to accommodate different
@@ -241,6 +261,37 @@ support and how to interpret amounts for each format.
 Payment methods MAY define additional fields in the `methodDetails`
 object. These fields are method-specific and MUST be documented in the
 payment method specification.
+
+## Implementor Guidance
+
+This section is non-normative.
+
+Payment method authors should treat the shared `subscription` intent as
+the canonical interoperable contract between clients and servers. A
+method specification may intentionally define a narrower profile of its
+underlying payment system, but it should do so explicitly and fail
+closed.
+
+In particular:
+
+- Methods should support only request shapes they can represent exactly.
+- Methods should document the supported and rejected ranges or values of
+  `periodSeconds`, how `subscriptionExpires` is enforced, and what
+  conditions make activation succeed.
+- Activation should not be reported as successful until both
+  subscription setup and the first billing-period charge have
+  succeeded.
+- Methods should preserve the shared invariants of one successful charge
+  per billing period, no automatic accumulation of missed periods, and
+  no renewals after expiry.
+- Richer network-native features such as trials, prorations,
+  discounts, metered billing, pause or resume controls, quantity
+  changes, plan changes, or open-ended renewals should be disabled or
+  rejected unless the method specification defines an exact mapping that
+  preserves the shared semantics.
+- Implementations should maintain durable server state sufficient to
+  prevent duplicate charges across retries, concurrent requests, and
+  out-of-band network events.
 
 ## Examples
 
@@ -312,7 +363,8 @@ When the server receives a "subscription" credential, it MUST:
 ## Renewal
 
 For each later billing period, the server MAY collect one renewal
-charge for `amount` using the method-specific recurring authorization.
+charge for `amount` using the method-specific recurring authorization
+flow.
 
 If the server grants access for a later billing period, it MUST ensure
 that the renewal charge for that period has been collected before, or
@@ -326,6 +378,10 @@ charge, the subscription intent authorizes at most one charge for the
 then-current billing period. Servers MUST NOT treat missed billing
 periods as automatically accumulated authority for additional charges.
 
+Payment method specifications define the concrete renewal, retry,
+recovery, and cancellation mechanisms, but they MUST preserve the
+invariants in this section.
+
 ## Reauthentication
 
 After successful activation, the server MUST return a `subscriptionId`
@@ -334,8 +390,11 @@ string without padding and MUST be unique within the server's
 subscription namespace.
 
 Clients SHOULD retain the `subscriptionId` and, when intending to use an
-existing subscription on a later request, SHOULD send it in the
+existing subscription on a later request, MAY send it in the
 `Subscription-Id` request header.
+
+The `Subscription-Id` header is only a subscription-selection hint. It
+does not, by itself, prove authority to use the subscription.
 
 If a request is associated with an existing subscription, the server MAY
 echo that identifier in the challenge `request.subscriptionId` field to
@@ -343,7 +402,7 @@ bind the challenge to the intended subscription.
 
 Servers MUST authenticate or otherwise authorize the client's use of the
 identified subscription before granting access or collecting a renewal
-charge.
+charge. A matching `Subscription-Id` alone is insufficient.
 
 ## Server Accounting and Idempotency
 
@@ -367,14 +426,9 @@ duplicate idempotent request.
 ## Cancellation
 
 Payers SHOULD be able to cancel subscriptions before expiry.
-Cancellation mechanisms are method-specific.
-
-For an active subscription, cancellation takes effect at the end of the
-current paid billing period. Servers MUST continue honoring access
-already paid for through the end of that billing period.
-
-If there is no current paid billing period, cancellation takes effect
-immediately.
+Cancellation mechanisms, effective-time rules, and any continued access
+for already-paid service are method-specific and MUST be documented by
+the payment method or application profile.
 
 Servers MUST NOT collect renewal charges for billing periods after
 cancellation takes effect.

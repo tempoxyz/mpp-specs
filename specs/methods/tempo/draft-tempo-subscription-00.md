@@ -84,6 +84,11 @@ Tempo transactions containing standalone `approve` calls and push-mode
 hash credentials do not provide the per-period enforcement required for
 this intent.
 
+Tempo subscriptions also require the {{TIP-1011}} periodic token-limit
+and `allowed_calls` restrictions described in this document. Servers
+MUST reject request objects on chains or deployments that cannot enforce
+those restrictions.
+
 ## Subscription Flow
 
 The following diagram illustrates the Tempo subscription flow:
@@ -215,8 +220,7 @@ The client fulfills this by signing a key authorization with:
 - Billing period = `periodSeconds`
 - Destination restriction = `recipient`
 
-When {{TIP-1011}} is available on the chain identified by the
-challenge, the signed key authorization MUST additionally configure:
+The signed key authorization MUST additionally configure:
 
 - a `TokenLimit` for `currency` whose `amount` equals the challenge
   `amount` and whose `period` equals `periodSeconds`
@@ -264,7 +268,7 @@ least:
 - the TIP-20 token spending limit
 - the billing-period limit configuration
 - the recipient restriction
-- the `allowed_calls` scope described above when {{TIP-1011}} is used
+- the `allowed_calls` scope described above
 
 The embedded signature MUST use a primitive signature type supported by
 {{TIP-1020}}. Keychain wrapper signatures MUST NOT be used for this
@@ -341,8 +345,10 @@ same billing period.
 
 ## Billing Anchor and Subscription State
 
-The billing anchor for a Tempo subscription is the settlement time of
-the successful activation transaction.
+The billing anchor for a Tempo subscription is the block timestamp, or
+equivalent consensus settlement timestamp, of the block containing the
+successful activation transaction. Servers MUST derive this anchor from
+chain settlement data rather than local wall-clock time.
 
 Billing periods are defined as:
 
@@ -396,8 +402,8 @@ Servers MUST also verify that the authorization contains a spending
 limit for `currency` whose amount equals `amount` and whose billing
 period equals `periodSeconds`.
 
-When {{TIP-1011}} is active on the target chain, servers MUST verify
-that the signed key authorization's `allowed_calls` scope:
+Servers MUST verify that the signed key authorization's `allowed_calls`
+scope:
 
 - contains exactly one target scope, and that scope is for `currency`
 - uses explicit selector rules rather than unrestricted target mode
