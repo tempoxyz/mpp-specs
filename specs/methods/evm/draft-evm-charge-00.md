@@ -148,8 +148,8 @@ This specification defines two credential types:
 - **`type="authorization"`**: The client signs an
   off-chain EIP-3009 {{EIP-3009}} `transferWithAuthorization`
   message. The server submits it to the token contract. This
-  is available for tokens that natively implement EIP-3009
-  (e.g., USDC, EURC). Benefits:
+  credential is available for tokens that natively implement
+  EIP-3009 (e.g., USDC, EURC). Benefits:
 
   - No Permit2 approval prerequisite — zero setup
   - Server naturally sponsors gas
@@ -264,7 +264,7 @@ mixed-case encoding but MUST compare addresses by decoded
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `chainId` | number | REQUIRED | EIP-155 chain ID |
-| `permit2Address` | string | OPTIONAL | Permit2 contract address (default: canonical address) |
+| `permit2Address` | string | REQUIRED | Permit2 contract address (default: canonical address) |
 | `credentialTypes` | array | OPTIONAL | Ordered list of accepted credential types |
 | `decimals` | number | OPTIONAL | Token decimal precision (e.g., 6 for USDC, 18 for USDm). Aids client-side display verification. |
 | `splits` | array | OPTIONAL | Additional payment splits (max 10) |
@@ -332,10 +332,10 @@ Constraints:
 - Address fields are compared by decoded 20-byte value, not
   by string form.
 
-The order of entries in `splits` is not significant for
-verification. Clients SHOULD emit transfers in array order.
-Servers MUST verify that the required payment effects are
-present regardless of ordering.
+The order of entries in `splits` is significant for
+verification. Clients MUST emit transfers in array order.
+Servers MUST verify `transferDetails[0]` as the primary
+transfer and `transferDetails[i+1]` as `splits[i]`.
 
 **Example:**
 
@@ -465,6 +465,10 @@ parameters are identical.
 
 The witness type string for EIP-712 is:
 `"PaymentWitness witness)PaymentWitness(bytes32 challengeHash)TokenPermissions(address token,uint256 amount)"`
+
+This specification defines that witness schema directly for
+challenge binding. Implementations MUST use the exact type
+string above when constructing the EIP-712 typed data.
 
 This binding applies to both single and batch
 transfers — the same `witness` parameter is used by
@@ -624,8 +628,8 @@ level.
 - Splits are NOT supported. Servers MUST reject
   `type="authorization"` credentials when the challenge
   includes `splits`.
-- Servers SHOULD only advertise `"authorization"` in
-  `credentialTypes` when the `currency` token is known to
+- Servers MUST NOT advertise `"authorization"` in
+  `credentialTypes` unless the `currency` token is known to
   implement EIP-3009.
 - `validBefore` SHOULD correspond to the challenge `expires`
   timestamp.
