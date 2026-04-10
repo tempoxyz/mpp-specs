@@ -330,8 +330,8 @@ the request JSON:
 
 network
 : OPTIONAL. Identifies which Solana cluster the payment
-  should be made on. MUST be one of "mainnet-beta",
-  "devnet", or "localnet". Defaults to "mainnet-beta"
+  should be made on. MUST be one of "mainnet",
+  "devnet", or "localnet". Defaults to "mainnet"
   if omitted. Clients MUST reject challenges whose
   network does not match their configured cluster.
 
@@ -427,7 +427,7 @@ recentBlockhash
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Weather API access",
   "methodDetails": {
-    "network": "mainnet-beta"
+    "network": "mainnet"
   }
 }
 ~~~
@@ -443,7 +443,7 @@ This requests a transfer of 0.01 SOL (10,000,000 lamports).
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Premium API call",
   "methodDetails": {
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "decimals": 6,
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
   }
@@ -461,7 +461,7 @@ This requests a transfer of 1 USDC (1,000,000 base units).
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Weather API access",
   "methodDetails": {
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "feePayer": true,
     "feePayerKey": "9aE3Fg7HjKLmNpQr5TuVwXyZ2AbCdEf8GhIjKlMnOp1R"
   }
@@ -480,7 +480,7 @@ transaction fees.
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Marketplace purchase",
   "methodDetails": {
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "decimals": 6,
     "splits": [
       { "recipient": "3pF8Kg2aHbNvJkLMwEqR7YtDxZ5sGhJn4UV6mWcXrT9A", "amount": "50000", "memo": "platform fee" }
@@ -1291,7 +1291,7 @@ Decoded `request`:
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Weather API access",
   "methodDetails": {
-    "network": "mainnet-beta"
+    "network": "mainnet"
   }
 }
 ~~~
@@ -1360,7 +1360,7 @@ Decoded `request`:
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Premium API call",
   "methodDetails": {
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "decimals": 6,
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
     "feePayer": true,
@@ -1419,7 +1419,7 @@ Decoded `request`:
   "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
   "description": "Marketplace purchase",
   "methodDetails": {
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "decimals": 6,
     "splits": [
       {
