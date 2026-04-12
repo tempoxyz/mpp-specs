@@ -114,7 +114,7 @@ Subscription Identifier
 
 The "subscription" intent represents a request for a recurring
 fixed-amount payment of `amount`, charged once per billing period until
-`subscriptionExpires` or cancellation.
+`subscriptionExpires` or explicit cancellation.
 
 ## Properties
 

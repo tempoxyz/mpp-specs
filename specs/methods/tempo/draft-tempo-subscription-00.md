@@ -89,12 +89,18 @@ and `allowed_calls` restrictions described in this document. Servers
 MUST reject request objects on chains or deployments that cannot enforce
 those restrictions.
 
+The {{TIP-1011}} features required by this specification — periodic
+spending limits, `allowed_calls` target and selector scoping, and
+recipient-bound selector rules — are introduced in the Tempo T3 network
+upgrade. Servers MUST NOT issue `intent="subscription"` challenges on
+chains or deployments running a pre-T3 protocol version.
+
 ## Subscription Flow
 
 The following diagram illustrates the Tempo subscription flow:
 
 ~~~
-   Client                        Server                     Tempo Network
+   Client                        Server                           Tempo
       │                             │                             │
       │  (1) GET /api/resource      │                             │
       │-------------------------->  │                             │
@@ -307,7 +313,7 @@ For `intent="subscription"`, activation and the first billing-period
 charge are a single atomic operation:
 
 ~~~
-   Client                        Server                     Tempo Network
+   Client                        Server                           Tempo
       |                             |                             |
       |  (1) Authorization:         |                             |
       |      Payment <credential>   |                             |
@@ -478,6 +484,31 @@ Subscription access keys SHOULD use the narrowest {{TIP-1011}} scope
 needed to support recurring charges. Implementations SHOULD avoid
 unrestricted target scopes and SHOULD limit the key to the subscription
 token, the permitted transfer selectors, and the configured recipient.
+
+## Access Key Isolation
+
+Servers SHOULD generate a unique key pair and use a distinct access key
+for each subscription. This provides fault isolation: compromise of one
+server-held key affects only the subscription associated with that key,
+and revoking one subscription's key via `revokeKey()` does not
+invalidate other active subscriptions between the same payer and server.
+
+If a server reuses a single access key across multiple subscriptions
+from the same payer, the key's permissions must be broad enough to cover
+all active subscriptions — potentially spanning multiple tokens,
+recipients, or spending limits. This widens the blast radius if the key
+is compromised and forces revocation of all subscriptions at once. It
+also complicates spending-limit accounting, since {{TIP-1011}} enforces
+a single `TokenLimit` per `(account, key, token)` tuple: two
+subscriptions for the same token on the same key would share one
+periodic limit rather than being independently capped.
+
+Servers that reuse keys across subscriptions MUST ensure the combined
+`TokenLimit` and `allowed_calls` scope still satisfies the per-
+subscription authorization scope verification requirements in this
+document. In practice this is difficult to guarantee, and
+implementations SHOULD prefer one key per subscription for simplicity
+and security.
 
 ## Caching
 
