@@ -41,13 +41,17 @@ normative:
     target: https://eips.ethereum.org/EIPS/eip-712
     author:
       - name: Remco Bloemen
+      - name: Leonid Logvinov
+      - name: Jacob Evans
     date: 2017-09
   EIP-3009:
     title: "Transfer With Authorization"
     target: https://eips.ethereum.org/EIPS/eip-3009
     author:
       - name: Peter Jihoon Kim
-    date: 2020-12
+      - name: Kevin Britz
+      - name: David Knott
+    date: 2020-09
   I-D.evm-charge:
     title: "EVM Charge Intent for HTTP Payment Authentication"
     target: https://datatracker.ietf.org/doc/draft-evm-charge/
@@ -70,6 +74,7 @@ informative:
     target: https://eips.ethereum.org/EIPS/eip-2098
     author:
       - name: Richard Moore
+      - name: Nick Johnson
     date: 2019-03
   ERC-20:
     title: "Token Standard"
@@ -318,11 +323,12 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 |------|--------|---------|
 | address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
 | bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
-| signature | 132 chars (0x + 130 hex) | 65-byte r &#124;&#124; s &#124;&#124; v |
+| signature (bytes) | 132 chars (0x + 130 hex) | 65-byte ECDSA signature |
 
-Implementations MUST accept standard 65-byte signatures (`r || s || v`).
-EIP-2098 compact 64-byte signatures {{EIP-2098}} are NOT used in this
-specification; implementations MUST NOT produce or accept them.
+All signatures in this specification are 65 bytes, encoded as
+`r (32 bytes) || s (32 bytes) || v (1 byte)` and passed as a single
+`bytes` parameter. EIP-2098 compact 64-byte signatures {{EIP-2098}}
+are NOT used; implementations MUST NOT produce or accept them.
 
 Implementations MUST use lowercase hex for channelId, signatures, and
 hashes. Address fields in the request schema (currency, recipient,
@@ -470,6 +476,15 @@ Opens a channel using EIP-3009 {{EIP-3009}} authorization. The server
 (or any relayer) submits the transaction, pulling funds from the payer
 via `transferWithAuthorization` inside the contract.
 
+> **Note:** The canonical EIP-3009 `transferWithAuthorization` interface
+> accepts separate `(uint8 v, bytes32 r, bytes32 s)` parameters. This
+> escrow contract accepts a packed `bytes` signature instead for
+> interface consistency with `settle` and `close`. The escrow
+> implementation MUST unpack the 65-byte value into `(v, r, s)`
+> components before forwarding to the token's
+> `transferWithAuthorization`. Tokens that support the USDC v2.2
+> `bytes signature` overload MAY be called directly.
+
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `payee` | address | Server's address |
@@ -481,9 +496,7 @@ via `transferWithAuthorization` inside the contract.
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
 | `nonce` | bytes32 | EIP-3009 nonce |
-| `v` | uint8 | Signature v |
-| `r` | bytes32 | Signature r |
-| `s` | bytes32 | Signature s |
+| `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 | `splitRecipients` | address[] | Split recipient addresses (empty if no splits) |
 | `splitBps` | uint16[] | Basis points per recipient |
 
@@ -498,9 +511,7 @@ function openWithAuthorization(
     uint256 validAfter,
     uint256 validBefore,
     bytes32 nonce,
-    uint8 v,
-    bytes32 r,
-    bytes32 s,
+    bytes calldata signature,
     address[] calldata splitRecipients,
     uint16[] calldata splitBps
 ) external returns (bytes32 channelId);
@@ -564,9 +575,7 @@ behalf of the payer.
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
 | `nonce` | bytes32 | EIP-3009 nonce |
-| `v` | uint8 | Signature v |
-| `r` | bytes32 | Signature r |
-| `s` | bytes32 | Signature s |
+| `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 
 ~~~solidity
 function topUpWithAuthorization(
@@ -576,9 +585,7 @@ function topUpWithAuthorization(
     uint256 validAfter,
     uint256 validBefore,
     bytes32 nonce,
-    uint8 v,
-    bytes32 r,
-    bytes32 s
+    bytes calldata signature
 ) external;
 ~~~
 
@@ -1245,7 +1252,7 @@ This is the only semantic difference in the voucher signing scheme.
 
 4. Sign with ECDSA using secp256k1 curve
 
-5. Encode signature as 65-byte `r || s || v` where `v` is 27 or 28
+5. Encode as a 65-byte `bytes` value: `r (32) || s (32) || v (1)`, where `v` is 27 or 28
 
 ## Cumulative Semantics
 
@@ -1654,13 +1661,13 @@ escrow contract enforces this on-chain as well.
 
 ## Signature Malleability {#signature-malleability}
 
-ECDSA signatures have an inherent malleability: given a valid signature
-`(r, s, v)`, the signature `(r, secp256k1_order - s, 55 - v)` is also
-valid for the same message. (Note: `55 - v` maps 27→28 and 28→27,
-which is the correct v-flip for EIP-712 signatures where
-v ∈ {27, 28}.) This could allow an attacker to submit a
-modified signature that passes `ecrecover` but references a
-different transaction hash.
+ECDSA signatures have an inherent malleability: given a valid
+65-byte signature containing components `(r, s, v)`, the value
+`(r, secp256k1_order - s, 55 - v)` is also valid for the same
+message. (Note: `55 - v` maps 27→28 and 28→27, which is the
+correct v-flip for EIP-712 signatures where v ∈ {27, 28}.)
+This could allow an attacker to submit a modified signature that
+passes `ecrecover` but references a different transaction hash.
 
 The escrow contract MUST enforce canonical (low-s) signatures to prevent
 this. See the signature verification requirements in the Contract
