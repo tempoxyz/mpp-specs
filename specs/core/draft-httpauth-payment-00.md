@@ -545,6 +545,54 @@ WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", i
 Clients choose which challenge to respond to. Clients that do not
 recognize an intent SHOULD treat the challenge as unsupported.
 
+## Client Payment Preferences {#client-payment-preferences}
+
+Clients MAY send an `Accept-Payment` request header to declare which
+payment method and intent combinations they support.
+
+The header uses the same weighted-preference model as other HTTP
+negotiation fields: omitted `q` values are equivalent to `q=1`, and
+`q=0` means "do not use".
+
+~~~abnf
+Accept-Payment = #payment-range
+payment-range  = payment-token [ weight ]
+payment-token  = payment-method-or-wildcard "/" intent-or-wildcard
+payment-method-or-wildcard = payment-method-id / "*"
+intent-or-wildcard         = intent-token / "*"
+~~~
+
+Examples:
+
+~~~http
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5, solana/charge;q=0.3
+Accept-Payment: tempo/*, solana/*;q=0.6, */session;q=0.3
+Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge
+~~~
+
+When `Accept-Payment` is present, servers SHOULD consider it when
+choosing which Payment challenges to return.
+
+Specifically, servers SHOULD:
+
+- Filter challenges to those matching at least one declared range with `q>0`
+- Order matching challenges by descending client `q` value
+- Preserve server preference order when multiple matches have the same `q`
+- Prefer the most specific matching range when multiple ranges match the same challenge
+
+If `Accept-Payment` is absent, servers MUST behave as though the client
+accepts any method and intent combination.
+
+If `Accept-Payment` is malformed, servers MAY ignore it.
+
+If `Accept-Payment` is present but no available challenge matches a
+declared range with `q>0`, servers MAY ignore the header and return
+their normal set of challenges.
+
+The `WWW-Authenticate: Payment` challenge remains authoritative even
+when `Accept-Payment` is used. Clients MUST validate the returned
+challenge before authorizing payment.
+
 # Error Handling
 
 ## Error Response Format
@@ -807,6 +855,7 @@ This document registers the following header fields:
 
 | Field Name | Status | Reference |
 |------------|--------|-----------|
+| Accept-Payment | permanent | This document, {{client-payment-preferences}} |
 | Payment-Receipt | permanent | This document, {{payment-receipt-header}} |
 
 ## Payment Method Registry {#payment-method-registry}
@@ -851,6 +900,13 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; HTTP Authorization Credentials
 payment-credentials = "Payment" 1*SP base64url-nopad
+
+; Client payment preferences
+Accept-Payment = #payment-range
+payment-range = payment-token [ weight ]
+payment-token = payment-method-or-wildcard "/" intent-or-wildcard
+payment-method-or-wildcard = payment-method-id / "*"
+intent-or-wildcard = intent-token / "*"
 
 ; Payment-Receipt header field value
 Payment-Receipt = base64url-nopad
@@ -963,6 +1019,92 @@ Payment-Receipt: eyJzdGF0dXMiOiJzdWNjZXNzIiwibWV0aG9kIjoiaW52b2ljZSIsInRpbWVzdGF
 Content-Type: application/json
 
 {"data": "..."}
+~~~
+
+## Challenge Negotiation with Accept-Payment
+
+The client can pre-declare its supported payment capabilities and let
+the server tailor the 402 response:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5, solana/charge;q=0.3
+~~~
+
+If the server supports all four combinations, it SHOULD prefer the
+higher-ranked `tempo` challenges, then `stripe/charge`, then
+`solana/charge`:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="pT7yHnKmQ2wErXsZ5vCbNl", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="nH6xJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="tempo", intent="session", request="..."
+WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", method="stripe", intent="charge", request="..."
+WWW-Authenticate: Payment id="kD4vLmNpQ2rStUwX5yAbCe", realm="api.example.com", method="solana", intent="charge", request="..."
+~~~
+
+When multiple entries omit `q`, they are equally preferred. In that
+case, the server MAY order the returned challenges according to its own
+policy:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, solana/charge
+~~~
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="sK9vLmQwErTyUiOpA2dFgH", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="rJ8uKnLpO3qWtYsA6wDcVb", realm="api.example.com", method="tempo", intent="charge", request="..."
+~~~
+
+Clients can also use wildcards to express broader support. In the
+following example, the client prefers any `tempo` payment method, then
+any `solana` method, and least prefers `stripe/charge`:
+
+~~~http
+GET /stream HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/*, solana/*;q=0.6, stripe/charge;q=0.2
+~~~
+
+If the server can offer `tempo/session`, `tempo/charge`,
+`solana/charge`, and `stripe/charge`, it SHOULD rank the `tempo` offers
+first, then `solana/charge`, then `stripe/charge`:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="tM4nOpQrS5uVwXyZ6aBcDe", realm="api.example.com", method="tempo", intent="session", request="..."
+WWW-Authenticate: Payment id="uN5oPqRsT6vWxYzA7bCdEf", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="qE3rFgHiJ4kLmNpO5sAtBu", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="vP6qRtSuV7wXyZaB8cDeFg", realm="api.example.com", method="stripe", intent="charge", request="..."
+~~~
+
+Clients can set `q=0` to declare that a capability is not acceptable.
+In this example, the client is able to use `tempo/session`, but does not
+wish to receive that challenge for this request:
+
+~~~http
+GET /download HTTP/1.1
+Host: api.example.com
+Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge;q=0.8, stripe/charge;q=0.4
+~~~
+
+If the server would otherwise offer `tempo/charge`, `tempo/session`,
+`solana/charge`, and `stripe/charge`, it SHOULD omit `tempo/session`
+from the ranked set:
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="wQ7rStTuV8xYzAbC9dEfGh", realm="api.example.com", method="tempo", intent="charge", request="..."
+WWW-Authenticate: Payment id="yR5tUvWxY6zAbCdE7fGhIj", realm="api.example.com", method="solana", intent="charge", request="..."
+WWW-Authenticate: Payment id="xR8sTuUvW9yZaBcD0eFgHi", realm="api.example.com", method="stripe", intent="charge", request="..."
 ~~~
 
 ## Signed Authorization
