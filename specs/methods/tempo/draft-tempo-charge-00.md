@@ -405,6 +405,89 @@ mode.
 }
 ~~~
 
+## Proof Payload (type="proof") {#proof-payload}
+
+When `amount` is `"0"`, no on-chain transfer is required. Instead of
+broadcasting a transaction, the client signs an EIP-712 typed-data
+message binding the proof to the challenge identifier. This payload
+type is used exclusively for zero-amount charges: clients MUST use
+`type="proof"` when `amount` is `"0"`, and MUST NOT use `type="proof"`
+when `amount` is non-zero. The `supportedModes` field does not apply
+to zero-amount charges.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `signature` | string | REQUIRED | EIP-712 signature with `0x` prefix |
+| `type` | string | REQUIRED | `"proof"` |
+
+The `source` field MUST be present on proof credentials and MUST be a
+`did:pkh:eip155:<chainId>:<address>` DID identifying the signer.
+
+### EIP-712 Domain and Types
+
+The typed-data domain and types are:
+
+~~~json
+{
+  "domain": {
+    "name": "MPP",
+    "version": "1",
+    "chainId": <challenge methodDetails.chainId>
+  },
+  "types": {
+    "Proof": [
+      { "name": "challengeId", "type": "string" }
+    ]
+  },
+  "primaryType": "Proof",
+  "message": {
+    "challengeId": "<challenge.id>"
+  }
+}
+~~~
+
+The `challengeId` in the message MUST be the `id` from the challenge
+that was issued to the client. This binds the signature to exactly one
+challenge, preventing cross-challenge replay.
+
+### Proof Verification
+
+Servers MUST verify proof credentials as follows:
+
+1. Verify `credential.source` is present and parses as
+   `did:pkh:eip155:<chainId>:<address>`
+2. Verify the chain ID from `source` matches
+   `methodDetails.chainId` from the challenge
+3. Recover the signer from `payload.signature` using the EIP-712
+   domain, types, and message described above
+4. Verify the recovered signer matches the address in `source`
+
+### Proof Receipt
+
+Upon successful verification, servers return a receipt per
+{{I-D.httpauth-payment}} with `reference` set to the challenge `id`
+(since no on-chain transaction exists).
+
+**Example:**
+
+~~~json
+{
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.example.com",
+    "method": "tempo",
+    "intent": "charge",
+    "request": "eyJ...",
+    "expires": "2025-02-05T12:05:00Z"
+  },
+  "payload": {
+    "signature": "0xabcdef1234567890...",
+    "type": "proof"
+  },
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+}
+~~~
+
 # Fee Payment
 
 When a request includes `feePayer: true`, the server commits to paying
