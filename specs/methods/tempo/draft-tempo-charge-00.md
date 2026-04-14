@@ -82,7 +82,9 @@ For non-zero charges, Tempo supports two submission modes:
   `type="hash"` credential for the server to verify onchain.
 
 Servers SHOULD support `pull` mode. Servers MAY additionally support
-`push` mode.
+`push` mode. Servers that do not support both non-zero modes for a
+challenge MUST advertise the supported subset via
+`methodDetails.supportedModes`.
 
 ## Pull Mode (Default)
 
@@ -182,8 +184,11 @@ If `supportedModes` is present, it MUST contain at least one of `pull`
 or `push`, and clients MUST choose one of the advertised modes.
 
 If `supportedModes` is omitted, clients MAY assume both `pull` and
-`push` are supported for backwards compatibility with version 00
-implementations.
+`push` are supported for that challenge for backwards compatibility with
+version 00 implementations. Servers MUST omit `supportedModes` only when
+they support both non-zero modes for the challenge. A server that
+supports only `pull` or only `push` for a challenge MUST include
+`supportedModes` explicitly and omit the unsupported mode.
 
 For zero-amount charges, mode negotiation does not apply. Clients use a
 `type="proof"` credential regardless of `supportedModes`.
