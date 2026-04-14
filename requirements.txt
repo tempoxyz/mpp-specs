@@ -1,5 +1,5 @@
-xml2rfc[pdf]==3.31.0
+xml2rfc[pdf]==3.32.0
 rfclint==1.0.0
 python-frontmatter==1.1.0
-pytest==8.3.4
+pytest==9.0.3
 jinja2==3.1.6
