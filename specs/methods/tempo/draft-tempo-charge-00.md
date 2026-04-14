@@ -460,7 +460,10 @@ Servers MUST verify proof credentials as follows:
    `methodDetails.chainId` from the challenge
 3. Recover the signer from `payload.signature` using the EIP-712
    domain, types, and message described above
-4. Verify the recovered signer matches the address in `source`
+4. Verify the recovered signer matches the address in `source`,
+   OR is an authorized access key for the `source` address (a
+   non-revoked, non-expired key registered on-chain to the
+   account identified by `source`)
 
 ### Proof Receipt
 
