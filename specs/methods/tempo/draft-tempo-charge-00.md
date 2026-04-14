@@ -1,8 +1,8 @@
 ---
 title: Tempo charge Intent for HTTP Payment Authentication
 abbrev: Tempo Charge
-docname: draft-tempo-charge-01
-version: 01
+docname: draft-tempo-charge-00
+version: 00
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
