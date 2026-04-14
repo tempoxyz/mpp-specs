@@ -1,8 +1,8 @@
 ---
 title: Tempo charge Intent for HTTP Payment Authentication
 abbrev: Tempo Charge
-docname: draft-tempo-charge-00
-version: 00
+docname: draft-tempo-charge-01
+version: 01
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -74,9 +74,19 @@ challenge `expires` auth-param timestamp.
 This specification defines the request schema, credential formats, and
 settlement procedures for charge transactions on Tempo.
 
-## Charge Flow
+For non-zero charges, Tempo supports two submission modes:
 
-The following diagram illustrates the Tempo charge flow:
+- `pull`: The client signs a transaction and returns a
+  `type="transaction"` credential for the server to broadcast.
+- `push`: The client broadcasts the transaction and returns a
+  `type="hash"` credential for the server to verify onchain.
+
+Servers SHOULD support `pull` mode. Servers MAY additionally support
+`push` mode.
+
+## Pull Mode (Default)
+
+The default Tempo charge flow uses `pull` mode:
 
 ~~~
    Client                        Server                     Tempo Network
@@ -155,6 +165,28 @@ Challenge expiry is conveyed by the `expires` auth-param in
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 | `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
 | `methodDetails.splits` | array | OPTIONAL | Additional recipients that receive a portion of `amount`. See {{split-payments}}. |
+| `methodDetails.supportedModes` | array | OPTIONAL | Supported non-zero submission modes. Values are `"pull"` and/or `"push"`. |
+
+## Submission Modes
+
+The `supportedModes` field allows a server to advertise which non-zero
+charge submission modes it supports for a specific challenge.
+
+- `pull` indicates that the client creates a `type="transaction"`
+  credential containing a signed Tempo Transaction for the server to
+  broadcast.
+- `push` indicates that the client creates a `type="hash"` credential
+  after broadcasting the transaction itself.
+
+If `supportedModes` is present, it MUST contain at least one of `pull`
+or `push`, and clients MUST choose one of the advertised modes.
+
+If `supportedModes` is omitted, clients MAY assume both `pull` and
+`push` are supported for backwards compatibility with version 00
+implementations.
+
+For zero-amount charges, mode negotiation does not apply. Clients use a
+`type="proof"` credential regardless of `supportedModes`.
 
 **Example:**
 
@@ -165,7 +197,8 @@ Challenge expiry is conveyed by the `expires` auth-param in
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 42431,
-    "feePayer": true
+    "feePayer": true,
+    "supportedModes": ["pull"]
   }
 }
 ~~~
@@ -308,7 +341,7 @@ Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
 TIP-20 token sufficient to satisfy the challenge parameters, using one
 or more `transfer` and/or `transferWithMemo` calls. When `splits` are
 present, the transaction MUST include transfers for each split entry
-(see {{split-payments}}).
+(see {{split-payments}}). This payload type corresponds to `pull` mode.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -339,7 +372,8 @@ present, the transaction MUST include transfers for each split entry
 
 When `type` is `"hash"`, the client has already broadcast the transaction
 to the Tempo network. The `hash` field contains the transaction hash for
-the server to verify onchain.
+the server to verify onchain. This payload type corresponds to `push`
+mode.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -489,6 +523,9 @@ the transaction. The server verifies the transaction onchain:
 
 - Clients MUST NOT use `type="hash"` when `methodDetails.feePayer` is
   `true`. Servers MUST reject such credentials.
+- If `methodDetails.supportedModes` is present and does not include
+  `push`, clients MUST NOT use `type="hash"` credentials. Servers MUST
+  reject such credentials.
 - Server cannot modify or enhance the transaction.
 
 ## Transaction Verification {#transaction-verification}
@@ -507,6 +544,8 @@ Before broadcasting a transaction credential, servers MUST verify:
    recipient receives `amount - sum(splits[].amount)`, each split
    recipient receives its specified amount, and any required memo
    values are present
+7. If `methodDetails.supportedModes` is present, verify it includes
+   `pull`
 
 Servers MAY impose additional structural requirements (such as
 exact call count or ordering) as local policy before broadcasting.
@@ -519,6 +558,9 @@ that the receipt contains `Transfer` and/or `TransferWithMemo` event
 logs emitted by the `currency` token address whose payment effects
 satisfy the challenge parameters, including the primary recipient
 amount, any split amounts, and any required memo values.
+
+If `methodDetails.supportedModes` is present, servers MUST verify it
+includes `push` before accepting a hash credential.
 
 Servers MAY additionally inspect the transaction call data as a
 local-policy check, but call-data decoding is not required for
@@ -643,7 +685,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxfX0",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJzdXBwb3J0ZWRNb2RlcyI6WyJwdWxsIl19fQ",
   expires="2025-01-06T12:00:00Z"
 Cache-Control: no-store
 ~~~
@@ -656,7 +698,8 @@ The `request` decodes to:
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431
+    "chainId": 42431,
+    "supportedModes": ["pull"]
   }
 }
 ~~~
