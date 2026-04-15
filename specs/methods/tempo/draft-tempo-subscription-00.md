@@ -64,7 +64,8 @@ This document defines the "subscription" intent for the "tempo"
 payment method in the Payment HTTP Authentication Scheme. It specifies
 how clients grant servers permission to collect a fixed TIP-20 token
 payment once per billing period using recipient-scoped access keys on
-the Tempo blockchain.
+the Tempo blockchain. This profile intentionally models the recurring
+transfer authorization itself, not a richer billing object.
 
 --- middle
 
@@ -79,10 +80,20 @@ This specification inherits the shared `subscription` intent semantics
 from {{I-D.payment-intent-subscription}} and defines Tempo-specific
 request fields, payloads, and settlement behavior.
 
+This profile is intentionally narrower than a general billing
+subscription. It standardizes a recurring token-transfer authorization,
+not price catalogs, quantities, prorations, deferred starts, or
+billing-anchor resets.
+
 Tempo subscriptions support only key-authorization fulfillment.
 Tempo transactions containing standalone `approve` calls and push-mode
 hash credentials do not provide the per-period enforcement required for
 this intent.
+
+Tempo also imposes an additional constraint that is not part of the
+shared intent: the recurring authorization MUST have an explicit expiry.
+This method therefore requires a `subscriptionExpires` field because the
+underlying Tempo key authorization itself is time-bounded.
 
 Tempo subscriptions also require the {{TIP-1011}} periodic token-limit
 and `allowed_calls` restrictions described in this document. Servers
@@ -159,7 +170,12 @@ base64url-encoded JSON object. The `request` JSON MUST be serialized
 using JSON Canonicalization Scheme (JCS) {{RFC8785}} and
 base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
-## Shared Fields
+## Request Fields
+
+Tempo uses the shared `amount`, `currency`, `periodSeconds`,
+`recipient`, `description`, `externalId`, and `subscriptionId` fields
+from {{I-D.payment-intent-subscription}}. It additionally requires the
+following request field because Tempo key authorizations must expire:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -184,7 +200,7 @@ surrounding whitespace. Leading zeros MUST NOT be used.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 4217 (Tempo mainnet). |
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 42431 (Tempo mainnet). |
 
 Servers issuing `intent="subscription"` challenges SHOULD include the
 `expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
@@ -214,7 +230,7 @@ be represented in the Tempo key authorization expiry field.
   "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 4217
+    "chainId": 42431
   }
 }
 ~~~
@@ -253,7 +269,7 @@ base64url-encoded JSON object per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge from the server |
 | `payload` | object | REQUIRED | Tempo-specific payload object |
-| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:4217:0x...`) |
+| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
 
 The `source` field, if present, SHOULD use the `did:pkh` method with
 the chain ID applicable to the challenge and the payer's Ethereum
@@ -301,7 +317,7 @@ field.
     "signature": "0xf8c1...signed authorization bytes...",
     "type": "keyAuthorization"
   },
-  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -557,7 +573,7 @@ The `request` decodes to:
   "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 4217
+    "chainId": 42431
   }
 }
 ~~~
@@ -581,7 +597,7 @@ seconds until 2026-01-01T00:00:00Z.
     "signature": "0xf8c1...signed authorization bytes...",
     "type": "keyAuthorization"
   },
-  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 

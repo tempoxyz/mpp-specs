@@ -59,8 +59,9 @@ informative:
 This document defines the `subscription` intent for the `stripe`
 payment method within the Payment HTTP Authentication Scheme
 {{I-D.httpauth-payment}}. It specifies a constrained Stripe Billing
-profile for fixed-price, bounded recurring subscriptions whose
-activation succeeds only after the first invoice is paid.
+profile for fixed-price recurring subscriptions, optionally bounded by
+an explicit expiry, whose activation succeeds only after the first
+invoice is paid.
 
 --- middle
 
@@ -78,6 +79,11 @@ trials, prorations, discounts, usage-based billing, and flexible
 schedule changes. This method supports only the subset that preserves
 the shared subscription semantics exactly. Servers MUST reject request
 objects or Stripe configurations that would broaden those semantics.
+
+This profile models the recurring payment agreement, not the full Stripe
+Billing object surface. Quantities or seat counts, plan schedules,
+prorations, billing-anchor resets, and other commercial-policy behavior
+remain out of scope even though Stripe can support them.
 
 ## Stripe Subscription Flow
 
@@ -150,14 +156,19 @@ base64url-encoded JSON object. The `request` JSON MUST be serialized
 using JSON Canonicalization Scheme (JCS) {{RFC8785}} and
 base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
-## Shared Fields
+## Request Fields
+
+The Stripe `subscription` profile uses the shared `amount`, `currency`,
+`periodSeconds`, `description`, `externalId`, and `subscriptionId`
+fields from {{I-D.payment-intent-subscription}}. It additionally defines
+the following request constraints and fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Fixed payment amount per billing period in the currency's smallest unit |
 | `currency` | string | REQUIRED | Lowercase ISO 4217 currency code |
 | `periodSeconds` | string | REQUIRED | Billing period duration in seconds |
-| `subscriptionExpires` | string | REQUIRED | Subscription expiry timestamp in {{RFC3339}} format |
+| `subscriptionExpires` | string | OPTIONAL | Subscription expiry timestamp in {{RFC3339}} format. When present, it bounds the subscription lifetime. |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
 | `subscriptionId` | string | OPTIONAL | Server-issued opaque identifier for an existing subscription |
@@ -219,15 +230,19 @@ the `week` representation. Servers MUST reject any `periodSeconds`
 value that would require approximation, calendar-month interpretation,
 calendar-year interpretation, or an unsupported Stripe interval count.
 
-`subscriptionExpires` MUST define a bounded subscription lifetime.
-Servers MUST configure Stripe so that no renewal may occur after
-`subscriptionExpires`, typically by setting Stripe's `cancel_at` field
-{{STRIPE-BILLING-CANCEL}}. In this profile, `subscriptionExpires` MUST
-fall on a canonical billing-period boundary derived from the activation
-anchor and `periodSeconds`. Servers MUST reject any request whose
-expiry would require a prorated invoice, a partial final billing
+If `subscriptionExpires` is present, it defines a bounded subscription
+lifetime. Servers MUST configure Stripe so that no renewal may occur
+after `subscriptionExpires`, typically by setting Stripe's `cancel_at`
+field {{STRIPE-BILLING-CANCEL}}. In this profile, `subscriptionExpires`
+MUST fall on a canonical billing-period boundary derived from the
+activation anchor and `periodSeconds`. Servers MUST reject any request
+whose expiry would require a prorated invoice, a partial final billing
 period, or any other amount or timing change relative to the shared
 subscription intent.
+
+If `subscriptionExpires` is absent, the Stripe subscription MAY remain
+open-ended until canceled or otherwise terminated according to this
+profile.
 
 This profile supports only a fixed quantity of 1 for the single
 subscription item. Servers MUST reject any request or server-side
@@ -249,7 +264,6 @@ features:
 - mid-cycle plan changes
 - quantity changes during an active subscription
 - pause or resume controls
-- open-ended subscriptions
 
 # Credential Schema
 
@@ -285,8 +299,8 @@ Servers MUST verify Payment credentials for Stripe subscription intent:
 1. Verify the challenge ID matches the one issued
 2. Verify the challenge has not expired
 3. Decode the request object and verify it matches this constrained
-   profile, including exact `periodSeconds` and `subscriptionExpires`
-   support
+   profile, including exact `periodSeconds` support and, if present,
+   exact `subscriptionExpires` support
 4. Extract the `paymentMethod` and optional `customer` from the
    credential payload
 5. Verify the Stripe PaymentMethod exists, is reusable by the
@@ -307,8 +321,8 @@ For `intent="subscription"`, the server MUST:
 3. Create or reuse a Stripe Price whose amount, currency, and recurring
    cadence exactly match the request
 4. Create a Stripe Subscription with exactly one recurring item,
-   quantity 1, no unsupported features, and bounded expiry at
-   `subscriptionExpires`
+   quantity 1, no unsupported features, and, if `subscriptionExpires`
+   is present, bounded expiry at that timestamp
 5. Treat activation as successful only after the first invoice for that
    subscription is paid
 6. Initialize durable local subscription state for later renewals
@@ -346,9 +360,9 @@ collection of older unpaid invoices. If a Stripe recovery or retry flow
 cannot be mapped exactly to the shared one-charge-per-period invariant,
 servers MUST disable that flow or reject the request.
 
-Once `subscriptionExpires` is reached, servers MUST stop treating the
-Stripe subscription as authority for additional renewals, even if Stripe
-later reports a paid invoice.
+Once `subscriptionExpires` is reached, if that field was present,
+servers MUST stop treating the Stripe subscription as authority for
+additional renewals, even if Stripe later reports a paid invoice.
 
 ## Receipt Generation
 

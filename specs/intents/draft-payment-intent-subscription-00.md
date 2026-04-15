@@ -48,8 +48,10 @@ normative:
 This document defines the "subscription" payment intent for use with the
 Payment HTTP Authentication Scheme. The "subscription" intent
 represents a recurring fixed-amount payment where the payer grants the
-server permission to charge the same amount once per billing period
-until a specified expiry time.
+server permission to charge the same amount once per billing period.
+It standardizes the recurring payment authorization itself, not the full
+billing relationship that many application-level systems also call a
+subscription.
 
 --- middle
 
@@ -58,10 +60,24 @@ until a specified expiry time.
 The "subscription" intent enables recurring fixed-amount payments. A
 successful subscription activation creates an authorization for the
 server to collect the same payment amount once per billing period until
-the subscription expires or is cancelled.
+the payer cancels it or the authorization otherwise becomes invalid.
 
 This intent is useful for recurring API plans, content subscriptions,
 and other services with a stable price per billing period.
+
+This document intentionally standardizes the payment agreement, not the
+entire billing system around it. In particular, the shared intent does
+not define price catalogs, quantities or seat counts, plan swaps,
+prorations, deferred starts, billing-cycle realignment, invoice state,
+or other product-management behavior that many billing platforms also
+associate with a "subscription". Those concerns belong to the
+application layer or to a narrower payment-method profile.
+
+This is a deliberate trade-off. Using the name "subscription" keeps the
+user-facing concept familiar, but the interoperable wire contract is
+intentionally narrower: it means "charge this fixed amount every
+interval", not "model every behavior of a commercial subscription
+object".
 
 ## Relationship to Payment Methods
 
@@ -76,6 +92,12 @@ Payment method specifications MAY intentionally define a constrained
 subset of a richer underlying subscription system. A method MUST either
 preserve the semantics in this document exactly or reject the request;
 it MUST NOT approximate them.
+
+Payment method specifications MAY also impose additional constraints
+that are not part of the shared contract, such as an explicit expiry or
+recipient requirements, when the underlying payment system cannot safely
+support the shared intent without them. Such constraints MUST be made
+explicit by the method specification.
 
 # Requirements Language
 
@@ -100,8 +122,7 @@ Renewal
   billing period.
 
 Cancellation
-: The act of ending a subscription before `subscriptionExpires`,
-  preventing future renewals.
+: The act of ending a subscription, preventing future renewals.
 
 Subscription Identifier
 : A server-issued opaque identifier for an activated subscription,
@@ -114,7 +135,8 @@ Subscription Identifier
 
 The "subscription" intent represents a request for a recurring
 fixed-amount payment of `amount`, charged once per billing period until
-`subscriptionExpires` or explicit cancellation.
+explicit cancellation or until the recurring authorization otherwise
+becomes invalid.
 
 ## Properties
 
@@ -123,7 +145,7 @@ fixed-amount payment of `amount`, charged once per billing period until
 | **Intent Identifier** | `subscription` |
 | **Payment Timing** | Recurring (initial charge at activation, then once per period) |
 | **Idempotency** | Credential single-use; subscription grant reusable across billing periods |
-| **Reversibility** | Cancellable before expiry |
+| **Reversibility** | Cancellable |
 
 ## Flow
 
@@ -182,7 +204,6 @@ supported subset.
 | `amount` | string | Fixed payment amount per billing period in base units |
 | `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
 | `periodSeconds` | string | Billing period duration in seconds |
-| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
@@ -215,32 +236,36 @@ The `subscriptionId` field is absent during initial activation. Servers
 MAY include it when issuing a challenge tied to an existing
 subscription.
 
+Payment methods MAY define additional top-level request fields when the
+underlying payment system requires data that is not part of the shared
+contract. Such fields MUST be documented by the payment method
+specification and MUST NOT change the meaning of the shared fields in
+this section.
+
 Servers issuing `intent="subscription"` challenges SHOULD include the
 `expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
 using {{RFC3339}} format. Request objects MUST NOT duplicate the
-challenge expiry value. The `subscriptionExpires` field instead defines
-when the subscription itself expires.
+challenge expiry value.
 
-If the challenge includes `expires`, the `subscriptionExpires` value
-MUST be strictly later than the challenge `expires` timestamp. Servers
-MUST reject credentials where `subscriptionExpires` is at or before the
-challenge `expires`.
-
-The first billing period begins when the subscription is activated.
-Payment methods MAY define additional activation controls in
+The first billing period begins immediately when the subscription is
+activated. Payment methods MAY define additional activation controls in
 `methodDetails`, but MUST define exact activation semantics if they do
 so.
 
-The billing anchor for a subscription is the time activation succeeds.
-Billing periods are contiguous fixed-duration windows derived by adding
-`periodSeconds` to that anchor.
+The billing anchor for a subscription is the time activation succeeds,
+or an equivalent network-native timestamp defined by the payment method
+specification. Billing periods are contiguous fixed-duration windows
+derived by adding `periodSeconds` to that anchor.
+
+This shared intent does not define deferred starts or merchant-selected
+billing anchors. A payment method that needs a more specific anchor rule
+MUST document it explicitly.
 
 The shared fields in this section are the canonical subscription
 contract. Payment method specifications MUST document how they map
-`amount`, `periodSeconds`, `subscriptionExpires`, and activation to the
-underlying payment system. If a payment method cannot represent those
-fields or semantics exactly, it MUST reject the request rather than
-approximate it.
+`amount`, `periodSeconds`, and activation to the underlying payment
+system. If a payment method cannot represent those fields or semantics
+exactly, it MUST reject the request rather than approximate it.
 
 ## Currency Formats {#currency-formats}
 
@@ -276,14 +301,14 @@ In particular:
 
 - Methods should support only request shapes they can represent exactly.
 - Methods should document the supported and rejected ranges or values of
-  `periodSeconds`, how `subscriptionExpires` is enforced, and what
-  conditions make activation succeed.
+  `periodSeconds`, any additional bounded-lifetime or expiry rules they
+  impose, and what conditions make activation succeed.
 - Activation should not be reported as successful until both
   subscription setup and the first billing-period charge have
   succeeded.
 - Methods should preserve the shared invariants of one successful charge
   per billing period, no automatic accumulation of missed periods, and
-  no renewals after expiry.
+  no renewals after cancellation or any method-specific expiry.
 - Richer network-native features such as trials, prorations,
   discounts, metered billing, pause or resume controls, quantity
   changes, plan changes, or open-ended renewals should be disabled or
@@ -302,7 +327,6 @@ In particular:
   "amount": "9900",
   "currency": "usd",
   "periodSeconds": "2592000",
-  "subscriptionExpires": "2026-01-01T00:00:00Z",
   "description": "Pro plan"
 }
 ~~~
@@ -314,10 +338,9 @@ In particular:
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
-  "subscriptionExpires": "2026-01-01T00:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 4217
+    "chainId": 42431
   }
 }
 ~~~
@@ -343,9 +366,9 @@ Servers MUST reject replayed credentials.
 A successfully activated subscription may be reused for later billing
 periods until:
 
-- The `subscriptionExpires` timestamp is reached
 - The payer explicitly cancels it
 - The payment method revokes or invalidates the authorization
+- Any method-specific expiry or bounded lifetime is reached
 
 # Subscription Lifecycle
 
@@ -415,7 +438,7 @@ At minimum, servers MUST track:
 - Billing anchor or equivalent current billing-period start time
 - Last successfully charged billing-period index, or whether the
   current billing period has been charged
-- Subscription expiry
+- Any method-specific expiry or bounded-lifetime state
 - Cancellation or revocation status
 
 For non-idempotent requests, clients SHOULD send an `Idempotency-Key`
@@ -425,7 +448,8 @@ duplicate idempotent request.
 
 ## Cancellation
 
-Payers SHOULD be able to cancel subscriptions before expiry.
+Payers SHOULD be able to cancel subscriptions before any applicable
+method-specific expiry.
 Cancellation mechanisms, effective-time rules, and any continued access
 for already-paid service are method-specific and MUST be documented by
 the payment method or application profile.
@@ -440,7 +464,7 @@ MUST return an appropriate HTTP status code:
 
 | Condition | Status Code | Behavior |
 |-----------|-------------|----------|
-| Subscription expired | 402 Payment Required | Issue new challenge |
+| Method-specific expiry reached | 402 Payment Required | Issue new challenge |
 | Cancellation effective or authorization revoked | 402 Payment Required | Issue new challenge |
 | Current billing period unpaid or renewal failed | 402 Payment Required | Issue new challenge |
 | Invalid credential | 402 Payment Required | Issue new challenge |
@@ -461,7 +485,6 @@ Suppose a server offers a plan with these request fields:
 - `amount = "9900"`
 - `currency = "usd"`
 - `periodSeconds = "2592000"`
-- `subscriptionExpires = "2026-07-14T12:00:00Z"`
 
 If activation succeeds at `2026-01-15T12:03:10Z`, that time becomes the
 billing anchor. The resulting billing periods are:
@@ -502,12 +525,16 @@ intent authorizes at most one charge for Period 4. The missed Period 3
 charge does not automatically accumulate into authority to collect both
 Period 3 and Period 4.
 
-## Natural Expiry Example
+## Method-Specific Expiry Example
 
-Suppose `subscriptionExpires` is `2026-07-14T12:00:00Z`. Once that time
-is reached, the server stops treating the subscription as reusable for
-future billing periods. Requests after that time receive
-`402 Payment Required` with a fresh challenge.
+The shared subscription intent does not require an expiry field. Some
+payment methods define an optional or required bounded lifetime for the
+recurring authorization.
+
+Once such a method-specific expiry is reached, the server stops
+treating the subscription as reusable for future billing periods.
+Requests after that time receive `402 Payment Required` with a fresh
+challenge.
 
 # Security Considerations
 
@@ -524,7 +551,8 @@ Clients MUST verify before activating a subscription:
 1. `amount` is acceptable for the service
 2. `currency` is expected
 3. `periodSeconds` matches the expected billing interval
-4. `subscriptionExpires` is acceptable
+4. Any method-specific fields or constraints are understood and
+   acceptable
 
 Clients MUST NOT rely on the `description` field for payment
 verification.
