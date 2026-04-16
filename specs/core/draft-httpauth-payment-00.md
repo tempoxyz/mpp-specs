@@ -742,6 +742,18 @@ Implementations MUST treat Payment credentials with the same care as
 authentication passwords or session tokens. Credentials SHOULD be stored
 only in memory and cleared after use.
 
+### Challenge-Binding Secret Management
+
+Implementations that use a shared secret for stateless challenge binding
+(for example, HMAC) MUST keep that secret on trusted server-side systems
+only and MUST NOT disclose it to clients. Servers MUST NOT log the secret
+or include it in error messages, debugging output, or analytics.
+
+If a server rotates a challenge-binding secret, it SHOULD continue
+verifying challenges issued under the previous secret until those
+challenges expire, or use an equivalent migration strategy that avoids
+invalidating unexpired challenges.
+
 
 ## Replay Protection
 
