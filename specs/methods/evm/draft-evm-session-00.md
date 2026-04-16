@@ -474,16 +474,21 @@ immutable once the channel is created.
 
 Opens a channel using EIP-3009 {{EIP-3009}} authorization. The server
 (or any relayer) submits the transaction, pulling funds from the payer
-via `transferWithAuthorization` inside the contract.
+via `receiveWithAuthorization` inside the contract.
 
-> **Note:** The canonical EIP-3009 `transferWithAuthorization` interface
-> accepts separate `(uint8 v, bytes32 r, bytes32 s)` parameters. This
-> escrow contract accepts a packed `bytes` signature instead for
-> interface consistency with `settle` and `close`. The escrow
-> implementation MUST unpack the 65-byte value into `(v, r, s)`
-> components before forwarding to the token's
-> `transferWithAuthorization`. Tokens that support the USDC v2.2
-> `bytes signature` overload MAY be called directly.
+> **Note:** The escrow contract MUST use `receiveWithAuthorization`
+> (not `transferWithAuthorization`) to pull funds from the token.
+> `receiveWithAuthorization` enforces `msg.sender == to`, preventing
+> front-running attacks where an attacker extracts the EIP-3009
+> signature from the mempool and calls the token directly (see
+> {{front-running-protection}}). The canonical EIP-3009
+> `receiveWithAuthorization` interface accepts separate
+> `(uint8 v, bytes32 r, bytes32 s)` parameters. This escrow contract
+> accepts a packed `bytes` signature instead for interface consistency
+> with `settle` and `close`. The escrow implementation MUST unpack
+> the 65-byte value into `(v, r, s)` components before forwarding to
+> the token's `receiveWithAuthorization`. Tokens that support the
+> USDC v2.2 `bytes signature` overload MAY be called directly.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -495,7 +500,7 @@ via `transferWithAuthorization` inside the contract.
 | `from` | address | Payer address (EIP-3009 `from`) |
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
-| `nonce` | bytes32 | EIP-3009 nonce |
+| `nonce` | bytes32 | EIP-3009 nonce (see {{front-running-protection}} for recommended derivation) |
 | `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 | `splitRecipients` | address[] | Split recipient addresses (empty if no splits) |
 | `splitBps` | uint16[] | Basis points per recipient |
@@ -574,7 +579,7 @@ behalf of the payer.
 | `from` | address | Payer address |
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
-| `nonce` | bytes32 | EIP-3009 nonce |
+| `nonce` | bytes32 | EIP-3009 nonce (see {{front-running-protection}} for recommended derivation) |
 | `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 
 ~~~solidity
@@ -846,16 +851,16 @@ signature. The server calls `openWithAuthorization()` or
 own balance. The client never sends an on-chain transaction.
 
 1. **Client signs EIP-3009**: The client signs the EIP-712 typed data
-   for `transferWithAuthorization` off-chain.
+   for `receiveWithAuthorization` off-chain.
 2. **Server submits**: The server calls `openWithAuthorization()` or
    `topUpWithAuthorization()` on the escrow contract.
 3. **Contract pulls funds**: The escrow contract internally calls
-   `transferWithAuthorization` on the ERC-20 token to pull funds
+   `receiveWithAuthorization` on the ERC-20 token to pull funds
    from the client.
 
 When `feePayer` is `true`, the `currency` token MUST implement EIP-3009.
 Servers MUST NOT advertise `feePayer: true` for tokens that lack
-`transferWithAuthorization` support.
+`receiveWithAuthorization` support.
 
 ## Client-Paid Fees (feePayer: false)
 
@@ -987,7 +992,7 @@ The `authorization` object contains EIP-3009 parameters as defined in {{I-D.evm-
 | `value` | string | REQUIRED | Deposit amount in base units |
 | `validAfter` | string | REQUIRED | Unix timestamp, valid from. `"0"` = immediately |
 | `validBefore` | string | REQUIRED | Unix timestamp, expires |
-| `nonce` | string | REQUIRED | Random `bytes32` hex. EIP-3009 nonce |
+| `nonce` | string | REQUIRED | `bytes32` hex. EIP-3009 nonce |
 
 **Example:**
 
@@ -1707,18 +1712,41 @@ address differs. The `salt` parameter (chosen by the client) provides
 additional protection by making the `channelId` unpredictable before
 the transaction appears in the mempool.
 
-When `feePayer` is `true`, the EIP-3009
-`transferWithAuthorization` signature is visible in the
-pending `openWithAuthorization` transaction. An attacker
-could extract this signature and call
-`transferWithAuthorization` directly on the token contract,
-diverting funds away from the escrow. To mitigate this, the
-escrow contract MUST call `transferWithAuthorization`
-atomically within `openWithAuthorization`, and the
-`authorization.to` field MUST be the escrow contract
-address — not an arbitrary recipient. The EIP-3009 `to`
-parameter binding prevents the signature from being used
-to transfer funds elsewhere.
+When `feePayer` is `true`, the EIP-3009 authorization
+signature is visible in the pending `openWithAuthorization`
+transaction. The escrow contract MUST use
+`receiveWithAuthorization` (not `transferWithAuthorization`)
+when calling the token. This enforces `msg.sender == to`,
+so only the escrow contract can execute the transfer. An
+attacker cannot call the token directly. The
+`authorization.to` field MUST be the escrow contract address.
+
+However, `receiveWithAuthorization` alone does not prevent an
+attacker from calling the **escrow** itself with modified
+parameters. The EIP-3009 signature only covers `from`, `to`,
+`value`, `validAfter`, `validBefore`, and `nonce` — it does
+not cover channel parameters such as `payee`, `salt`, or
+`authorizedSigner`. An attacker could front-run
+`openWithAuthorization` with a different `payee` (their own
+address), and the EIP-3009 signature would remain valid.
+
+To mitigate this, escrow implementations SHOULD derive the
+EIP-3009 `nonce` deterministically from the channel parameters
+rather than accepting an arbitrary random value. For example:
+
+~~~
+// openWithAuthorization
+nonce = keccak256(abi.encode(payee, token, salt, authorizedSigner, splitRecipients, splitBps))
+
+// topUpWithAuthorization
+nonce = keccak256(abi.encode(channelId, additionalDeposit))
+~~~
+
+The contract recomputes the nonce from the function parameters
+and passes it to `receiveWithAuthorization`. If an attacker
+substitutes different parameters, the nonce changes, and the
+EIP-3009 signature verification fails. The client MUST use
+the same derivation formula when signing the authorization.
 
 ## ERC-20 Approval Front-Running
 
