@@ -17,7 +17,7 @@ author:
     ins: C. Swenberg
     email: conner.swenberg@coinbase.com
     organization: Coinbase
-  - name: K. Scott
+  - name: Kyle Scott
     ins: K. Scott
     email: kscott@monad.foundation
     organization: Monad Foundation
