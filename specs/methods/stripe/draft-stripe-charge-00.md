@@ -12,11 +12,11 @@ author:
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Steve Kaliski
     ins: S. Kaliski
     email: stevekaliski@stripe.com
-    organization: Stripe
+    org: Stripe
 
 normative:
   RFC2119:
@@ -26,7 +26,7 @@ normative:
   RFC7235:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
