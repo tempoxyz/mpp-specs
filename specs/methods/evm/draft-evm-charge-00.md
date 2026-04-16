@@ -13,6 +13,14 @@ author:
     ins: B. DiNovi
     email: bread@megaeth.com
     organization: MegaETH Labs
+  - name: Conner Swenberg
+    ins: C. Swenberg
+    email: conner.swenberg@coinbase.com
+    organization: Coinbase
+  - name: K. Scott
+    ins: K. Scott
+    email: kscott@monad.foundation
+    organization: Monad Foundation
 
 normative:
   RFC2119:
