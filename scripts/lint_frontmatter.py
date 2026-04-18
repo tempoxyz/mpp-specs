@@ -9,7 +9,9 @@ import frontmatter
 REQUIRED_FIELDS = ["title", "abbrev", "docname", "version", "category", "ipr", "submissiontype", "consensus", "author"]
 AUTHOR_FIELD_ORDER = ["name", "ins", "email", "org"]
 
+EXPECTED_IPR = "noModificationTrust200902"
 ID_HTTPAUTH_PAYMENT_TITLE = "The 'Payment' HTTP Authentication Scheme"
+ID_HTTPAUTH_PAYMENT_TARGET = "https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/"
 
 
 def lint_file(path: Path) -> list[str]:
@@ -22,6 +24,17 @@ def lint_file(path: Path) -> list[str]:
     for field in REQUIRED_FIELDS:
         if field not in meta:
             errors.append(f"missing required field '{field}'")
+
+    # Check IPR value
+    ipr = meta.get("ipr", "")
+    if ipr and ipr != EXPECTED_IPR:
+        errors.append(f"ipr should be '{EXPECTED_IPR}', got '{ipr}'")
+
+    # Check consensus/submissiontype compatibility
+    submissiontype = meta.get("submissiontype", "")
+    consensus = meta.get("consensus")
+    if submissiontype == "independent" and consensus is True:
+        errors.append("consensus must be false for independent submissions")
 
     # Check version format (two-digit string like "00", "01", … or int 0)
     version = meta.get("version")
@@ -45,6 +58,8 @@ def lint_file(path: Path) -> list[str]:
         actual = [k for k in keys if k in AUTHOR_FIELD_ORDER]
         if actual != expected:
             errors.append(f"author[{i}] field order should be {expected}, got {actual}")
+        if "organization" in author:
+            errors.append(f"author[{i}] uses 'organization' instead of 'org'; use 'org' for consistency")
 
     # Check I-D.httpauth-payment reference format (if present)
     normative = meta.get("normative", {})
@@ -53,6 +68,8 @@ def lint_file(path: Path) -> list[str]:
         if ref:
             if "target" not in ref:
                 errors.append("I-D.httpauth-payment missing 'target' field")
+            elif ref["target"] != ID_HTTPAUTH_PAYMENT_TARGET:
+                errors.append(f"I-D.httpauth-payment target should be '{ID_HTTPAUTH_PAYMENT_TARGET}', got '{ref['target']}'")
             title = ref.get("title", "")
             # Normalize title by stripping outer quotes for comparison
             normalized_title = title.strip('"').strip("'")
