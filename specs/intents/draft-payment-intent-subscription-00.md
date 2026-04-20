@@ -418,8 +418,13 @@ subscription namespace.
 Clients MAY retain the `subscriptionId` as application data when
 referring to the active subscription in later interactions.
 
-This specification does not define a dedicated HTTP request header for
-carrying `subscriptionId`.
+The `Subscription-Id` header is only a subscription-selection hint. It
+does not, by itself, prove authority to use the subscription.
+
+The challenge `request` object does not carry `subscriptionId`. The
+canonical reusable identifier is the `subscriptionId` field returned in
+the `Payment-Receipt`, and the corresponding request-time selector is
+the `Subscription-Id` header.
 
 Servers MUST authenticate or otherwise authorize the client's use of the
 identified subscription before granting access or collecting a renewal
