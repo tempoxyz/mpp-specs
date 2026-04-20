@@ -186,10 +186,11 @@ authorizations into actual token movement.
 Authorized Signer
 : An address delegated to sign vouchers on behalf of the payer. Defaults
 to the payer if not specified.
-In this specification, voucher signatures are ECDSA
-secp256k1 signatures produced by an EOA-style signer.
-Contract accounts that cannot produce such signatures MUST
-delegate an `authorizedSigner`.
+In this specification, voucher signatures are verified either as
+ECDSA secp256k1 signatures (for EOA signers) or via ERC-1271
+`isValidSignature` (for smart-contract wallets such as Safe or
+ERC-4337 accounts). The `authorizedSigner` field MAY be an EOA
+or an ERC-1271-compliant contract wallet.
 
 Base Units
 : The smallest indivisible unit of an ERC-20 token, determined by the
@@ -327,8 +328,11 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 
 All signatures in this specification are 65 bytes, encoded as
 `r (32 bytes) || s (32 bytes) || v (1 byte)` and passed as a single
-`bytes` parameter. EIP-2098 compact 64-byte signatures {{EIP-2098}}
-are NOT used; implementations MUST NOT produce or accept them.
+`bytes` parameter. Implementations MUST NOT produce EIP-2098 compact
+64-byte signatures {{EIP-2098}}. Implementations MAY accept them
+(e.g., when using a standard signature-verification library such as
+OpenZeppelin SignatureChecker that transparently handles both
+formats), but MUST NOT require clients to produce them.
 
 Implementations MUST use lowercase hex for channelId, signatures, and
 hashes. Address fields in the request schema (currency, recipient,
@@ -481,14 +485,12 @@ via `receiveWithAuthorization` inside the contract.
 > `receiveWithAuthorization` enforces `msg.sender == to`, preventing
 > front-running attacks where an attacker extracts the EIP-3009
 > signature from the mempool and calls the token directly (see
-> {{front-running-protection}}). The canonical EIP-3009
-> `receiveWithAuthorization` interface accepts separate
-> `(uint8 v, bytes32 r, bytes32 s)` parameters. This escrow contract
-> accepts a packed `bytes` signature instead for interface consistency
-> with `settle` and `close`. The escrow implementation MUST unpack
-> the 65-byte value into `(v, r, s)` components before forwarding to
-> the token's `receiveWithAuthorization`. Tokens that support the
-> USDC v2.2 `bytes signature` overload MAY be called directly.
+> {{front-running-protection}}). This specification targets tokens
+> that support the USDC v2.2 `bytes signature` overload of
+> `receiveWithAuthorization` and calls it directly with the packed
+> 65-byte signature. Tokens that only expose the canonical
+> `(uint8 v, bytes32 r, bytes32 s)` interface are NOT supported by
+> this escrow design.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -576,6 +578,7 @@ behalf of the payer.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Existing channel identifier |
 | `additionalDeposit` | uint128 | Additional amount |
+| `topUpSalt` | bytes32 | Random value for nonce derivation |
 | `from` | address | Payer address |
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
@@ -586,6 +589,7 @@ behalf of the payer.
 function topUpWithAuthorization(
     bytes32 channelId,
     uint128 additionalDeposit,
+    bytes32 topUpSalt,
     address from,
     uint256 validAfter,
     uint256 validBefore,
@@ -603,11 +607,16 @@ the settlement delta is distributed according to the split ratios
 (same logic as `settle`), then the remaining deposit is refunded to
 the payer.
 
+If `cumulativeAmount <= channel.settled`, the payee is forfeiting
+any uncollected amount (e.g., to cleanly close an exhausted or
+abandoned channel). In this case the contract MAY skip voucher
+signature verification and `signature` MAY be empty.
+
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `channelId` | bytes32 | Channel to close |
 | `cumulativeAmount` | uint128 | Final cumulative amount |
-| `signature` | bytes | EIP-712 voucher signature |
+| `signature` | bytes | EIP-712 voucher signature; MAY be empty when `cumulativeAmount <= channel.settled` (forfeit path) |
 
 ~~~solidity
 function close(
@@ -669,8 +678,8 @@ functions that accept voucher signatures (`settle`, `close`):
    signer address from the EIP-712 signature and verify it matches:
     - `channel.authorizedSigner` if non-zero
     - Otherwise `channel.payer`
-      Contract accounts that cannot produce secp256k1 ECDSA signatures
-      MUST configure `authorizedSigner` to an EOA-style signer.
+      The signer may be an EOA (verified via ECDSA) or an ERC-1271
+      contract wallet (verified via `isValidSignature`).
 
 3. **Domain binding**: The contract MUST use its own address as
    `verifyingContract` in the EIP-712 domain separator, ensuring
@@ -1053,6 +1062,7 @@ REQUIRED, as described in the Credential Structure section.
 | `action` | string | REQUIRED | `"topUp"` |
 | `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
+| `salt` | string | REQUIRED | Random bytes32 hex for nonce derivation |
 | `authorization` | object | REQUIRED | EIP-3009 authorization parameters |
 | `signature` | string | REQUIRED | EIP-3009 signature |
 | `additionalDeposit` | string | REQUIRED | Additional amount to deposit |
@@ -1082,7 +1092,7 @@ atomically.
 | `deposit.action` | string | REQUIRED | `"open"` or `"topUp"` |
 | `deposit.authorization` | object | REQUIRED | EIP-3009 authorization parameters (type, from, to, value, validAfter, validBefore, nonce) |
 | `deposit.signature` | string | REQUIRED | EIP-3009 signature (65 bytes, hex-encoded) |
-| `deposit.salt` | string | CONDITIONAL | Random bytes32 hex for channelId computation. REQUIRED when `deposit.action` is `"open"`; MUST NOT be present for `"topUp"` |
+| `deposit.salt` | string | REQUIRED | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"`; passed as `topUpSalt` for nonce derivation when `deposit.action` is `"topUp"` |
 | `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Defaults to payer (`authorization.from`) if omitted. Only applicable when `deposit.action` is `"open"` |
 
 When `deposit` is present, the server processes the deposit first
@@ -1141,6 +1151,7 @@ if `open` is called on an existing `channelId`.
     "signature": "0xabcdef...vouchersig",
     "deposit": {
       "action": "topUp",
+      "salt": "0xcccc5678dddd9012eeee3456ffff7890aaaa1234bbbb5678cccc9012dddd3456",
       "authorization": {
         "type": "eip-3009",
         "from": "0xaabbccddee11223344556677889900aabbccddee",
@@ -1739,7 +1750,7 @@ rather than accepting an arbitrary random value. For example:
 nonce = keccak256(abi.encode(payee, token, salt, authorizedSigner, splitRecipients, splitBps))
 
 // topUpWithAuthorization
-nonce = keccak256(abi.encode(channelId, additionalDeposit))
+nonce = keccak256(abi.encode(channelId, additionalDeposit, from, topUpSalt))
 ~~~
 
 The contract recomputes the nonce from the function parameters
