@@ -173,9 +173,10 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 ## Request Fields
 
 Tempo uses the shared `amount`, `currency`, `periodSeconds`,
-`recipient`, `description`, `externalId`, and `subscriptionId` fields
-from {{I-D.payment-intent-subscription}}. It additionally requires the
-following request field because Tempo key authorizations must expire:
+`subscriptionExpires`, `recipient`, `description`, and `externalId`
+fields from {{I-D.payment-intent-subscription}}. Tempo additionally
+requires `subscriptionExpires` because Tempo key authorizations must
+expire:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -186,7 +187,6 @@ following request field because Tempo key authorizations must expire:
 | `recipient` | string | REQUIRED | Recipient address authorized for subscription charges |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
-| `subscriptionId` | string | OPTIONAL | Server-issued opaque identifier for an existing subscription |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
@@ -195,6 +195,14 @@ surrounding whitespace. Leading zeros MUST NOT be used.
 The `periodSeconds` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
+
+Hex values in this profile use lowercase hexadecimal with `0x` prefix
+and no padding or truncation. Implementations MUST use lowercase hex
+when generating addresses, token identifiers, selectors, and
+hex-encoded signed payloads. Implementations SHOULD accept mixed-case
+input, but MUST normalize it to lowercase before comparison. Address,
+selector, and token-identifier comparisons are by decoded value, not
+raw string form.
 
 ## Method Details
 
@@ -227,7 +235,7 @@ be represented in the Tempo key authorization expiry field.
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
-  "subscriptionExpires": "2026-01-01T00:00:00Z",
+  "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 42431
@@ -356,6 +364,9 @@ charge are a single atomic operation:
 
 Servers MUST treat the subscription as active only after the activation
 transaction succeeds.
+
+Servers MUST NOT treat activation as successful if the activation
+transaction settles at or after `subscriptionExpires`.
 
 ## Renewal
 
@@ -570,7 +581,7 @@ The `request` decodes to:
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
-  "subscriptionExpires": "2026-01-01T00:00:00Z",
+  "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 42431
@@ -579,7 +590,7 @@ The `request` decodes to:
 ~~~
 
 This requests a recurring payment of 10.00 alphaUSD every 2,592,000
-seconds until 2026-01-01T00:00:00Z.
+seconds until 2026-07-14T12:00:00Z.
 
 **Credential:**
 
@@ -643,7 +654,6 @@ authorization:
 ~~~http
 GET /api/resource HTTP/1.1
 Host: api.example.com
-Subscription-Id: c3ViXzAxMjM0NTY
 ~~~
 
 When Period 1 begins, the server determines that billing-period index 1
@@ -682,7 +692,6 @@ that time continue to succeed without another renewal charge:
 ~~~http
 GET /api/resource HTTP/1.1
 Host: api.example.com
-Subscription-Id: c3ViXzAxMjM0NTY
 ~~~
 
 Once `2026-04-15T12:03:10Z` is reached, the server stops submitting

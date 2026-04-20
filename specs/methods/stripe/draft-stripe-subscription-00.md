@@ -159,9 +159,9 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 ## Request Fields
 
 The Stripe `subscription` profile uses the shared `amount`, `currency`,
-`periodSeconds`, `description`, `externalId`, and `subscriptionId`
-fields from {{I-D.payment-intent-subscription}}. It additionally defines
-the following request constraints and fields:
+`periodSeconds`, `subscriptionExpires`, `description`, and
+`externalId` fields from {{I-D.payment-intent-subscription}}. It
+additionally defines the following request constraints:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -171,7 +171,6 @@ the following request constraints and fields:
 | `subscriptionExpires` | string | OPTIONAL | Subscription expiry timestamp in {{RFC3339}} format. When present, it bounds the subscription lifetime. |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
-| `subscriptionId` | string | OPTIONAL | Server-issued opaque identifier for an existing subscription |
 | `recipient` | string | MUST NOT | This profile identifies the merchant by the challenged Stripe account and `methodDetails.networkId`, not by a request-native recipient field |
 
 The `amount` value MUST be a string representation of a positive
@@ -189,8 +188,13 @@ Servers MUST reject request objects that include `recipient`.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID for the challenged merchant |
-| `methodDetails.paymentMethodTypes` | []string | REQUIRED | Stripe payment method types accepted for the first invoice |
+| `methodDetails.paymentMethodTypes` | []string | REQUIRED | Stripe payment method types accepted for activation and future off-session recurring invoices |
 | `methodDetails.metadata` | object | OPTIONAL | Merchant-defined metadata to attach to Stripe objects |
+
+Servers MUST include only payment method types that can complete this
+profile's activation flow, including any asynchronous or
+customer-action-required first-invoice path, and can also be reused for
+future off-session recurring charges under the challenged account.
 
 **Example:**
 
@@ -304,7 +308,9 @@ Servers MUST verify Payment credentials for Stripe subscription intent:
 4. Extract the `paymentMethod` and optional `customer` from the
    credential payload
 5. Verify the Stripe PaymentMethod exists, is reusable by the
-   challenged merchant, and has a type allowed by the challenge
+   challenged merchant, has a type allowed by the challenge, and can
+   support both the profile's first-invoice activation flow and future
+   off-session recurring charges
 6. Verify the credential has not been replayed for the same challenge
 
 Servers MUST complete challenge validation before creating or mutating

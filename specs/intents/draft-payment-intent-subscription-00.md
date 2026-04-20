@@ -193,9 +193,9 @@ JSON MUST be serialized using JSON Canonicalization Scheme (JCS)
 ## Shared Fields
 
 All payment methods implementing the "subscription" intent MUST support
-these shared fields. Payment methods MAY elevate OPTIONAL fields to
-REQUIRED in their method specification, and MUST document any narrower
-supported subset.
+the required shared fields below. Method specifications MAY support,
+forbid, or elevate optional shared fields to REQUIRED, but MUST
+document those choices explicitly.
 
 ### Required Fields
 
@@ -227,14 +227,17 @@ cadence.
 | Field | Type | Description |
 |-------|------|-------------|
 | `recipient` | string | Payment recipient in method-native format |
+| `subscriptionExpires` | string | Optional recurring-authorization expiry timestamp in {{RFC3339}} format |
 | `description` | string | Human-readable subscription description |
 | `externalId` | string | Merchant's reference for the subscription |
-| `subscriptionId` | string | Server-issued opaque identifier for an existing subscription |
 | `methodDetails` | object | Method-specific extension data |
 
-The `subscriptionId` field is absent during initial activation. Servers
-MAY include it when issuing a challenge tied to an existing
-subscription.
+When present, `subscriptionExpires` bounds the reusable lifetime of the
+subscription authorization. Once that timestamp is reached, the server
+MUST stop treating the subscription as authority for future billing
+periods. Payment methods MAY require this field and MAY impose
+additional constraints, such as billing-period boundary alignment or
+network-native representation limits.
 
 Payment methods MAY define additional top-level request fields when the
 underlying payment system requires data that is not part of the shared
@@ -368,7 +371,7 @@ periods until:
 
 - The payer explicitly cancels it
 - The payment method revokes or invalidates the authorization
-- Any method-specific expiry or bounded lifetime is reached
+- The `subscriptionExpires` timestamp, if present, is reached
 
 # Subscription Lifecycle
 
@@ -405,27 +408,23 @@ Payment method specifications define the concrete renewal, retry,
 recovery, and cancellation mechanisms, but they MUST preserve the
 invariants in this section.
 
-## Reauthentication
+## Subscription Identifier
 
 After successful activation, the server MUST return a `subscriptionId`
 in the `Payment-Receipt`. The value MUST be a base64url {{RFC4648}}
 string without padding and MUST be unique within the server's
 subscription namespace.
 
-Clients SHOULD retain the `subscriptionId` and, when intending to use an
-existing subscription on a later request, MAY send it in the
-`Subscription-Id` request header.
+Clients MAY retain the `subscriptionId` as application data when
+referring to the active subscription in later interactions.
 
-The `Subscription-Id` header is only a subscription-selection hint. It
-does not, by itself, prove authority to use the subscription.
-
-If a request is associated with an existing subscription, the server MAY
-echo that identifier in the challenge `request.subscriptionId` field to
-bind the challenge to the intended subscription.
+This specification does not define a dedicated HTTP request header for
+carrying `subscriptionId`.
 
 Servers MUST authenticate or otherwise authorize the client's use of the
 identified subscription before granting access or collecting a renewal
-charge. A matching `Subscription-Id` alone is insufficient.
+charge. Possession or presentation of a `subscriptionId` alone is
+insufficient.
 
 ## Server Accounting and Idempotency
 
@@ -478,7 +477,7 @@ usable and initiate a new subscription flow.
 
 This section is non-normative.
 
-## Monthly Billing Example
+## 30-Day Billing Example
 
 Suppose a server offers a plan with these request fields:
 
@@ -525,16 +524,15 @@ intent authorizes at most one charge for Period 4. The missed Period 3
 charge does not automatically accumulate into authority to collect both
 Period 3 and Period 4.
 
-## Method-Specific Expiry Example
+## Expiry Example
 
-The shared subscription intent does not require an expiry field. Some
-payment methods define an optional or required bounded lifetime for the
-recurring authorization.
+The shared subscription intent defines `subscriptionExpires` as an
+optional top-level field. Some payment methods require it and others
+leave it optional.
 
-Once such a method-specific expiry is reached, the server stops
-treating the subscription as reusable for future billing periods.
-Requests after that time receive `402 Payment Required` with a fresh
-challenge.
+Once `subscriptionExpires` is reached, the server stops treating the
+subscription as reusable for future billing periods. Requests after that
+time receive `402 Payment Required` with a fresh challenge.
 
 # Security Considerations
 
@@ -551,8 +549,8 @@ Clients MUST verify before activating a subscription:
 1. `amount` is acceptable for the service
 2. `currency` is expected
 3. `periodSeconds` matches the expected billing interval
-4. Any method-specific fields or constraints are understood and
-   acceptable
+4. Any `subscriptionExpires` value and method-specific constraints are
+   understood and acceptable
 
 Clients MUST NOT rely on the `description` field for payment
 verification.
@@ -583,14 +581,6 @@ Responses containing `Payment-Receipt` headers MUST include
 receipts.
 
 # IANA Considerations
-
-## Header Field Registration
-
-This document registers the following header fields:
-
-| Field Name | Status | Reference |
-|------------|--------|-----------|
-| `Subscription-Id` | permanent | This document |
 
 ## Payment Intent Registration
 
