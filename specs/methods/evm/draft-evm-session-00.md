@@ -1772,6 +1772,47 @@ possible (e.g., via ERC-4337 UserOperations or
 multicall) to minimize the window between approval and
 channel creation.
 
+## Contract Wallet Signer Mutability {#contract-wallet-signer-mutability}
+
+When `authorizedSigner` is an ERC-1271 contract wallet (e.g., Safe,
+ERC-4337 account), voucher validity depends on the wallet's current
+signer state at verification time, not at signing time. If the wallet's
+owner set, signing key, or signature-validation policy changes after a
+voucher is signed, `isValidSignature` MAY return failure for
+previously-signed vouchers, rendering them unredeemable on-chain.
+
+This creates an asymmetric risk:
+
+- **Payee risk**: If the payer rotates keys on their contract wallet
+  after signing vouchers but before the payee calls `settle()`, the
+  payee loses the ability to redeem accumulated off-chain authorizations.
+- **Payer mitigation**: Payers using contract wallets as
+  `authorizedSigner` SHOULD avoid key rotation during active sessions,
+  or coordinate rotation with settlement.
+- **Payee mitigation**: Payees SHOULD settle more frequently when the
+  `authorizedSigner` is a contract wallet, reducing the value at risk
+  from signer-state changes. Payees MAY inspect the signer address to
+  determine whether it is a contract (via `EXTCODESIZE`) and adjust
+  settlement cadence accordingly.
+
+EOA signers are not affected: ECDSA recovery is stateless and depends
+only on the signature and message.
+
+**Recommended pattern**: When the payer is a contract wallet, the payer
+SHOULD delegate voucher signing to an ephemeral EOA session key by
+setting `authorizedSigner` to that EOA's address, rather than leaving
+`authorizedSigner` unset (which defaults to the payer contract wallet).
+This preserves the AA benefits for the escrowed funds — the contract
+wallet still controls `open()`, `topUp()`, and `close()` calls — while
+eliminating the signer-mutability risk for off-chain vouchers. The
+session key SHOULD be scoped to the lifetime of the channel and
+discarded after `close()`.
+
+Contract-wallet `authorizedSigner` remains permitted for cases where
+EOA delegation is not acceptable (e.g., enterprise multi-sig policies
+that require every signed artifact to carry a quorum signature). In
+such cases, the mitigations above apply.
+
 ## Escrow Guarantees
 
 The escrow contract provides the following security properties:
