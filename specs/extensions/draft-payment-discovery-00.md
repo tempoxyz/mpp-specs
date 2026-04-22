@@ -258,6 +258,100 @@ except for the value `"0"`. This format is consistent
 with the `amount` field defined in the request object
 of {{I-D.httpauth-payment}}.
 
+### Payment Offer Examples
+
+The following examples illustrate common multi-offer
+patterns.
+
+#### Same Intent, Different Currency
+
+The same `charge` intent can be offered in multiple
+currencies for the same operation:
+
+~~~json
+{
+  "x-payment-info": {
+    "offers": [
+      {
+        "intent": "charge",
+        "method": "tempo",
+        "amount": "500",
+        "currency":
+          "0x20c00000000000000000000000000000000000"
+      },
+      {
+        "intent": "charge",
+        "method": "tempo",
+        "amount": "500",
+        "currency":
+          "0x20c000000000000000000000b9537d11c60e8b50"
+      }
+    ]
+  }
+}
+~~~
+
+#### Multiple Methods Under One Intent
+
+The same `charge` intent can be offered through
+different payment methods:
+
+~~~json
+{
+  "x-payment-info": {
+    "offers": [
+      {
+        "intent": "charge",
+        "method": "tempo",
+        "amount": "500",
+        "currency":
+          "0x20c000000000000000000000b9537d11c60e8b50"
+      },
+      {
+        "intent": "charge",
+        "method": "stripe",
+        "amount": "5",
+        "currency": "usd"
+      }
+    ]
+  }
+}
+~~~
+
+#### Multiple Methods and Intents
+
+An operation can advertise multiple methods and
+multiple intents at the same time:
+
+~~~json
+{
+  "x-payment-info": {
+    "offers": [
+      {
+        "intent": "session",
+        "method": "tempo",
+        "amount": "500",
+        "currency":
+          "0x20c00000000000000000000000000000000000"
+      },
+      {
+        "intent": "charge",
+        "method": "tempo",
+        "amount": "750",
+        "currency":
+          "0x20c000000000000000000000b9537d11c60e8b50"
+      },
+      {
+        "intent": "charge",
+        "method": "stripe",
+        "amount": "8",
+        "currency": "usd"
+      }
+    ]
+  }
+}
+~~~
+
 ## 402 Response Declaration
 
 Each payable operation MUST include a `402` response
