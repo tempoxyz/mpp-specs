@@ -109,8 +109,7 @@ document annotated with two extensions:
   including categories and documentation links.
 
 - `x-payment-info`: Per-operation payment requirements
-  including intent type, payment method, amount, and
-  currency.
+  including one or more payment offers.
 
 OpenAPI provides both payment metadata and input
 schemas, enabling agents to discover and invoke
@@ -135,6 +134,12 @@ Payable Operation
 : An API operation that requires payment, indicated by
   a 402 response and `x-payment-info` extension in the
   OpenAPI document.
+
+Payment Offer
+: A discovered payment alternative for a payable
+  operation. Multiple payment offers correspond to
+  alternative runtime Payment challenges for the same
+  operation.
 
 # OpenAPI Discovery {#openapi-discovery}
 
@@ -209,8 +214,30 @@ All URI values MUST conform to {{RFC3986}}.
 
 Each payable operation MUST include the
 `x-payment-info` extension object on the operation.
-This extension describes the payment requirements for
+This extension describes one or more payment offers for
 the operation.
+
+The extension supports two equivalent forms:
+
+- Single-offer shorthand: an object containing the
+  fields of a single payment offer directly.
+
+- Multi-offer form: an object containing an `offers`
+  array of one or more payment offer objects.
+
+Servers publishing new discovery documents SHOULD use
+the multi-offer form. Clients and registries MUST
+accept both forms. When the single-offer shorthand is
+used, clients and registries MUST treat it as
+equivalent to a multi-offer form containing exactly one
+payment offer.
+
+When multiple offers are present, clients SHOULD treat
+them as alternative ways to access the same operation.
+At runtime, the client selects one offer and fulfills
+the corresponding 402 challenge.
+
+### Payment Offer Object
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -221,7 +248,7 @@ the operation.
 | `description` | string | OPTIONAL | Human-readable pricing note. |
 
 The `amount` field is REQUIRED but its value MAY be
-`null` to support endpoints where pricing depends on
+`null` to support offers where pricing depends on
 request parameters (e.g., variable-cost operations).
 When non-null, the value MUST be a string of ASCII
 digits (`0`-`9`) representing a non-negative integer in
@@ -304,11 +331,24 @@ capabilities may have changed.
       "post": {
         "summary": "Chat completions",
         "x-payment-info": {
-          "intent": "session",
-          "method": "tempo",
-          "amount": "500",
-          "currency":
-            "0x20c00000000000000000000000000000000000"
+          "offers": [
+            {
+              "intent": "charge",
+              "method": "tempo",
+              "amount": "500",
+              "currency":
+                "0x20c00000000000000000000000000000000000"
+            },
+            {
+              "intent": "charge",
+              "method": "tempo",
+              "amount": "500",
+              "currency":
+                "0x20c000000000000000000000b9537d11c60e8b50",
+              "description":
+                "Alternative Tempo asset for the same route."
+            }
+          ]
         },
         "requestBody": {
           "content": {
@@ -397,11 +437,9 @@ authoritative.
 
 Specifically:
 
-- If discovery indicates a payment method that differs
-  from the 402 challenge, the 402 challenge takes
-  precedence.
-- If discovery indicates an amount that differs from
-  the 402 challenge, the 402 challenge takes
+- If discovery indicates payment offer details that
+  differ from the 402 challenge, including method,
+  intent, amount, or currency, the 402 challenge takes
   precedence.
 - Clients MUST NOT cache discovery data as a
   substitute for processing 402 challenges.
@@ -545,30 +583,50 @@ this schema.
   "$schema":
     "https://json-schema.org/draft/2020-12/schema",
   "title": "x-payment-info",
-  "type": "object",
-  "required": ["intent", "method", "amount"],
-  "properties": {
-    "intent": {
-      "type": "string",
-      "enum": ["charge", "session"]
-    },
-    "method": {
-      "type": "string"
-    },
-    "amount": {
-      "oneOf": [
-        { "type": "null" },
-        {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)$"
+  "oneOf": [
+    { "$ref": "#/$defs/offer" },
+    {
+      "type": "object",
+      "required": ["offers"],
+      "properties": {
+        "offers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/offer" }
         }
-      ]
-    },
-    "currency": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "offer": {
+      "type": "object",
+      "required": ["intent", "method", "amount"],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": ["charge", "session"]
+        },
+        "method": {
+          "type": "string"
+        },
+        "amount": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
