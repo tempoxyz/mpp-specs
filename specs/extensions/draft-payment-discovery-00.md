@@ -318,6 +318,36 @@ different payment methods:
 }
 ~~~
 
+#### Fixed and Dynamic Offers
+
+An operation can mix fixed-price and dynamic-price
+offers in the same intent set. In this example,
+Tempo is fixed-price while Stripe is dynamic:
+
+~~~json
+{
+  "x-payment-info": {
+    "offers": [
+      {
+        "intent": "charge",
+        "method": "tempo",
+        "amount": "500",
+        "currency":
+          "0x20c000000000000000000000b9537d11c60e8b50"
+      },
+      {
+        "intent": "charge",
+        "method": "stripe",
+        "amount": null,
+        "currency": "usd",
+        "description":
+          "Price varies by processor fees and request size."
+      }
+    ]
+  }
+}
+~~~
+
 #### Multiple Methods and Intents
 
 An operation can advertise multiple methods and
