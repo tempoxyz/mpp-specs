@@ -114,8 +114,8 @@ Billing Period
   may be collected.
 
 Activation
-: The successful initial registration of a subscription, which also
-  collects the first billing-period charge.
+: The successful initial setup of a subscription, which includes
+  collection of the first billing-period charge.
 
 Renewal
 : A later charge that collects the subscription amount for a subsequent
@@ -126,8 +126,8 @@ Cancellation
 
 Subscription Identifier
 : A server-issued opaque identifier for an activated subscription,
-  used by clients to re-authenticate into that subscription on later
-  requests.
+  used by servers and applications to refer to that subscription in
+  later interactions.
 
 # Intent Semantics
 
@@ -239,11 +239,9 @@ periods. Payment methods MAY require this field and MAY impose
 additional constraints, such as billing-period boundary alignment or
 network-native representation limits.
 
-Payment methods MAY define additional top-level request fields when the
-underlying payment system requires data that is not part of the shared
-contract. Such fields MUST be documented by the payment method
-specification and MUST NOT change the meaning of the shared fields in
-this section.
+Payment methods MUST place all method-specific request parameters in
+`methodDetails`. They MAY require or forbid shared optional fields, but
+MUST NOT define additional top-level request fields.
 
 Servers issuing `intent="subscription"` challenges SHOULD include the
 `expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
@@ -286,9 +284,9 @@ support and how to interpret amounts for each format.
 
 ## Method Extensions
 
-Payment methods MAY define additional fields in the `methodDetails`
-object. These fields are method-specific and MUST be documented in the
-payment method specification.
+Payment methods MAY define additional fields only in the
+`methodDetails` object. Shared top-level fields retain the meanings
+defined in this document.
 
 ## Implementor Guidance
 
@@ -341,6 +339,7 @@ In particular:
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
+  "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 42431
@@ -380,11 +379,13 @@ periods until:
 When the server receives a "subscription" credential, it MUST:
 
 1. Verify the subscription authorization proof
-2. Activate the subscription
-3. Collect the first billing-period charge
-4. Initialize durable subscription state for later renewals
-5. Return success (200) with a `Payment-Receipt` for the first charge,
+2. Perform any method-specific subscription setup and collect the first
+   billing-period charge
+3. Initialize durable subscription state for later renewals
+4. Return success (200) with a `Payment-Receipt` for the first charge,
    including a `subscriptionId`
+
+The subscription becomes active only after these steps succeed.
 
 ## Renewal
 
@@ -416,15 +417,12 @@ string without padding and MUST be unique within the server's
 subscription namespace.
 
 Clients MAY retain the `subscriptionId` as application data when
-referring to the active subscription in later interactions.
+referring to the active subscription in later interactions. Applications
+MAY instead use application-defined identifiers or other context to
+associate a later request with an existing subscription.
 
-The `Subscription-Id` header is only a subscription-selection hint. It
-does not, by itself, prove authority to use the subscription.
-
-The challenge `request` object does not carry `subscriptionId`. The
-canonical reusable identifier is the `subscriptionId` field returned in
-the `Payment-Receipt`, and the corresponding request-time selector is
-the `Subscription-Id` header.
+This specification does not define a dedicated request header or
+parameter for selecting an existing subscription.
 
 Servers MUST authenticate or otherwise authorize the client's use of the
 identified subscription before granting access or collecting a renewal

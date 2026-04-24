@@ -159,8 +159,8 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 ## Request Fields
 
 The Stripe `subscription` profile uses the shared `amount`, `currency`,
-`periodSeconds`, `subscriptionExpires`, `description`, and
-`externalId` fields from {{I-D.payment-intent-subscription}}. It
+`periodSeconds`, `description`, and `externalId` fields from
+{{I-D.payment-intent-subscription}}. It
 additionally defines the following request constraints:
 
 | Field | Type | Required | Description |
@@ -168,7 +168,6 @@ additionally defines the following request constraints:
 | `amount` | string | REQUIRED | Fixed payment amount per billing period in the currency's smallest unit |
 | `currency` | string | REQUIRED | Lowercase ISO 4217 currency code |
 | `periodSeconds` | string | REQUIRED | Billing period duration in seconds |
-| `subscriptionExpires` | string | OPTIONAL | Subscription expiry timestamp in {{RFC3339}} format. When present, it bounds the subscription lifetime. |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
 | `recipient` | string | MUST NOT | This profile identifies the merchant by the challenged Stripe account and `methodDetails.networkId`, not by a request-native recipient field |
@@ -181,7 +180,8 @@ The `periodSeconds` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
-Servers MUST reject request objects that include `recipient`.
+Servers MUST reject request objects that include `recipient` or
+`subscriptionExpires`.
 
 ## Method Details
 
@@ -203,7 +203,6 @@ future off-session recurring charges under the challenged account.
   "amount": "5000",
   "currency": "usd",
   "periodSeconds": "604800",
-  "subscriptionExpires": "2026-03-12T12:03:10Z",
   "description": "Weekly Pro plan",
   "externalId": "sub_12345",
   "methodDetails": {
@@ -233,20 +232,6 @@ If `periodSeconds` is divisible by both values, servers SHOULD prefer
 the `week` representation. Servers MUST reject any `periodSeconds`
 value that would require approximation, calendar-month interpretation,
 calendar-year interpretation, or an unsupported Stripe interval count.
-
-If `subscriptionExpires` is present, it defines a bounded subscription
-lifetime. Servers MUST configure Stripe so that no renewal may occur
-after `subscriptionExpires`, typically by setting Stripe's `cancel_at`
-field {{STRIPE-BILLING-CANCEL}}. In this profile, `subscriptionExpires`
-MUST fall on a canonical billing-period boundary derived from the
-activation anchor and `periodSeconds`. Servers MUST reject any request
-whose expiry would require a prorated invoice, a partial final billing
-period, or any other amount or timing change relative to the shared
-subscription intent.
-
-If `subscriptionExpires` is absent, the Stripe subscription MAY remain
-open-ended until canceled or otherwise terminated according to this
-profile.
 
 This profile supports only a fixed quantity of 1 for the single
 subscription item. Servers MUST reject any request or server-side
@@ -279,7 +264,6 @@ Stripe subscription, the `payload` object contains the following fields:
 |-------|------|----------|-------------|
 | `paymentMethod` | string | REQUIRED | Stripe PaymentMethod ID to use for the first invoice and future recurring charges |
 | `customer` | string | OPTIONAL | Existing Stripe Customer ID if the merchant already has one for the payer |
-| `externalId` | string | OPTIONAL | Client's reference ID |
 
 The `paymentMethod` MUST reference a Stripe PaymentMethod whose type is
 included in `methodDetails.paymentMethodTypes` and which is suitable for
@@ -291,8 +275,7 @@ account.
 ~~~json
 {
   "paymentMethod": "pm_1Qabc32eZvKYlo2C7b8H1234",
-  "customer": "cus_S7x1Pq5R9n2Lm4",
-  "externalId": "client_sub_789"
+  "customer": "cus_S7x1Pq5R9n2Lm4"
 }
 ~~~
 
@@ -303,8 +286,7 @@ Servers MUST verify Payment credentials for Stripe subscription intent:
 1. Verify the challenge ID matches the one issued
 2. Verify the challenge has not expired
 3. Decode the request object and verify it matches this constrained
-   profile, including exact `periodSeconds` support and, if present,
-   exact `subscriptionExpires` support
+   profile, including exact `periodSeconds` support
 4. Extract the `paymentMethod` and optional `customer` from the
    credential payload
 5. Verify the Stripe PaymentMethod exists, is reusable by the
@@ -327,8 +309,7 @@ For `intent="subscription"`, the server MUST:
 3. Create or reuse a Stripe Price whose amount, currency, and recurring
    cadence exactly match the request
 4. Create a Stripe Subscription with exactly one recurring item,
-   quantity 1, no unsupported features, and, if `subscriptionExpires`
-   is present, bounded expiry at that timestamp
+   quantity 1, and no unsupported features
 5. Treat activation as successful only after the first invoice for that
    subscription is paid
 6. Initialize durable local subscription state for later renewals
@@ -365,10 +346,6 @@ of duplicate webhooks, retries, concurrent requests, or later
 collection of older unpaid invoices. If a Stripe recovery or retry flow
 cannot be mapped exactly to the shared one-charge-per-period invariant,
 servers MUST disable that flow or reject the request.
-
-Once `subscriptionExpires` is reached, if that field was present,
-servers MUST stop treating the Stripe subscription as authority for
-additional renewals, even if Stripe later reports a paid invoice.
 
 ## Receipt Generation
 
@@ -454,7 +431,6 @@ The `request` decodes to:
   "amount": "5000",
   "currency": "usd",
   "periodSeconds": "604800",
-  "subscriptionExpires": "2026-03-12T12:03:10Z",
   "description": "Weekly Pro plan",
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
@@ -473,9 +449,9 @@ The `request` decodes to:
 ~~~
 
 The server creates or reuses a Stripe Customer, creates or reuses a
-weekly fixed-price Stripe Price, creates a bounded Stripe Subscription,
-and waits for the first invoice to be paid. Once Stripe reports the
-first invoice as paid, the `Payment-Receipt` payload decodes to:
+weekly fixed-price Stripe Price, creates a Stripe Subscription, and
+waits for the first invoice to be paid. Once Stripe reports the first
+invoice as paid, the `Payment-Receipt` payload decodes to:
 
 ~~~json
 {
@@ -501,7 +477,6 @@ whole number of days or weeks:
   "amount": "5000",
   "currency": "usd",
   "periodSeconds": "90000",
-  "subscriptionExpires": "2026-03-12T12:03:10Z",
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
     "paymentMethodTypes": ["card"]
