@@ -701,7 +701,7 @@ transactions.
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract":
-      "0x401b6dc30221823361E4876f5C502e37249D84C3",
+      "0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE",
     "chainId": 295
   }
 }
@@ -722,7 +722,7 @@ units). The `currency` is Circle USDC on Hedera mainnet
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract":
-      "0x401b6dc30221823361E4876f5C502e37249D84C3",
+      "0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE",
     "channelId":
       "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b"
       "1f6a9c1b3e2d4a5b6c7d8e9f",
@@ -1884,7 +1884,7 @@ The `request` decodes to:
     "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract":
-      "0x401b6dc30221823361E4876f5C502e37249D84C3",
+      "0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE",
     "chainId": 295
   }
 }
@@ -2171,8 +2171,8 @@ interface IHederaStreamChannel {
 
 | Network | Chain ID | Contract Address |
 |---------|----------|------------------|
-| Hedera Testnet | 296 | `0x401b6dc30221823361E4876f5C502e37249D84C3` |
-| Hedera Mainnet | 295 | `0x401b6dc30221823361E4876f5C502e37249D84C3` |
+| Hedera Testnet | 296 | `0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE` |
+| Hedera Mainnet | 295 | `0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE` |
 
 Both deployments are fully verified on Sourcify.
 
