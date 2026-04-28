@@ -52,6 +52,12 @@ normative:
       - name: Kevin Britz
       - name: David Knott
     date: 2020-09
+  Permit2:
+    title: "Permit2: Token Approvals for the Next Generation of DeFi"
+    target: https://github.com/Uniswap/permit2
+    author:
+      - org: Uniswap Labs
+    date: 2022-12
   I-D.evm-charge:
     title: "EVM Charge Intent for HTTP Payment Authentication"
     target: https://datatracker.ietf.org/doc/draft-evm-charge/
@@ -380,8 +386,6 @@ Each channel is identified by a unique `channelId` and stores:
 | `settled` | uint128 | Cumulative amount already withdrawn by payee |
 | `closeRequestedAt` | uint64 | Timestamp when close was requested (0 if not) |
 | `finalized` | bool | Whether channel is closed |
-| `splitRecipients` | address[] | Split recipient addresses (empty if no splits) |
-| `splitBps` | uint16[] | Corresponding basis points per recipient |
 
 The `channelId` MUST be computed deterministically using the escrow
 contract's `computeChannelId()` function or equivalent logic:
@@ -455,8 +459,6 @@ a channel with the computed `channelId` already exists.
 | `deposit` | uint128 | Amount to deposit in base units |
 | `salt` | bytes32 | Random value for channelId computation |
 | `authorizedSigner` | address | Delegated signer; `address(0)` = payer |
-| `splitRecipients` | address[] | Split recipient addresses (empty array if no splits) |
-| `splitBps` | uint16[] | Basis points per recipient. MUST have same length as `splitRecipients`. Sum MUST be < 10000 |
 
 ~~~solidity
 function open(
@@ -464,15 +466,9 @@ function open(
     address token,
     uint128 deposit,
     bytes32 salt,
-    address authorizedSigner,
-    address[] calldata splitRecipients,
-    uint16[] calldata splitBps
+    address authorizedSigner
 ) external returns (bytes32 channelId);
 ~~~
-
-When `splitRecipients` is empty, the channel has no splits and
-all settlement funds go to the payee. Split parameters are
-immutable once the channel is created.
 
 ### openWithAuthorization
 
@@ -504,8 +500,6 @@ via `receiveWithAuthorization` inside the contract.
 | `validBefore` | uint256 | EIP-3009 validity end |
 | `nonce` | bytes32 | EIP-3009 nonce (see {{front-running-protection}} for recommended derivation) |
 | `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
-| `splitRecipients` | address[] | Split recipient addresses (empty if no splits) |
-| `splitBps` | uint16[] | Basis points per recipient |
 
 ~~~solidity
 function openWithAuthorization(
@@ -518,11 +512,68 @@ function openWithAuthorization(
     uint256 validAfter,
     uint256 validBefore,
     bytes32 nonce,
-    bytes calldata signature,
-    address[] calldata splitRecipients,
-    uint16[] calldata splitBps
+    bytes calldata signature
 ) external returns (bytes32 channelId);
 ~~~
+
+### openWithPermit2
+
+Opens a channel using {{Permit2}} `SignatureTransfer` with a witness.
+The server (or any relayer) submits the transaction, pulling funds
+from the payer via the canonical Permit2 contract. This path supports
+any ERC-20 token that the payer has previously approved for the
+Permit2 contract (typically a one-time, unlimited approval).
+
+> **Note:** The escrow contract MUST use `permitWitnessTransferFrom`
+> (not `permitTransferFrom`) to bind the channel intent (`payee`,
+> `salt`, `authorizedSigner`) into the EIP-712 signature as a named
+> witness struct. This serves two purposes: (1) wallets that render
+> EIP-712 typed data display the channel parameters as labeled fields
+> at signing time, instead of leaving them to be hashed opaquely into
+> the nonce; (2) the contract enforces channel-parameter integrity
+> via the Permit2 signature itself, so an attacker cannot front-run
+> with a different `payee`. The Permit2 `spender` is fixed to
+> `msg.sender` by the contract, so only the escrow can spend the
+> signature.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `payee` | address | Server's address |
+| `token` | address | ERC-20 token contract |
+| `deposit` | uint128 | Amount to deposit |
+| `salt` | bytes32 | Random value |
+| `authorizedSigner` | address | Delegated signer; `address(0)` = payer |
+| `from` | address | Payer address (Permit2 `owner`) |
+| `nonce` | uint256 | Permit2 nonce (any unused value; bitmap-based replay protection) |
+| `deadline` | uint256 | Permit2 signature deadline (Unix seconds) |
+| `signature` | bytes | Permit2 EIP-712 signature (65 bytes) |
+
+~~~solidity
+function openWithPermit2(
+    address payee,
+    address token,
+    uint128 deposit,
+    bytes32 salt,
+    address authorizedSigner,
+    address from,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external returns (bytes32 channelId);
+~~~
+
+The escrow contract MUST construct the Permit2 `PermitTransferFrom`
+struct, `SignatureTransferDetails`, and the `ChannelOpenWitness`
+witness struct from these parameters with `permitted.token = token`,
+`permitted.amount = deposit`, `transferDetails.to = address(this)`,
+`transferDetails.requestedAmount = deposit`, and witness fields
+`(payee, salt, authorizedSigner)`. It then computes
+`witnessHash = keccak256(abi.encode(CHANNEL_OPEN_WITNESS_TYPEHASH, payee, salt, authorizedSigner))`
+and calls
+`IPermit2(PERMIT2).permitWitnessTransferFrom(permit, transferDetails, from, witnessHash, WITNESS_TYPE_STRING, signature)`
+on the canonical Permit2 deployment. If the payer signed a different
+`payee`, `salt`, or `authorizedSigner` than the function arguments,
+the Permit2 signature verification reverts.
 
 ### settle
 
@@ -535,11 +586,8 @@ channel. The contract MUST revert if `msg.sender != channel.payee`.
 | `cumulativeAmount` | uint128 | Cumulative total authorized |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
-The contract computes `delta = cumulativeAmount - channel.settled`.
-If the channel has no splits, `delta` is transferred to the payee.
-If splits are registered, the contract distributes:
-`splitAmount = delta * bps / 10000` to each split recipient, and
-the remainder to the payee. All transfers are atomic.
+The contract computes `delta = cumulativeAmount - channel.settled`
+and transfers `delta` to the payee.
 
 ~~~solidity
 function settle(
@@ -598,14 +646,42 @@ function topUpWithAuthorization(
 ) external;
 ~~~
 
+### topUpWithPermit2
+
+Adds funds using {{Permit2}} `SignatureTransfer` with a witness.
+Mirrors `openWithPermit2` for an existing channel. The escrow MUST
+call `permitWitnessTransferFrom` with a `ChannelTopUpWitness`
+binding `(channelId, topUpSalt)`, so the payer's wallet shows the
+target channel and the contract enforces that the signature cannot
+be redirected to a different channel.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Existing channel identifier |
+| `additionalDeposit` | uint128 | Additional amount |
+| `topUpSalt` | bytes32 | Random value bound into the witness |
+| `from` | address | Payer address |
+| `nonce` | uint256 | Permit2 nonce (any unused value; bitmap-based replay protection) |
+| `deadline` | uint256 | Permit2 signature deadline (Unix seconds) |
+| `signature` | bytes | Permit2 EIP-712 signature (65 bytes) |
+
+~~~solidity
+function topUpWithPermit2(
+    bytes32 channelId,
+    uint128 additionalDeposit,
+    bytes32 topUpSalt,
+    address from,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external;
+~~~
+
 ### close
 
 Server closes the channel, settling outstanding voucher and refunding
 remainder to payer. The contract MUST revert if
-`msg.sender != channel.payee`. If splits are registered,
-the settlement delta is distributed according to the split ratios
-(same logic as `settle`), then the remaining deposit is refunded to
-the payer.
+`msg.sender != channel.payee`.
 
 If `cumulativeAmount <= channel.settled`, the payee is forfeiting
 any uncollected amount (e.g., to cleanly close an exhausted or
@@ -656,9 +732,11 @@ function withdraw(bytes32 channelId) external;
 |----------|--------|-------------|
 | `open` | Anyone | Creates channel; caller becomes payer |
 | `openWithAuthorization` | Anyone (typically server) | Creates channel via EIP-3009; `from` becomes payer |
+| `openWithPermit2` | Anyone (typically server) | Creates channel via Permit2 SignatureTransfer; `from` becomes payer |
 | `settle` | Payee only | Withdraws funds using voucher |
 | `topUp` | Payer only | Adds funds (approve + pull) |
 | `topUpWithAuthorization` | Anyone (typically server) | Adds funds via EIP-3009; no caller restriction because the EIP-3009 signature provides authorization |
+| `topUpWithPermit2` | Anyone (typically server) | Adds funds via Permit2; no caller restriction because the Permit2 signature provides authorization |
 | `close` | Payee only | Closes with final voucher |
 | `requestClose` | Payer only | Initiates forced close |
 | `withdraw` | Payer only | Withdraws after grace period |
@@ -720,84 +798,6 @@ consumption: `total = amount * units_consumed`.
 | `methodDetails.channelId` | string | OPTIONAL | Channel ID if resuming an existing channel |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (base units). Default: `"0"` (any positive increment accepted). See {{dos-mitigation}} |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays gas for open/topUp (default: `false`) |
-| `methodDetails.splits` | array | OPTIONAL | Ratio-based payment splits. See {{session-split-payments}} |
-
-## Split Payments {#session-split-payments}
-
-The `splits` field enables a session to distribute settlement
-payments across multiple recipients using ratio-based splits.
-Unlike the `charge` intent which uses fixed amounts, session
-splits use basis points (bps) because the total session cost
-is unknown upfront and grows with consumption.
-
-### Split Entry Schema
-
-Each entry in the `methodDetails.splits` array:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `recipient` | string | REQUIRED | Recipient EVM address |
-| `bps` | number | REQUIRED | Basis points (1 bps = 0.01%). Range: 1-9999 |
-| `memo` | string | OPTIONAL | Human-readable label (max 256 chars) |
-
-The primary `recipient` (top-level) receives the remainder
-after all split percentages are deducted.
-
-### Constraints
-
-- The sum of all `splits[].bps` MUST be strictly less than
-  10000 (100%). The primary recipient MUST always receive a
-  non-zero remainder.
-- If present, `splits` MUST contain at least 1 entry.
-- Servers SHOULD enforce a maximum split count appropriate
-  for the target chain's gas limits.
-
-### On-Chain Enforcement
-
-Split ratios are registered in the escrow contract at
-`open()` time as part of the channel state. The contract
-enforces distribution at `settle()` and `close()`:
-
-1. Compute settlement delta:
-   `delta = cumulativeAmount - channel.settled`
-2. For each split:
-   `splitAmount = delta * bps / 10000`
-3. Primary recipient receives:
-   `delta - sum(splitAmounts)`
-4. All transfers execute atomically.
-
-Vouchers remain unchanged — the client signs cumulative
-vouchers over the total amount. The split distribution is
-handled entirely by the escrow contract. The client does
-not need to sign separate authorizations per split recipient.
-
-### Example
-
-~~~json
-{
-  "amount": "100",
-  "unitType": "llm_token",
-  "suggestedDeposit": "5000000",
-  "currency": "0x74b7F16337b8972027F6196A17a631ac6dE26d22",
-  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
-  "methodDetails": {
-    "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-    "chainId": 196,
-    "splits": [
-      {
-        "recipient": "0xA1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2",
-        "bps": 500,
-        "memo": "platform fee"
-      }
-    ]
-  }
-}
-~~~
-
-This declares a 5% platform fee. When the server settles
-3,750,000 base units (3.75 USDC), the platform receives
-187,500 (0.1875 USDC) and the primary recipient receives
-3,562,500 (3.5625 USDC).
 
 Channel reuse is OPTIONAL. Servers MAY include `channelId` to suggest
 resuming an existing channel:
@@ -854,22 +854,50 @@ server-initiated and server-funded.
 
 ## Server-Paid Fees (feePayer: true)
 
-When `feePayer: true`, the client submits an EIP-3009 authorization
-signature. The server calls `openWithAuthorization()` or
-`topUpWithAuthorization()` on the escrow contract, paying gas from its
-own balance. The client never sends an on-chain transaction.
+When `feePayer: true`, the client submits a token-pull authorization
+signature instead of broadcasting an on-chain transaction. The server
+submits the on-chain transaction and pays gas from its own balance.
 
-1. **Client signs EIP-3009**: The client signs the EIP-712 typed data
-   for `receiveWithAuthorization` off-chain.
-2. **Server submits**: The server calls `openWithAuthorization()` or
-   `topUpWithAuthorization()` on the escrow contract.
-3. **Contract pulls funds**: The escrow contract internally calls
-   `receiveWithAuthorization` on the ERC-20 token to pull funds
-   from the client.
+This specification supports two authorization formats, distinguished
+by `payload.authorization.type` in the credential:
 
-When `feePayer` is `true`, the `currency` token MUST implement EIP-3009.
-Servers MUST NOT advertise `feePayer: true` for tokens that lack
-`receiveWithAuthorization` support.
+- **EIP-3009** ({{EIP-3009}}, `type="eip-3009"`): the token itself
+  implements `receiveWithAuthorization`. Suitable for stablecoins
+  such as USDC, USDP, and EURC that ship EIP-3009. No prior approval
+  is required from the payer.
+- **Permit2** ({{Permit2}}, `type="permit2"`): the canonical Permit2
+  contract (deployed at the same deterministic address on most major
+  EVM chains) brokers the transfer via `permitWitnessTransferFrom`,
+  with the channel parameters carried as a named EIP-712 witness so
+  they appear as labeled fields in the payer's wallet at signing
+  time. Suitable for any ERC-20 token, including tokens without
+  native EIP-3009 support. The payer MUST have previously approved
+  the Permit2 contract for the token (typically a one-time, unlimited
+  approval).
+
+Selection rules:
+
+1. The server MAY advertise which authorization formats it accepts
+   via out-of-band documentation. The credential's
+   `payload.authorization.type` is the on-the-wire discriminator.
+2. **EIP-3009 path**: The client signs the EIP-712 typed data for
+   `receiveWithAuthorization`. The server calls
+   `openWithAuthorization()` or `topUpWithAuthorization()`. The
+   escrow contract internally calls `receiveWithAuthorization` on
+   the token.
+3. **Permit2 path**: The client signs the EIP-712 typed data for
+   Permit2 `PermitWitnessTransferFrom` with a channel-parameter
+   witness (`ChannelOpenWitness` for `open`, `ChannelTopUpWitness`
+   for `topUp`). The server calls `openWithPermit2()` or
+   `topUpWithPermit2()`. The escrow contract internally calls
+   `permitWitnessTransferFrom` on the canonical Permit2 contract,
+   which verifies the witness against the function arguments and
+   pulls tokens via the prior Permit2 approval.
+
+When `feePayer` is `true`, the `currency` token MUST support at
+least one of the two paths advertised by the server. Servers MUST
+NOT advertise `feePayer: true` for tokens whose authorization paths
+they cannot service.
 
 ## Client-Paid Fees (feePayer: false)
 
@@ -885,6 +913,33 @@ When `feePayer: false` or omitted:
 
 `settle` and `close` are server-originated on-chain transactions. The
 server pays gas for these regardless of the `feePayer` setting.
+
+### Implementer Note: Gasless Settlement (Non-Normative) {#gasless-settlement-note}
+
+This specification assumes the payee (merchant) holds the native
+token of the target chain to pay gas for `settle()` and `close()`.
+In practice, some merchants — particularly those receiving stablecoin
+payments on a chain whose native token they do not otherwise hold —
+may prefer not to maintain a native-token gas balance.
+
+To accommodate this, implementers MAY add meta-transaction variants
+of the payee-only functions, for example
+`settleWithAuthorization(channelId, cumulativeAmount, voucherSignature, payeeAuth)`
+and `closeWithAuthorization(channelId, cumulativeAmount, voucherSignature, payeeAuth)`,
+where `payeeAuth` is an EIP-712 signature from `channel.payee` over
+the call parameters. The contract verifies the payee signature and
+permits any caller (typically a relayer service) to submit the
+transaction and pay gas. The relayer recovers its costs out-of-band,
+e.g., by deducting from the settled amount before paying out to the
+merchant.
+
+These variants are **not part of this specification** and are not
+required for compliance. Implementations that add them MUST ensure
+the meta-transaction signature is bound to a unique nonce or to the
+`channelId` + `cumulativeAmount` pair to prevent replay, and SHOULD
+publish the additional EIP-712 type strings out-of-band.
+Interoperability across implementations is not guaranteed for these
+extensions; clients SHOULD treat them as implementation-specific.
 
 # Credential Schema
 
@@ -976,22 +1031,26 @@ hash credentials.
 
 ### Open Payload (feePayer: true) {#open-transaction}
 
-When `feePayer` is `true`, the client submits an EIP-3009 authorization
-for the server to call `openWithAuthorization()`.
+When `feePayer` is `true`, the client submits a token-pull
+authorization for the server to call the corresponding
+`openWith…()` function on the escrow contract. The
+`authorization.type` field selects the format.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | string | REQUIRED | `"open"` |
 | `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel identifier (hex bytes32) |
-| `authorization` | object | REQUIRED | EIP-3009 authorization parameters |
-| `signature` | string | REQUIRED | EIP-3009 signature (65 bytes hex) |
+| `authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` |
+| `signature` | string | REQUIRED | Authorization signature (65 bytes hex). EIP-3009 signature if `authorization.type="eip-3009"`; Permit2 EIP-712 signature if `authorization.type="permit2"` |
 | `cumulativeAmount` | string | REQUIRED | Initial cumulative amount (typically `"0"`) |
 | `voucherSignature` | string | REQUIRED | EIP-712 voucher signature for the initial amount |
 | `authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers (defaults to payer if omitted) |
 | `salt` | string | REQUIRED | Random bytes32 hex for channelId computation |
 
-The `authorization` object contains EIP-3009 parameters as defined in {{I-D.evm-charge}}:
+The `authorization` object takes one of two shapes.
+
+**EIP-3009 shape** (`authorization.type="eip-3009"`):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -1002,6 +1061,62 @@ The `authorization` object contains EIP-3009 parameters as defined in {{I-D.evm-
 | `validAfter` | string | REQUIRED | Unix timestamp, valid from. `"0"` = immediately |
 | `validBefore` | string | REQUIRED | Unix timestamp, expires |
 | `nonce` | string | REQUIRED | `bytes32` hex. EIP-3009 nonce |
+
+**Permit2 shape** (`authorization.type="permit2"`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | REQUIRED | `"permit2"` |
+| `from` | string | REQUIRED | Payer address (Permit2 `owner`) |
+| `token` | string | REQUIRED | ERC-20 token address (= `request.currency`) |
+| `amount` | string | REQUIRED | Deposit amount in base units (Permit2 `permitted.amount`) |
+| `nonce` | string | REQUIRED | Decimal string. uint256 Permit2 nonce |
+| `deadline` | string | REQUIRED | Decimal string. Unix timestamp after which the signature is invalid |
+
+The `spender` covered by the Permit2 signature is the escrow
+contract address (`methodDetails.escrowContract`); it is implied
+by `msg.sender` when the escrow calls `permitWitnessTransferFrom`
+and therefore is not transmitted in the payload. Clients MUST set
+`spender = methodDetails.escrowContract` when constructing the
+EIP-712 hash.
+
+The witness fields (`payee`, `salt`, `authorizedSigner` for `open`;
+`channelId`, `topUpSalt` for `topUp`) are not duplicated inside the
+`authorization` object — they are sourced from the surrounding open
+or topUp payload. The client MUST construct the witness from those
+outer fields when signing, and the server MUST pass the same values
+to the escrow when submitting the on-chain call.
+
+The Permit2 EIP-712 domain and struct types are:
+
+~~~
+EIP712Domain(string name,uint256 chainId,address verifyingContract)
+  name              = "Permit2"
+  chainId           = methodDetails.chainId
+  verifyingContract = canonical Permit2 contract address
+
+// For open (action="open"):
+PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,ChannelOpenWitness witness)
+ChannelOpenWitness(address payee,bytes32 salt,address authorizedSigner)
+TokenPermissions(address token,uint256 amount)
+
+// For topUp (action="topUp"):
+PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,ChannelTopUpWitness witness)
+ChannelTopUpWitness(bytes32 channelId,bytes32 topUpSalt)
+TokenPermissions(address token,uint256 amount)
+~~~
+
+The `witnessTypeString` passed to `permitWitnessTransferFrom` is
+the suffix beginning at `ChannelOpenWitness witness)` (or
+`ChannelTopUpWitness witness)`) followed by the witness struct
+definition and the `TokenPermissions` definition, per the Permit2
+encoding rules.
+
+Note that the Permit2 domain omits the `version` field. The
+canonical Permit2 contract is deployed at the same deterministic
+address on most major EVM chains; servers MUST publish (or refer
+to a well-known list of) the address used on the target
+`chainId`.
 
 **Example:**
 
@@ -1055,16 +1170,16 @@ pending close timer.
 When `type="hash"`, the credential-level `source` field is
 REQUIRED, as described in the Credential Structure section.
 
-**When feePayer: true** (server submits via EIP-3009):
+**When feePayer: true** (server submits via EIP-3009 or Permit2):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | string | REQUIRED | `"topUp"` |
 | `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
-| `salt` | string | REQUIRED | Random bytes32 hex for nonce derivation |
-| `authorization` | object | REQUIRED | EIP-3009 authorization parameters |
-| `signature` | string | REQUIRED | EIP-3009 signature |
+| `salt` | string | REQUIRED | Random bytes32 hex; passed as `topUpSalt` for nonce derivation |
+| `authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
+| `signature` | string | REQUIRED | Authorization signature |
 | `additionalDeposit` | string | REQUIRED | Additional amount to deposit |
 
 ### Voucher Payload {#voucher-payload}
@@ -1090,15 +1205,17 @@ atomically.
 |-------|------|----------|-------------|
 | `deposit` | object | OPTIONAL | Deposit extension |
 | `deposit.action` | string | REQUIRED | `"open"` or `"topUp"` |
-| `deposit.authorization` | object | REQUIRED | EIP-3009 authorization parameters (type, from, to, value, validAfter, validBefore, nonce) |
-| `deposit.signature` | string | REQUIRED | EIP-3009 signature (65 bytes, hex-encoded) |
+| `deposit.authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
+| `deposit.signature` | string | REQUIRED | Authorization signature (65 bytes, hex-encoded) |
 | `deposit.salt` | string | REQUIRED | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"`; passed as `topUpSalt` for nonce derivation when `deposit.action` is `"topUp"` |
 | `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Defaults to payer (`authorization.from`) if omitted. Only applicable when `deposit.action` is `"open"` |
 
-When `deposit` is present, the server processes the deposit first
-(calling `openWithAuthorization` or `topUpWithAuthorization`), then
-validates and accepts the voucher. If the deposit fails, the server
-MUST reject the entire credential.
+When `deposit` is present, the server processes the deposit first by
+calling the matching escrow function (`openWithAuthorization` /
+`topUpWithAuthorization` for `authorization.type="eip-3009"`, or
+`openWithPermit2` / `topUpWithPermit2` for `authorization.type="permit2"`),
+then validates and accepts the voucher. If the deposit fails, the
+server MUST reject the entire credential.
 
 `deposit.action: "open"` is an optimization pattern that allows the
 client to pre-compute the `channelId` deterministically (per the
@@ -1106,10 +1223,10 @@ formula in the Channel State section) and bundle channel creation
 with the initial voucher in a single round-trip. Despite using
 `action="voucher"` in the payload, the server creates the channel
 as part of processing. The server MUST process the deposit first
-(calling `openWithAuthorization`), then validate the voucher against
-the newly created channel. For already-existing channels,
-`deposit.action` MUST be `"topUp"`. The escrow contract will revert
-if `open` is called on an existing `channelId`.
+(calling `openWithAuthorization` or `openWithPermit2`), then validate
+the voucher against the newly created channel. For already-existing
+channels, `deposit.action` MUST be `"topUp"`. The escrow contract will
+revert if `open` is called on an existing `channelId`.
 
 **Example (voucher only):**
 
@@ -1322,8 +1439,13 @@ On `action="open"`, servers MUST:
 
 **When `type="transaction"`:**
 
-1. Verify the EIP-3009 authorization parameters
-2. Call `openWithAuthorization()` on the escrow contract
+1. Verify the `authorization` parameters according to
+   `authorization.type`:
+    - `"eip-3009"`: validate EIP-3009 fields and signature
+    - `"permit2"`: validate Permit2 fields and signature
+2. Call the matching escrow function:
+    - `"eip-3009"`: `openWithAuthorization()`
+    - `"permit2"`: `openWithPermit2()`
 3. Verify channel state as above
 4. Verify the initial voucher signature
 5. Initialize server-side accounting state
@@ -1345,8 +1467,13 @@ On `action="topUp"`, servers MUST:
 
 **When `type="transaction"`:**
 
-1. Verify EIP-3009 authorization parameters
-2. Call `topUpWithAuthorization()` on the escrow contract
+1. Verify the `authorization` parameters according to
+   `authorization.type`:
+    - `"eip-3009"`: validate EIP-3009 fields and signature
+    - `"permit2"`: validate Permit2 fields and signature
+2. Call the matching escrow function:
+    - `"eip-3009"`: `topUpWithAuthorization()`
+    - `"permit2"`: `topUpWithPermit2()`
 3. Verify updated channel state
 4. Update server-side balance
 
@@ -1359,7 +1486,10 @@ On `action="voucher"`, servers MUST:
 2. Verify `channel.closeRequestedAt == 0` (no pending close).
    Reject vouchers on channels with a pending forced close.
 3. If `deposit` field is present, process deposit first:
-    - Call `openWithAuthorization` or `topUpWithAuthorization`
+    - For `authorization.type="eip-3009"`, call
+      `openWithAuthorization` or `topUpWithAuthorization`
+    - For `authorization.type="permit2"`, call
+      `openWithPermit2` or `topUpWithPermit2`
     - Verify updated channel state
 4. Verify monotonicity:
     - `cumulativeAmount > highestVoucherAmount`
@@ -1523,8 +1653,7 @@ When the client sends `action="close"`:
    voucher is insufficient, the server SHOULD settle using the
    highest previously accepted voucher instead of the close voucher
 2. Server calls `close(channelId, cumulativeAmount, signature)`
-3. Contract settles delta (distributing to split recipients if
-   splits are registered) and refunds remainder to payer
+3. Contract settles delta and refunds remainder to payer
 4. Server returns receipt with transaction hash
 
 ## Forced Close
@@ -1723,41 +1852,73 @@ address differs. The `salt` parameter (chosen by the client) provides
 additional protection by making the `channelId` unpredictable before
 the transaction appears in the mempool.
 
-When `feePayer` is `true`, the EIP-3009 authorization
-signature is visible in the pending `openWithAuthorization`
-transaction. The escrow contract MUST use
-`receiveWithAuthorization` (not `transferWithAuthorization`)
-when calling the token. This enforces `msg.sender == to`,
-so only the escrow contract can execute the transfer. An
-attacker cannot call the token directly. The
-`authorization.to` field MUST be the escrow contract address.
+When `feePayer` is `true`, the token-pull authorization
+signature is visible in the pending `openWith…` transaction.
+The same direct-call attack is mitigated at the
+token-transfer layer by both supported authorization formats:
 
-However, `receiveWithAuthorization` alone does not prevent an
-attacker from calling the **escrow** itself with modified
-parameters. The EIP-3009 signature only covers `from`, `to`,
-`value`, `validAfter`, `validBefore`, and `nonce` — it does
-not cover channel parameters such as `payee`, `salt`, or
-`authorizedSigner`. An attacker could front-run
-`openWithAuthorization` with a different `payee` (their own
-address), and the EIP-3009 signature would remain valid.
+- **EIP-3009**: The escrow contract MUST use
+  `receiveWithAuthorization` (not `transferWithAuthorization`)
+  when calling the token. This enforces `msg.sender == to`,
+  so only the escrow contract can execute the transfer. The
+  `authorization.to` field MUST be the escrow contract address.
+- **Permit2**: The Permit2 contract fixes `spender = msg.sender`
+  inside `permitWitnessTransferFrom`, so only the caller of
+  `permitWitnessTransferFrom` (the escrow contract) can spend the
+  signature. The `transferDetails.to` is also constrained to
+  the escrow contract address. The channel parameters (`payee`,
+  `salt`, `authorizedSigner` for `open`; `channelId`, `topUpSalt`
+  for `topUp`) are bound into the signature as a named EIP-712
+  witness, so an attacker who substitutes any of those values when
+  calling the escrow causes the Permit2 signature verification to
+  revert.
 
-To mitigate this, escrow implementations SHOULD derive the
-EIP-3009 `nonce` deterministically from the channel parameters
-rather than accepting an arbitrary random value. For example:
+The two paths achieve channel-parameter integrity by different
+mechanisms:
+
+- Permit2 signs `permitted.token`, `permitted.amount`, `spender`,
+  `nonce`, `deadline`, **and** the witness struct, which carries
+  the channel parameters explicitly. No nonce derivation is
+  required: any unused Permit2 nonce is acceptable, and clients
+  MAY use random or sequential nonces.
+- EIP-3009 signs only `from`, `to`, `value`, `validAfter`,
+  `validBefore`, `nonce`. It has no witness mechanism, so the
+  channel parameters (`payee`, `salt`, `authorizedSigner` for
+  `open`; `channelId`, `topUpSalt` for `topUp`) are not covered
+  by the underlying signature. An attacker could front-run
+  `openWithAuthorization` with a different `payee` (their own
+  address), and the underlying transfer signature would remain
+  valid.
+
+To close this gap on the EIP-3009 path, escrow implementations
+SHOULD derive the EIP-3009 nonce deterministically from the
+channel parameters rather than accepting an arbitrary random
+value:
 
 ~~~
-// openWithAuthorization
-nonce = keccak256(abi.encode(payee, token, salt, authorizedSigner, splitRecipients, splitBps))
+// openWithAuthorization (EIP-3009 nonce, bytes32)
+nonce = keccak256(abi.encode(from, payee, token, salt, authorizedSigner))
 
-// topUpWithAuthorization
+// topUpWithAuthorization (EIP-3009 nonce, bytes32)
 nonce = keccak256(abi.encode(channelId, additionalDeposit, from, topUpSalt))
 ~~~
 
 The contract recomputes the nonce from the function parameters
 and passes it to `receiveWithAuthorization`. If an attacker
 substitutes different parameters, the nonce changes, and the
-EIP-3009 signature verification fails. The client MUST use
-the same derivation formula when signing the authorization.
+underlying signature verification fails. The client MUST use the
+same derivation formula when signing the authorization.
+Including `from` ensures the nonce is bound to the depositor
+identity, even though the underlying signature already covers
+`from` directly.
+
+Trade-off note: The deterministic-nonce approach for EIP-3009
+trades signing-time UX (the nonce appears as an opaque hash in
+wallet displays) for protocol simplicity. The Permit2 witness
+approach trades a slightly longer EIP-712 type string for
+intent-visible UX — wallets that render typed data show
+`payee`, `salt`, and `authorizedSigner` as labeled fields the
+user can review.
 
 ## ERC-20 Approval Front-Running
 
@@ -1771,6 +1932,13 @@ batch `approve` and `open` in a single transaction when
 possible (e.g., via ERC-4337 UserOperations or
 multicall) to minimize the window between approval and
 channel creation.
+
+When `feePayer` is `true` and `authorization.type="permit2"`,
+the payer must have previously approved the canonical Permit2
+contract for the token (typically a one-time, unlimited
+approval). The same reasoning applies: Permit2 is trusted code
+with deterministic behavior, and each `permitTransferFrom` is
+gated by a single-use nonce.
 
 ## Contract Wallet Signer Mutability {#contract-wallet-signer-mutability}
 
