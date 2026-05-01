@@ -564,6 +564,46 @@ payment-method-or-wildcard = payment-method-id / "*"
 intent-or-wildcard         = intent-token / "*"
 ~~~
 
+### Preference Parameters {#preference-parameters}
+
+Two parameters are defined for use with `Accept-Payment`.
+Implementations MUST ignore unknown parameters.
+
+**`currency`**: The currency or asset the client can pay
+  with. The value uses the same format as the `currency`
+  field in the corresponding payment method's request
+  schema: ISO 4217 lowercase for fiat methods (e.g.,
+  `usd`), token contract address for on-chain methods
+  (e.g., `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`),
+  or a method-defined identifier (e.g., `sat` for
+  Lightning). When present, the server SHOULD only return
+  challenges whose `request` object specifies a matching
+  currency.
+
+**`network`**: The payment network or chain the client can
+  use. The format is defined by the payment method
+  specification: EIP-155 chain ID for EVM methods (e.g.,
+  `8453`), CAIP-2 identifier for Stellar (e.g.,
+  `stellar:pubnet`), a network name for Solana and
+  Lightning (e.g., `mainnet`), or omitted entirely for
+  methods without a network concept (e.g., Stripe, card).
+  When present, the server SHOULD only return challenges
+  whose `request` object targets a matching network.
+
+Both parameters are method-scoped: the valid values for a
+given method are defined by that method's specification,
+not by this document. Payment method specifications SHOULD
+document the accepted values for use in `Accept-Payment`.
+
+Parameters are compared using case-sensitive byte-for-byte
+string matching. A `payment-range` without a parameter
+matches challenges regardless of that dimension, preserving
+backward compatibility.
+
+Payment method specifications MAY define additional
+preference parameters beyond `currency` and `network`.
+Implementations MUST ignore unknown parameters.
+
 Examples:
 
 ~~~http
