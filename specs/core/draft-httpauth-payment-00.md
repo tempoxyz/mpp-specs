@@ -854,6 +854,19 @@ Clients MUST NOT rely on the `description` parameter for payment
 verification. Malicious servers could provide a misleading description
 while the actual `request` payload requests a different amount.
 
+## Accept-Payment Information Disclosure
+
+The `Accept-Payment` header reveals which payment methods,
+currencies, and networks a client supports. This metadata
+is visible to the server and any intermediary that can
+observe request headers.
+
+Clients concerned about disclosing wallet capabilities
+SHOULD omit `Accept-Payment` and instead filter challenges
+locally after receiving the 402 response. Servers MUST NOT
+require `Accept-Payment` as a precondition for issuing
+challenges.
+
 ## Privacy
 
 - Servers MUST NOT require user accounts for payment.
