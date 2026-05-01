@@ -617,10 +617,21 @@ choosing which Payment challenges to return.
 
 Specifically, servers SHOULD:
 
-- Filter challenges to those matching at least one declared range with `q>0`
+- Filter challenges to those matching at least one declared
+  range with `q>0`. A challenge matches a range when:
+  - The `method` and `intent` match (including wildcards)
+  - If the range specifies `currency`, the challenge request
+    object contains a matching `currency` value
+  - If the range specifies `network`, the challenge request
+    object targets a matching network (via `methodDetails`)
+  - A range that omits a parameter matches any value for
+    that dimension
 - Order matching challenges by descending client `q` value
-- Preserve server preference order when multiple matches have the same `q`
-- Prefer the most specific matching range when multiple ranges match the same challenge
+- Preserve server preference order when multiple matches
+  have the same `q`
+- Prefer the most specific matching range when multiple
+  ranges match the same challenge. Ranges with parameters
+  are more specific than ranges without.
 
 If `Accept-Payment` is absent, servers MUST behave as though the client
 accepts any method and intent combination.
