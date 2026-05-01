@@ -556,8 +556,10 @@ negotiation fields: omitted `q` values are equivalent to `q=1`, and
 
 ~~~abnf
 Accept-Payment = #payment-range
-payment-range  = payment-token [ weight ]
-payment-token  = payment-method-or-wildcard "/" intent-or-wildcard
+payment-range  = payment-token *prefer-param [ weight ]
+payment-token  = payment-method-or-wildcard
+                 "/" intent-or-wildcard
+prefer-param   = OWS ";" OWS token "=" ( token / quoted-string )
 payment-method-or-wildcard = payment-method-id / "*"
 intent-or-wildcard         = intent-token / "*"
 ~~~
@@ -915,10 +917,12 @@ payment-credentials = "Payment" 1*SP base64url-nopad
 
 ; Client payment preferences
 Accept-Payment = #payment-range
-payment-range = payment-token [ weight ]
-payment-token = payment-method-or-wildcard "/" intent-or-wildcard
+payment-range  = payment-token *prefer-param [ weight ]
+payment-token  = payment-method-or-wildcard
+                 "/" intent-or-wildcard
+prefer-param   = OWS ";" OWS token "=" ( token / quoted-string )
 payment-method-or-wildcard = payment-method-id / "*"
-intent-or-wildcard = intent-token / "*"
+intent-or-wildcard         = intent-token / "*"
 
 ; Payment-Receipt header field value
 Payment-Receipt = base64url-nopad
