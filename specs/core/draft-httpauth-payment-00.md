@@ -1174,6 +1174,70 @@ WWW-Authenticate: Payment id="yR5tUvWxY6zAbCdE7fGhIj", realm="api.example.com", 
 WWW-Authenticate: Payment id="xR8sTuUvW9yZaBcD0eFgHi", realm="api.example.com", method="stripe", intent="charge", request="..."
 ~~~
 
+## Currency and Network Preferences
+
+Clients can narrow challenges by currency and network.
+In this example, the client holds USDC on Base (EVM chain
+8453) and also accepts Stripe in USD:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Accept-Payment: evm/charge;currency=0x833589fC;network=8453,
+  stripe/charge;currency=usd;q=0.5
+~~~
+
+The server offers both EVM and Stripe challenges but only
+returns the EVM challenge for chain 8453 with USDC (not an
+alternative chain or token the client did not request):
+
+~~~http
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+WWW-Authenticate: Payment id="cN7xKmLp",
+  realm="api.example.com", method="evm",
+  intent="charge", request="eyJ..."
+WWW-Authenticate: Payment id="dP8yLnMq",
+  realm="api.example.com", method="stripe",
+  intent="charge", request="eyJ..."
+~~~
+
+## Cross-Method Preferences
+
+A client that supports multiple payment ecosystems can
+express a ranked preference across methods, currencies,
+and networks in a single header:
+
+~~~http
+GET /api/data HTTP/1.1
+Host: api.example.com
+Accept-Payment: evm/charge;network=8453;currency=0x833589fC,
+  solana/charge;network=mainnet;currency=EPjFWdd5Au;q=0.8,
+  lightning/charge;network=mainnet;q=0.5,
+  stripe/charge;currency=usd;q=0.3
+~~~
+
+The client prefers USDC on Base, then USDC on Solana
+mainnet, then Lightning on mainnet, and least prefers
+Stripe in USD. Methods without a network concept (such as
+Stripe) omit the `network` parameter. Methods with an
+implicit currency (such as Lightning, which always uses
+satoshis) may omit `currency`.
+
+## Partial Preferences
+
+A client can specify `currency` without `network`, or vice
+versa. Unspecified dimensions match any value.
+
+~~~http
+Accept-Payment: evm/charge;currency=0x833589fC,
+  solana/charge;network=mainnet;q=0.8
+~~~
+
+The first range matches any EVM chain offering the
+specified USDC contract. The second matches Solana mainnet
+regardless of token.
+
 ## Signed Authorization
 
 A payment method using cryptographic signatures:
