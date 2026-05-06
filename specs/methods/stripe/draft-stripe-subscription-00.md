@@ -1,5 +1,5 @@
 ---
-title: Stripe subscription Intent for HTTP Payment Authentication
+title: Stripe Subscription Intent for HTTP Payment Authentication
 abbrev: Stripe Subscription
 docname: draft-stripe-subscription-00
 version: 00
@@ -12,11 +12,11 @@ author:
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Steve Kaliski
     ins: S. Kaliski
     email: stevekaliski@stripe.com
-    organization: Stripe
+    org: Stripe
 
 normative:
   RFC2119:
@@ -25,7 +25,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -52,6 +52,21 @@ informative:
     title: Using webhooks with subscriptions
     author:
       - org: Stripe, Inc.
+  STRIPE-SUBSCRIPTIONS-API:
+    target: https://docs.stripe.com/api/subscriptions/create
+    title: Create a subscription
+    author:
+      - org: Stripe, Inc.
+  STRIPE-METADATA:
+    target: https://docs.stripe.com/api/metadata
+    title: Metadata
+    author:
+      - org: Stripe, Inc.
+  STRIPE-SETUP-FUTURE:
+    target: https://docs.stripe.com/payments/setup-intents
+    title: Set up future payments
+    author:
+      - org: Stripe, Inc.
 ---
 
 --- abstract
@@ -59,9 +74,8 @@ informative:
 This document defines the `subscription` intent for the `stripe`
 payment method within the Payment HTTP Authentication Scheme
 {{I-D.httpauth-payment}}. It specifies a constrained Stripe Billing
-profile for fixed-price recurring subscriptions, optionally bounded by
-an explicit expiry, whose activation succeeds only after the first
-invoice is paid.
+profile for fixed-price recurring subscriptions whose activation
+succeeds only when the first invoice is paid synchronously.
 
 --- middle
 
@@ -188,13 +202,21 @@ Servers MUST reject request objects that include `recipient` or
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `methodDetails.networkId` | string | REQUIRED | Stripe Business Network Profile ID for the challenged merchant |
-| `methodDetails.paymentMethodTypes` | []string | REQUIRED | Stripe payment method types accepted for activation and future off-session recurring invoices |
-| `methodDetails.metadata` | object | OPTIONAL | Merchant-defined metadata to attach to Stripe objects |
+| `methodDetails.paymentMethodTypes` | []string | REQUIRED | Stripe payment method types accepted for synchronous activation and future off-session recurring invoices |
+| `methodDetails.metadata` | object | OPTIONAL | Stripe metadata as a string key/value map |
 
 Servers MUST include only payment method types that can complete this
-profile's activation flow, including any asynchronous or
-customer-action-required first-invoice path, and can also be reused for
+profile's activation flow synchronously and can also be reused for
 future off-session recurring charges under the challenged account.
+Servers MUST reject payment method types that require an asynchronous
+first-invoice settlement path or customer action after the credential is
+submitted.
+
+If `methodDetails.metadata` is present, every key and value MUST be a
+JSON string and the object MUST satisfy Stripe metadata limits
+{{STRIPE-METADATA}}. Metadata MUST NOT affect payment authorization,
+amount, period, recipient, invoice validation, cancellation, or
+access-control decisions.
 
 **Example:**
 
@@ -207,7 +229,10 @@ future off-session recurring charges under the challenged account.
   "externalId": "sub_12345",
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
-    "paymentMethodTypes": ["card", "link"]
+    "paymentMethodTypes": ["card", "link"],
+    "metadata": {
+      "plan": "weekly-pro"
+    }
   }
 }
 ~~~
@@ -238,6 +263,26 @@ subscription item. Servers MUST reject any request or server-side
 configuration that would vary quantity during the active lifetime of the
 subscription.
 
+When creating a Stripe Subscription for this profile, servers MUST use
+the following create Subscription parameters {{STRIPE-SUBSCRIPTIONS-API}}:
+
+- `collection_method=charge_automatically`
+- `payment_behavior=error_if_incomplete`
+- `proration_behavior=none`
+- exactly one subscription item with `quantity=1`
+- no `add_invoice_items`
+- no `billing_cycle_anchor` other than immediate activation
+- no `backdate_start_date`
+- no `cancel_at` or `cancel_at_period_end` at activation
+- no `pending_invoice_item_interval`
+- no subscription schedule
+
+Servers MUST create the subscription using an idempotency key bound to
+the challenge ID, payer, payment method, amount, currency, and
+`periodSeconds`. If an idempotent retry returns an existing Stripe
+Subscription, the server MUST verify that the existing object still
+matches this profile before treating the retry as successful.
+
 ## Unsupported Stripe Billing Features
 
 Servers implementing this profile MUST disable or reject the following
@@ -248,11 +293,16 @@ features:
 - prorations
 - discounts or coupons
 - automatic tax
+- additional invoice items
+- pending invoice items
 - usage-based billing
 - metered add-ons
 - mid-cycle plan changes
 - quantity changes during an active subscription
 - pause or resume controls
+- asynchronous first-invoice settlement
+- customer-action-required first-invoice flows
+- manual invoice collection
 
 # Credential Schema
 
@@ -269,6 +319,12 @@ The `paymentMethod` MUST reference a Stripe PaymentMethod whose type is
 included in `methodDetails.paymentMethodTypes` and which is suitable for
 future off-session recurring charges under the challenged Stripe
 account.
+
+Before submitting a credential, the client or Stripe-native collection
+flow MUST have obtained any authorization, mandate, or setup required by
+Stripe for future off-session recurring charges {{STRIPE-SETUP-FUTURE}}.
+Servers MUST reject PaymentMethods that are not reusable for the
+challenged merchant and subscription terms.
 
 **Example:**
 
@@ -291,8 +347,8 @@ Servers MUST verify Payment credentials for Stripe subscription intent:
    credential payload
 5. Verify the Stripe PaymentMethod exists, is reusable by the
    challenged merchant, has a type allowed by the challenge, and can
-   support both the profile's first-invoice activation flow and future
-   off-session recurring charges
+   support both the profile's synchronous first-invoice activation flow
+   and future off-session recurring charges
 6. Verify the credential has not been replayed for the same challenge
 
 Servers MUST complete challenge validation before creating or mutating
@@ -309,26 +365,45 @@ For `intent="subscription"`, the server MUST:
 3. Create or reuse a Stripe Price whose amount, currency, and recurring
    cadence exactly match the request
 4. Create a Stripe Subscription with exactly one recurring item,
-   quantity 1, and no unsupported features
-5. Treat activation as successful only after the first invoice for that
-   subscription is paid
-6. Initialize durable local subscription state for later renewals
-7. Return success (200) with a `Payment-Receipt` for the first invoice,
+   quantity 1, the creation parameters defined above, and no
+   unsupported features
+5. Verify the first invoice and its PaymentIntent completed
+   synchronously
+6. Treat activation as successful only after the first invoice for that
+   subscription is paid and validated
+7. Initialize durable local subscription state for later renewals
+8. Return success (200) with a `Payment-Receipt` for the first invoice,
    including a `subscriptionId`
 
 Servers MUST NOT treat the subscription as active, grant access, or
 return a success receipt while the first invoice is unpaid, requires
 additional customer action, or remains incomplete.
 
-If the first invoice requires an immediate customer confirmation step,
-the implementation MAY complete that step using Stripe-native flows, but
-the HTTP subscription activation remains incomplete until the first
-invoice is paid.
+If Stripe cannot pay the first invoice synchronously, including because
+the invoice requires customer action, remains incomplete, enters
+processing, or depends on asynchronous settlement, the server MUST treat
+activation as failed and return `402 Payment Required` with a fresh
+challenge. The server MUST NOT expose a protocol continuation state for
+that incomplete Stripe Subscription.
 
 The canonical billing anchor for this profile is the start timestamp of
 the first paid Stripe invoice period. Servers MUST use that anchor when
 mapping later Stripe invoices to the shared `periodSeconds` billing
 periods.
+
+Before activating a subscription or recording a renewal, servers MUST
+validate the paid Stripe invoice. The invoice MUST:
+
+- belong to the expected Stripe Subscription and Customer
+- have status `paid`
+- contain exactly one subscription line item
+- have no invoice items outside the subscription item
+- have no discounts, tax, credits, or prorations that change the amount
+- match the challenged `amount` and `currency`
+- map to exactly one canonical billing period derived from the billing
+  anchor and `periodSeconds`
+- not have already been recorded for another billing period or
+  subscription
 
 ## Renewal
 
@@ -346,6 +421,43 @@ of duplicate webhooks, retries, concurrent requests, or later
 collection of older unpaid invoices. If a Stripe recovery or retry flow
 cannot be mapped exactly to the shared one-charge-per-period invariant,
 servers MUST disable that flow or reject the request.
+
+Implementations MUST process Stripe invoice events idempotently by
+recording the Stripe event ID, invoice ID, subscription ID, and
+canonical billing-period index. A duplicate webhook or API retry MUST
+return the previously recorded result without creating a second local
+payment record or granting another billing period.
+
+Servers MUST NOT rely on `invoice.created` delivery or acknowledgement
+for access decisions. Access can be granted only after a validated paid
+invoice has been durably recorded. If webhook delivery, invoice
+finalization, or automatic collection is delayed, the corresponding
+billing period remains unpaid until a later validated paid invoice is
+recorded.
+
+## Cancellation
+
+Payers MUST be able to cancel Stripe subscriptions. For this profile,
+the default cancellation effective time is the end of the current paid
+canonical billing period.
+
+When a payer cancels, the server MUST set the Stripe Subscription to
+cancel at the period end corresponding to the last paid canonical
+billing period, and MUST record that cancellation effective time in
+durable local state. The server MAY cancel immediately only if the
+application separately handles any already-paid access period without
+creating an additional charge.
+
+Servers MUST treat `customer.subscription.deleted` and equivalent
+Stripe cancellation state as revocation for future renewals. Servers
+MUST NOT collect or record renewal invoices for billing periods whose
+start time is at or after the cancellation effective time.
+
+Servers MUST prevent pending invoice items from being collected after
+cancellation. If any pending invoice item, proration, credit, tax, or
+other non-profile invoice component exists for the Customer or
+Subscription, the server MUST remove it before cancellation or reject
+the subscription as no longer conforming to this profile.
 
 ## Receipt Generation
 

@@ -12,15 +12,15 @@ author:
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Brendan Ryan
     ins: B. Ryan
     email: brendan@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
   - name: Tom Meagher
     ins: T. Meagher
     email: thomas@tempo.xyz
-    organization: Tempo Labs
+    org: Tempo Labs
 
 normative:
   RFC2119:
@@ -31,7 +31,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -236,7 +236,7 @@ be represented in the Tempo key authorization expiry field.
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "chainId": 42431
   }
@@ -319,7 +319,7 @@ field.
     "method": "tempo",
     "intent": "subscription",
     "request": "eyJ...",
-    "expires": "2025-02-05T12:05:00Z"
+    "expires": "2026-01-15T12:05:00Z"
   },
   "payload": {
     "signature": "0xf8c1...signed authorization bytes...",
@@ -395,6 +395,7 @@ including at least:
 - subscription identifier
 - billing anchor
 - last charged billing-period index
+- any in-flight billing-period index and renewal transaction identifier
 - subscription expiry
 - revocation status
 
@@ -404,8 +405,12 @@ When granting access in a later billing period, servers MUST:
 - Determine the current billing-period index from the anchor and
   `periodSeconds`
 - Verify that the current billing period has not already been charged
-- Atomically record the current billing period as charged before, or
-  atomically with, delivering the corresponding service
+- Atomically record any renewal attempt for the current billing period
+  as in-flight before submitting the renewal transaction
+- Mark the current billing period as charged only after the renewal
+  transaction settles successfully
+- Grant access only after, or atomically with, durably recording the
+  successful renewal charge
 
 For duplicate idempotent requests, servers MUST NOT charge the same
 billing period more than once.
@@ -458,7 +463,7 @@ include a `Payment-Receipt` header on error responses.
 
 On activation, servers MUST include the `subscriptionId` defined by
 {{I-D.payment-intent-subscription}} in the receipt. On renewal, servers
-SHOULD return the same `subscriptionId` for the active subscription.
+MUST return the same `subscriptionId` for the active subscription.
 
 The receipt payload for Tempo subscription:
 
@@ -570,7 +575,7 @@ WWW-Authenticate: Payment id="qT8wErYuI3oPlKjH6gFdSa",
   realm="api.example.com",
   method="tempo",
   intent="subscription",
-  expires="2025-02-05T12:05:00Z",
+  expires="2026-01-15T12:05:00Z",
   request="<base64url-encoded JSON below>"
 ~~~
 
@@ -582,7 +587,7 @@ The `request` decodes to:
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "chainId": 42431
   }
@@ -602,7 +607,7 @@ seconds until 2026-07-14T12:00:00Z.
     "method": "tempo",
     "intent": "subscription",
     "request": "eyJ...",
-    "expires": "2025-02-05T12:05:00Z"
+    "expires": "2026-01-15T12:05:00Z"
   },
   "payload": {
     "signature": "0xf8c1...signed authorization bytes...",

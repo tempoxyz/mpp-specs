@@ -31,7 +31,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -340,7 +340,7 @@ In particular:
   "currency": "0x20c0000000000000000000000000000000000001",
   "periodSeconds": "2592000",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
-  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "chainId": 42431
   }
