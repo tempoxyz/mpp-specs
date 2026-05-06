@@ -31,7 +31,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -208,6 +208,9 @@ raw string form.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `methodDetails.accessKey` | object | REQUIRED | Access key descriptor that the payer authorizes for subscription renewal charges |
+| `methodDetails.accessKey.accessKeyAddress` | string | REQUIRED | Address of the access key to authorize |
+| `methodDetails.accessKey.keyType` | string | REQUIRED | Access key type. The value MUST be `p256`, `secp256k1`, or `webAuthn` |
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 42431 (Tempo mainnet). |
 
 Servers issuing `intent="subscription"` challenges SHOULD include the
@@ -238,6 +241,10 @@ be represented in the Tempo key authorization expiry field.
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
+    "accessKey": {
+      "accessKeyAddress": "0x1111111111111111111111111111111111111111",
+      "keyType": "p256"
+    },
     "chainId": 42431
   }
 }
@@ -246,12 +253,15 @@ be represented in the Tempo key authorization expiry field.
 The client fulfills this by signing a key authorization with:
 
 - Expiry = `subscriptionExpires`
+- Access key = `methodDetails.accessKey`
 - Per-period spending limit = `amount`
 - Billing period = `periodSeconds`
 - Destination restriction = `recipient`
 
 The signed key authorization MUST additionally configure:
 
+- the exact access-key address and key type from
+  `methodDetails.accessKey`
 - a `TokenLimit` for `currency` whose `amount` equals the challenge
   `amount` and whose `period` equals `periodSeconds`
 - exactly one `allowed_calls` target scope whose `target` equals
@@ -293,7 +303,7 @@ The encoded value MUST be a signed key authorization containing at
 least:
 
 - the Tempo chain ID
-- the access-key identifier
+- the access-key address and key type
 - the authorization expiry
 - the TIP-20 token spending limit
 - the billing-period limit configuration
@@ -432,10 +442,20 @@ address from the signed key authorization using
 {{TIP-1020}}-compatible verification semantics over the encoded key
 authorization payload.
 
+If `source` is present, servers MUST verify that it identifies the
+recovered root signer on the same chain as `methodDetails.chainId`, or
+on chain 42431 when `methodDetails.chainId` is omitted.
+
 ## Authorization Scope Verification
 
 When validating a Tempo subscription credential, servers MUST verify
 that the signed key authorization expiry equals `subscriptionExpires`.
+Servers MUST verify that the signed key authorization chain ID equals
+`methodDetails.chainId`, or 42431 when `methodDetails.chainId` is
+omitted. Servers MUST verify that the signed key authorization
+authorizes the exact access key described by
+`methodDetails.accessKey`, including both `accessKeyAddress` and
+`keyType`.
 Servers MUST also verify that the authorization contains a spending
 limit for `currency` whose amount equals `amount` and whose billing
 period equals `periodSeconds`.
@@ -589,6 +609,10 @@ The `request` decodes to:
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
+    "accessKey": {
+      "accessKeyAddress": "0x1111111111111111111111111111111111111111",
+      "keyType": "p256"
+    },
     "chainId": 42431
   }
 }
@@ -642,6 +666,7 @@ The server records at least:
 - `subscriptionId = "c3ViXzAxMjM0NTY"`
 - `billing anchor = 2026-01-15T12:03:10Z`
 - `periodSeconds = 2592000`
+- `accessKeyAddress = "0x1111111111111111111111111111111111111111"`
 - `last charged billing-period index = 0`
 
 ## Renewal Across Multiple Periods
@@ -659,6 +684,7 @@ authorization:
 ~~~http
 GET /api/resource HTTP/1.1
 Host: api.example.com
+Cookie: session=<application-session>
 ~~~
 
 When Period 1 begins, the server determines that billing-period index 1
@@ -697,6 +723,7 @@ that time continue to succeed without another renewal charge:
 ~~~http
 GET /api/resource HTTP/1.1
 Host: api.example.com
+Cookie: session=<application-session>
 ~~~
 
 Once `2026-04-15T12:03:10Z` is reached, the server stops submitting

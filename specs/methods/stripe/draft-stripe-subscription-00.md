@@ -25,7 +25,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -421,6 +421,16 @@ of duplicate webhooks, retries, concurrent requests, or later
 collection of older unpaid invoices. If a Stripe recovery or retry flow
 cannot be mapped exactly to the shared one-charge-per-period invariant,
 servers MUST disable that flow or reject the request.
+
+Servers MUST prevent Stripe from collecting invoices for canonical
+billing periods that are no longer payable under the shared
+subscription intent. If a renewal invoice remains unpaid when a later
+canonical billing period begins, the server MUST void it, mark it
+uncollectible, cancel automatic collection for it, or configure Stripe
+retry and recovery behavior so the stale invoice cannot later collect
+payment for that closed period. A later paid invoice for an older
+canonical billing period MUST NOT be recorded as a successful
+subscription charge.
 
 Implementations MUST process Stripe invoice events idempotently by
 recording the Stripe event ID, invoice ID, subscription ID, and

@@ -31,7 +31,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -342,6 +342,10 @@ In particular:
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
+    "accessKey": {
+      "accessKeyAddress": "0x1111111111111111111111111111111111111111",
+      "keyType": "p256"
+    },
     "chainId": 42431
   }
 }
@@ -416,13 +420,17 @@ in the `Payment-Receipt`. The value MUST be a base64url {{RFC4648}}
 string without padding and MUST be unique within the server's
 subscription namespace.
 
-Clients MAY retain the `subscriptionId` as application data when
-referring to the active subscription in later interactions. Applications
-MAY instead use application-defined identifiers or other context to
-associate a later request with an existing subscription.
-
 This specification does not define a dedicated request header or
-parameter for selecting an existing subscription.
+parameter for selecting an existing subscription. Selecting an existing
+subscription is an application-layer concern. Applications MAY use
+authenticated session state, account identity, resource scope, an
+application-defined selector, or other context to associate a later
+request with an existing subscription.
+
+Clients MAY retain the `subscriptionId` as application data when
+referring to the active subscription in later interactions, but the
+`subscriptionId` is only a receipt identifier unless an application
+explicitly assigns it additional application-layer meaning.
 
 Servers MUST authenticate or otherwise authorize the client's use of the
 identified subscription before granting access or collecting a renewal
