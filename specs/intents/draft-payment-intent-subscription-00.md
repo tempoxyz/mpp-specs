@@ -110,8 +110,8 @@ Subscription
   billing period.
 
 Billing Period
-: A fixed-duration window during which at most one subscription charge
-  may be collected.
+: A recurrence window, defined by the subscription period fields, during
+  which at most one subscription charge may be collected.
 
 Activation
 : The successful initial setup of a subscription, which includes
@@ -203,24 +203,36 @@ document those choices explicitly.
 |-------|------|-------------|
 | `amount` | string | Fixed payment amount per billing period in base units |
 | `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
-| `periodSeconds` | string | Billing period duration in seconds |
+| `periodUnit` | string | Billing period unit. The value MUST be `day`, `week`, or `month` |
+| `periodCount` | string | Positive integer count of `periodUnit` values per billing period |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
-The `periodSeconds` value MUST be a string representation of a positive
+The `periodCount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
-`periodSeconds` defines fixed-duration billing periods measured in
-elapsed seconds. It does not, by itself, encode calendar-month or
-calendar-year alignment.
+The `periodUnit` value defines how billing-period boundaries are
+computed:
 
-Payment methods MUST reject request objects whose `periodSeconds` value
-they cannot represent exactly. They MUST NOT approximate the requested
-period by rounding, truncating, or substituting a nearby network-native
-cadence.
+- `day`: fixed elapsed-time periods of `periodCount * 86400` seconds
+- `week`: fixed elapsed-time periods of `periodCount * 604800` seconds
+- `month`: calendar-month periods anchored at activation
+
+For `periodUnit="month"`, billing-period boundaries are computed by
+adding `N * periodCount` calendar months to the original activation
+anchor using UTC calendar fields. If the target month does not contain
+the activation anchor's day-of-month, the boundary uses the last valid
+day of the target month while preserving the activation time-of-day.
+Boundaries MUST be computed from the original activation anchor, not by
+adding months to the previous boundary.
+
+Payment methods MUST reject request objects whose `periodUnit` or
+`periodCount` values they cannot represent exactly. They MUST NOT
+approximate the requested period by rounding, truncating, or
+substituting a nearby network-native cadence.
 
 ### Optional Fields
 
@@ -255,8 +267,8 @@ so.
 
 The billing anchor for a subscription is the time activation succeeds,
 or an equivalent network-native timestamp defined by the payment method
-specification. Billing periods are contiguous fixed-duration windows
-derived by adding `periodSeconds` to that anchor.
+specification. Billing periods are contiguous windows derived from that
+anchor according to `periodUnit` and `periodCount`.
 
 This shared intent does not define deferred starts or merchant-selected
 billing anchors. A payment method that needs a more specific anchor rule
@@ -264,9 +276,10 @@ MUST document it explicitly.
 
 The shared fields in this section are the canonical subscription
 contract. Payment method specifications MUST document how they map
-`amount`, `periodSeconds`, and activation to the underlying payment
-system. If a payment method cannot represent those fields or semantics
-exactly, it MUST reject the request rather than approximate it.
+`amount`, `periodUnit`, `periodCount`, and activation to the underlying
+payment system. If a payment method cannot represent those fields or
+semantics exactly, it MUST reject the request rather than approximate
+it.
 
 ## Currency Formats {#currency-formats}
 
@@ -302,8 +315,8 @@ In particular:
 
 - Methods should support only request shapes they can represent exactly.
 - Methods should document the supported and rejected ranges or values of
-  `periodSeconds`, any additional bounded-lifetime or expiry rules they
-  impose, and what conditions make activation succeed.
+  `periodUnit` and `periodCount`, any additional bounded-lifetime or
+  expiry rules they impose, and what conditions make activation succeed.
 - Activation should not be reported as successful until both
   subscription setup and the first billing-period charge have
   succeeded.
@@ -327,7 +340,8 @@ In particular:
 {
   "amount": "9900",
   "currency": "usd",
-  "periodSeconds": "2592000",
+  "periodUnit": "month",
+  "periodCount": "1",
   "description": "Pro plan"
 }
 ~~~
@@ -338,7 +352,8 @@ In particular:
 {
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "periodSeconds": "2592000",
+  "periodUnit": "day",
+  "periodCount": "30",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
@@ -488,26 +503,34 @@ usable and initiate a new subscription flow.
 
 This section is non-normative.
 
-## 30-Day Billing Example
+## Monthly Billing Example
 
 Suppose a server offers a plan with these request fields:
 
 - `amount = "9900"`
 - `currency = "usd"`
-- `periodSeconds = "2592000"`
+- `periodUnit = "month"`
+- `periodCount = "1"`
 
 If activation succeeds at `2026-01-15T12:03:10Z`, that time becomes the
 billing anchor. The resulting billing periods are:
 
-- Period 0: `[2026-01-15T12:03:10Z, 2026-02-14T12:03:10Z)`
-- Period 1: `[2026-02-14T12:03:10Z, 2026-03-16T12:03:10Z)`
-- Period 2: `[2026-03-16T12:03:10Z, 2026-04-15T12:03:10Z)`
+- Period 0: `[2026-01-15T12:03:10Z, 2026-02-15T12:03:10Z)`
+- Period 1: `[2026-02-15T12:03:10Z, 2026-03-15T12:03:10Z)`
+- Period 2: `[2026-03-15T12:03:10Z, 2026-04-15T12:03:10Z)`
 
 Activation collects the Period 0 charge. Requests during Period 0 do
 not require another renewal charge. When Period 1 begins, the server
 may collect one renewal charge for Period 1 before, or atomically with,
 granting access for that period. After that renewal succeeds, additional
 requests during Period 1 do not permit another charge for Period 1.
+
+If the same monthly plan activates at `2026-01-31T12:03:10Z`, the
+resulting boundaries are computed from the January 31 anchor:
+
+- Period 0: `[2026-01-31T12:03:10Z, 2026-02-28T12:03:10Z)`
+- Period 1: `[2026-02-28T12:03:10Z, 2026-03-31T12:03:10Z)`
+- Period 2: `[2026-03-31T12:03:10Z, 2026-04-30T12:03:10Z)`
 
 ## Cancellation Example
 
@@ -559,7 +582,7 @@ Clients MUST verify before activating a subscription:
 
 1. `amount` is acceptable for the service
 2. `currency` is expected
-3. `periodSeconds` matches the expected billing interval
+3. `periodUnit` and `periodCount` match the expected billing interval
 4. Any `subscriptionExpires` value and method-specific constraints are
    understood and acceptable
 

@@ -173,7 +173,7 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 ## Request Fields
 
 The Stripe `subscription` profile uses the shared `amount`, `currency`,
-`periodSeconds`, `description`, and `externalId` fields from
+`periodUnit`, `periodCount`, `description`, and `externalId` fields from
 {{I-D.payment-intent-subscription}}. It
 additionally defines the following request constraints:
 
@@ -181,7 +181,8 @@ additionally defines the following request constraints:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Fixed payment amount per billing period in the currency's smallest unit |
 | `currency` | string | REQUIRED | Lowercase ISO 4217 currency code |
-| `periodSeconds` | string | REQUIRED | Billing period duration in seconds |
+| `periodUnit` | string | REQUIRED | Billing period unit. The value MUST be `day`, `week`, or `month` |
+| `periodCount` | string | REQUIRED | Positive integer count of `periodUnit` values per billing period |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
 | `recipient` | string | MUST NOT | This profile identifies the merchant by the challenged Stripe account and `methodDetails.networkId`, not by a request-native recipient field |
@@ -190,7 +191,7 @@ The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
-The `periodSeconds` value MUST be a string representation of a positive
+The `periodCount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
@@ -224,7 +225,8 @@ access-control decisions.
 {
   "amount": "5000",
   "currency": "usd",
-  "periodSeconds": "604800",
+  "periodUnit": "week",
+  "periodCount": "1",
   "description": "Weekly Pro plan",
   "externalId": "sub_12345",
   "methodDetails": {
@@ -247,15 +249,17 @@ Stripe Subscription containing exactly one recurring Stripe Price. The
 Price MUST have a fixed `unit_amount`, fixed `currency`, and fixed
 recurring cadence for the full life of the subscription.
 
-The `periodSeconds` field MUST map exactly to a Stripe recurring cadence
-using one of the following forms:
+The period fields MUST map exactly to a Stripe recurring cadence using
+one of the following forms:
 
-- `week`, where `periodSeconds = interval_count * 604800`
-- `day`, where `periodSeconds = interval_count * 86400`
+- `periodUnit="day"`, where `periodCount` maps to `interval_count`
+  and Stripe `recurring.interval` is `day`
+- `periodUnit="week"`, where `periodCount` maps to `interval_count`
+  and Stripe `recurring.interval` is `week`
+- `periodUnit="month"`, where `periodCount` maps to `interval_count`
+  and Stripe `recurring.interval` is `month`
 
-If `periodSeconds` is divisible by both values, servers SHOULD prefer
-the `week` representation. Servers MUST reject any `periodSeconds`
-value that would require approximation, calendar-month interpretation,
+Servers MUST reject any period fields that would require approximation,
 calendar-year interpretation, or an unsupported Stripe interval count.
 
 This profile supports only a fixed quantity of 1 for the single
@@ -279,9 +283,10 @@ the following create Subscription parameters {{STRIPE-SUBSCRIPTIONS-API}}:
 
 Servers MUST create the subscription using an idempotency key bound to
 the challenge ID, payer, payment method, amount, currency, and
-`periodSeconds`. If an idempotent retry returns an existing Stripe
-Subscription, the server MUST verify that the existing object still
-matches this profile before treating the retry as successful.
+`periodUnit` and `periodCount`. If an idempotent retry returns an
+existing Stripe Subscription, the server MUST verify that the existing
+object still matches this profile before treating the retry as
+successful.
 
 ## Unsupported Stripe Billing Features
 
@@ -342,7 +347,7 @@ Servers MUST verify Payment credentials for Stripe subscription intent:
 1. Verify the challenge ID matches the one issued
 2. Verify the challenge has not expired
 3. Decode the request object and verify it matches this constrained
-   profile, including exact `periodSeconds` support
+   profile, including exact support for `periodUnit` and `periodCount`
 4. Extract the `paymentMethod` and optional `customer` from the
    credential payload
 5. Verify the Stripe PaymentMethod exists, is reusable by the
@@ -388,8 +393,7 @@ that incomplete Stripe Subscription.
 
 The canonical billing anchor for this profile is the start timestamp of
 the first paid Stripe invoice period. Servers MUST use that anchor when
-mapping later Stripe invoices to the shared `periodSeconds` billing
-periods.
+mapping later Stripe invoices to the shared billing periods.
 
 Before activating a subscription or recording a renewal, servers MUST
 validate the paid Stripe invoice. The invoice MUST:
@@ -401,7 +405,7 @@ validate the paid Stripe invoice. The invoice MUST:
 - have no discounts, tax, credits, or prorations that change the amount
 - match the challenged `amount` and `currency`
 - map to exactly one canonical billing period derived from the billing
-  anchor and `periodSeconds`
+  anchor, `periodUnit`, and `periodCount`
 - not have already been recorded for another billing period or
   subscription
 
@@ -410,7 +414,7 @@ validate the paid Stripe invoice. The invoice MUST:
 Later billing periods are fulfilled by Stripe renewal invoices. Servers
 MUST use durable local state to map Stripe invoices and webhook events
 onto canonical billing periods derived from the activation anchor and
-`periodSeconds`.
+the period fields.
 
 Servers MUST treat a later billing period as paid only after they
 observe a successful paid Stripe invoice for that subscription and
@@ -552,7 +556,8 @@ The `request` decodes to:
 {
   "amount": "5000",
   "currency": "usd",
-  "periodSeconds": "604800",
+  "periodUnit": "week",
+  "periodCount": "1",
   "description": "Weekly Pro plan",
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
@@ -588,17 +593,18 @@ invoice as paid, the `Payment-Receipt` payload decodes to:
 
 ## Rejected Unsupported Cadence
 
-If a request uses a `periodSeconds` value that cannot be represented as
-an exact whole number of Stripe `day` or `week` intervals, the server
+If a request uses period fields that cannot be represented by the
+shared subscription contract and Stripe recurring cadence, the server
 rejects it rather than approximating. For example, the following request
-is invalid for this profile because `90000` seconds is not an exact
-whole number of days or weeks:
+is invalid for this profile because `year` is not a supported
+`periodUnit`:
 
 ~~~json
 {
   "amount": "5000",
   "currency": "usd",
-  "periodSeconds": "90000",
+  "periodUnit": "year",
+  "periodCount": "1",
   "methodDetails": {
     "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
     "paymentMethodTypes": ["card"]

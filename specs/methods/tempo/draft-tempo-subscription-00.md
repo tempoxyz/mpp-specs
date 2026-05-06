@@ -172,7 +172,7 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
 ## Request Fields
 
-Tempo uses the shared `amount`, `currency`, `periodSeconds`,
+Tempo uses the shared `amount`, `currency`, `periodUnit`, `periodCount`,
 `subscriptionExpires`, `recipient`, `description`, and `externalId`
 fields from {{I-D.payment-intent-subscription}}. Tempo additionally
 requires `subscriptionExpires` because Tempo key authorizations must
@@ -182,7 +182,8 @@ expire:
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Fixed payment amount per billing period in base units |
 | `currency` | string | REQUIRED | TIP-20 token address |
-| `periodSeconds` | string | REQUIRED | Billing period duration in seconds |
+| `periodUnit` | string | REQUIRED | Billing period unit. The value MUST be `day` or `week` |
+| `periodCount` | string | REQUIRED | Positive integer count of `periodUnit` values per billing period |
 | `subscriptionExpires` | string | REQUIRED | Subscription expiry timestamp in {{RFC3339}} format |
 | `recipient` | string | REQUIRED | Recipient address authorized for subscription charges |
 | `description` | string | OPTIONAL | Human-readable subscription description |
@@ -192,7 +193,7 @@ The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
-The `periodSeconds` value MUST be a string representation of a positive
+The `periodCount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
 surrounding whitespace. Leading zeros MUST NOT be used.
 
@@ -224,12 +225,18 @@ MUST be strictly later than the challenge `expires` timestamp. Servers
 MUST reject credentials where `subscriptionExpires` is at or before the
 challenge `expires`.
 
-Tempo subscriptions map `periodSeconds` to the {{TIP-1011}} `TokenLimit`
-`period` field and map `subscriptionExpires` to the Tempo key
-authorization expiry field. Servers MUST reject request objects where
-`periodSeconds` cannot be represented as an unsigned 64-bit integer.
-Servers MUST reject request objects where `subscriptionExpires` cannot
-be represented in the Tempo key authorization expiry field.
+Tempo subscriptions map the shared period fields to the {{TIP-1011}}
+`TokenLimit` `period` field as follows:
+
+- `periodUnit="day"` maps to `periodCount * 86400` seconds
+- `periodUnit="week"` maps to `periodCount * 604800` seconds
+
+Servers MUST reject `periodUnit="month"` because {{TIP-1011}} periodic
+token limits are fixed elapsed-time periods and cannot represent
+calendar-month billing exactly. Servers MUST reject request objects
+where the mapped period cannot be represented as an unsigned 64-bit
+integer. Servers MUST reject request objects where `subscriptionExpires`
+cannot be represented in the Tempo key authorization expiry field.
 
 **Example:**
 
@@ -237,7 +244,8 @@ be represented in the Tempo key authorization expiry field.
 {
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "periodSeconds": "2592000",
+  "periodUnit": "day",
+  "periodCount": "30",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
@@ -255,7 +263,7 @@ The client fulfills this by signing a key authorization with:
 - Expiry = `subscriptionExpires`
 - Access key = `methodDetails.accessKey`
 - Per-period spending limit = `amount`
-- Billing period = `periodSeconds`
+- Billing period = mapped period in seconds
 - Destination restriction = `recipient`
 
 The signed key authorization MUST additionally configure:
@@ -263,7 +271,7 @@ The signed key authorization MUST additionally configure:
 - the exact access-key address and key type from
   `methodDetails.accessKey`
 - a `TokenLimit` for `currency` whose `amount` equals the challenge
-  `amount` and whose `period` equals `periodSeconds`
+  `amount` and whose `period` equals the mapped period in seconds
 - exactly one `allowed_calls` target scope whose `target` equals
   `currency`
 - explicit selector rules for `transfer(address,uint256)`
@@ -395,9 +403,9 @@ chain settlement data rather than local wall-clock time.
 
 Billing periods are defined as:
 
-- Period 0: `[anchor, anchor + periodSeconds)`
-- Period 1: `[anchor + periodSeconds, anchor + 2*periodSeconds)`
-- Period N: `[anchor + N*periodSeconds, anchor + (N+1)*periodSeconds)`
+- Period 0: `[anchor, anchor + mappedPeriodSeconds)`
+- Period 1: `[anchor + mappedPeriodSeconds, anchor + 2*mappedPeriodSeconds)`
+- Period N: `[anchor + N*mappedPeriodSeconds, anchor + (N+1)*mappedPeriodSeconds)`
 
 Servers MUST maintain durable local state for each subscription,
 including at least:
@@ -413,7 +421,7 @@ When granting access in a later billing period, servers MUST:
 
 - Verify the subscription has not expired or been revoked
 - Determine the current billing-period index from the anchor and
-  `periodSeconds`
+  the mapped period in seconds
 - Verify that the current billing period has not already been charged
 - Atomically record any renewal attempt for the current billing period
   as in-flight before submitting the renewal transaction
@@ -458,7 +466,7 @@ authorizes the exact access key described by
 `keyType`.
 Servers MUST also verify that the authorization contains a spending
 limit for `currency` whose amount equals `amount` and whose billing
-period equals `periodSeconds`.
+period equals the mapped period in seconds.
 
 Servers MUST verify that the signed key authorization's `allowed_calls`
 scope:
@@ -511,7 +519,7 @@ Clients MUST parse and verify the `request` payload before signing:
 
 1. Verify `amount` is reasonable for the service
 2. Verify `currency` is the expected TIP-20 token address
-3. Verify `periodSeconds` matches expectations
+3. Verify `periodUnit` and `periodCount` match expectations
 4. Verify `recipient` is controlled by the expected party
 5. Verify `subscriptionExpires` is acceptable
 
@@ -605,7 +613,8 @@ The `request` decodes to:
 {
   "amount": "10000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "periodSeconds": "2592000",
+  "periodUnit": "day",
+  "periodCount": "30",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
@@ -618,8 +627,8 @@ The `request` decodes to:
 }
 ~~~
 
-This requests a recurring payment of 10.00 alphaUSD every 2,592,000
-seconds until 2026-07-14T12:00:00Z.
+This requests a recurring payment of 10.00 alphaUSD every 30 days until
+2026-07-14T12:00:00Z.
 
 **Credential:**
 
@@ -665,7 +674,9 @@ The server records at least:
 
 - `subscriptionId = "c3ViXzAxMjM0NTY"`
 - `billing anchor = 2026-01-15T12:03:10Z`
-- `periodSeconds = 2592000`
+- `periodUnit = "day"`
+- `periodCount = "30"`
+- `mappedPeriodSeconds = 2592000`
 - `accessKeyAddress = "0x1111111111111111111111111111111111111111"`
 - `last charged billing-period index = 0`
 
