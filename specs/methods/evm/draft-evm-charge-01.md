@@ -1,8 +1,8 @@
 ---
 title: EVM Charge Intent for HTTP Payment Authentication
 abbrev: EVM Charge
-docname: draft-evm-charge-00
-version: 00
+docname: draft-evm-charge-01
+version: 01
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -1317,6 +1317,45 @@ Decoded receipt:
   "chainId": 4326
 }
 ~~~
+
+# Example: Radius SBC Charge
+
+Radius uses the generic `evm` method with EIP-155 chain ID
+723487 and ERC-20 SBC settlement.
+
+**Challenge** requests 1.0 SBC on Radius (chain 723487):
+
+~~~http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="rAd1usSbcCharge",
+  realm="api.example.com",
+  method="evm",
+  intent="charge",
+  request="eyJ...",
+  expires="2026-04-01T12:05:00Z"
+Cache-Control: no-store
+~~~
+
+Decoded `request`:
+
+~~~json
+{
+  "amount": "1000000",
+  "currency": "0x33ad9e4BD16B69B5BFdED37D8B5D9fF9aba014Fb",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
+  "description": "Premium API call",
+  "methodDetails": {
+    "chainId": 723487,
+    "permit2Address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "decimals": 6,
+    "credentialTypes": ["permit2", "transaction", "hash"]
+  }
+}
+~~~
+
+Servers SHOULD advertise `permit2` first when available.
+`transaction` and `hash` are compatible fallbacks, with the
+challenge-binding limitations described in {{hash-binding}}.
 
 # Full Example: Transaction Charge on Sei
 
