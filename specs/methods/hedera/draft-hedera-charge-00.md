@@ -346,7 +346,7 @@ NONCE (bytes 25-31)
   the `WWW-Authenticate` header. Binds the memo to a
   specific challenge instance, preventing replay.
 
-## Encoding
+## Memo Encoding {#memo-encoding}
 
 The 32-byte memo MUST be hex-encoded with a `0x` prefix
 and stored as the Hedera transaction memo via
