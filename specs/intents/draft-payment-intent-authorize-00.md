@@ -47,35 +47,40 @@ normative:
 
 This document defines the "authorize" payment intent for use with the
 Payment HTTP Authentication Scheme. The "authorize" intent represents a
-pre-authorization where the payer grants the server permission to charge
-up to a specified amount within a time window, without immediate payment.
+payment authorization where the payer approves a maximum amount that a
+server can later capture before an expiry time.
 
 --- middle
 
 # Introduction
 
-The "authorize" intent enables pre-authorized payments where the payer
-grants the server permission to charge up to a specified amount at a
-later time. This is useful for:
+The "authorize" intent enables delayed payment capture. The payer
+authorizes a maximum amount, and the payment method creates a hold,
+escrow, or equivalent authorization. The server can later capture one or
+more amounts against that authorization, subject to the authorized maximum
+and expiry.
 
-Metered billing:
-: Pay-per-use APIs where total cost is unknown upfront
+This is useful for:
 
 Delayed fulfillment:
-: Services where delivery occurs after authorization
+: Services where delivery or shipment occurs after payment authorization.
+
+Metered billing:
+: Services where final cost is unknown when the payer authorizes payment.
 
 Spending caps:
-: User-controlled limits on automated spending
+: User-controlled limits on future server-initiated captures.
 
-Unlike the "charge" intent which requires immediate payment, "authorize"
-creates a payment capability that the server can exercise later.
+Unlike the "charge" intent, successful authorization is not itself a
+payment capture. A successful authorization response MUST NOT imply that
+the recipient has received funds.
 
 ## Relationship to Payment Methods
 
-Payment methods implement "authorize" using method-specific
-authorization mechanisms. This document defines the abstract semantics
-and shared request fields; payment method specifications define how
-those semantics are enforced.
+This document defines the abstract authorize semantics and shared request
+fields. Payment method specifications define how an authorization is
+created, how captures are executed, how unused authorizations are voided,
+and which method-specific policy applies to refund requests.
 
 # Requirements Language
 
@@ -84,77 +89,120 @@ those semantics are enforced.
 # Terminology
 
 Authorization
-: A grant of permission for a server to initiate payments up to a
-  specified limit within a specified time window, without requiring
-  immediate payment.
+: A method-enforced hold, escrow, or equivalent capability allowing a
+  server or operator to capture up to a maximum amount before an expiry.
 
-Spending Limit
-: The maximum amount that can be charged against an authorization
-  before it is exhausted.
+Capture
+: A method-specific operation that consumes part or all of an
+  authorization and transfers captured value to the recipient.
 
-Revocation
-: The act of canceling an authorization before its natural expiry,
-  preventing further charges.
+Void
+: A method-specific operation that closes an authorization and releases
+  any uncaptured value.
+
+Recipient
+: The method-native destination that receives captured value.
+
+Operator
+: A method-specific entity authorized to drive the payment lifecycle,
+  such as registering the authorization, capturing value, or voiding
+  unused value. Some methods use the server as the operator; others use a
+  payment processor, contract, or facilitator.
 
 # Intent Semantics
 
 ## Definition
 
-The "authorize" intent represents a request for the payer to grant
-permission for the server to initiate payments up to a specified limit,
-within a specified time window.
+The "authorize" intent requests the payer to authorize a maximum amount
+for future capture. The client does not need to know whether the payment
+method implements capture as a single capture, multiple captures, escrow
+release, card network capture, or another method-specific mechanism.
 
 ## Properties
 
 | Property | Value |
 |----------|-------|
-| **Intent Identifier** | `authorize` |
-| **Payment Timing** | Deferred (server-initiated later) |
-| **Idempotency** | Credential single-use; authorization reusable within limits |
-| **Reversibility** | Revocable before use |
+| Intent Identifier | `authorize` |
+| Payment Timing | Deferred capture |
+| Capture Count | Method-specific; one or more captures MAY occur |
+| Idempotency | Credential single-use; authorization lifecycle method-specific |
+| Reversibility | Uncaptured value can be voided; captured value refund is method/policy-specific |
 
-## Flow
+## Authorization Flow
 
 ~~~
-   Client                           Server                    Payment Network
-      │                                │                              │
-      │  (1) GET /resource             │                              │
-      ├───────────────────────────────>│                              │
-      │                                │                              │
-      │  (2) 402 Payment Required      │                              │
-      │      intent="authorize"        │                              │
-      │<───────────────────────────────┤                              │
-      │                                │                              │
-      │  (3) Sign authorization        │                              │
-      │                                │                              │
-      │  (4) Authorization: Payment    │                              │
-      ├───────────────────────────────>│                              │
-      │                                │                              │
-      │                                │  (5) Register authorization  │
-      │                                ├─────────────────────────────>│
-      │                                │                              │
-      │  (6) 200 OK (authorized)       │                              │
-      │<───────────────────────────────┤                              │
-      │                                │                              │
-      │        ... later ...           │                              │
-      │                                │                              │
-      │  (7) GET /resource             │                              │
-      ├───────────────────────────────>│                              │
-      │                                │  (8) Charge via auth         │
-      │                                ├─────────────────────────────>│
-      │                                │                              │
-      │  (9) 200 OK + Receipt          │                              │
-      │<───────────────────────────────┤                              │
-      │                                │                              │
+   Client                      Server / Operator             Payment Method
+      |                              |                              |
+      |  (1) GET /resource           |                              |
+      |----------------------------->|                              |
+      |                              |                              |
+      |  (2) 402 Payment Required    |                              |
+      |      intent="authorize"      |                              |
+      |<-----------------------------|                              |
+      |                              |                              |
+      |  (3) Create method-specific  |                              |
+      |      authorization credential|                              |
+      |                              |                              |
+      |  (4) Authorization: Payment  |                              |
+      |----------------------------->|                              |
+      |                              |  (5) Create hold/escrow/auth  |
+      |                              |----------------------------->|
+      |                              |                              |
+      |  (6) 200 OK                  |  (authorization active)       |
+      |      authorization handle    |<-----------------------------|
+      |<-----------------------------|                              |
+      |                              |                              |
 ~~~
 
-## Non-Atomicity
+## Capture Flow
 
-Unlike "charge", the "authorize" intent is non-atomic:
+Captures are method-specific operations. They can occur synchronously with
+resource delivery, after resource delivery, or as part of a separate
+fulfillment workflow.
 
-- Authorization registration is separate from payment collection
-- Multiple charges may occur against a single authorization
-- Total charges MUST NOT exceed the authorized limit
+~~~
+   Client                      Server / Operator             Payment Method
+      |                              |                              |
+      |  (1) Request fulfillment     |                              |
+      |----------------------------->|                              |
+      |                              |                              |
+      |                              |  (2) capture(amount)          |
+      |                              |----------------------------->|
+      |                              |                              |
+      |  (3) 200 OK                  |  (capture confirmed)          |
+      |      Payment-Receipt         |<-----------------------------|
+      |<-----------------------------|                              |
+      |                              |                              |
+~~~
+
+The core intent deliberately does not expose payment method capture
+capabilities, such as whether the method performs one capture or multiple
+captures. The payer authorizes a maximum amount; the payment method and
+server enforce the capture lifecycle.
+
+## Void Flow
+
+~~~
+   Server / Operator             Payment Method
+          |                            |
+          |  void(authorization)       |
+          |--------------------------->|
+          |                            |
+          |  uncaptured value released |
+          |<---------------------------|
+          |                            |
+~~~
+
+Void closes the authorization and releases any uncaptured value according
+to method-specific rules. Void does not refund captured value.
+
+## Refund Requests
+
+Refunds are out of scope for the core authorize lifecycle. Clients MAY
+request a refund through method-defined or merchant-defined channels.
+Servers MAY honor refund requests depending on payment method capability,
+merchant policy, and applicable rules. The "authorize" intent does not
+require partial refunds or on-protocol refund execution.
 
 # Request Schema
 
@@ -167,9 +215,8 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 ## Shared Fields
 
 All payment methods implementing the "authorize" intent MUST support these
-shared fields, enabling clients to parse and display authorization requests
-consistently across methods. Payment methods MAY elevate OPTIONAL fields
-to REQUIRED in their method specification.
+shared fields. Payment methods MAY elevate OPTIONAL fields to REQUIRED in
+their method specification.
 
 ### Required Fields
 
@@ -180,17 +227,16 @@ to REQUIRED in their method specification.
 | `authorizationExpires` | string | Authorization expiry timestamp in {{RFC3339}} format |
 
 The `amount` value MUST be a string representation of a non-negative
-integer in base 10 with no sign, decimal point, exponent, or
-surrounding whitespace. Leading zeros MUST NOT be used except for the
-value `"0"`.
+integer in base 10 with no sign, decimal point, exponent, or surrounding
+whitespace. Leading zeros MUST NOT be used except for the value `"0"`.
 
 ### Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `recipient` | string | Payment recipient in method-native format |
+| `recipient` | string | Captured-value destination in method-native format |
 | `description` | string | Human-readable authorization description |
-| `externalId` | string | Merchant's reference (order ID, etc.) |
+| `externalId` | string | Merchant reference, order ID, or cart ID |
 | `methodDetails` | object | Method-specific extension data |
 
 Challenge expiry is conveyed by the `expires` auth-param in
@@ -217,83 +263,93 @@ payment networks:
 Payment method specifications MUST document which currency formats they
 support and how to interpret amounts for each format.
 
-## Method Extensions
-
-Payment methods MAY define additional fields in the `methodDetails` object.
-These fields are method-specific and MUST be documented in the payment
-method specification.
-
 ## Examples
 
-### Traditional Payment Processor (Stripe)
+### Stripe
 
-~~~ json
+~~~json
 {
   "amount": "100000",
   "currency": "usd",
-  "authorizationExpires": "2025-01-22T12:00:00Z",
+  "authorizationExpires": "2026-05-14T12:00:00Z",
+  "recipient": "acct_merchant",
   "description": "Pre-authorization for metered API usage",
   "methodDetails": {
-    "captureMethod": "manual"
+    "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj"
   }
 }
 ~~~
 
-### Blockchain Payment (Tempo)
+### Tempo
 
-~~~ json
+~~~json
 {
   "amount": "50000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "authorizationExpires": "2025-02-05T12:00:00Z",
+  "authorizationExpires": "2026-05-14T12:00:00Z",
+  "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431
+    "chainId": 42431,
+    "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
+    "operator": "0xA1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
   }
 }
 ~~~
 
 # Credential Requirements
 
-## Payload
+The credential `payload` for an "authorize" intent contains
+method-specific authorization material. Each credential MUST be usable
+only once for a challenge. Servers MUST reject replayed credentials.
 
-The credential `payload` for an "authorize" intent contains the
-authorization grant. The format is method-specific:
-
-| Authorization Type | Description | Example Methods |
-|-------------------|-------------|-----------------|
-| Signed Key Auth | Delegated signing key | Tempo Access Keys |
-| Token Approval | On-chain approval | EVM ERC-20 approve |
-| Saved Payment Method | Stored card/account | Stripe SetupIntent |
-
-## Reusability
-
-Each "authorize" credential MUST be usable only once per challenge.
-Servers MUST reject replayed credentials.
-
-A successfully registered authorization may enable multiple subsequent
-charges. The authorization persists until:
+Successful credential processing creates an authorization. The
+authorization persists until:
 
 - The `authorizationExpires` timestamp is reached
-- The spending limit is exhausted
-- The payer explicitly revokes it
+- The authorized amount is fully captured
+- The authorization is voided
+- A method-specific terminal state occurs
 
 # Authorization Lifecycle
 
 ## Registration
 
-When the server receives an "authorize" credential:
+When the server receives an "authorize" credential, it MUST:
 
-1. Verify the authorization signature/proof
-2. Store the authorization for future use
-3. Initialize durable state for the authorization, including its
-   remaining authorized amount
-4. Return success (200) to indicate authorization accepted
-5. Return success response; session reuse mechanisms are out of scope
-   for this specification
+1. Verify the challenge ID and challenge expiry.
+2. Verify the method-specific authorization credential.
+3. Create or confirm the method-specific hold, escrow, or authorization.
+4. Store durable state sufficient to correlate later captures and voids.
+5. Return success only after the authorization is active.
 
 Registration responses for `intent="authorize"` MUST NOT include a
-`Payment-Receipt` header. `Payment-Receipt` is reserved for later
-successful responses that actually consume authorized value.
+`Payment-Receipt` header. `Payment-Receipt` is reserved for successful
+responses that actually consume or capture authorized value.
+
+## Authorization Metadata
+
+Payment methods MAY return method-specific authorization metadata in a
+successful registration response body. Such metadata can include an
+authorization identifier, status, expiry, captured amount, remaining
+amount, or method reference. The core authorize intent does not define a
+mandatory authorization metadata schema, and clients MUST NOT rely on a
+method returning a core-defined authorization handle.
+
+## Captures
+
+Servers MUST enforce the following invariants across all captures for an
+authorization:
+
+- The cumulative captured amount MUST NOT exceed `amount`.
+- Captures MUST NOT occur after `authorizationExpires`.
+- Capture execution MUST be idempotent with respect to method-specific
+  retry behavior.
+- Captured value MUST be directed to the `recipient` or the
+  method-specific destination bound by the original authorization.
+
+Payment methods MAY use cumulative capture semantics, per-capture
+idempotency keys, processor idempotency keys, or other mechanisms to
+prevent duplicate capture.
 
 ## Server Accounting and Idempotency
 
@@ -303,43 +359,218 @@ remaining limits across concurrent requests and retries.
 At minimum, servers MUST track:
 
 - Authorization identifier
-- Remaining authorized amount
+- Authorized amount
+- Cumulative captured amount
 - Authorization expiry
-- Revocation status
+- Terminal state, if any
 
-When charging against an authorization, servers MUST perform the limit
-check and decrement atomically before, or atomically with, delivering the
-corresponding service.
+For retried HTTP requests, clients SHOULD send an `Idempotency-Key`
+header per {{I-D.ietf-httpapi-idempotency-key-header}}. Servers MUST NOT
+capture or consume authorized amount more than once for a duplicate
+idempotent request.
 
-For retried requests, clients SHOULD send an `Idempotency-Key` header per {{I-D.ietf-httpapi-idempotency-key-header}}.
-Servers MUST NOT decrement the remaining authorized amount more than once
-for a duplicate idempotent request.
+## Void
 
-## Charging
+Servers SHOULD provide a way to void an unused or partially used
+authorization. Void closes the authorization and releases uncaptured value
+according to method-specific rules. Void MUST NOT alter captured value.
 
-When charging against an authorization:
+## Refund Requests
 
-1. Verify the authorization is still valid (not expired, not revoked)
-2. Verify sufficient limit remains
-3. Execute the charge via method-specific mechanism
-4. Decrement the remaining limit atomically with service delivery
-5. Return `Payment-Receipt` with charge details
+Clients MAY request a refund through method-defined or merchant-defined
+channels. A successful refund request is not guaranteed by this intent and
+does not change the core authorization lifecycle.
 
-## Revocation
+## Non-Normative Protocol Examples
 
-Payers SHOULD be able to revoke authorizations before expiry. Revocation
-mechanisms are method-specific:
+The following non-normative examples illustrate possible wire shapes.
+Method specifications define the exact payload fields, response bodies,
+and any void or refund-request interfaces.
 
-| Method | Revocation Mechanism |
-|--------|---------------------|
-| Tempo | Remove Access Key from account |
-| EVM | Set approval to zero |
-| Stripe | Detach PaymentMethod from Customer |
+### Authorization Challenge
 
-## Expiry
+~~~http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="auth_1a2b3c4d5e",
+  realm="api.example.com",
+  method="example",
+  intent="authorize",
+  expires="2026-05-13T12:05:00Z",
+  request="<base64url-encoded request>"
+Cache-Control: no-store
+Content-Type: application/json
 
-Servers MUST NOT charge against expired authorizations. Servers SHOULD
-provide a mechanism for payers to query authorization status.
+{
+  "type": "https://paymentauth.org/problems/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "This resource requires payment authorization"
+}
+~~~
+
+Decoded request:
+
+~~~json
+{
+  "amount": "100000",
+  "currency": "usd",
+  "authorizationExpires": "2026-05-14T12:00:00Z",
+  "recipient": "merchant_123"
+}
+~~~
+
+### Authorization Credential
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Authorization: Payment <base64url-encoded credential>
+~~~
+
+Decoded credential:
+
+~~~json
+{
+  "challenge": {
+    "id": "auth_1a2b3c4d5e",
+    "realm": "api.example.com",
+    "method": "example",
+    "intent": "authorize",
+    "request": "eyJ...",
+    "expires": "2026-05-13T12:05:00Z"
+  },
+  "payload": {
+    "type": "method-specific"
+  }
+}
+~~~
+
+### Authorization Active
+
+Registration responses MUST NOT include `Payment-Receipt`. The response
+body below is illustrative metadata, not a required core schema.
+
+~~~http
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Type: application/json
+
+{
+  "authorization": {
+    "id": "pauth_123",
+    "status": "authorized",
+    "amount": "100000",
+    "capturedAmount": "0",
+    "remainingAmount": "100000",
+    "currency": "usd",
+    "recipient": "merchant_123",
+    "authorizationExpires": "2026-05-14T12:00:00Z"
+  }
+}
+~~~
+
+### Capture Receipt
+
+When a response consumes or captures authorized value, the server returns a
+`Payment-Receipt` header. The decoded receipt shape is method-specific.
+
+~~~http
+HTTP/1.1 200 OK
+Payment-Receipt: eyJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiYXV0aG9yaXplIiwic3RhdHVzIjoic3VjY2VzcyJ9
+Cache-Control: no-store
+Content-Type: application/json
+
+{
+  "result": "resource response"
+}
+~~~
+
+Decoded receipt:
+
+~~~json
+{
+  "method": "example",
+  "intent": "authorize",
+  "reference": "cap_456",
+  "authorizationId": "pauth_123",
+  "capturedAmount": "25000",
+  "delta": "25000",
+  "status": "success",
+  "timestamp": "2026-05-13T12:10:00Z"
+}
+~~~
+
+### Authorization Exhausted or Closed
+
+When an authorization cannot cover the request, the server returns a fresh
+challenge.
+
+~~~http
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="auth_6f7g8h9i0j",
+  realm="api.example.com",
+  method="example",
+  intent="authorize",
+  expires="2026-05-13T12:20:00Z",
+  request="eyJ..."
+Cache-Control: no-store
+Content-Type: application/problem+json
+
+{
+  "type": "https://paymentauth.org/problems/authorization-exhausted",
+  "title": "Authorization Exhausted",
+  "status": 402,
+  "detail": "The previous authorization cannot cover this request"
+}
+~~~
+
+### Method-Defined Void
+
+Void is a method-specific or server-operator operation. A method that
+exposes void over HTTP might use a shape like this:
+
+~~~http
+POST /payments/authorizations/pauth_123/void HTTP/1.1
+Host: api.example.com
+Idempotency-Key: void_123
+~~~
+
+~~~http
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Type: application/json
+
+{
+  "authorizationId": "pauth_123",
+  "status": "voided",
+  "releasedAmount": "75000"
+}
+~~~
+
+### Out-of-Band Refund Request
+
+Refund requests are merchant-defined or method-defined and do not change
+the core authorization semantics:
+
+~~~http
+POST /payments/authorizations/pauth_123/refund-requests HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "reason": "requested_by_customer"
+}
+~~~
+
+~~~http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "refundRequestId": "rr_123",
+  "status": "pending_review"
+}
+~~~
 
 ## Error Responses
 
@@ -349,30 +580,45 @@ MUST return an appropriate HTTP status code:
 | Condition | Status Code | Behavior |
 |-----------|-------------|----------|
 | Authorization expired | 402 Payment Required | Issue new challenge |
-| Spending limit exhausted | 402 Payment Required | Issue new challenge |
-| Authorization revoked | 402 Payment Required | Issue new challenge |
+| Authorized amount exhausted | 402 Payment Required | Issue new challenge |
+| Authorization voided or closed | 402 Payment Required | Issue new challenge |
 | Invalid credential | 401 Unauthorized | Reject credential |
 
 For all 402 responses, the server MUST include a `WWW-Authenticate`
-header with a fresh challenge. Clients receiving a 402 after a
-previously valid authorization SHOULD treat the authorization as
-exhausted and initiate a new authorization flow.
+header with a fresh challenge. Clients receiving a 402 after a previously
+valid authorization SHOULD initiate a new authorization flow.
 
 # Security Considerations
 
 ## Limit Verification
 
-Clients MUST verify the requested limit is acceptable before signing.
-Authorizations grant future spending capability without further user
-interaction.
+Clients MUST verify the requested limit is acceptable before authorizing.
+Authorizations allow future captures without further user interaction.
 
-Clients MUST verify `authorizationExpires` is not unreasonably far in the
-future.
+Clients MUST verify:
+
+- The `amount` and `currency`
+- The `recipient`, when exposed by the method
+- The authorization expiry
+- Method-specific lifecycle authority, processor, or escrow identifiers
+  when present
+
+## Destination and Lifecycle Authority
+
+Some methods distinguish between the destination that receives captured
+funds and an authority that can drive authorization, capture, or void
+operations. For example, an on-chain method might use a recipient address
+for settlement and a separate operator address for lifecycle operations.
+Where a method exposes separate roles, clients SHOULD display them when
+they differ. Method specifications MUST define which role fields are bound
+by the payer's authorization and MUST ensure lifecycle authority cannot
+redirect captured value to a different destination.
 
 ## Expiry Windows
 
 Clients SHOULD prefer short authorization windows. Long-lived
-authorizations increase risk if credentials are compromised.
+authorizations increase risk if credentials are compromised or merchant
+systems behave incorrectly.
 
 Recommended maximum windows:
 
@@ -385,35 +631,18 @@ Recommended maximum windows:
 These values are informational guidance. Deployments SHOULD evaluate
 their own risk tolerance and adjust authorization windows accordingly.
 
-## Revocation Capability
+## Refund Expectations
 
-Payment methods implementing "authorize" SHOULD provide revocation
-mechanisms. Payers MUST be able to revoke authorizations if they suspect
-compromise.
-
-## Authorization Scope
-
-Authorizations SHOULD be scoped as narrowly as possible:
-
-- Specific recipient address (not "any address")
-- Specific asset/currency
-- Reasonable limits and expiry
-
-## Server Accountability
-
-Servers holding authorizations are responsible for:
-
-- Secure storage of authorization data
-- Not exceeding authorized limits
-- Providing transaction records to payers
-- Honoring revocation requests
+Clients MUST NOT assume that captured value can be refunded through the
+Payment Authentication protocol. Refund rights and procedures are
+method-specific and policy-specific.
 
 ## Caching
 
-Responses to authorization challenges (402 Payment Required) and
-responses that consume authorized value SHOULD include
-`Cache-Control: no-store` to prevent sensitive payment data from being
-cached by intermediaries.
+Responses to authorization challenges (402 Payment Required), responses
+that establish authorizations, and responses that consume authorized value
+SHOULD include `Cache-Control: no-store` to prevent sensitive payment data
+from being cached by intermediaries.
 
 # IANA Considerations
 
@@ -424,7 +653,7 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 | Intent | Description | Reference |
 |--------|-------------|-----------|
-| `authorize` | Pre-authorization for future charges | This document |
+| `authorize` | Authorization for deferred capture | This document |
 
 --- back
 
@@ -432,5 +661,3 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 
 The authors thank the MPP community for their feedback on this
 specification.
-
-
