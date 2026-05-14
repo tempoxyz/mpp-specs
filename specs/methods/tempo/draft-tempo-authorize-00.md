@@ -241,17 +241,16 @@ Ethereum address.
 Servers MUST verify payer identity from the signed transaction and MUST
 NOT trust `source` without verification.
 
-## Transaction Payload (type="transaction")
+## Transaction Payload
 
-When `type` is `"transaction"`, `transaction` contains the complete
-client-signed Tempo Transaction (type `0x76`) serialized as RLP and
-hex-encoded with `0x` prefix. The transaction MUST call `authorize(info)`
-on the escrow contract identified by `methodDetails.escrowContract`.
+The `transaction` field contains the complete client-signed Tempo
+Transaction (type `0x76`) serialized as RLP and hex-encoded with `0x`
+prefix. The transaction MUST call `authorize(info)` on the escrow contract
+identified by `methodDetails.escrowContract`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `transaction` | string | REQUIRED | Hex-encoded RLP-serialized signed Tempo Transaction |
-| `type` | string | REQUIRED | `"transaction"` |
 
 **Example:**
 
@@ -266,8 +265,7 @@ on the escrow contract identified by `methodDetails.escrowContract`.
     "expires": "2026-05-13T12:05:00Z"
   },
   "payload": {
-    "transaction": "0x76f901...signed transaction bytes...",
-    "type": "transaction"
+    "transaction": "0x76f901...signed transaction bytes..."
   },
   "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
 }
@@ -295,7 +293,7 @@ server to add the fee-payer signature before broadcasting. If
 payment fields so the transaction is executable without server
 sponsorship.
 
-# Escrow Contract Semantics
+# Escrow Contract Semantics {#escrow-contract-semantics}
 
 Tempo authorize uses an escrow contract with the following abstract state
 and operations. Exact Solidity types MAY vary, but implementations MUST
@@ -357,7 +355,7 @@ interface ITempoAuthCaptureEscrow {
         external
         returns (uint120 delta);
 
-    function voidAuthorization(AuthorizationInfo calldata info) external;
+    function void(AuthorizationInfo calldata info) external;
 
     function reclaim(AuthorizationInfo calldata info) external;
 
@@ -428,9 +426,9 @@ Expired:
 : Capture fails unless it is an exact or lower cumulative retry that
   transfers no funds.
 
-### voidAuthorization
+### void
 
-`voidAuthorization(info)` closes the authorization and returns all
+`void(info)` closes the authorization and returns all
 uncaptured funds to `info.payer`:
 
 ~~~
@@ -444,13 +442,13 @@ refund captured funds.
 
 `reclaim(info)` allows `info.payer` to recover remaining uncaptured funds
 after `info.authorizationExpiry`. It closes the authorization and returns
-the same `remaining` value as `voidAuthorization`.
+the same `remaining` value as `void`.
 
 Only `info.payer` can reclaim an authorization.
 
 # Verification Procedure
 
-On receipt of a `type="transaction"` credential, servers MUST:
+On receipt of a Tempo authorize credential, servers MUST:
 
 1. Verify the challenge ID and challenge expiry.
 2. Decode the transaction and verify it is a Tempo Transaction.
@@ -631,8 +629,7 @@ Decoded request:
     "expires": "2026-05-13T12:05:00Z"
   },
   "payload": {
-    "transaction": "0x76f901...signed transaction bytes...",
-    "type": "transaction"
+    "transaction": "0x76f901...signed transaction bytes..."
   },
   "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
 }
@@ -731,7 +728,7 @@ Decoded receipt:
 ## Void Example
 
 If the operator determines no further captures are needed, it calls
-`voidAuthorization(info)`. With 25.00 tokens captured from a 50.00 token
+`void(info)`. With 25.00 tokens captured from a 50.00 token
 authorization, the contract returns the remaining 25.00 tokens to the
 payer and closes the authorization.
 
@@ -781,6 +778,213 @@ Content-Type: application/json
 {
   "refundRequestId": "rr_789",
   "status": "pending_review"
+}
+~~~
+
+# Reference Escrow Contract
+
+This non-normative appendix gives a complete Solidity reference
+implementation for the escrow semantics in this document. Implementations
+MAY use different source code or exact Solidity types, but compliant
+implementations MUST preserve the externally visible semantics described
+in {{escrow-contract-semantics}}.
+
+~~~solidity
+pragma solidity ^0.8.24;
+
+interface ITIP20 {
+    function transferFrom(address from, address to, uint256 amount)
+        external
+        returns (bool);
+
+    function transfer(address to, uint256 amount)
+        external
+        returns (bool);
+}
+
+contract TempoAuthCaptureEscrow {
+    struct AuthorizationInfo {
+        address payer;
+        address recipient;
+        address operator;
+        address token;
+        uint120 maxAmount;
+        uint48 authorizationExpiry;
+        bytes32 salt;
+    }
+
+    struct AuthorizationState {
+        bool initialized;
+        bool closed;
+        uint120 authorizedAmount;
+        uint120 capturedAmount;
+    }
+
+    mapping(bytes32 => AuthorizationState) public authorizations;
+
+    error UnknownAuthorization();
+    error DuplicateAuthorization();
+    error AuthorizationClosed();
+    error AuthorizationExpired();
+    error Unauthorized();
+    error CaptureExceedsMax();
+    error TransferFailed();
+
+    event Authorized(
+        bytes32 indexed authorizationId,
+        address indexed payer,
+        address indexed recipient,
+        address operator,
+        address token,
+        uint120 amount,
+        uint48 authorizationExpiry
+    );
+
+    event Captured(
+        bytes32 indexed authorizationId,
+        uint120 cumulativeCaptured,
+        uint120 delta
+    );
+
+    event Voided(bytes32 indexed authorizationId, uint120 releasedAmount);
+    event Reclaimed(bytes32 indexed authorizationId, uint120 releasedAmount);
+
+    function authorize(AuthorizationInfo calldata info)
+        external
+        returns (bytes32 authorizationId)
+    {
+        if (msg.sender != info.payer) revert Unauthorized();
+        if (block.timestamp >= info.authorizationExpiry) {
+            revert AuthorizationExpired();
+        }
+
+        authorizationId = getAuthorizationId(info);
+        AuthorizationState storage state = authorizations[authorizationId];
+        if (state.initialized) revert DuplicateAuthorization();
+
+        state.initialized = true;
+        state.authorizedAmount = info.maxAmount;
+
+        if (
+            !ITIP20(info.token).transferFrom(
+                info.payer,
+                address(this),
+                info.maxAmount
+            )
+        ) {
+            revert TransferFailed();
+        }
+
+        emit Authorized(
+            authorizationId,
+            info.payer,
+            info.recipient,
+            info.operator,
+            info.token,
+            info.maxAmount,
+            info.authorizationExpiry
+        );
+    }
+
+    function capture(
+        AuthorizationInfo calldata info,
+        uint120 cumulativeCaptured
+    ) external returns (uint120 delta) {
+        if (msg.sender != info.operator) revert Unauthorized();
+
+        bytes32 authorizationId = getAuthorizationId(info);
+        AuthorizationState storage state = authorizations[authorizationId];
+        if (!state.initialized) revert UnknownAuthorization();
+        if (state.closed) revert AuthorizationClosed();
+
+        if (cumulativeCaptured <= state.capturedAmount) {
+            emit Captured(authorizationId, cumulativeCaptured, 0);
+            return 0;
+        }
+
+        if (block.timestamp >= info.authorizationExpiry) {
+            revert AuthorizationExpired();
+        }
+        if (cumulativeCaptured > info.maxAmount) {
+            revert CaptureExceedsMax();
+        }
+
+        delta = cumulativeCaptured - state.capturedAmount;
+        state.capturedAmount = cumulativeCaptured;
+
+        if (!ITIP20(info.token).transfer(info.recipient, delta)) {
+            revert TransferFailed();
+        }
+
+        emit Captured(authorizationId, cumulativeCaptured, delta);
+    }
+
+    function void(AuthorizationInfo calldata info) external {
+        if (msg.sender != info.operator) revert Unauthorized();
+
+        bytes32 authorizationId = getAuthorizationId(info);
+        AuthorizationState storage state = authorizations[authorizationId];
+        if (!state.initialized) revert UnknownAuthorization();
+        if (state.closed) revert AuthorizationClosed();
+
+        uint120 releasedAmount =
+            state.authorizedAmount - state.capturedAmount;
+        state.closed = true;
+
+        if (
+            releasedAmount != 0
+                && !ITIP20(info.token).transfer(info.payer, releasedAmount)
+        ) {
+            revert TransferFailed();
+        }
+
+        emit Voided(authorizationId, releasedAmount);
+    }
+
+    function reclaim(AuthorizationInfo calldata info) external {
+        if (msg.sender != info.payer) revert Unauthorized();
+        if (block.timestamp < info.authorizationExpiry) {
+            revert AuthorizationExpired();
+        }
+
+        bytes32 authorizationId = getAuthorizationId(info);
+        AuthorizationState storage state = authorizations[authorizationId];
+        if (!state.initialized) revert UnknownAuthorization();
+        if (state.closed) revert AuthorizationClosed();
+
+        uint120 releasedAmount =
+            state.authorizedAmount - state.capturedAmount;
+        state.closed = true;
+
+        if (
+            releasedAmount != 0
+                && !ITIP20(info.token).transfer(info.payer, releasedAmount)
+        ) {
+            revert TransferFailed();
+        }
+
+        emit Reclaimed(authorizationId, releasedAmount);
+    }
+
+    function getAuthorizationId(AuthorizationInfo calldata info)
+        public
+        view
+        returns (bytes32 authorizationId)
+    {
+        return keccak256(
+            abi.encode(
+                block.chainid,
+                address(this),
+                info.payer,
+                info.recipient,
+                info.operator,
+                info.token,
+                info.maxAmount,
+                info.authorizationExpiry,
+                info.salt
+            )
+        );
+    }
 }
 ~~~
 

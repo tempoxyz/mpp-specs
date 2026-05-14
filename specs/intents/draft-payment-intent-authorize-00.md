@@ -624,17 +624,6 @@ Clients SHOULD prefer short authorization windows. Long-lived
 authorizations increase risk if credentials are compromised or merchant
 systems behave incorrectly.
 
-Recommended maximum windows:
-
-| Use Case | Recommended Max |
-|----------|-----------------|
-| Single session | 1 hour |
-| Daily usage | 24 hours |
-| Monthly billing | 30 days |
-
-These values are informational guidance. Deployments SHOULD evaluate
-their own risk tolerance and adjust authorization windows accordingly.
-
 ## Refund Expectations
 
 Clients MUST NOT assume that captured value can be refunded through the
