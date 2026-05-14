@@ -25,7 +25,7 @@ normative:
   RFC8785:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -189,9 +189,17 @@ base64url encoding, per {{I-D.httpauth-payment}}.
 
 The challenge request does not contain a PaymentIntent ID or a
 PaymentIntent client secret. The client fulfills the challenge by creating
-an SPT scoped to the challenged amount, currency, expiry, and seller
-details. The server consumes that SPT when creating the manual-capture
-PaymentIntent.
+an SPT scoped to the challenged amount, currency, expiry, seller details,
+and one of the listed `methodDetails.paymentMethodTypes` values. The
+server consumes that SPT when creating the manual-capture PaymentIntent.
+
+The `amount` value MUST fit the Stripe API integer amount range for the
+selected currency and payment method. Implementations MUST reject values
+that cannot be converted to an exact Stripe integer amount.
+
+Servers issuing a Stripe authorize challenge MUST include the `expires`
+auth-param. The `authorizationExpires` value MUST be strictly later than
+the challenge `expires` timestamp.
 
 **Example:**
 
@@ -275,11 +283,17 @@ to the server. Clients MUST NOT submit an SPT that is not usable for
 PaymentIntent creation.
 
 ~~~javascript
+const amount = BigInt(request.amount);
+if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
+  throw new Error("amount exceeds exact JavaScript integer range");
+}
+const stripeAmount = Number(amount);
+
 const spt = await stripe.sharedPayment.issuedTokens.create({
   payment_method: "pm_123",
   usage_limits: {
     currency: request.currency,
-    max_amount: Number(request.amount),
+    max_amount: stripeAmount,
     expires_at: expiresAt
   },
   seller_details: {
@@ -294,18 +308,21 @@ After receiving the Payment credential, the server creates and confirms a
 PaymentIntent with manual capture. For example:
 
 ~~~javascript
+const amount = BigInt(request.amount);
+if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
+  throw new Error("amount exceeds exact JavaScript integer range");
+}
+const stripeAmount = Number(amount);
+
 const paymentIntent = await stripe.paymentIntents.create({
-  amount: Number(request.amount),
+  amount: stripeAmount,
   currency: request.currency,
   capture_method: "manual",
+  payment_method_types: request.methodDetails.paymentMethodTypes,
   payment_method_data: {
     shared_payment_granted_token: credential.spt
   },
   confirm: true,
-  automatic_payment_methods: {
-    enabled: true,
-    allow_redirects: "never"
-  },
   metadata: {
     challenge_id: challenge.id,
     external_id: request.externalId
@@ -425,14 +442,7 @@ payment network, and merchant policy.
 
 # IANA Considerations
 
-## Payment Intent Registration
-
-This document registers the following payment intent in the "HTTP Payment
-Intents" registry established by {{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `authorize` | `stripe` | Manual-capture Stripe PaymentIntent authorization | This document |
+This document has no IANA actions.
 
 --- back
 
@@ -444,6 +454,7 @@ stripe-authorize-challenge = "Payment" 1*SP
   "realm=" quoted-string ","
   "method=" DQUOTE "stripe" DQUOTE ","
   "intent=" DQUOTE "authorize" DQUOTE ","
+  "expires=" quoted-string ","
   "request=" base64url-nopad
 
 stripe-authorize-credential = "Payment" 1*SP base64url-nopad

@@ -52,6 +52,18 @@ normative:
     target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
     author:
       - org: Tempo Labs
+
+informative:
+  DID-PKH:
+    title: "The did:pkh Method"
+    target: https://github.com/w3c-ccg/did-pkh/blob/main/did-pkh-method-draft.md
+    author:
+      - org: W3C Credentials Community Group
+  SOLIDITY-ABI:
+    title: "Contract ABI Specification"
+    target: https://docs.soliditylang.org/en/latest/abi-spec.html
+    author:
+      - org: Solidity
 ---
 
 --- abstract
@@ -181,9 +193,17 @@ format. Request objects MUST NOT duplicate the challenge expiry value.
 The `authorizationExpires` field instead defines when capture authority
 expires.
 
+Servers issuing a Tempo authorize challenge MUST include the `expires`
+auth-param.
+
 The `authorizationExpires` value MUST be strictly later than the
 challenge `expires` timestamp. Servers MUST reject credentials where
 `authorizationExpires` is at or before the challenge `expires`.
+
+The `amount` value MUST fit the `uint120 maxAmount` field in
+`AuthorizationInfo`. Servers MUST reject requests with an `amount` greater
+than 2^120 - 1. The Unix-seconds representation of
+`authorizationExpires` MUST fit the `uint48 authorizationExpiry` field.
 
 **Example:**
 
@@ -215,8 +235,9 @@ JSON object per {{I-D.httpauth-payment}}.
 | `payload` | object | REQUIRED | Tempo-specific payload object |
 | `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
 
-The `source` field, if present, SHOULD use the `did:pkh` method with the
-chain ID applicable to the challenge and the payer's Ethereum address.
+The `source` field, if present, SHOULD use the `did:pkh` method
+{{DID-PKH}} with the chain ID applicable to the challenge and the payer's
+Ethereum address.
 Servers MUST verify payer identity from the signed transaction and MUST
 NOT trust `source` without verification.
 
@@ -306,7 +327,8 @@ struct AuthorizationState {
 ~~~
 
 The authorization identifier MUST be bound to the chain, escrow contract,
-and economic terms. A compliant implementation SHOULD compute it using a
+and economic terms. A compliant implementation SHOULD compute it using
+Solidity ABI encoding and Keccak-256 {{SOLIDITY-ABI}} with a
 domain-separated hash equivalent to:
 
 ~~~
@@ -423,6 +445,8 @@ refund captured funds.
 `reclaim(info)` allows `info.payer` to recover remaining uncaptured funds
 after `info.authorizationExpiry`. It closes the authorization and returns
 the same `remaining` value as `voidAuthorization`.
+
+Only `info.payer` can reclaim an authorization.
 
 # Verification Procedure
 
@@ -541,14 +565,7 @@ from being cached by intermediaries.
 
 # IANA Considerations
 
-## Payment Intent Registration
-
-This document registers the following payment intent in the "HTTP Payment
-Intents" registry established by {{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `authorize` | `tempo` | Escrow-backed authorization for future TIP-20 captures | This document |
+This document has no IANA actions.
 
 --- back
 
@@ -560,6 +577,7 @@ tempo-authorize-challenge = "Payment" 1*SP
   "realm=" quoted-string ","
   "method=" DQUOTE "tempo" DQUOTE ","
   "intent=" DQUOTE "authorize" DQUOTE ","
+  "expires=" quoted-string ","
   "request=" base64url-nopad
 
 tempo-authorize-credential = "Payment" 1*SP base64url-nopad

@@ -149,7 +149,7 @@ release, card network capture, or another method-specific mechanism.
       |                              |----------------------------->|
       |                              |                              |
       |  (6) 200 OK                  |  (authorization active)       |
-      |      authorization handle    |<-----------------------------|
+      |      optional metadata       |<-----------------------------|
       |<-----------------------------|                              |
       |                              |                              |
 ~~~
@@ -245,6 +245,9 @@ format. Request objects MUST NOT duplicate the challenge expiry value.
 The `authorizationExpires` field instead defines when the authorization
 itself expires.
 
+Servers issuing an "authorize" challenge MUST include the `expires`
+auth-param.
+
 The `authorizationExpires` value MUST be strictly later than the
 challenge `expires` timestamp. Servers MUST reject credentials where
 `authorizationExpires` is at or before the challenge `expires`.
@@ -275,7 +278,8 @@ support and how to interpret amounts for each format.
   "recipient": "acct_merchant",
   "description": "Pre-authorization for metered API usage",
   "methodDetails": {
-    "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj"
+    "networkId": "profile_1MqDcVKA5fEO2tZvKQm9g8Yj",
+    "paymentMethodTypes": ["card", "link"]
   }
 }
 ~~~
@@ -582,7 +586,7 @@ MUST return an appropriate HTTP status code:
 | Authorization expired | 402 Payment Required | Issue new challenge |
 | Authorized amount exhausted | 402 Payment Required | Issue new challenge |
 | Authorization voided or closed | 402 Payment Required | Issue new challenge |
-| Invalid credential | 401 Unauthorized | Reject credential |
+| Invalid credential | 402 Payment Required | Issue new challenge |
 
 For all 402 responses, the server MUST include a `WWW-Authenticate`
 header with a fresh challenge. Clients receiving a 402 after a previously
@@ -654,6 +658,8 @@ Intents" registry established by {{I-D.httpauth-payment}}:
 | Intent | Description | Reference |
 |--------|-------------|-----------|
 | `authorize` | Authorization for deferred capture | This document |
+
+Contact: Tempo Labs (<contact@tempo.xyz>)
 
 --- back
 
