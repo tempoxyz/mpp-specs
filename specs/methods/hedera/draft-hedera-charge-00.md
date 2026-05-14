@@ -12,6 +12,10 @@ author:
   - name: Tom Rowbotham
     ins: T. Rowbotham
     email: tom@xeno.money
+  - name: Lindsay Walker
+    ins: L. Walker
+    email: lindsay.w@swirldslabs.com
+    org: Hedera / Hashgraph
 
 normative:
   RFC2119:
