@@ -199,15 +199,18 @@ base64url encoding, per {{I-D.httpauth-payment}}.
 The client fulfills this by creating an SPT using Stripe:
 
 ~~~ javascript
-const body = new URLSearchParams({
+const spt = await stripe.sharedPayment.issuedTokens.create({
   payment_method: 'pm_123',
-  'usage_limits[currency]': 'usd',
-  'usage_limits[max_amount]': '5000',
-  'usage_limits[expires_at]': expiresAt,
-  'seller_details[network_id]': 'profile_123'
+  usage_limits: {
+    currency: 'usd',
+    max_amount: 5000,
+    expires_at: Timestamp
+  },
+  seller_details: {
+    networkId: 'profile_123'
+  }
 });
-const res = await fetch('/create-spt', { method: 'POST', body });
-const { id: spt } = await res.json();
+// Returns: { id: 'spt_1N...' }
 ~~~
 
 # Credential Schema
