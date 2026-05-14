@@ -37,6 +37,11 @@ informative:
     title: Stripe API Reference
     author:
       - org: Stripe, Inc.
+  STRIPE-SPT:
+    target: https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens
+    title: Shared payment tokens
+    author:
+      - org: Stripe, Inc.
 ---
 
 --- abstract
@@ -44,7 +49,7 @@ informative:
 This document defines the "charge" intent for the Stripe payment method
 within the Payment HTTP Authentication Scheme {{I-D.httpauth-payment}}.
 It specifies how clients and servers exchange one-time payments using
-Stripe Payment Tokens (SPTs).
+Shared Payment Tokens (SPTs).
 
 --- middle
 
@@ -54,7 +59,7 @@ This specification defines the "charge" intent for use with the Stripe
 payment method in the Payment HTTP Authentication Scheme
 {{I-D.httpauth-payment}}. The charge intent enables one-time payments
 where the server processes the payment immediately upon receiving a
-Stripe Payment Token (SPT).
+Shared Payment Token (SPT).
 
 Stripe provides payment processing through SPTs, which are single-use
 tokens that represent payment authorization. SPTs abstract away the
@@ -111,13 +116,13 @@ method, along with verification and settlement procedures.
 
 # Terminology
 
-Stripe Payment Token (SPT)
+Shared Payment Token (SPT)
 : A single-use token (prefixed with `spt_`) that represents authorization
   to charge a payment method. SPTs are created by clients using the
   Stripe API and consumed by servers to process payments. Both the Client
   and Server require a Stripe account. In the Stripe API, SPTs are
   referenced as `shared_payment_granted_token` on PaymentIntent creation.
-  Learn more: https://docs.stripe.com/agentic-commerce/concepts/shared-payment-tokens
+  See {{STRIPE-SPT}}.
 
 Business Network Profile
 : A Stripe profile is a business’s public identity on Stripe. With a Stripe profile,
@@ -148,7 +153,7 @@ payment immediately upon receiving the SPT.
 
 **Fulfillment mechanism:**
 
-1. **Stripe Payment Token (SPT)**: The payer creates an SPT using the
+1. **Shared Payment Token (SPT)**: The payer creates an SPT using the
    Stripe API, which the server uses to create a PaymentIntent via Stripe.
 
 # Request Schema
@@ -217,7 +222,7 @@ contains the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `spt` | string | REQUIRED | Stripe Payment Token ID (starts with `spt_`) |
+| `spt` | string | REQUIRED | Shared Payment Token ID (starts with `spt_`) |
 | `externalId` | string | OPTIONAL | Client's reference ID |
 
 **Example:**
@@ -326,8 +331,10 @@ additionally maintain a local replay cache of consumed challenge IDs.
 ## Amount Verification
 
 Clients MUST verify the payment amount in the challenge matches their
-expectation before creating an SPT. The SPT itself does not encode the
-amount, so clients must trust the challenge parameters.
+expectation before creating an SPT. The SPT usage limits constrain the
+currency, maximum amount, and expiration window granted to the seller,
+but those limits are derived from the challenge parameters the client
+accepts.
 
 **Verification checklist:**
 
@@ -344,7 +351,7 @@ significantly reducing PCI DSS compliance scope.
 
 ## HTTPS Requirement
 
-All communication MUST use TLS 1.2 or higher. Stripe Payment Tokens MUST
+All communication MUST use TLS 1.2 or higher. Shared Payment Tokens MUST
 only be transmitted over HTTPS connections.
 
 # IANA Considerations
