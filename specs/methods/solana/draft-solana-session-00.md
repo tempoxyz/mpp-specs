@@ -17,6 +17,10 @@ author:
     ins: Desormeaux
     email: jo.desormeaux@solana.org
     org: Solana Foundation
+  - name: Michael Assaf
+    ins: M. Assaf
+    email: michael@moonsonglabs.com
+    org: Moonsong Labs
 
 normative:
   RFC2119:
@@ -97,13 +101,20 @@ This specification leverages Solana-specific capabilities:
   settlement and client-initiated forced close.
 
 - **Atomic multi-instruction transactions**: Channel open
-  can include the deposit transfer, escrow initialization,
-  and initial voucher in a single transaction. Similarly,
-  close can settle and refund atomically.
+  can include the channel-PDA creation, escrow ATA
+  creation, deposit transfer, and splits commitment in
+  a single transaction. Similarly, cooperative close
+  can bundle `settleAndFinalize` and `distribute` so
+  the merchant payout, payer refund, treasury sweep,
+  and PDA tombstone all land atomically.
 
-- **Fee payer separation**: The server can sponsor all
-  on-chain operations (open, topUp, settle, close) so the
-  client never needs SOL for transaction fees.
+- **Fee payer separation**: The server can sponsor the
+  cooperative on-chain operations it submits (open,
+  topUp, settle, settleAndFinalize, distribute) so the
+  client never needs SOL for transaction fees during
+  the normal session lifecycle. Escape-route
+  instructions (requestClose, finalize, withdrawPayer)
+  are client-submitted and self-funded.
 
 - **Ed25519 native verification**: Voucher signatures can
   be verified on-chain using Solana's native `ed25519`
@@ -126,11 +137,12 @@ This specification leverages Solana-specific capabilities:
      |  (1) GET /resource        |                  |
      |-------------------------> |                  |
      |                           |                  |
-     |  (2) 402 (pricing, asset) |                  |
+     |  (2) 402 (pricing, asset, |                  |
+     |       splits, grace)      |                  |
      |<------------------------- |                  |
      |                           |                  |
-     |  (3) open (deposit tx     |                  |
-     |       + initial voucher)  |                  |
+     |  (3) open (deposit tx,    |                  |
+     |       no initial voucher) |                  |
      |-------------------------> |                  |
      |                           | (4) co-sign +    |
      |                           |     broadcast    |
@@ -152,12 +164,13 @@ This specification leverages Solana-specific capabilities:
      |        ...                |                  |
      |                           |                  |
      |  (10) close (final        |                  |
-     |        voucher)           |                  |
+     |        voucher, optional) |                  |
      |-------------------------> |                  |
-     |                           | (11) settle +    |
-     |                           |      refund      |
+     |                           | (11) settleAnd-  |
+     |                           | Finalize +       |
+     |                           | distribute       |
      |                           |----------------> |
-     |  (12) 204 + Receipt       |                  |
+     |  (12) 200 OK + Receipt    |                  |
      |<------------------------- |                  |
      |                           |                  |
 ~~~
@@ -166,6 +179,11 @@ Steps 6–9 are off-chain: the client signs a voucher
 authorizing cumulative spend, the server verifies the
 signature and serves the resource. No on-chain
 transaction occurs per request.
+
+Step 11 typically bundles `settleAndFinalize` and
+`distribute` in the same transaction so the
+merchant payout, payer refund, treasury sweep, and
+PDA tombstone all land atomically.
 
 When fee sponsorship is enabled, the server co-signs
 as fee payer on steps 4 and 11 — the client never
@@ -227,9 +245,32 @@ It MUST be lowercase.
 
 # Encoding Conventions
 
-This specification uses the same encoding conventions
-as the Solana charge intent: JCS-serialized {{RFC8785}}
-JSON, base64url-encoded {{RFC4648}} without padding.
+This specification uses two distinct encoding regimes:
+
+1. **HTTP envelope canonicalization.** Challenge
+   payloads (`request` auth-param), credential
+   payloads (`Authorization: Payment` header bodies),
+   and receipts use the same encoding as the Solana
+   charge intent: JCS-serialized {{RFC8785}} JSON,
+   base64url-encoded {{RFC4648}} without padding.
+
+2. **On-chain signed-payload encoding.** The bytes
+   the payer's Ed25519 key signs to authorize spend
+   are produced by Borsh-encoding the on-chain
+   `Voucher` struct (see {{on-chain-voucher-encoding}}).
+   These bytes are the exact message verified by
+   Solana's native `ed25519` precompile and read back
+   by the channel program via the Instructions
+   sysvar. Using a fixed-layout binary encoding here
+   removes the need to repack between the HTTP JSON
+   shape and the precompile message, and makes the
+   on-chain verification a single byte-equality
+   check.
+
+JCS produces deterministic JSON bytes for header
+canonicalization but is unnecessary for the inner
+signed payload: the on-chain Borsh layout is
+deterministic by construction.
 
 # Channel Program Interface
 
@@ -241,19 +282,28 @@ MUST implement.
 ## Channel State
 
 Each channel is represented by an on-chain account
-(typically a PDA derived from payer, payee, asset,
-and a salt) with the following logical fields:
+(typically a PDA derived from payer, payee, mint,
+authorized signer, and a salt) with the following
+logical fields:
 
 | Field | Type | Storage | Description |
 |-------|------|---------|-------------|
-| `payer` | Pubkey | Seed + Account state | Client who deposited funds |
-| `payee` | Pubkey | Seed + Account state | Server authorized to settle |
-| `token` | Pubkey | Seed only | Token mint |
-| `authorizedSigner` | Pubkey | Seed + Account state | Voucher signer (payer if not delegated) |
-| `deposit` | u64 | Account state | Total amount deposited |
-| `settled` | u64 | Account state | Cumulative amount settled to payee |
-| `closeRequestedAt` | i64 | Account state | Unix timestamp of close request (0 if none) |
+| `discriminator` | u8 | Account state | Non-zero account-type tag (`Channel`); rejected when 0 so zero-initialized PDAs cannot impersonate a channel |
+| `version` | u8 | Account state | Account-layout version; lets implementations evolve fields without colliding with `ClosedChannel` |
 | `bump` | u8 | Account state | Canonical PDA bump |
+| `status` | u8 | Account state | `Open` / `Closing` / `Finalized` enum value |
+| `salt` | u64 | Seed + Account state | PDA disambiguator. Persisted so the channel PDA can re-derive its own seeds for self-signed CPIs (refunds, distribution) without off-chain inputs |
+| `deposit` | u64 | Account state | Total amount currently escrowed |
+| `settled` | u64 | Account state | Cumulative amount authorized for distribution (voucher watermark) |
+| `paidOut` | u64 | Account state | Cumulative amount already distributed to the merchant side; `paidOut <= settled` |
+| `closureStartedAt` | i64 | Account state | Unix timestamp when `requestClose` was called (0 if not set; cleared on `Finalized`) |
+| `payerWithdrawnAt` | i64 | Account state | Unix timestamp of the payer refund (0 if not yet); guards against double-refund when both `withdrawPayer` and `distribute` can pay the payer |
+| `gracePeriod` | u32 | Account state | Seconds between `requestClose` and permissionless `finalize`. Per-channel, set at `open`, so a single program deployment can host channels with differing dispute windows |
+| `distributionHash` | [u8;32] | Account state | Hash digest of the canonical splits preimage committed at `open`; `distribute` MUST re-verify this hash before paying recipients |
+| `payer` | Pubkey | Seed + Account state | Client who deposited funds |
+| `payee` | Pubkey | Seed + Account state | Server authorized to settle; receives the implicit-remainder share on `distribute` |
+| `authorizedSigner` | Pubkey | Seed + Account state | Voucher signer (payer if not delegated) |
+| `mint` | Pubkey | Seed + Account state | SPL Token or Token-2022 mint. Stored (not seed-only) so refund / distribution CPIs can be validated without re-binding seeds |
 
 The `channelId` is the base58-encoded address of the
 channel account (PDA). Channel programs MUST derive
@@ -263,7 +313,8 @@ set MUST bind the PDA to:
 
 - the payer public key;
 - the payee public key;
-- the asset identifier (SOL or mint address);
+- the mint address (native SOL is unsupported; see
+  {{native-sol}});
 - a client-chosen salt or nonce; and
 - the authorized signer public key (or payer if no
   delegation is used).
@@ -284,140 +335,182 @@ match the canonical derivation for the channel seeds.
 
 ### open
 
-Creates the channel account and transfers the initial
-deposit from the payer to the escrow.
+Creates the channel account, transfers the initial
+deposit from the payer, and commits a hash of the
+distribution splits preimage. The payer MUST be a
+signer.
 
-Solana allows the channel creation, token transfer,
-and any initial setup to be composed in a single
-atomic transaction with multiple instructions.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `salt` | u64 | PDA disambiguator |
+| `deposit` | u64 | Initial deposit in base units; MUST be non-zero |
+| `gracePeriod` | u32 | Forced-close grace period in seconds; stored per-channel |
+| `distributionSplits` | `(Pubkey, u16)[]` | Splits preimage; canonical encoding hashed into `distributionHash` (see {{splits-canonicalization}}) |
 
-The payer authority for the funding transfer MUST be a
-signer on the transaction.
+`open` MUST reject the instruction when the target
+PDA already exists with the `ClosedChannel`
+discriminator; reopening a previously finalized
+channel PDA is forbidden regardless of seed inputs.
+`open` MUST reject any `distributionSplits` whose
+preimage is malformed, whose total share exceeds
+10000 bps, which contains duplicate recipients, or
+which lists the derived channel PDA as a recipient.
+Mints carrying Token-2022 extensions outside the
+allow-list (see {{token-extension-policy}}) MUST be
+rejected.
 
-Before initializing, the program MUST check whether the
-target PDA already exists. If the account discriminator
-matches `ClosedChannel`, the program MUST reject the
-instruction. Reopening a previously finalized channel
-PDA is forbidden regardless of seed inputs.
-
-If the token mint has a Token-2022 transfer hook
-extension, the deposit transfer instruction MUST
-include the extra accounts required by the hook program.
-Clients MUST resolve hook extra accounts from on-chain
-mint state before constructing the open transaction.
+`open` does NOT carry an initial voucher; the first
+voucher is exchanged off-chain after confirmation.
 
 ### settle
 
-Payee presents a signed voucher. The program verifies
-the Ed25519 signature (via Solana's `ed25519` program
-or in-program verification), checks that
-`cumulativeAmount > settled` and
-`cumulativeAmount <= deposit`, then transfers the
-delta (`cumulativeAmount - settled`) to the payee.
+Advances the on-chain `settled` watermark using a
+payer-signed voucher. Permissionless; authority is
+the voucher signature.
 
-The server MAY call settle at any time to claim
-accumulated funds without closing the channel.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `voucher` | `VoucherArgs` | On-chain voucher payload (see {{on-chain-voucher-encoding}}) |
 
-The payee authority for settlement MUST be a signer on
-the transaction.
-
-If the token mint has a Token-2022 transfer hook
-extension, the token transfer instruction MUST include
-the extra accounts required by the hook program.
-Servers MUST resolve current hook extra accounts from
-on-chain mint state before building this transaction.
+The submitter MUST bundle a Solana native `ed25519`
+precompile instruction immediately before `settle`
+in the same transaction. The program reads the
+verified message bytes via the Instructions sysvar,
+asserts they byte-equal the `voucher` argument, and
+asserts the precompile-recorded signer equals
+`authorizedSigner`. The program then verifies
+`settled < voucher.cumulativeAmount <= deposit` and
+writes `settled = voucher.cumulativeAmount`. No
+token transfer occurs in `settle`.
 
 ### topUp
 
-Payer transfers additional funds to the escrow. The
-program increases `deposit` accordingly. If
-`closeRequestedAt > 0`, topUp MUST reset it to 0
-(cancelling any pending forced close).
+Payer transfers additional funds to the escrow.
 
-The payer authority for the additional funding transfer
-MUST be a signer on the transaction.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `amount` | u64 | Amount to add in base units; MUST be non-zero |
+
+`topUp` requires `status == Open` and MUST be
+rejected when `status == Closing`. Implementations
+of this specification do NOT clear `closureStartedAt`
+via `topUp`. The payer MUST be a signer.
 
 ### requestClose
 
-Payer initiates a forced close. The program sets
-`closeRequestedAt = Clock::get().unix_timestamp`.
-This starts a grace period during which the payee
-can still call settle or close.
+Payer initiates a forced close. Sets
+`closureStartedAt = Clock::get().unix_timestamp`,
+`status = Closing`. Requires `status == Open`. The
+payer MUST be a signer.
 
-The payer authority requesting close MUST be a signer
-on the transaction.
+### finalize
 
-### withdraw
+Permissionless post-grace crank. Transitions
+`Closing -> Finalized` once
+`now >= closureStartedAt + gracePeriod`, clears
+`closureStartedAt`, and freezes `settled`. No
+token transfer occurs.
 
-Payer recovers remaining funds after the grace
-period has expired. The program verifies
-`Clock::get().unix_timestamp >= closeRequestedAt + GRACE_PERIOD`,
+### settleAndFinalize
+
+Payee-initiated cooperative close. Optionally
+applies one final voucher (using the same
+precompile-verified path as `settle`), then
+transitions the channel to `Finalized`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `voucher` | `VoucherArgs` | Final voucher payload (used when `hasVoucher != 0`) |
+| `hasVoucher` | u8 | `0` skips voucher verification; non-zero applies `voucher` |
+
+The payee MUST be a signer. Callable from `Open`
+and from `Closing` while `now < closureStartedAt + gracePeriod`;
+after the grace deadline use `finalize` instead. No
+token transfer occurs.
+
+### distribute
+
+Pays the merchant-side pool out of escrow according
+to the splits preimage committed at `open`.
+Permissionless; authority is the on-chain hash
+commitment.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `distributionSplits` | `(Pubkey, u16)[]` | Splits preimage (see {{splits-canonicalization}}); rehashed and MUST equal `distributionHash` |
+
+Recipient token accounts are supplied as the dynamic
+account tail, in the same order as the preimage
+entries. Each MUST be the canonical ATA for
+`(recipient, channel.mint, channel.tokenProgram)`.
+
+For `pool = settled - paidOut`:
+
+- recipient `i`: `floor(pool * bps[i] / 10000)`;
+- payee: `floor(pool * (10000 - Σ bps) / 10000)`.
+
+`paidOut` is incremented by the total distributed.
+
+From `Open`, `distribute` requires `pool > 0`,
+leaves flooring residual in the escrow ATA, and
+keeps the channel `Open`. From `Finalized`,
+`distribute` additionally — when
+`payerWithdrawnAt == 0` — transfers
+`deposit - settled` to the payer, stamps
+`payerWithdrawnAt`, sweeps residual to the treasury
+ATA, closes the escrow ATA, and tombstones the
+channel PDA (see {{tombstoning}}). `distribute`
+MUST NOT be callable from `Closing`.
+
+### withdrawPayer
+
+One-shot payer refund in `Finalized` that does NOT
+tombstone the PDA. The program requires
+`status == Finalized` and `payerWithdrawnAt == 0`,
 transfers `deposit - settled` to the payer, and
-marks the channel as finalized.
+stamps `payerWithdrawnAt`. The payer MUST be a
+signer.
 
-The payer authority receiving the refund MUST be a
-signer on the transaction.
+### Tombstoning {#tombstoning}
 
-On completion, the `withdraw` instruction MUST NOT
-fully deallocate the channel account. The program MUST
-realloc the account data to 8 bytes, write the
-`ClosedChannel` discriminator, and return the difference
-between the pre-close rent-exempt balance and the 8-byte
-tombstone rent-exempt minimum to the payer.
+The `Finalized` branch of `distribute` performs
+tombstoning. The program MUST NOT fully deallocate
+the channel account; it MUST realloc the account
+data to 1 byte and write the `ClosedChannel`
+discriminator at offset 0. The rent difference
+between the pre-tombstone balance and the 1-byte
+tombstone rent-exempt minimum MUST be returned to
+the payer. `withdrawPayer` MUST NOT tombstone.
 
-### close
-
-Payee closes the channel by settling any final delta
-authorized by a voucher and refunding the remainder to
-the payer in a single atomic transaction. If no new
-delta exists beyond the on-chain `settled` watermark,
-the close path MAY omit voucher verification and act
-as a refund-only cooperative close.
-
-Solana's multi-instruction transactions allow the
-settle + refund + account cleanup to happen
-atomically, ensuring neither party can be cheated
-during close.
-
-The payee authority initiating cooperative close MUST
-be a signer on the transaction. Fee-payer signatures
-MUST NOT be treated as satisfying payer or payee
-authority checks.
-
-On completion, the `close` instruction MUST NOT
-fully deallocate the channel account. The program MUST
-realloc the account data to 8 bytes, write the
-`ClosedChannel` discriminator, and return the difference
-between the pre-close rent-exempt balance and the 8-byte
-tombstone rent-exempt minimum to the payer.
-
-If the token mint has a Token-2022 transfer hook
-extension, the token transfer instruction MUST include
-the extra accounts required by the hook program.
-Servers MUST resolve current hook extra accounts from
-on-chain mint state before building this transaction.
+Implementations MUST NOT treat a fee-payer
+signature as satisfying payer or payee authority
+checks on any authority-gated instruction above.
 
 ## Grace Period
 
 The grace period (RECOMMENDED: 15 minutes) protects
-the payee. If the payer calls requestClose while the
-payee has unsubmitted vouchers, the payee has until
-the grace period expires to call settle or close.
+the payee. If the payer calls `requestClose` while
+the payee has unsubmitted vouchers, the payee has
+until the grace period expires to call `settle`
+followed by `settleAndFinalize` (or to bundle a
+voucher into `settleAndFinalize` directly).
 
-Without a grace period, the payer could withdraw
-funds immediately after receiving service, before
-the server has time to settle.
+Without a grace period, the payer could
+`requestClose`, immediately call `finalize`, and
+sweep funds before the server has time to settle.
 
 ## Access Control
 
-| Instruction | Caller |
-|-------------|--------|
-| open | Anyone (payer signs the deposit transfer) |
-| settle | Payee only |
-| topUp | Payer only |
-| requestClose | Payer only |
-| withdraw | Payer only (after grace period) |
-| close | Payee only |
+| Instruction | Caller | Gating |
+|-------------|--------|--------|
+| open | Payer | Payer signs the deposit transfer |
+| settle | Anyone (permissionless crank) | Precompile-verified Ed25519 voucher from `authorizedSigner` |
+| topUp | Payer | Payer signs the additional transfer; rejected when `status != Open` |
+| requestClose | Payer | Payer signer equals channel `payer` |
+| finalize | Anyone (permissionless crank) | `status == Closing` and elapsed grace period |
+| settleAndFinalize | Payee | Payee signer equals channel `payee` |
+| distribute | Anyone (permissionless crank) | On-chain hash commitment to splits preimage |
+| withdrawPayer | Payer | Payer signer equals channel `payer` and `status == Finalized` |
 
 # Request Schema
 
@@ -436,16 +529,25 @@ suggestedDeposit
   units. Clients MAY deposit less or more depending on
   expected usage.
 
+minimumDeposit
+: OPTIONAL. Hard floor on initial channel deposit in
+  base units. Enforced at the HTTP layer (not on
+  chain). Servers MUST reject `POST /channel/open`
+  payloads with `depositAmount < minimumDeposit`.
+  Implementations SHOULD set this above the rent
+  cost of the channel account plus a minimum
+  economically useful balance to avoid spam.
+
 recipient
 : REQUIRED. Base58-encoded public key of the server's
   account that will receive settlement funds.
 
 currency
 : REQUIRED. Base58-encoded SPL token mint address.
-  Native SOL is not supported; clients wishing to pay
-  in SOL MUST wrap it to wSOL
+  Native SOL is not supported (see {{native-sol}});
+  clients wishing to pay in SOL MUST wrap it to wSOL
   (`So11111111111111111111111111111111111111112`)
-  before opening a channel.
+  before opening a channel. {#native-sol}
 
 description
 : OPTIONAL. Human-readable description of the service
@@ -502,7 +604,25 @@ ttlSeconds
 
 gracePeriodSeconds
 : OPTIONAL. Grace period for forced close
-  (RECOMMENDED: 900, i.e. 15 minutes).
+  (RECOMMENDED: 900). Stored per-channel in
+  `Channel.gracePeriod` at `open`.
+
+distributionSplits
+: OPTIONAL. Ordered list of `{recipient, shareBps}`
+  entries the merchant proposes to bind into the
+  channel at `open`. The payee receives the implicit
+  remainder share `10000 − Σ shareBps`; the explicit
+  list therefore covers only co-recipients, not the
+  payee itself.
+
+  Each entry MUST have `shareBps > 0`. The list MUST
+  satisfy `0 ≤ Σ shareBps ≤ 10000`. The list size is
+  bounded by an implementation-defined
+  `MAX_DISTRIBUTION_RECIPIENTS` (RECOMMENDED: 32).
+
+  When omitted, the channel behaves as a vanilla
+  two-party channel in which the payee receives the
+  full distributed pool.
 
 For the `session` intent, `amount` specifies the price
 per unit of service, not a total charge. When
@@ -527,12 +647,17 @@ Opens a new payment channel.
 | `action` | string | REQUIRED | `"open"` |
 | `channelId` | string | REQUIRED | Base58 channel account address |
 | `payer` | string | REQUIRED | Base58 public key of the depositor |
-| `authorizationPolicy` | object | OPTIONAL | Voucher signer policy |
-| `depositAmount` | string | REQUIRED | Initial deposit in base units |
-| `transaction` | string | REQUIRED | Base64-encoded signed (or partially signed) transaction |
-| `expiresAt` | string | OPTIONAL | Session expiration (ISO 8601) |
+| `payee` | string | REQUIRED | Base58 public key of the channel payee (matches `recipient` in the 402 challenge) |
+| `mint` | string | REQUIRED | Base58 SPL Token / Token-2022 mint (matches `currency` in the 402 challenge) |
+| `authorizedSigner` | string | REQUIRED | Base58 public key bound into the PDA seeds as the voucher signer; equals `payer` when no delegation is used |
+| `salt` | string | REQUIRED | Decimal u64 PDA disambiguator |
+| `depositAmount` | string | REQUIRED | Initial deposit in base units; MUST satisfy `depositAmount >= methodDetails.minimumDeposit` |
+| `gracePeriodSeconds` | integer | REQUIRED | Grace-period seconds bound into channel state at `open`; MUST match `methodDetails.gracePeriodSeconds` (or the server-policy default) |
+| `distributionSplits` | array | OPTIONAL | Splits preimage (see `methodDetails.distributionSplits`); MUST byte-match the splits proposed in the 402 challenge |
+| `authorizationPolicy` | object | OPTIONAL | Voucher signer policy. When present, MUST be consistent with `authorizedSigner` |
+| `transaction` | string | REQUIRED | Base64-encoded (standard alphabet, padded) signed or partially signed transaction |
+| `expiresAt` | string | OPTIONAL | Session expiration (RFC 3339) |
 | `capabilities` | object | OPTIONAL | Implementation-specific extensions |
-| `voucher` | object | REQUIRED | Signed initial voucher (see {{voucher-format}}) |
 
 The `transaction` contains the open instruction(s).
 When `feePayer` is `true`, the client partially signs
@@ -540,12 +665,38 @@ When `feePayer` is `true`, the client partially signs
 fee payer before broadcasting — same pattern as the
 charge intent's pull mode.
 
+`Action: "open"` MUST NOT carry an initial voucher.
+The first voucher is exchanged off-chain in a
+subsequent metered request, after the channel is
+confirmed on-chain. This keeps the open path
+focused on channel construction and avoids burning
+on-chain compute on a signature for a single
+request's worth of authorization.
+
+`Action: "open"` MUST NOT carry a `bump` field. The
+channel PDA's canonical bump is derived on-chain via
+`find_program_address` and validated by the program's
+direct address check, so any wire-supplied bump is
+redundant. Servers MUST reject open envelopes that
+include a `bump` field using the `malformed-credential`
+problem type. Silently accepting and ignoring a wire
+`bump` is forbidden because a client whose derivation
+is buggy can compute a wrong bump that nonetheless
+pairs with the canonical PDA address — a mismatch the
+on-chain address check cannot catch.
+
 Servers MUST derive `payer`, `channelId`,
 `depositAmount`, `authorizationPolicy`, delegated signer
-settings, and all program-relevant open parameters
-from the signed transaction and confirmed on-chain
-state. Servers MUST NOT trust these values solely
-because they appear in the HTTP payload.
+settings, the distribution splits commitment, and
+all other program-relevant open parameters from the
+signed transaction and confirmed on-chain state.
+Servers MUST NOT trust these values solely because
+they appear in the HTTP payload. Servers MUST also
+strictly validate that the on-chain `distributionSplits`,
+`payee`, and `mint` exactly match what was proposed
+in the 402 challenge; failing to do so allows a
+malicious client to redirect the merchant-side
+payout.
 
 ## Action: "voucher"
 
@@ -581,10 +732,29 @@ Requests cooperative close.
 | `channelId` | string | REQUIRED | Existing channel identifier |
 | `voucher` | object | OPTIONAL | Final signed voucher (see {{voucher-format}}) |
 
-If `voucher` is present, the server settles the final
-delta on-chain and refunds the remainder atomically.
-If the highest amount has already been settled on-chain,
-the server MAY close without a new voucher.
+`Action: "close"` is a request for the server to
+broadcast `settleAndFinalize` (optionally bundled
+with `distribute` in the same transaction). Unlike
+`Action: "open"` and `Action: "topUp"`, the
+close credential does NOT carry a pre-signed
+transaction: cooperative close requires the payee
+signature, which the server controls, and the
+server constructs and broadcasts the transaction
+itself.
+
+When `voucher` is present, it MUST strictly advance
+the on-chain watermark
+(`settled < voucher.cumulativeAmount`). A supplied
+voucher at or below the current on-chain `settled`
+is invalid and MUST cause `settleAndFinalize` to
+reject; clients SHOULD omit `voucher` instead when
+no additional settlement is needed. When `voucher`
+is omitted, the server finalizes at the current
+on-chain `settled` watermark.
+
+See {{close-cooperative}} for the full settlement
+procedure, including how `settleAndFinalize` and
+`distribute` are bundled.
 
 # Voucher Format {#voucher-format}
 
@@ -615,16 +785,30 @@ program ID and channel open parameters.
 | `signature` | string | REQUIRED | Base58-encoded Ed25519 signature |
 | `signatureType` | string | REQUIRED | `"ed25519"` |
 
-## Voucher Signing
+## Voucher Signing {#on-chain-voucher-encoding}
 
-1. Serialize the voucher data object using JCS
-   {{RFC8785}} to produce deterministic bytes.
+The signed voucher payload is 48 bytes in fixed
+Borsh layout:
 
-2. Sign the bytes using Ed25519 with the payer's
-   keypair (or a delegated signer's keypair if the
-   channel's `authorizedSigner` is set).
+| Offset | Length | Field | Encoding |
+|--------|--------|-------|----------|
+| 0 | 32 | `channelId` | Raw Solana address bytes |
+| 32 | 8 | `cumulativeAmount` | u64 little-endian |
+| 40 | 8 | `expiresAt` | i64 little-endian; `0` = no expiration |
 
-3. Encode the signature as base58.
+Signing:
+
+1. Serialize the voucher data into the layout above.
+2. Sign with Ed25519 using `authorizedSigner`'s key.
+3. Encode the signature as base58 for the HTTP
+   `signature` field.
+
+The Borsh bytes are authoritative for signature
+verification. The HTTP JSON shape is a transport
+view; clients and servers MUST NOT influence what
+bytes are signed via the JSON. The same layout is
+the on-chain argument for `settle` and (without the
+`hasVoucher` byte) for `settleAndFinalize`.
 
 ## Voucher Verification
 
@@ -647,12 +831,14 @@ The server MUST verify each voucher:
 
 6. Verify the channel account discriminator is not
    `ClosedChannel` (i.e., the channel has not been
-   finalized via close or withdraw).
+   tombstoned by `distribute`).
 
-7. Verify `closeRequestedAt == 0`. Servers MUST reject
-   new voucher acceptance on channels with a pending
-   forced close unless the voucher is being used only
-   to settle or cooperatively close the channel.
+7. Verify `status == Open` (i.e., `closureStartedAt == 0`
+   and the channel has not yet been finalized).
+   Servers MUST reject new voucher acceptance on
+   channels with a pending forced close unless the
+   voucher is being used only to drive
+   `settleAndFinalize`.
 
 8. Verify `cumulativeAmount <= escrowedAmount` (does
    not exceed deposit).
@@ -666,20 +852,24 @@ The server MUST verify each voucher:
 
 ## On-Chain Voucher Verification
 
-When the server calls settle or close on the channel
-program, the voucher signature MUST be verified
-on-chain. On Solana, this can be done by:
+When the channel program executes `settle` or
+`settleAndFinalize` (with a voucher), the voucher
+signature MUST be verified on-chain. On Solana, this
+can be done by:
 
 - Including an `ed25519` program instruction in the
-  same transaction that verifies the signature before
-  the settle instruction executes.
+  same transaction that verifies the signature
+  immediately before the channel instruction
+  executes.
 
 - Or implementing Ed25519 verification directly in
   the channel program (higher compute cost).
 
 The first approach is preferred as it uses Solana's
 native signature verification at minimal compute
-cost.
+cost. The precompile instruction MUST immediately
+precede the channel instruction in the same
+transaction.
 
 When using instruction introspection to consume a
 native signature-verification instruction, channel
@@ -689,13 +879,68 @@ programs MUST:
 - use checked instruction-loading helpers provided by
   the Solana SDK;
 - correlate the verified message bytes to the exact
-  `channelId`, `cumulativeAmount`, and signer accepted
-  by the `settle` or `close` instruction in the same
-  transaction; and
+  on-chain voucher payload accepted by the channel
+  instruction in the same transaction
+  (see {{on-chain-voucher-encoding}}); the bytes the
+  precompile recorded MUST byte-equal the channel
+  instruction's voucher argument, and the precompile-
+  recorded signer MUST equal `authorizedSigner`;
 - reject signature-verification instructions that are
   replayed, unrelated, or positioned such that the
   channel program cannot unambiguously determine which
   verified message they authorize.
+
+# Distribution Splits {#splits-canonicalization}
+
+Channels MAY commit a multi-recipient split of the
+merchant-side pool at `open`. The split is a list
+of `(recipient, shareBps)` entries; the payee
+receives the implicit-remainder share
+`10000 − Σ shareBps` and is NOT listed explicitly.
+
+## Canonical Preimage
+
+The byte layout hashed at `open` and re-hashed at
+`distribute`:
+
+~~~
+count (u32 LE) || [ recipient (32 bytes) || shareBps (u16 LE) ] × count
+~~~
+
+- `count == 0` is legal; the payee receives 100% of
+  the pool.
+- Every active entry MUST have `shareBps > 0`.
+- `0 ≤ Σ shareBps ≤ 10000`.
+- Recipients MUST be unique and MUST NOT equal the
+  channel PDA itself.
+- The list size is bounded by an
+  implementation-defined `MAX_DISTRIBUTION_RECIPIENTS`
+  (RECOMMENDED: 32).
+
+## Hash Algorithm
+
+Implementations MUST use a collision-resistant hash
+with a 32-byte digest. The chosen algorithm MUST be
+fixed at deployment and documented for clients so
+they can reproduce it. Blake3 is RECOMMENDED; the
+specific hash implementation (e.g., the `sol_blake3`
+syscall versus a bundled library) is an
+implementation detail that does not affect wire
+compatibility.
+
+## Distribution Math
+
+For `pool = settled − paidOut`:
+
+- recipient `i`: `floor(pool * shareBps[i] / 10000)`;
+- payee: `floor(pool * (10000 − Σ shareBps) / 10000)`.
+
+Flooring residual remains in the escrow ATA while
+`status == Open`. At the `Finalized` branch of
+`distribute`, residual is swept to the protocol
+treasury ATA before the escrow ATA is closed.
+The treasury account is a deployment-level address
+documented out of band by the channel program.
 
 # Authorized Signer
 
@@ -763,7 +1008,7 @@ each open channel:
 | `acceptedCumulative` | Highest voucher amount accepted |
 | `spentAmount` | Cumulative amount charged for delivered service |
 | `settledOnChain` | Highest cumulative amount already settled on-chain |
-| `closeRequestedAt` | Pending forced-close timestamp, if any |
+| `closureStartedAt` | Pending forced-close timestamp, if any |
 
 The available off-chain balance is computed as:
 
@@ -832,7 +1077,7 @@ MUST be processed atomically with respect to:
 
 - `acceptedCumulative`;
 - `spentAmount`; and
-- `closeRequestedAt`.
+- `closureStartedAt`.
 
 Servers MUST treat voucher submissions idempotently:
 
@@ -857,12 +1102,15 @@ idempotent request.
 ## Open
 
 1. Verify the open transaction contains the expected
-   channel program instructions (create PDA +
-   initialize channel + deposit transfer).
+   channel program instruction (the reference
+   implementation composes channel-PDA creation,
+   escrow ATA creation, deposit transfer, and the
+   `distributionHash` commitment in a single `open`
+   instruction).
 2. Recompute the expected PDA from the transaction's
-   payer, payee, asset, authorized signer, salt, and
-   channel program ID. Verify it equals the declared
-   `channelId`.
+   payer, payee, mint, authorized signer, and salt
+   plus the channel program ID. Verify it equals the
+   declared `channelId`.
 3. Verify the transaction's fee payer matches the
    challenge policy:
    - if `feePayer` is `true`, the fee payer MUST equal
@@ -873,18 +1121,22 @@ idempotent request.
    redirect funds or mutate channel parameters.
    The server SHOULD reject transactions that route
    value through unexpected external programs.
-5. If fee payer mode: co-sign and broadcast.
+5. Verify `depositAmount >= methodDetails.minimumDeposit`
+   (when set) and that the on-chain `distributionHash`
+   matches the digest of the canonical preimage of
+   the splits proposed in the 402 challenge.
+6. If fee payer mode: co-sign and broadcast.
    Otherwise: broadcast as-is.
-6. Verify channel state on-chain after confirmation:
+7. Verify channel state on-chain after confirmation:
    - payer matches transaction signer;
    - payee matches the challenged recipient;
-   - token/asset matches the challenge currency;
+   - mint matches the challenge currency;
    - deposit matches the requested amount;
    - authorized signer matches the open parameters;
+   - `gracePeriod` matches the challenge policy;
+   - `distributionHash` matches the proposed splits;
    - channel is not finalized; and
-   - `closeRequestedAt == 0`.
-7. Verify the initial voucher against the confirmed
-   channel state.
+   - `closureStartedAt` is `0`.
 8. Create server-side channel state.
 9. Return 200 with receipt.
 
@@ -905,38 +1157,52 @@ idempotent request.
 2. Verify the top-up transaction targets the expected
    channel PDA and channel program and only increases
    deposit for that channel.
-3. Verify deposit increase on-chain.
-4. Increase `escrowedAmount`.
-5. If the program cleared `closeRequestedAt`, clear it
-   in server-side state as well.
-6. Return 204 with receipt.
+3. Verify the on-chain deposit increase after
+   confirmation.
+4. Increase `escrowedAmount` in server-side state.
+5. Return 200 with receipt.
 
-## Close (Cooperative)
+`topUp` is callable only while `status == Open` and
+MUST NOT clear `closureStartedAt`. Once forced close
+is requested, the paths forward are
+`settleAndFinalize` (within grace) or `finalize`
+(after grace).
 
-1. If a final voucher is provided and authorizes an
-   amount above `settledOnChain`, verify it.
-2. Build and broadcast a close transaction:
-   settle any final delta + refund remainder
-   (atomic).
-3. Mark channel as `"closed"`.
+## Close (Cooperative) {#close-cooperative}
+
+1. If a final voucher is provided, verify it (it
+   MUST strictly advance the on-chain watermark).
+2. Build and broadcast `settleAndFinalize`. The
+   server SHOULD bundle `distribute` in the same
+   transaction so the merchant-side payout, payer
+   refund, treasury sweep, and PDA tombstone all
+   land atomically.
+3. Mark the channel as `"closed"` in server-side
+   state.
 4. Persist final `settledOnChain` and terminal
    accounting state after confirmation.
-5. Return 204 with receipt containing `txHash`.
+5. Return 200 with receipt containing `txHash` and
+   (if `distribute` ran) the refunded amount.
 
 ## Forced Close (Client-Initiated)
 
 If the server becomes unresponsive, the client can
 force-close the channel:
 
-1. Client calls requestClose on the channel program.
-2. Grace period begins (RECOMMENDED: 15 minutes).
+1. Client submits `requestClose` directly to RPC.
+2. Grace period begins (per-channel `gracePeriod`).
 3. During the grace period, the server MAY still
-   call settle with the latest voucher.
-4. After the grace period, the client calls withdraw
-   to recover `deposit - settled`.
-
-This ensures the client can always recover unspent
-funds, even if the server disappears.
+   call `settleAndFinalize` with the latest
+   voucher.
+4. After the grace period, any party submits
+   `finalize` (permissionless) to transition the
+   channel to `Finalized`.
+5. The payer MAY submit `withdrawPayer` to recover
+   `deposit - settled` immediately. Independently,
+   any party MAY submit `distribute` with the
+   splits preimage; the merchant side is paid, any
+   pending payer refund is also paid, residual is
+   swept to treasury, and the PDA is tombstoned.
 
 # Receipt Format
 
@@ -1035,17 +1301,18 @@ it, a malicious payer could use the service, then
 immediately withdraw. The server has the grace period
 to submit any outstanding vouchers.
 
-TopUp cancels pending close requests, preventing a
-grief attack where the payer requests close
-repeatedly to disrupt the session.
+Because `topUp` MUST NOT clear `closureStartedAt`,
+servers MUST guard the equivalent grief vector at
+the HTTP layer by rate-limiting `requestClose`
+retries and refusing to extend service after a
+forced-close broadcast.
 
-Servers MUST stop accepting new service vouchers once
-`closeRequestedAt` is set. During the grace period,
-the server MAY use the latest previously accepted
-voucher to settle or cooperatively close the channel,
-but SHOULD NOT continue serving new metered content
-unless the close request is cancelled by a confirmed
-top-up.
+Servers MUST stop accepting new service vouchers
+once `closureStartedAt` is set. During the grace
+period, the server MAY use the latest previously
+accepted voucher to drive `settleAndFinalize` (and,
+optionally, `distribute`). Servers MUST NOT resume
+metered service after `closureStartedAt` is set.
 
 ## Delegated Signer Risks
 
@@ -1088,6 +1355,48 @@ variant into channel creation and subsequent account
 validation. A channel opened for one token-program
 variant MUST NOT be settled or refunded through a
 different token-program account.
+
+## Token-2022 Extension Policy {#token-extension-policy}
+
+Implementations MUST enforce a closed allow-list of
+permitted Token-2022 extensions at `open` and
+re-validate it on every token-touching instruction.
+Extension presence alone is disqualifying;
+unlisted, unknown, or malformed extensions MUST be
+rejected before any token movement.
+
+The RECOMMENDED mint allow-list:
+
+- `MetadataPointer`
+- `TokenMetadata`
+- `GroupPointer`
+- `TokenGroup`
+- `GroupMemberPointer`
+- `TokenGroupMember`
+
+The RECOMMENDED token-account allow-list:
+
+- `ImmutableOwner`
+
+All other extensions MUST be rejected:
+
+| Extension | Reason |
+|-----------|--------|
+| `NonTransferable` | No transfer from escrow can succeed |
+| `PermanentDelegate` | Delegate can move escrow arbitrarily |
+| `DefaultAccountState` | Destination ATAs may be born non-`Initialized` |
+| `ConfidentialTransferMint` | Channel program does not produce confidential-transfer proofs |
+| `TransferFeeConfig` | Withheld fees desync `deposit` / `settled` from escrow |
+| `TransferHook` | Hook program can revert any transfer |
+| `InterestBearing` | Visible amount changes over time |
+| `ScaledUiAmountConfig` | Display-vs-raw divergence breaks exact distribution |
+| `Pausable` | Mint-level pause can block escrow release |
+| `CpiGuard` / `MemoTransfer` (account) | Distribution CPIs use neither delegate flow nor memos |
+| `MintCloseAuthority` | Mint identity can be recreated while channels reference it |
+
+Implementations MUST NOT resolve transfer-hook extra
+accounts, route through fee withholding, or honor
+pause flags.
 
 ## Account Ownership Validation
 
@@ -1142,9 +1451,9 @@ primitives where possible. The base interoperable path
 is Ed25519, using either:
 
 - an `ed25519` verification instruction in the same
-  transaction as `settle` or `close`, with the channel
-  program reading the instruction sysvar to confirm
-  success; or
+  transaction as `settle` or `settleAndFinalize`, with
+  the channel program reading the Instructions sysvar
+  to confirm success; or
 - direct in-program verification if compute budget and
   implementation constraints permit.
 
