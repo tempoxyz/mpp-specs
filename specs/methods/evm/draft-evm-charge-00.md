@@ -140,7 +140,7 @@ splits or server-paid fees. Servers SHOULD prefer
 
 ## Credential Types
 
-This specification defines two credential types:
+This specification defines four credential types:
 
 - **`type="permit2"` (RECOMMENDED)**: The client signs an
   off-chain EIP-712 Permit2 authorization. The server constructs
@@ -168,6 +168,12 @@ This specification defines two credential types:
   `transfer` transaction. The server broadcasts it. This is the
   compatible fallback for chains where Permit2 is not deployed
   or clients that prefer direct transaction signing.
+
+- **`type="hash"`**: The client signs and broadcasts a standard
+  ERC-20 `transfer` transaction and presents the confirmed
+  transaction hash for server verification. This is the fallback
+  for some hardware wallets that cannot hand off a
+  signed-but-unbroadcast transaction.
 
 Servers that support Permit2 SHOULD advertise it as the preferred
 credential type. Clients SHOULD prefer `type="permit2"` when
