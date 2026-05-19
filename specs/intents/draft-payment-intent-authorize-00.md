@@ -48,7 +48,7 @@ normative:
 This document defines the "authorize" payment intent for use with the
 Payment HTTP Authentication Scheme. The "authorize" intent represents a
 payment authorization where the payer approves a maximum amount that a
-server can later capture before an expiry time.
+server can later capture.
 
 --- middle
 
@@ -58,7 +58,7 @@ The "authorize" intent enables delayed payment capture. The payer
 authorizes a maximum amount, and the payment method creates a hold,
 escrow, or equivalent authorization. The server can later capture one or
 more amounts against that authorization, subject to the authorized maximum
-and expiry.
+and method-specific lifecycle rules.
 
 This is useful for:
 
@@ -90,7 +90,7 @@ and which method-specific policy applies to refund requests.
 
 Authorization
 : A method-enforced hold, escrow, or equivalent capability allowing a
-  server or operator to capture up to a maximum amount before an expiry.
+  server or operator to capture up to a maximum amount.
 
 Capture
 : A method-specific operation that consumes part or all of an
@@ -224,7 +224,6 @@ their method specification.
 |-------|------|-------------|
 | `amount` | string | Maximum authorization amount in base units (stringified non-negative integer, no leading zeros) |
 | `currency` | string | Currency or asset identifier (see {{currency-formats}}) |
-| `authorizationExpires` | string | Authorization expiry timestamp in {{RFC3339}} format |
 
 The `amount` value MUST be a string representation of a non-negative
 integer in base 10 with no sign, decimal point, exponent, or surrounding
@@ -242,15 +241,12 @@ whitespace. Leading zeros MUST NOT be used except for the value `"0"`.
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
 format. Request objects MUST NOT duplicate the challenge expiry value.
-The `authorizationExpires` field instead defines when the authorization
-itself expires.
+The challenge expiry only limits when the client can satisfy the
+challenge; it does not define the lifetime of the resulting
+authorization.
 
 Servers issuing an "authorize" challenge MUST include the `expires`
 auth-param.
-
-The `authorizationExpires` value MUST be strictly later than the
-challenge `expires` timestamp. Servers MUST reject credentials where
-`authorizationExpires` is at or before the challenge `expires`.
 
 ## Currency Formats {#currency-formats}
 
@@ -274,7 +270,6 @@ support and how to interpret amounts for each format.
 {
   "amount": "100000",
   "currency": "usd",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "recipient": "acct_merchant",
   "description": "Pre-authorization for metered API usage",
   "methodDetails": {
@@ -290,7 +285,6 @@ support and how to interpret amounts for each format.
 {
   "amount": "50000000",
   "currency": "0x20c0000000000000000000000000000000000001",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
     "chainId": 42431,
@@ -309,7 +303,6 @@ only once for a challenge. Servers MUST reject replayed credentials.
 Successful credential processing creates an authorization. The
 authorization persists until:
 
-- The `authorizationExpires` timestamp is reached
 - The authorized amount is fully captured
 - The authorization is voided
 - A method-specific terminal state occurs
@@ -334,10 +327,10 @@ responses that actually consume or capture authorized value.
 
 Payment methods MAY return method-specific authorization metadata in a
 successful registration response body. Such metadata can include an
-authorization identifier, status, expiry, captured amount, remaining
-amount, or method reference. The core authorize intent does not define a
-mandatory authorization metadata schema, and clients MUST NOT rely on a
-method returning a core-defined authorization handle.
+authorization identifier, status, captured amount, remaining amount,
+method-specific expiry, or method reference. The core authorize intent
+does not define a mandatory authorization metadata schema, and clients
+MUST NOT rely on a method returning a core-defined authorization handle.
 
 ## Captures
 
@@ -345,7 +338,6 @@ Servers MUST enforce the following invariants across all captures for an
 authorization:
 
 - The cumulative captured amount MUST NOT exceed `amount`.
-- Captures MUST NOT occur after `authorizationExpires`.
 - Capture execution MUST be idempotent with respect to method-specific
   retry behavior.
 - Captured value MUST be directed to the `recipient` or the
@@ -365,7 +357,6 @@ At minimum, servers MUST track:
 - Authorization identifier
 - Authorized amount
 - Cumulative captured amount
-- Authorization expiry
 - Terminal state, if any
 
 For retried HTTP requests, clients SHOULD send an `Idempotency-Key`
@@ -418,7 +409,6 @@ Decoded request:
 {
   "amount": "100000",
   "currency": "usd",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "recipient": "merchant_123"
 }
 ~~~
@@ -467,8 +457,7 @@ Content-Type: application/json
     "capturedAmount": "0",
     "remainingAmount": "100000",
     "currency": "usd",
-    "recipient": "merchant_123",
-    "authorizationExpires": "2026-05-14T12:00:00Z"
+    "recipient": "merchant_123"
   }
 }
 ~~~
@@ -583,9 +572,9 @@ MUST return an appropriate HTTP status code:
 
 | Condition | Status Code | Behavior |
 |-----------|-------------|----------|
-| Authorization expired | 402 Payment Required | Issue new challenge |
 | Authorized amount exhausted | 402 Payment Required | Issue new challenge |
 | Authorization voided or closed | 402 Payment Required | Issue new challenge |
+| Method-specific terminal state | 402 Payment Required | Issue new challenge |
 | Invalid credential | 402 Payment Required | Issue new challenge |
 
 For all 402 responses, the server MUST include a `WWW-Authenticate`
@@ -603,7 +592,6 @@ Clients MUST verify:
 
 - The `amount` and `currency`
 - The `recipient`, when exposed by the method
-- The authorization expiry
 - Method-specific lifecycle authority, processor, or escrow identifiers
   when present
 
@@ -618,11 +606,12 @@ they differ. Method specifications MUST define which role fields are bound
 by the payer's authorization and MUST ensure lifecycle authority cannot
 redirect captured value to a different destination.
 
-## Expiry Windows
+## Lifecycle Duration
 
-Clients SHOULD prefer short authorization windows. Long-lived
-authorizations increase risk if credentials are compromised or merchant
-systems behave incorrectly.
+Clients SHOULD prefer methods and merchant policies that limit how long
+authorizations remain outstanding. Long-lived authorizations increase
+risk if credentials are compromised or merchant systems behave
+incorrectly.
 
 ## Refund Expectations
 

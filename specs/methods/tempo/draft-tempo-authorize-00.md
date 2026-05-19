@@ -107,10 +107,11 @@ lifecycle onto TIP-1034:
 | Void unused value | `close(descriptor, settled, settled, emptySignature)` |
 | Payer-initiated reclaim | `requestClose(descriptor)` followed by `withdraw(descriptor)` after the close grace period |
 
-TIP-1034 channels do not carry an on-chain `authorizationExpires` field.
-For this profile, `authorizationExpires` is enforced by the server and
-operator. Implementations that require on-chain expiry enforcement need a
-future TIP-1034 extension or a separate adapter.
+TIP-1034 channels do not carry native expiry. The challenge `expires`
+auth-param limits only when the payer can submit the credential that opens
+the channel. After the channel is open, the authorization is bounded by
+the original `amount`, channel lifecycle state, and method-specific
+terminal operations.
 
 ## Flow
 
@@ -216,7 +217,6 @@ without padding per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Maximum authorization amount in base units (stringified non-negative integer, no leading zeros) |
 | `currency` | string | REQUIRED | TIP-20 token address |
-| `authorizationExpires` | string | REQUIRED | Last time the server or operator can capture, in {{RFC3339}} format |
 | `recipient` | string | REQUIRED | Destination address that receives captured funds |
 | `description` | string | OPTIONAL | Human-readable authorization description |
 | `externalId` | string | OPTIONAL | Merchant reference, order ID, or cart ID |
@@ -241,15 +241,11 @@ they differ.
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}}, using {{RFC3339}}
 format. Request objects MUST NOT duplicate the challenge expiry value.
-The `authorizationExpires` field instead defines the HTTP Payment
-Authentication authorization expiry.
+The challenge expiry only limits when the client can satisfy the
+challenge and does not define the TIP-1034 channel lifetime.
 
 Servers issuing a Tempo authorize challenge MUST include the `expires`
 auth-param.
-
-The `authorizationExpires` value MUST be strictly later than the
-challenge `expires` timestamp. Servers MUST reject credentials where
-`authorizationExpires` is at or before the challenge `expires`.
 
 The `amount` value MUST fit the TIP-1034 `uint96 deposit` and
 `uint96 cumulativeAmount` fields. Servers MUST reject requests with an
@@ -267,7 +263,6 @@ additional payer interaction for every capture.
   "amount": "50000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "methodDetails": {
     "chainId": 42431,
     "escrowContract": "0x4d50500000000000000000000000000000000000",
@@ -456,8 +451,7 @@ delta = cumulativeAmount - previousSettled
 ~~~
 
 For this authorize profile, `cumulativeAmount` MUST NOT exceed the
-original challenge `amount`, even if the channel is later topped up. The
-server and operator MUST NOT capture after `authorizationExpires`.
+original challenge `amount`, even if the channel is later topped up.
 
 TIP-1034 requires `settle` amounts to be strictly increasing. Therefore
 retried captures with the same or lower cumulative value are not
@@ -496,9 +490,7 @@ not alter captured value.
 
 ## Payer-Initiated Reclaim
 
-TIP-1034 does not have a single `reclaim` operation tied to
-`authorizationExpires`. The payer can initiate channel closure at any
-time by calling:
+The payer can initiate channel closure at any time by calling:
 
 ~~~
 requestClose(descriptor)
@@ -546,7 +538,7 @@ On receipt of a Tempo authorize credential, servers MUST:
     `state.closeRequestedAt == 0`.
 13. Store durable authorization state, including the challenge ID,
     channel ID, full descriptor, authorized amount, captured amount,
-    authorization expiry, and terminal state.
+    and terminal state.
 
 Servers MUST NOT return success until the authorization channel is active
 onchain.
@@ -564,14 +556,12 @@ The server MUST enforce the following before signing, requesting, or
 submitting a capture voucher:
 
 1. The channel is active.
-2. The latest observed Tempo block timestamp and server wall-clock time
-   are before `authorizationExpires`.
-3. The requested cumulative captured amount is greater than the stored
+2. The requested cumulative captured amount is greater than the stored
    captured amount.
-4. The requested cumulative captured amount does not exceed the original
+3. The requested cumulative captured amount does not exceed the original
    challenge `amount`.
-5. `closeRequestedAt == 0`, except for terminal close handling.
-6. The HTTP request is not a duplicate idempotency key that has already
+4. `closeRequestedAt == 0`, except for terminal close handling.
+5. The HTTP request is not a duplicate idempotency key that has already
    consumed value.
 
 For example:
@@ -642,7 +632,6 @@ particular, clients MUST verify:
 5. `methodDetails.authorizedSigner` is expected or acceptable.
 6. `methodDetails.escrowContract` is the canonical TIP-1034 channel
    escrow precompile address.
-7. `authorizationExpires` is acceptable.
 
 If `recipient`, `operator`, and `authorizedSigner` differ, clients SHOULD
 display each role.
@@ -655,17 +644,6 @@ intentional for delayed fulfillment and metered billing. Clients MUST
 treat `authorizedSigner` as capture authority over the full challenge
 `amount`.
 
-## Expiry Enforcement
-
-TIP-1034 does not enforce `authorizationExpires` onchain. Servers and
-operators MUST enforce `authorizationExpires` before issuing or submitting
-capture vouchers. Clients MUST NOT assume that the precompile will reject
-late captures solely because the HTTP authorization has expired.
-
-For deployments that need on-chain expiry, implementers should use a
-future TIP-1034 extension or a separate adapter that validates expiry
-before voucher settlement.
-
 ## Top-Up Risk
 
 TIP-1034 top-up increases the channel deposit, and the authorized signer
@@ -676,10 +654,10 @@ requires server-side capture accounting against the original challenge
 
 ## Payer-Initiated Close
 
-The payer can call `requestClose` before `authorizationExpires`. This is a
-TIP-1034 channel exit mechanism and is a method-specific terminal path
-for this profile. Servers SHOULD monitor channel state before capture and
-stop service delivery if `closeRequestedAt != 0`.
+The payer can call `requestClose` at any time. This is a TIP-1034 channel
+exit mechanism and is a method-specific terminal path for this profile.
+Servers SHOULD monitor channel state before capture and stop service
+delivery if `closeRequestedAt != 0`.
 
 ## Replay Prevention
 
@@ -744,7 +722,6 @@ Decoded request:
   "amount": "50000000",
   "currency": "0x20c0000000000000000000000000000000000001",
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "methodDetails": {
     "chainId": 42431,
     "escrowContract": "0x4d50500000000000000000000000000000000000",
@@ -794,7 +771,6 @@ Content-Type: application/json
     "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
     "operator": "0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
     "authorizedSigner": "0xb1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6b1b2",
-    "authorizationExpires": "2026-05-14T12:00:00Z",
     "reference": "0xopenTxHash"
   }
 }

@@ -175,7 +175,6 @@ base64url encoding, per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `amount` | string | REQUIRED | Maximum authorization amount in the smallest currency unit |
 | `currency` | string | REQUIRED | Three-letter ISO currency code, lowercase |
-| `authorizationExpires` | string | REQUIRED | Latest intended capture time in {{RFC3339}} format |
 | `recipient` | string | OPTIONAL | Stripe business or merchant identifier |
 | `description` | string | OPTIONAL | Human-readable authorization description |
 | `externalId` | string | OPTIONAL | Merchant reference, order ID, or cart ID |
@@ -189,17 +188,17 @@ base64url encoding, per {{I-D.httpauth-payment}}.
 
 The challenge request does not contain a PaymentIntent ID or a
 PaymentIntent client secret. The client fulfills the challenge by creating
-an SPT scoped to the challenged amount, currency, expiry, seller details,
-and one of the listed `methodDetails.paymentMethodTypes` values. The
-server consumes that SPT when creating the manual-capture PaymentIntent.
+an SPT scoped to the challenged amount, currency, seller details, and one
+of the listed `methodDetails.paymentMethodTypes` values. The server
+consumes that SPT when creating the manual-capture PaymentIntent.
 
 The `amount` value MUST fit the Stripe API integer amount range for the
 selected currency and payment method. Implementations MUST reject values
 that cannot be converted to an exact Stripe integer amount.
 
 Servers issuing a Stripe authorize challenge MUST include the `expires`
-auth-param. The `authorizationExpires` value MUST be strictly later than
-the challenge `expires` timestamp.
+auth-param. Clients MUST scope the SPT so it cannot be used after the
+challenge `expires` timestamp.
 
 **Example:**
 
@@ -208,7 +207,6 @@ the challenge `expires` timestamp.
   "amount": "100000",
   "currency": "usd",
   "recipient": "acct_merchant",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "description": "Pre-authorization for metered API usage",
   "externalId": "order_12345",
   "methodDetails": {
@@ -274,8 +272,8 @@ credential material.
 
 The client creates an SPT using Stripe client-side flows. This step can
 use Stripe's standard card collection and authentication flow. The SPT
-MUST be scoped to the challenged currency, maximum amount, expiry, and
-seller details.
+MUST be scoped to the challenged currency, maximum amount, challenge
+expiry, and seller details.
 
 If creating or preparing the SPT requires additional customer action, the
 client MUST complete that action before submitting the Payment credential
@@ -294,7 +292,7 @@ const spt = await stripe.sharedPayment.issuedTokens.create({
   usage_limits: {
     currency: request.currency,
     max_amount: stripeAmount,
-    expires_at: expiresAt
+    expires_at: challengeExpiresAt
   },
   seller_details: {
     network_business_profile: request.methodDetails.networkId
@@ -405,10 +403,11 @@ The receipt payload for Stripe authorize:
 
 ## Authorization Amount
 
-Clients MUST verify the maximum authorization amount, currency, expiry,
-and seller details before creating the SPT. A consumed SPT can produce a
-manual-capture PaymentIntent that allows later server-side capture without
-further client interaction, subject to Stripe and payment network rules.
+Clients MUST verify the maximum authorization amount, currency, challenge
+expiry, and seller details before creating the SPT. A consumed SPT can
+produce a manual-capture PaymentIntent that allows later server-side
+capture without further client interaction, subject to Stripe and payment
+network rules.
 
 ## SPT Single-Use Constraint
 
@@ -430,9 +429,9 @@ and implementations MUST NOT include PaymentIntent client secrets in
 ## Capture Windows
 
 Payment method and card network rules constrain how long a Stripe
-authorization can remain capturable. Servers MUST NOT advertise an
-`authorizationExpires` value that they cannot honor for the selected
-PaymentIntent and payment method.
+authorization can remain capturable. Servers MUST cancel or capture
+manual-capture PaymentIntents within the windows applicable to the
+selected PaymentIntent and payment method.
 
 ## Refund Expectations
 
@@ -485,7 +484,6 @@ Decoded request:
   "amount": "100000",
   "currency": "usd",
   "recipient": "acct_merchant",
-  "authorizationExpires": "2026-05-14T12:00:00Z",
   "description": "Pre-authorization for metered API usage",
   "externalId": "order_12345",
   "methodDetails": {
@@ -545,8 +543,7 @@ Content-Type: application/json
     "capturedAmount": "0",
     "remainingAmount": "100000",
     "currency": "usd",
-    "recipient": "acct_merchant",
-    "authorizationExpires": "2026-05-14T12:00:00Z"
+    "recipient": "acct_merchant"
   }
 }
 ~~~
