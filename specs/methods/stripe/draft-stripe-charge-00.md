@@ -260,10 +260,15 @@ issued. This includes validating:
 
 1. Server receives and verifies the credential ({{charge-verification}})
 2. Server creates a Stripe PaymentIntent with `confirm: true` and the
-   SPT as `shared_payment_granted_token`:
+   SPT as `shared_payment_granted_token`. The server MAY include
+   Stripe Connect settlement parameters as described in
+   {{stripe-connect-settlement}}:
 
 ~~~ javascript
-const paymentIntent = await stripe.paymentIntents.create({
+const stripeDetails = request.methodDetails || {};
+const settlementPolicy = getServerSettlementPolicy(challenge, request);
+
+const paymentIntentParams = {
   amount: Number(request.amount),
   currency: request.currency,
   shared_payment_granted_token: credential.spt,
@@ -272,10 +277,48 @@ const paymentIntent = await stripe.paymentIntents.create({
     enabled: true,
     allow_redirects: 'never'
   },
-  metadata: { challenge_id: challenge.id }
-}, {
+  metadata: {
+    ...(stripeDetails.metadata || {}),
+    challenge_id: challenge.id
+  }
+};
+
+if (settlementPolicy.applicationFeeAmount !== undefined) {
+  paymentIntentParams.application_fee_amount =
+    settlementPolicy.applicationFeeAmount;
+}
+
+if (settlementPolicy.onBehalfOf !== undefined) {
+  paymentIntentParams.on_behalf_of = settlementPolicy.onBehalfOf;
+}
+
+if (settlementPolicy.transferData !== undefined) {
+  paymentIntentParams.transfer_data = {
+    destination: settlementPolicy.transferData.destination
+  };
+
+  if (settlementPolicy.transferData.amount !== undefined) {
+    paymentIntentParams.transfer_data.amount =
+      settlementPolicy.transferData.amount;
+  }
+}
+
+if (settlementPolicy.transferGroup !== undefined) {
+  paymentIntentParams.transfer_group = settlementPolicy.transferGroup;
+}
+
+const paymentIntentOptions = {
   idempotencyKey: `${challenge.id}_${credential.spt}`
-});
+};
+
+if (settlementPolicy.stripeAccount !== undefined) {
+  paymentIntentOptions.stripeAccount = settlementPolicy.stripeAccount;
+}
+
+const paymentIntent = await stripe.paymentIntents.create(
+  paymentIntentParams,
+  paymentIntentOptions
+);
 ~~~
 
 3. Server MUST verify the PaymentIntent `status` is `"succeeded"`
@@ -294,6 +337,30 @@ if the client retries a request.
 Stripe processes fund transfers asynchronously. Servers SHOULD return
 200 immediately after PaymentIntent confirmation (status `"succeeded"`),
 even if final fund settlement to the merchant is pending.
+
+## Stripe Connect Settlement {#stripe-connect-settlement}
+
+Servers that use Stripe Connect MAY apply Connect parameters when
+creating the Stripe PaymentIntent. These parameters are settlement
+policy inputs controlled by the server, not payment request fields
+that clients need in order to create an SPT.
+
+The following Stripe PaymentIntent create parameters are compatible
+with this specification:
+
+| Stripe parameter | Description |
+|------------------|-------------|
+| `Stripe-Account` header or SDK `stripeAccount` option | Connected account used as the Stripe account context for the request |
+| `application_fee_amount` | Platform application fee amount in the smallest currency unit |
+| `on_behalf_of` | Connected account used as the business of record |
+| `transfer_data[destination]` | Connected account that receives transferred funds |
+| `transfer_data[amount]` | Amount transferred to `transfer_data[destination]` |
+| `transfer_group` | Reconciliation token linking related charges and transfers |
+
+Servers SHOULD derive Connect settlement parameters from server-side
+merchant configuration, platform policy, order state, or equivalent
+trusted state. Servers MUST NOT include Connect settlement parameters
+in the MPP challenge.
 
 ## Receipt Generation
 
@@ -336,6 +403,29 @@ amount, so clients must trust the challenge parameters.
 3. Verify the `description` matches the expected service
 4. Verify the challenge hasn't expired
 5. Verify the server's identity (TLS certificate validation)
+
+## Stripe Connect Parameter Integrity
+
+Servers that use Stripe Connect settlement parameters MUST validate
+those parameters before creating the PaymentIntent:
+
+- Connected account identifiers, including `stripeAccount`,
+  `on_behalf_of`, and `transfer_data[destination]`, MUST refer to
+  connected accounts that the server is authorized to use for the
+  current request.
+- `transfer_data[destination]` MUST be present when `transfer_data`
+  is present.
+- `application_fee_amount`, when present, MUST be a non-negative
+  integer no greater than the PaymentIntent `amount`.
+- `transfer_data[amount]`, when present, MUST be a non-negative
+  integer no greater than the PaymentIntent `amount`.
+- `transfer_group`, when present, MUST be derived from an order,
+  invoice, request, or similar reconciliation identifier and MUST NOT
+  be treated as secret.
+
+Servers MUST NOT accept Connect settlement parameters from clients
+unless an explicit trust boundary authorizes that client to control
+settlement routing or platform fees.
 
 ## PCI DSS Compliance
 
