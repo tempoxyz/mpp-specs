@@ -78,168 +78,58 @@ informative:
 
 --- abstract
 
-This document defines the "subscription" intent for the "solana"
-payment method within the Payment HTTP Authentication Scheme
-{{I-D.httpauth-payment}}. Subscriptions enable recurring fixed-amount
-payments where the payer grants the server permission, through an
-on-chain delegation, to collect the same SPL token amount once per
-billing period. The client signs an activation transaction that, in a
-single atomic step, creates an on-chain subscription delegation and
-collects the first billing-period charge. Subsequent renewal charges
-are submitted directly by the server using the registered delegation
-and require no further client interaction.
-
-This profile inherits the shared "subscription" intent semantics from
-{{I-D.payment-intent-subscription}} and defines Solana-specific request
-fields, credential payloads, transaction composition, and settlement
-behavior.
+This document defines the Solana profile of the "subscription"
+payment intent for use with the Payment HTTP Authentication Scheme.
+It specifies how clients grant servers permission to collect a fixed
+SPL token payment once per billing period using a subscription
+delegation held by an audited on-chain program. This profile
+intentionally models the recurring transfer authorization itself, not
+a richer billing object.
 
 --- middle
 
 # Introduction
 
-HTTP Payment Authentication {{I-D.httpauth-payment}} defines a
-challenge-response mechanism that gates access to resources behind
-payments. This document registers the "subscription" intent for the
-"solana" payment method.
+The "subscription" intent on Solana represents a recurring
+fixed-amount SPL token payment. The client grants the server a
+recipient-scoped subscription delegation with a per-period spending
+limit. Activation creates the delegation and collects the first
+billing-period charge in the same transaction.
 
-The `subscription` intent enables a server to collect a recurring
-fixed-amount payment from a client at a defined cadence. On Solana, the
-authorization is materialized as on-chain state held by an audited
-subscriptions program {{SUBSCRIPTIONS-PROGRAM}}. Activation atomically
-creates that state and collects the first charge. Renewals are then
-server-driven: at each billing-period boundary, the server submits one
-transaction that pulls the next charge from the payer's token account
-through the registered delegation, with no HTTP round-trip required.
+This intent is useful for recurring API plans, content subscriptions,
+and other Solana-priced services with a stable amount per billing
+period.
 
 This profile is intentionally narrower than a general billing
-subscription. It standardizes a recurring SPL-token transfer
-authorization, not price catalogs, quantities, prorations, deferred
-starts, trials, metered usage, or plan changes. Those concerns belong
-to the application layer.
+subscription. It standardizes a recurring token-transfer authorization,
+not price catalogs, quantities, prorations, deferred starts, or
+billing-anchor resets.
 
-## Solana-Specific Capabilities
+## Relationship to the Subscription Intent
 
-This specification leverages Solana-specific capabilities:
+This document inherits the shared request semantics of the
+"subscription" intent from {{I-D.payment-intent-subscription}}. It
+defines only the Solana-specific `methodDetails`, `payload`,
+activation transaction shape, on-chain lifecycle, and verification
+procedures for the "solana" payment method.
 
-- **On-chain delegation**: The recurring authorization is held by an
-  audited program PDA (`SubscriptionDelegation`) rather than by the
-  server. The server can only pull funds within the per-period limit
-  encoded in the delegation; over-pulls and out-of-period pulls fail
-  on-chain.
+Solana subscriptions support only subscription-delegation
+fulfillment. Solana transactions containing standalone SPL Token
+`Approve` instructions and push-mode hash credentials do not provide
+the per-period enforcement required for this intent.
 
-- **Atomic activation**: A single transaction can initialize the
-  payer's per-mint delegation authority, create the subscription
-  delegation by snapshotting an immutable on-chain plan, and execute
-  the first billing-period transfer. There is no race window between
-  authorization and first charge.
+Solana also imposes an additional constraint that is not part of the
+shared intent: the recurring authorization MUST be created against a
+`Plan` account that the merchant has published on-chain prior to the
+challenge. This method therefore elevates the shared optional
+`externalId` field to REQUIRED and uses it to carry the base58
+address of that on-chain plan.
 
-- **Durable on-chain accounting**: The program tracks the current
-  billing-period start time and the amount already pulled in the
-  current period. Period advance is automatic at transfer time. Missed
-  billing periods do not accumulate additional charge capacity.
-
-- **Fee payer separation**: The server can sponsor the activation
-  transaction so the client never needs SOL for transaction fees during
-  the normal subscription lifecycle. Renewal transactions are
-  server-submitted and server-paid by construction.
-
-- **Plan immutability**: Subscription terms (amount, billing period,
-  mint, destinations) are published on-chain by the merchant as an
-  immutable `Plan` PDA. The 402 challenge pins the `planId`, and the
-  payer can inspect the plan on-chain before signing the activation.
-
-- **Kill-switch isolation**: Each `(payer, mint)` pair has a
-  `SubscriptionAuthority` PDA whose recreation (close + reopen)
-  invalidates every delegation that referenced the previous instance.
-  This provides a non-revocable emergency control without touching
-  individual subscriptions.
-
-## Subscription Flow
-
-~~~
-   Client                       Server                     Solana
-      |                            |                          |
-      |  (1) GET /resource         |                          |
-      |--------------------------> |                          |
-      |                            |                          |
-      |  (2) 402 Payment Required  |                          |
-      |      intent="subscription" |                          |
-      |      (planId, amount,      |                          |
-      |       periodUnit,          |                          |
-      |       periodCount,         |                          |
-      |       recipient, ...)      |                          |
-      |<-------------------------- |                          |
-      |                            |                          |
-      |  (3) Inspect plan on-chain,|                          |
-      |      build activation tx,  |                          |
-      |      sign as subscriber    |                          |
-      |                            |                          |
-      |  (4) Authorization: Payment|                          |
-      |      <activate credential> |                          |
-      |--------------------------> |                          |
-      |                            |                          |
-      |                            |  (5) Co-sign (if fee     |
-      |                            |      payer) + send       |
-      |                            |------------------------> |
-      |                            |                          |
-      |                            |  (6) Confirmation:       |
-      |                            |      SubscriptionCreated |
-      |                            |      + first transfer    |
-      |                            |<------------------------ |
-      |                            |                          |
-      |  (7) 200 OK + Receipt      |                          |
-      |      (subscriptionId)      |                          |
-      |<-------------------------- |                          |
-      |                            |                          |
-      |       ... later period ... |                          |
-      |                            |                          |
-      |                            |  (8) transfer_subscription
-      |                            |      (server-driven)     |
-      |                            |------------------------> |
-      |                            |                          |
-      |  (9) GET /resource         |                          |
-      |--------------------------> |                          |
-      |                            |                          |
-      |  (10) 200 OK + Receipt     |                          |
-      |       (renewed period)     |                          |
-      |<-------------------------- |                          |
-      |                            |                          |
-~~~
-
-Steps 1–7 are the activation phase: the client signs the activation
-transaction, the server (optionally co-signing as fee payer) submits
-it, the on-chain program creates the subscription delegation and
-executes the first-period transfer in the same transaction, and the
-server returns a receipt with the subscription identifier.
-
-Step 8 is a server-driven renewal. There is no HTTP round-trip; the
-server detects that the current billing period is unpaid and submits
-one transfer using the registered delegation.
-
-Steps 9–10 are a subsequent access: because the current billing period
-has been charged, the server serves the resource and returns a fresh
-`Payment-Receipt`. If the next request arrives while the current period
-is unpaid (for example, before the server's renewal worker has run, or
-after a failed renewal), the server returns `402 Payment Required` with
-a fresh challenge instead.
-
-## Relationship to Charge and Session Intents
-
-The "charge" intent handles a single one-time payment per request
-(see the companion specification for the Solana charge profile). The
-"session" intent handles metered or streaming payments through an
-off-chain voucher channel against an on-chain escrow.
-
-The "subscription" intent handles recurring fixed-amount payments
-with on-chain per-period accounting. Unlike "charge", subscriptions
-do not require an HTTP round-trip per period: the server submits
-renewals directly. Unlike "session", subscriptions do not use vouchers,
-do not require an open/close lifecycle per usage burst, and do not
-support metered amounts.
-
-All three intents share the same `solana` method identifier and the
-encoding conventions defined in {{encoding-conventions}}.
+Solana subscriptions also require the per-period spending limit,
+recipient scoping, and missed-period non-accumulation described in
+this document, including the Token-2022 mint constraints in
+{{token-extension-policy}}. Servers MUST reject request objects on
+deployments that cannot enforce those restrictions.
 
 # Requirements Language
 
@@ -247,373 +137,295 @@ encoding conventions defined in {{encoding-conventions}}.
 
 # Terminology
 
-Plan
-: An immutable on-chain account (PDA) published by a merchant that
-  defines a subscription's terms: token mint, amount per billing
-  period, period length, allowed pullers, and recipient destinations.
+This document uses the terms `Subscription`, `Billing Period`,
+`Activation`, `Renewal`, `Cancellation`, and `Subscription Identifier`
+as defined by {{I-D.payment-intent-subscription}}. The following
+additional terms are specific to the Solana profile.
 
-Plan PDA
-: The address of the `Plan` account, derived from `["plan", owner,
-  plan_id]`.
-
-Subscription Delegation
-: A per-subscriber on-chain account (PDA) that snapshots the plan terms
-  the subscriber agreed to and tracks current-period accounting state.
-  Address: `["subscription", plan_pda, subscriber]`.
-
-Subscription Authority
-: A per-(payer, mint) on-chain PDA that holds the SPL token delegate
-  authority over the payer's associated token account. The subscriptions
-  program uses this PDA as the signing authority when executing pulls.
-  Address: `["SubscriptionAuthority", payer, mint]`.
-
-Puller
-: A public key authorized by the plan to submit
-  `transfer_subscription` instructions. The plan owner is implicitly
-  authorized; up to four additional pullers MAY be enumerated in the
-  plan.
-
-Subscriber
-: The funding key. Holds the SPL token balance from which the
-  recurring charges are pulled. Signs the activation transaction.
-
-Billing Anchor
-: The on-chain timestamp at which the subscription was activated. All
-  subsequent billing-period boundaries are derived from this anchor.
-
-Mapped Period Seconds
-: The fixed elapsed time, in seconds, between billing-period
-  boundaries. Computed from the shared `periodUnit` and `periodCount`
-  fields as defined in {{period-mapping}}.
+SPL Token
+: Solana's standard token program. SPL Token-2022 is its extension-
+  enabled successor and is supported subject to {{token-extension-policy}}.
 
 Subscriptions Program
 : The audited on-chain program implementing the account model and
   instructions referenced by this specification
   {{SUBSCRIPTIONS-PROGRAM}}.
 
-# Intent Identifier
+Plan
+: An immutable on-chain PDA published by the merchant that defines a
+  subscription's terms: token mint, amount per billing period, period
+  length, allowed pullers, and recipient destinations. Derived from
+  `["plan", owner, plan_id]`.
 
-The intent identifier is `subscription`, as defined in
-{{I-D.payment-intent-subscription}}.
+Subscription Delegation
+: A per-subscriber on-chain PDA that snapshots the plan terms at
+  subscription time and tracks current-period accounting state.
+  Derived from `["subscription", plan_pda, subscriber]`.
 
-# Encoding Conventions {#encoding-conventions}
+Subscription Authority
+: A per-(payer, mint) on-chain PDA that holds the SPL Token delegate
+  authority over the payer's associated token account. The
+  subscriptions program signs transfers as this PDA. Derived from
+  `["SubscriptionAuthority", subscriber, mint]`.
 
-All public keys, transaction signatures, mints, and program identifiers
-in this specification are encoded as base58 {{BASE58}} strings unless
-explicitly noted otherwise.
+# Intent Semantics
 
-The `request` JSON object in the `WWW-Authenticate` challenge MUST be
-serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} and
-base64url-encoded without padding per {{I-D.httpauth-payment}}.
+## Definition
 
-Subscription identifiers in receipts are base64url-encoded without
-padding per {{I-D.payment-intent-subscription}}.
+The "subscription" intent on Solana represents a request for a
+recurring fixed-amount SPL token payment of `amount`, charged once
+per billing period until explicit cancellation, until the on-chain
+subscription delegation is otherwise invalidated, or until the
+optional `subscriptionExpires` timestamp is reached.
 
-Transaction bytes in credentials are base64-encoded with padding using
-the standard alphabet of {{RFC4648}}.
+On Solana, the recurring authorization is held by an audited on-chain
+program {{SUBSCRIPTIONS-PROGRAM}}, deployed at a canonical program ID
+that servers MUST pin in the challenge and clients MUST validate
+before signing. The program defines three on-chain accounts
+referenced by this specification:
 
-Token amounts are decimal strings of unsigned integers in base units
-(no decimal point, no exponent, no leading zeros, no whitespace, no
-sign).
+- **Plan**, published off the critical path of the 402 challenge by
+  the merchant. The plan's core terms (mint, amount per billing
+  period, period length, destinations) are immutable once published.
+- **SubscriptionDelegation**, created when the subscriber activates a
+  subscription. The delegation snapshots the plan's terms and tracks
+  the current billing-period start time and the amount already pulled
+  in the current period.
+- **SubscriptionAuthority**, created per `(subscriber, mint)` and
+  acting as the on-chain delegate over the subscriber's token
+  account.
 
-# Subscriptions Program Interface
+The program enforces per-period spending limits, recipient scoping,
+and missed-period non-accumulation: renewals advance the current
+billing-period start by whole multiples of the period length and
+reset the in-period counter to zero, so a successful pull authorizes
+at most one charge for the then-current billing period regardless of
+how many periods have elapsed. Cancellation is performed on-chain and
+takes effect at the end of the currently-paid billing period.
 
-This specification depends on the audited subscriptions program
-{{SUBSCRIPTIONS-PROGRAM}}. Servers MUST pin a specific deployed
-program ID in the challenge and reject credentials whose activation
-transactions invoke a different program.
+## Properties
 
-## Account Model
+| Property | Value |
+|----------|-------|
+| **Intent Identifier** | `subscription` |
+| **Payment Timing** | Recurring (activation charge atomic with delegation creation, then once per period via server-driven pulls) |
+| **Idempotency** | Credential single-use; on-chain delegation reusable across billing periods |
+| **Reversibility** | Cancellable on-chain; effective at end of currently-paid billing period |
 
-### Plan
+## Flow
 
-The `Plan` account is a merchant-published PDA describing the
-subscription terms. It is created off the critical path of the 402
-challenge by the merchant calling `create_plan` (instruction
-discriminator `7`) on the subscriptions program. The `Plan` is
-immutable in its core terms (`mint`, `amount_per_period`,
-`period_hours`, `destinations`) once published; its status, sunset
-timestamp, and metadata may be updated by the merchant.
-
-Plan-PDA derivation:
-
-~~~
-plan_pda = find_program_address(
-    [b"plan", owner_pubkey, plan_id_bytes],
-    subscriptions_program_id,
-)
-~~~
-
-The plan stores at least:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `owner` | Pubkey | Merchant key, also implicitly an authorized puller |
-| `plan_id` | bytes | Merchant-chosen identifier (unique per owner) |
-| `mint` | Pubkey | SPL token mint |
-| `token_program` | Pubkey | SPL Token or SPL Token-2022 program ID |
-| `amount_per_period` | u64 | Amount per billing period in base units |
-| `period_hours` | u64 | Billing period length in hours, in `[1, 8760]` |
-| `destinations` | array of Pubkey, length 1..4 | Token-account destinations |
-| `pullers` | array of Pubkey, length 0..4 | Additional authorized pullers |
-| `status` | enum | `Active` / `Sunset` |
-| `end_ts` | i64 | Optional sunset timestamp; `0` means no sunset |
-| `metadata_uri` | string | Optional human-readable metadata URI |
-
-### Subscription Delegation
-
-The `SubscriptionDelegation` is a per-subscriber PDA created when the
-subscriber calls `subscribe` (instruction discriminator `11`). It
-snapshots the plan terms at subscription time and tracks the current
-billing period accounting state.
-
-Subscription-delegation PDA derivation:
+The following diagram illustrates the Solana subscription flow:
 
 ~~~
-subscription_pda = find_program_address(
-    [b"subscription", plan_pda, subscriber_pubkey],
-    subscriptions_program_id,
-)
+   Client                        Server                          Solana
+      │                             │                             │
+      │  (1) GET /api/resource      │                             │
+      │-------------------------->  │                             │
+      │                             │                             │
+      │  (2) 402 Payment Required   │                             │
+      │      intent="subscription"  │                             │
+      │<--------------------------  │                             │
+      │                             │                             │
+      │  (3) Sign activation tx     │                             │
+      │      (subscribe + first     │                             │
+      │       transfer)             │                             │
+      │                             │                             │
+      │  (4) Authorization: Payment │                             │
+      │-------------------------->  │                             │
+      │                             │                             │
+      │                             │  (5) Co-sign + broadcast    │
+      │                             │      subscription delegation│
+      │                             │      + first transfer       │
+      │                             │-------------------------->  │
+      │                             │                             │
+      │  (6) 200 OK + Receipt       │                             │
+      │<--------------------------  │                             │
+      │                             │                             │
+      │        ... later period ... │                             │
+      │                             │                             │
+      │                             │  (7) transfer_subscription  │
+      │                             │      (server-driven pull)   │
+      │                             │-------------------------->  │
+      │                             │                             │
+      │  (8) 200 OK + Receipt       │                             │
+      │<--------------------------  │                             │
+      │                             │                             │
 ~~~
 
-The delegation stores at least:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `header` | struct | Includes delegator (subscriber), delegatee, payer, `init_id` |
-| `plan_pda` | Pubkey | The `Plan` this subscription was created from |
-| `mint` | Pubkey | Snapshotted from the plan |
-| `amount_per_period` | u64 | Snapshotted from the plan |
-| `period_hours` | u64 | Snapshotted from the plan |
-| `current_period_start_ts` | i64 | Unix timestamp of current period start |
-| `amount_pulled_in_period` | u64 | Amount already pulled in the current period |
-| `expires_at_ts` | i64 | `0` while active; set by `cancel_subscription` |
-
-### Subscription Authority
-
-The `SubscriptionAuthority` is a per-(payer, mint) PDA created by the
-payer calling `initialize_subscription_authority` (discriminator `0`).
-On creation, the payer approves this PDA as the SPL Token delegate of
-their associated token account with allowance `u64::MAX`. The
-subscriptions program uses this PDA as the signing authority when
-moving tokens during `transfer_subscription`.
-
-Subscription-authority PDA derivation:
-
-~~~
-subscription_authority_pda = find_program_address(
-    [b"SubscriptionAuthority", payer_pubkey, mint_pubkey],
-    subscriptions_program_id,
-)
-~~~
-
-The authority's `init_id` (set from `Clock::slot` at creation) is
-snapshotted into every delegation that references it. Closing the
-authority via `close_subscription_authority` and reopening it
-invalidates every previously created delegation that references the
-old instance; subsequent `transfer_subscription` calls return
-`StaleSubscriptionAuthority`. This is the emergency kill switch
-described in {{security-considerations}}.
-
-## Instructions
-
-Servers and clients implementing this profile MUST use the
-subscriptions program's published instruction set. The instructions
-relevant to this specification are:
-
-| Instruction | Discriminator | Signer | Role |
-|-------------|---------------|--------|------|
-| `initialize_subscription_authority` | `0` | payer | Creates the per-(payer, mint) authority and approves it as the SPL Token delegate |
-| `subscribe` | `11` | subscriber | Creates the `SubscriptionDelegation` from a `Plan` snapshot |
-| `transfer_subscription` | `10` | puller (plan owner or one of `plan.pullers`) | Executes one in-period transfer; auto-advances the period |
-| `cancel_subscription` | `12` | subscriber | Sets `expires_at_ts` (grace = end of current paid period) |
-| `revoke_delegation` | `3` | subscriber or sponsor (post-expiry) | Closes the delegation, returning rent |
-| `create_plan` | `7` | merchant | Merchant-side plan publication; not in the activation flow |
-| `update_plan` | `8` | merchant | Mutates non-terms fields (status, end_ts, pullers, metadata_uri) |
-
-Instruction discriminators are single bytes prefixed to the
-instruction data, per the subscriptions program convention.
-
-## Plan Publication
-
-Servers MUST require a published `Plan` for every subscription
-challenge. The challenge `methodDetails.planId` MUST be the base58
-encoding of a `Plan` PDA that:
-
-1. Is owned by the subscriptions program identified by
-   `methodDetails.programId`.
-2. Has `mint` equal to `methodDetails.mint`.
-3. Has `amount_per_period` equal to the challenge `amount` parsed as
-   `u64`.
-4. Has `period_hours` equal to the value computed by
-   {{period-mapping}}.
-5. Has the server's puller pubkey listed in `plan.pullers` or as
-   `plan.owner`.
-6. Has `status == Active` and (if `end_ts != 0`) `end_ts` strictly
-   greater than the challenge `expires` timestamp and, if present,
-   strictly greater than the challenge `subscriptionExpires`.
-
-Servers MUST refuse to issue subscription challenges for plans they do
-not satisfy these conditions for. Clients SHOULD re-verify them by
-fetching the plan on-chain before signing the activation transaction.
-
-## Per-Period Accounting
-
-When the subscriptions program processes a `transfer_subscription`
-call, it:
-
-1. Verifies the `Plan` referenced by the delegation still exists, is
-   `Active`, has not been replaced, and has terms matching the
-   delegation snapshot (rejects with `PlanTermsMismatch` otherwise).
-2. Verifies `expires_at_ts == 0` or `current_ts < expires_at_ts`
-   (rejects with `SubscriptionCancelled` otherwise).
-3. Computes `elapsed = current_ts - current_period_start_ts`. If
-   `elapsed >= period_length_seconds`, advances
-   `current_period_start_ts` by
-   `(elapsed / period_length_seconds) * period_length_seconds` and
-   resets `amount_pulled_in_period = 0`.
-4. Verifies `transfer_amount <= amount_per_period -
-   amount_pulled_in_period` (rejects with `AmountExceedsPeriodLimit`
-   otherwise).
-5. Pulls `transfer_amount` from the payer's associated token account
-   through the `SubscriptionAuthority` delegate and credits the
-   `plan.destinations` according to the on-chain split logic.
-6. Increments `amount_pulled_in_period += transfer_amount`.
-7. Emits a `SubscriptionTransferEvent` via the program's Anchor-
-   compatible self-CPI event mechanism.
-
-The period advance is jumping rather than accumulating: if multiple
-billing periods have elapsed since the last successful pull, the
-program advances to the active period and resets the in-period
-counter to zero. There is no catch-up authority for missed periods.
-
-## Token-Program Support
-
-This profile supports both SPL Token and SPL Token-2022. Servers MUST
-pin the token program of the underlying mint in
-`methodDetails.tokenProgram`. Clients MUST verify on-chain that the
-mint's owner program equals this value before signing.
-
-For mints managed by SPL Token-2022, the subscriptions program
-enforces an extension blocklist at every token-touching path. Mints
-or token accounts that carry any of the following extensions MUST be
-rejected by the program (and therefore by this profile):
-
-- `ConfidentialTransferMint` / `ConfidentialTransferAccount`
-- `NonTransferable`
-- `PermanentDelegate`
-- `TransferHook`
-- `TransferFeeConfig`
-- `MintCloseAuthority`
-- `Pausable`
-
-The mint extension allowlist for this profile is identical to the one
-defined by the companion Solana session specification (metadata-only
-extensions). The token-account allowlist is `ImmutableOwner` only.
-
-## Subscription Authority Lifecycle
-
-The `SubscriptionAuthority` is shared across all of a payer's
-subscriptions for the same mint. Clients SHOULD reuse an existing
-authority when one is already initialized for `(subscriber, mint)`,
-and SHOULD include `initialize_subscription_authority` in the
-activation transaction only if it does not yet exist.
-
-The `init_id` snapshot binds every delegation to the lifecycle of the
-authority instance that created it. Closing and reopening the
-authority invalidates every previously created delegation and forces
-re-subscription. This MUST be treated as a destructive operation by
-applications and SHOULD be exposed in user UX only as an explicit
-"revoke all subscriptions for this token" affordance.
-
-# Request Schema {#request-schema}
+# Request Schema
 
 The `request` parameter in the `WWW-Authenticate` challenge contains a
 base64url-encoded JSON object. The `request` JSON MUST be serialized
-using JSON Canonicalization Scheme (JCS) {{RFC8785}} and base64url-
-encoded without padding per {{I-D.httpauth-payment}}.
+using JSON Canonicalization Scheme (JCS) {{RFC8785}} and
+base64url-encoded without padding per {{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
-This profile uses the shared `amount`, `currency`, `periodUnit`,
+Solana uses the shared `amount`, `currency`, `periodUnit`,
 `periodCount`, `subscriptionExpires`, `recipient`, `description`, and
-`externalId` fields from {{I-D.payment-intent-subscription}}. The
-`solana` profile elevates `recipient` to REQUIRED:
+`externalId` fields from {{I-D.payment-intent-subscription}}, with
+their meanings preserved. The Solana profile elevates `recipient` and
+`externalId` from OPTIONAL to REQUIRED, and constrains the values
+that `periodUnit` may take.
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `amount` | string | Fixed payment amount per billing period in base units |
+| `currency` | string | SPL Token or Token-2022 mint address (see {{currency-formats}}) |
+| `periodUnit` | string | Billing period unit. The value MUST be `day` or `week` |
+| `periodCount` | string | Positive integer count of `periodUnit` values per billing period |
+| `recipient` | string | Recipient address authorized for subscription charges. The activation transaction MUST bind the destination at sign time |
+| `externalId` | string | Base58 address of the on-chain `Plan` |
+
+The `amount` value MUST be a string representation of a positive
+integer in base 10 with no sign, decimal point, exponent, or
+surrounding whitespace. Leading zeros MUST NOT be used.
+
+The `periodCount` value MUST be a string representation of a positive
+integer in base 10 with no sign, decimal point, exponent, or
+surrounding whitespace. Leading zeros MUST NOT be used.
+
+Solana subscription delegations use fixed elapsed-time periods and
+cannot represent calendar-month billing exactly. Servers MUST reject
+`periodUnit="month"`. The shared period fields map to a per-billing-
+period interval in hours as follows:
+
+- `periodUnit="day"` maps to `periodCount * 24` hours
+- `periodUnit="week"` maps to `periodCount * 168` hours
+
+Servers MUST reject request objects where the mapped per-billing-
+period interval is zero or exceeds 8760 hours.
+
+The `externalId` value is the base58 address of the on-chain `Plan`
+account the subscription is created against. Servers MUST reject
+request objects where the on-chain `Plan` at this address does not
+exist, has been closed, is not owned by the subscriptions program
+identified by `methodDetails.programId`, or whose snapshotted terms
+diverge from the challenge fields (mint, per-period amount, mapped
+per-billing-period interval).
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format |
+| `description` | string | Human-readable subscription description |
+| `methodDetails` | object | Solana-specific extension data (see {{method-extensions}}) |
+
+Servers issuing `intent="subscription"` challenges SHOULD include the
+`expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
+using {{RFC3339}} format. Request objects MUST NOT duplicate the
+challenge expiry value. The `subscriptionExpires` field instead
+defines when the subscription itself expires.
+
+If the challenge includes `expires`, the `subscriptionExpires` value
+MUST be strictly later than the challenge `expires` timestamp. Servers
+MUST reject credentials where `subscriptionExpires` is at or before
+the challenge `expires`.
+
+## Currency Formats {#currency-formats}
+
+The `currency` field on Solana is the base58-encoded mint address of
+an SPL Token or SPL Token-2022 mint:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Token mint | `"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"` | Base58 address of an SPL Token or Token-2022 mint |
+
+Implementations MUST treat `currency` and `methodDetails.mint` as the
+same value; servers MUST reject request objects where they differ.
+Native SOL is not a valid currency for the "subscription" intent on
+Solana.
+
+Base58 values in this profile use the standard Solana alphabet
+{{BASE58}}. Address comparisons are by decoded value, not raw string
+form.
+
+## Method Extensions {#method-extensions}
+
+All Solana-specific request parameters live in `methodDetails`:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Per-period token amount in base units |
-| `currency` | string | REQUIRED | SPL token mint address (base58) |
-| `periodUnit` | string | REQUIRED | `"day"` or `"week"` (see {{period-mapping}}) |
-| `periodCount` | string | REQUIRED | Positive integer count of `periodUnit` values per billing period |
-| `recipient` | string | REQUIRED | Primary recipient's token account, or wallet pubkey resolvable to its ATA, in base58 |
-| `subscriptionExpires` | string | OPTIONAL | {{RFC3339}} expiry of the recurring authorization |
-| `description` | string | OPTIONAL | Human-readable subscription description |
-| `externalId` | string | OPTIONAL | Merchant reference |
-| `methodDetails` | object | REQUIRED | Solana-specific fields (see {{method-details}}) |
-
-## Period Mapping {#period-mapping}
-
-Servers MUST map the shared period fields to the subscriptions
-program's `period_hours` value as follows:
-
-| `periodUnit` | Mapping | `periodCount` range |
-|--------------|---------|---------------------|
-| `day` | `period_hours = periodCount * 24` | `[1, 365]` |
-| `week` | `period_hours = periodCount * 168` | `[1, 52]` |
-| `month` | rejected | — |
-
-Servers MUST reject `periodUnit="month"` because the subscriptions
-program's billing-period boundaries are fixed elapsed seconds and
-cannot represent calendar-month cadence exactly. Clients receiving a
-challenge with `periodUnit="month"` and `method="solana"` MUST treat
-it as a malformed challenge.
-
-Servers MUST reject any `periodCount` value outside the ranges above
-because the resulting `period_hours` would exceed the program's
-`[1, 8760]` bounds. Clients SHOULD perform the same check before
-signing.
-
-`Mapped Period Seconds` is `period_hours * 3600`. Billing-period
-boundaries are derived from the on-chain `current_period_start_ts`
-that the program writes during activation; servers MUST NOT use local
-wall-clock time as the anchor.
-
-## Method Details {#method-details}
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `methodDetails.programId` | string | OPTIONAL | Base58 of the subscriptions program ID. If omitted, defaults to the canonical mainnet deployment. |
-| `methodDetails.planId` | string | REQUIRED | Base58 of the on-chain `Plan` PDA the subscription is created against |
-| `methodDetails.mint` | string | REQUIRED | Base58 of the SPL token mint. MUST equal the on-chain `plan.mint` |
-| `methodDetails.tokenProgram` | string | REQUIRED | Base58 of the SPL Token (`Tokenkeg...`) or Token-2022 (`TokenzQd...`) program ID |
-| `methodDetails.decimals` | number | REQUIRED | Decimal precision of the mint (0..255) |
+| `methodDetails.mint` | string | REQUIRED | Mint address echoed from `currency`. MUST equal the on-chain `plan.mint` |
+| `methodDetails.decimals` | number | REQUIRED | Decimal precision of the mint |
+| `methodDetails.tokenProgram` | string | REQUIRED | Token program ID. The value MUST be the SPL Token program or the SPL Token-2022 program |
 | `methodDetails.puller` | string | REQUIRED | Base58 of the server's puller pubkey. MUST be `plan.owner` or appear in `plan.pullers` |
-| `methodDetails.network` | string | OPTIONAL | `"mainnet-beta"`, `"devnet"`, `"testnet"`, or `"localnet"`. Defaults to `"mainnet-beta"` |
+| `methodDetails.programId` | string | OPTIONAL | Base58 of the subscriptions program ID. If omitted, the default value is the canonical mainnet deployment |
+| `methodDetails.network` | string | OPTIONAL | `"mainnet"`, `"devnet"`, `"testnet"`, or `"localnet"`. If omitted, the default value is `"mainnet"` |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, the client constructs the activation transaction with the server as fee payer |
 | `methodDetails.feePayerKey` | string | OPTIONAL | Base58 of the server fee-payer pubkey. REQUIRED when `feePayer` is `true` |
 | `methodDetails.recentBlockhash` | string | OPTIONAL | Pre-fetched blockhash to bind to the activation transaction |
-| `methodDetails.splits` | array | OPTIONAL | Distribution overrides (see {{distribution-splits}}). The on-chain split is governed by `plan.destinations`; `splits` is advisory |
+| `methodDetails.splits` | array | OPTIONAL | Advisory distribution; the on-chain split is governed by `plan.destinations` |
 
-The challenge `currency` field is the same value as
-`methodDetails.mint`. Implementations MUST treat the two consistently;
-servers MUST reject credentials where the activation transaction
-references a different mint.
+Servers MUST reject request objects where `currency`,
+`methodDetails.tokenProgram`, `methodDetails.decimals`, `amount`, or
+the mapped per-billing-period interval diverge from the on-chain
+`Plan` referenced by `externalId`.
 
-Servers issuing `intent="subscription"` challenges SHOULD include the
-`expires` auth-param in `WWW-Authenticate` per
-{{I-D.httpauth-payment}}, using {{RFC3339}} format. The challenge
-`expires` bounds the lifetime of the credential the client may submit;
-the optional `subscriptionExpires` bounds the lifetime of the resulting
-on-chain authorization, and MUST be strictly later than `expires` when
-both are present.
+## Implementor Guidance
 
-# Credential Schema
+This section is non-normative.
+
+The Solana profile is a deliberately narrow projection of what an
+on-chain subscription system could express. Implementations should:
+
+- Treat the on-chain `Plan` as the authoritative source of recurring
+  terms. The challenge `request` MUST agree with the plan exactly;
+  servers should reject mismatched challenges before any client
+  signing.
+- Refuse to map `periodUnit="month"` rather than approximate it with
+  30-day or 31-day fixed periods. Clients receiving a `month` request
+  for the Solana method should treat it as a server bug.
+- Avoid publishing one Solana `Plan` per billing-amount tier when the
+  amount and recipient set actually differ; combining them under a
+  single plan with looser destinations expands the on-chain spending
+  surface.
+- Submit at most one `transfer_subscription` per billing period per
+  subscription, and never retry past the end of the period the
+  transaction was constructed against.
+- Maintain durable server state sufficient to prevent duplicate
+  charges across retries, concurrent requests, and out-of-band on-
+  chain events such as failed renewals or independent cancellations.
+
+## Examples
+
+~~~json
+{
+  "amount": "10000000",
+  "currency": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "periodUnit": "day",
+  "periodCount": "30",
+  "subscriptionExpires": "2026-07-14T12:00:00Z",
+  "recipient": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  "externalId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
+  "methodDetails": {
+    "programId": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "decimals": 6,
+    "puller": "5fKb5cF22cFybZB1H4hLDydFhwoQy9JzKzRWaSbMkB6h",
+    "network": "mainnet",
+    "feePayer": true,
+    "feePayerKey": "5fKb5cF22cFybZB1H4hLDydFhwoQy9JzKzRWaSbMkB6h"
+  }
+}
+~~~
+
+# Credential Requirements
 
 The credential in the `Authorization` header contains a base64url-
 encoded JSON object per {{I-D.httpauth-payment}}.
 
-## Credential Structure
+## Payload
+
+The credential `payload` for a Solana "subscription" intent contains
+the activation grant. For this profile only one credential action is
+defined: activation. Renewals are server-driven on-chain transactions
+and do not produce HTTP credentials. Cancellations are out-of-band
+on-chain operations and use no credential.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -621,447 +433,309 @@ encoded JSON object per {{I-D.httpauth-payment}}.
 | `payload` | object | REQUIRED | Solana-specific activation payload |
 | `source` | string | OPTIONAL | Subscriber identifier (e.g., `did:pkh:solana:...`) |
 
-For this profile, only one credential action is defined: activation.
-Renewals are server-driven on-chain transactions and do not produce
-HTTP credentials. Cancellations are out-of-band on-chain operations
-(see {{cancellation}}).
-
-## Activation Payload
-
-The activation payload represents the signed activation transaction.
-Two `type` values are supported:
+Subscriptions on Solana MUST use one of two activation-payload types.
+In pull mode (`type="transaction"`), the client signs the activation
+transaction and submits the serialized bytes; the server co-signs as
+fee payer if configured and broadcasts. In push mode
+(`type="signature"`), the client broadcasts the activation
+transaction itself and submits the confirmed transaction signature.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"transaction"` (pull mode) or `"signature"` (push mode) |
-| `transaction` | string | CONDITIONAL | Required when `type="transaction"`. Standard-base64 of the serialized, partially or fully signed activation transaction |
-| `signature` | string | CONDITIONAL | Required when `type="signature"`. Base58 of the on-chain transaction signature |
+| `type` | string | REQUIRED | `"transaction"` or `"signature"` |
+| `transaction` | string | CONDITIONAL | Standard-base64 of the signed activation transaction. REQUIRED when `type="transaction"` |
+| `signature` | string | CONDITIONAL | Base58 of the on-chain transaction signature. REQUIRED when `type="signature"` |
 
-The default pull-mode form mirrors the Solana charge profile: the
-client builds and signs the activation transaction, the server
-co-signs as fee payer (if `feePayer == true`) and broadcasts. The
-push-mode form is provided for clients that cannot delegate broadcast
-to the server; the client broadcasts directly and presents the
-confirmed signature.
+Servers MUST reject credentials where `type="signature"` is combined
+with `methodDetails.feePayer` set to `true`, because the server has
+no opportunity to co-sign a transaction the client has already
+broadcast.
 
-Each subscription credential MUST be usable only once per challenge.
-Servers MUST reject replayed credentials. The challenge `id` is
-HMAC-bound to the server's secret key and is the source of truth for
-single-use enforcement (mirroring {{I-D.httpauth-payment}}'s
-guidance).
+The signed activation transaction MUST:
 
-# Activation Transaction Composition
+- contain a `subscribe` instruction creating the
+  `SubscriptionDelegation` PDA from the on-chain `Plan` snapshot;
+- contain a `transfer_subscription` instruction collecting the first-
+  period charge atomically with the subscription creation;
+- contain an `initialize_subscription_authority` instruction prepended
+  only when the `(subscriber, mint)` authority does not yet exist
+  on-chain;
+- target the subscriptions program identified by
+  `methodDetails.programId` (or its canonical default);
+- use the SPL Token or Token-2022 program identified by
+  `methodDetails.tokenProgram` for all token-touching instructions;
+- pull funds from the subscriber's associated token account for
+  `methodDetails.mint`;
+- direct funds to the destination ATAs derived from
+  `plan.destinations`;
+- set the fee payer to `methodDetails.feePayerKey` when
+  `methodDetails.feePayer` is `true`, and to the subscriber otherwise;
+- contain no instructions other than those above plus optional
+  compute-budget and memo instructions.
 
-The activation transaction MUST contain the following instructions in
-this order, and SHOULD NOT contain any other instructions:
+The signed activation transaction MUST NOT contain SPL Token `Approve`
+or any other non-subscriptions-program instruction that could move the
+subscriber's tokens outside the per-period limit, and MUST NOT
+reference writable accounts that could redirect funds away from the
+plan destinations.
 
-1. (OPTIONAL) Compute-budget instructions
-   (`SetComputeUnitLimit`, `SetComputeUnitPrice`).
-2. (CONDITIONAL) `initialize_subscription_authority`, only if the
-   `SubscriptionAuthority` PDA for `(subscriber, mint)` does not yet
-   exist on-chain. Discriminator `0`.
-3. `subscribe`. Discriminator `11`. Signers: subscriber. Accounts:
-   plan PDA, subscription PDA, subscription authority PDA, payer (rent
-   sponsor), and the system program.
-4. `transfer_subscription`. Discriminator `10`. Signer: puller (the
-   server, included as additional signer in the activation tx).
-   Accounts: subscription PDA, plan PDA, subscription authority PDA,
-   payer ATA, destination ATA(s), mint, token program.
-5. (OPTIONAL) A memo instruction containing the canonical JSON of
-   `{"externalId": "..."}` if `externalId` was present in the
-   challenge.
+## Single-Use
 
-Servers MUST reject activation transactions that:
+Each "subscription" activation credential MUST be usable only once
+per challenge. Servers MUST reject replayed credentials.
 
-- contain instructions not in the list above;
-- contain the listed instructions in a different order;
-- omit `subscribe` or `transfer_subscription`;
-- target a program other than the pinned subscriptions program for
-  the subscription instructions, or a different token program than
-  `methodDetails.tokenProgram` for the token instructions;
-- specify a fee payer other than the subscriber when `feePayer` is
-  absent or `false`, or other than `methodDetails.feePayerKey` when
-  `feePayer` is `true`;
-- contain writable account references that could redirect value to an
-  unauthorized destination.
+A successfully activated subscription may be reused for later billing
+periods until:
 
-# Settlement Procedure
+- The subscriber cancels it on-chain;
+- The on-chain delegation is otherwise invalidated (e.g., closure of
+  the `SubscriptionAuthority`);
+- The `subscriptionExpires` timestamp, if present, is reached.
+
+# Subscription Lifecycle
 
 ## Activation
 
-1. Verify the credential's `challenge.id` is HMAC-bound to the
-   server's secret and has not been used before. Reject as
-   `invalid-challenge` otherwise.
-2. Verify the pinned fields (method, intent, realm, currency,
-   recipient, planId, mint, periodUnit, periodCount,
-   subscriptionExpires, methodDetails.programId,
-   methodDetails.tokenProgram, methodDetails.puller) of the echoed
-   challenge match this server's configured request, per
-   {{I-D.httpauth-payment}}.
-3. Decode the activation transaction per {{credential-schema}} and
-   validate its instruction shape per the rules in
-   {{activation-transaction-composition}}.
-4. If pull mode (`type="transaction"`): co-sign as fee payer if
-   `feePayer == true`, broadcast to the configured cluster, and await
-   confirmation.
-5. If push mode (`type="signature"`): fetch the transaction by
-   signature, verify it was confirmed on the expected cluster, and
-   validate its instruction shape as above.
-6. After confirmation, fetch the `SubscriptionDelegation` account and
-   verify:
-   - the PDA matches the expected derivation from `planId` and the
-     transaction's subscriber signer;
-   - `delegation.plan_pda == methodDetails.planId`;
-   - `delegation.mint == methodDetails.mint`;
-   - `delegation.amount_per_period == parse_u64(challenge.amount)`;
-   - `delegation.period_hours == map_period_to_hours(periodUnit,
-     periodCount)`;
-   - `delegation.amount_pulled_in_period == amount_per_period` (the
-     first-period charge was executed atomically).
-7. Compute `subscriptionId = base64url(SubscriptionDelegation_PDA
-   bytes, no padding)`.
-8. Persist server state per {{server-state-management}}.
-9. Return `200 OK` with the receipt defined in {{receipt-format}}.
+For `intent="subscription"`, activation and the first billing-period
+charge are a single atomic transaction:
+
+~~~
+   Client                        Server                          Solana
+      |                             |                             |
+      |  (1) Authorization:         |                             |
+      |      Payment <credential>   |                             |
+      |      (signed activation tx) |                             |
+      |-------------------------->  |                             |
+      |                             |                             |
+      |                             |  (2) Co-sign if feePayer,   |
+      |                             |      sendTransaction        |
+      |                             |-------------------------->  |
+      |                             |                             |
+      |                             |  (3) SubscriptionDelegation |
+      |                             |      created + first        |
+      |                             |      transfer executed      |
+      |                             |<--------------------------  |
+      |                             |                             |
+      |  (4) 200 OK                 |                             |
+      |      Payment-Receipt: ...   |                             |
+      |<--------------------------  |                             |
+      |                             |                             |
+~~~
+
+When the server receives a Solana "subscription" credential, it MUST:
+
+1. Verify the activation transaction matches the challenge: program
+   ID, token program, mint, puller, destinations, and per-period
+   amount as described in {{authorization-scope-verification}}.
+2. Verify the subscriber identity per {{source-verification}}.
+3. Co-sign the transaction as fee payer when `methodDetails.feePayer`
+   is `true`, then broadcast.
+4. Wait for confirmation and read the resulting on-chain state.
+5. Initialize durable subscription state for later renewals.
+6. Return `200 OK` with a `Payment-Receipt` for the first charge,
+   including a `subscriptionId` as defined in
+   {{subscription-identifier}}.
+
+Servers MUST treat the subscription as active only after the
+activation transaction settles successfully and the on-chain
+`SubscriptionDelegation` account reflects
+`amount_pulled_in_period == amount_per_period` for period 0.
+
+Servers MUST NOT treat activation as successful if the activation
+transaction settles at or after `subscriptionExpires`.
+
+### Source Verification {#source-verification}
+
+If a credential includes the optional `source` field, servers MUST
+NOT trust this value without verification.
+
+Servers MUST determine the payer identity from the activation
+transaction itself, by extracting the subscriber signer (the signer
+whose role corresponds to the `delegator` field of the resulting
+`SubscriptionDelegation`).
+
+If `source` is present, servers MUST verify that it uses the
+`did:pkh:solana:` method and that its address matches the subscriber
+signer extracted from the activation transaction.
+
+### Authorization Scope Verification {#authorization-scope-verification}
+
+When validating a Solana subscription credential, servers MUST verify
+that the activation transaction:
+
+- invokes only the subscriptions program identified by
+  `methodDetails.programId` for subscription instructions, and only
+  the token program identified by `methodDetails.tokenProgram` for
+  token instructions;
+- contains exactly one subscribe instruction and exactly one
+  first-period transfer instruction on the subscriptions program,
+  ordered with subscribe first;
+- conditionally contains one subscription-authority initialization
+  instruction, only if the `(subscriber, mint)` authority does not
+  yet exist on-chain;
+- contains no other subscriptions-program, system-program, or
+  token-program instructions; compute-budget and memo instructions
+  are permitted.
+
+After the activation transaction settles, servers MUST read the
+resulting `SubscriptionDelegation` account and assert that its
+snapshotted terms (plan, mint, amount per billing period, mapped
+per-billing-period interval) equal the corresponding challenge
+fields, and that the in-period counter equals the per-billing-period
+amount (i.e., the first-period charge was executed atomically with
+the subscription's creation).
+
+Servers MUST reject activation transactions that pull funds through
+broader scopes than those required above.
 
 ## Renewal
 
-Renewals are server-driven. The server SHOULD run a worker that, for
-each active subscription, checks whether the current billing period
-has been charged by reading the on-chain delegation. When
-`amount_pulled_in_period < amount_per_period` and the current
-timestamp is within the current billing period, the worker submits one
-`transfer_subscription` instruction.
+For each later billing period, the server MAY submit one
+`transfer_subscription` transaction using the registered subscription
+delegation to pull `amount` to the plan destinations.
 
-On a subsequent gated request from the subscriber:
+If the server grants access for a later billing period, it MUST
+ensure that the renewal charge for that period has been collected
+before, or atomically with, delivering the corresponding service.
 
-- if the on-chain delegation shows the current period has been
-  charged, the server responds `200 OK` with a renewal receipt
-  including `periodIndex >= 1`;
-- if the current period is unpaid (renewal not yet attempted, or
-  renewal failed), the server responds `402 Payment Required` with a
-  fresh subscription challenge.
+Servers MUST NOT submit more than one successful renewal charge for
+the same billing period.
 
-Servers MUST NOT collect more than one successful renewal per billing
-period for a given subscription. The on-chain program enforces this
-invariant; servers SHOULD also enforce it locally to avoid duplicate
-RPC submissions during retries.
+The on-chain `transfer_subscription` advances
+`current_period_start_ts` by whole multiples of the period length and
+resets `amount_pulled_in_period` to zero on each successful pull. If
+one or more billing periods elapse without a successful charge, a
+later transaction authorizes at most one charge in the then-current
+billing period. Servers MUST NOT treat missed billing periods as
+additional on-chain spending capacity.
 
-If one or more billing periods elapse with no successful charge, the
-on-chain program collapses to the current billing period and grants at
-most one charge against that period. Servers MUST NOT attempt to
-collect charges for the skipped periods.
+## Subscription Identifier {#subscription-identifier}
 
-## Cancellation {#cancellation}
+After successful activation, the server MUST return a
+`subscriptionId` in the `Payment-Receipt`. On Solana, the
+`subscriptionId` is the base64url {{RFC4648}} encoding without
+padding of the `SubscriptionDelegation` account address. The
+`subscriptionId` is stable across renewals: it is derived from the
+on-chain account, and remains valid for the lifetime of that account.
 
-Cancellation is out-of-band and on-chain. The subscriber submits
-`cancel_subscription` to the subscriptions program. The program sets
-`expires_at_ts` to the end of the currently-paid billing period if the
-plan is still valid and matches the delegation, or to the current
-timestamp if the plan has been invalidated.
+Servers MUST NOT include a `Payment-Receipt` header on error
+responses. On renewal, servers MUST return the same `subscriptionId`
+for the active subscription.
 
-Servers MUST observe cancellation by reading
-`delegation.expires_at_ts` (directly via RPC, via a websocket
-subscription, or via indexed `SubscriptionCancelledEvent` events). For
-gated requests received while
-`current_ts < delegation.expires_at_ts`, the server SHOULD continue to
-serve the resource using the receipt of the most recent paid period.
-For requests received at or after `expires_at_ts`, the server MUST
-return `402 Payment Required` with a fresh challenge.
+The receipt payload for a Solana subscription:
 
-Servers MAY additionally expose an application-level UX that submits
-`cancel_subscription` on behalf of the subscriber via a signed
-out-of-band message; that is an application concern outside the
-authorization wire contract.
+| Field | Type | Description |
+|-------|------|-------------|
+| `method` | string | `"solana"` |
+| `reference` | string | Base58 of the settlement transaction signature |
+| `status` | string | `"success"` |
+| `subscriptionId` | string | Base64url of the `SubscriptionDelegation` account address, no padding |
+| `periodIndex` | string | Decimal index of the billing period (`"0"` on activation) |
+| `periodStartTs` | string | {{RFC3339}} start of the current period |
+| `periodEndTs` | string | {{RFC3339}} end (exclusive) of the current period |
+| `expiresAt` | string | OPTIONAL. {{RFC3339}} effective subscription expiry |
+| `timestamp` | string | {{RFC3339}} settlement time |
+| `externalId` | string | Echoed from the challenge request (the on-chain plan address) |
 
-## Revocation and Rent Reclaim
+Clients MAY retain the `subscriptionId` as application data when
+referring to the active subscription in later interactions, but the
+`subscriptionId` is only a receipt identifier unless an application
+explicitly assigns it additional application-layer meaning.
 
-After a delegation's `expires_at_ts` has passed, any party named in
-the delegation's `header` (subscriber, or the rent sponsor) MAY submit
-`revoke_delegation` to close the PDA and reclaim the rent. Servers
-that paid rent during activation SHOULD run a janitor task that
-revokes expired delegations they sponsored.
+Servers MUST authenticate or otherwise authorize the client's use of
+the identified subscription before granting access or collecting a
+renewal charge. Possession or presentation of a `subscriptionId`
+alone is insufficient.
 
-`revoke_delegation` is not required for correctness: an expired
-delegation is non-pullable on-chain regardless of whether it has been
-closed.
+## Server Accounting and Idempotency
 
-# Receipt Format {#receipt-format}
+The billing anchor for a Solana subscription is the on-chain
+`current_period_start_ts` written by `subscribe` when the activation
+transaction settles. Servers MUST derive this anchor from chain
+settlement data rather than local wall-clock time.
 
-The server MUST return a `Payment-Receipt` header on successful
-activations and renewals per {{I-D.httpauth-payment}}.
+Billing periods are defined as:
 
-The receipt payload contains:
+- Period 0: `[anchor, anchor + mappedPeriodSeconds)`
+- Period 1: `[anchor + mappedPeriodSeconds, anchor + 2*mappedPeriodSeconds)`
+- Period N: `[anchor + N*mappedPeriodSeconds, anchor + (N+1)*mappedPeriodSeconds)`
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `method` | string | REQUIRED | `"solana"` |
-| `intent` | string | REQUIRED | `"subscription"` |
-| `status` | string | REQUIRED | `"success"` |
-| `reference` | string | REQUIRED | Base58 transaction signature of the settlement transaction (activation tx for `periodIndex=0`; renewal tx otherwise) |
-| `subscriptionId` | string | REQUIRED | Base64url of the `SubscriptionDelegation` PDA bytes, no padding |
-| `planId` | string | REQUIRED | Base58 of the `Plan` PDA |
-| `periodIndex` | string | REQUIRED | Decimal integer string. `"0"` on activation; `"N"` for the Nth renewal after activation |
-| `periodStartTs` | string | REQUIRED | {{RFC3339}} timestamp of the current period's start |
-| `periodEndTs` | string | REQUIRED | {{RFC3339}} timestamp of the current period's end (exclusive) |
-| `expiresAt` | string | OPTIONAL | {{RFC3339}} effective subscription expiry. When set, the minimum of `plan.end_ts` (if `!= 0`) and the credential's `subscriptionExpires` |
-| `timestamp` | string | REQUIRED | {{RFC3339}} settlement time |
-| `externalId` | string | OPTIONAL | Echo of the challenge `externalId` if present |
+`mappedPeriodSeconds` is `period_hours * 3600` for the on-chain
+delegation.
 
-The `subscriptionId` value is stable across renewals for a given
-subscription: it is derived from the immutable
-`SubscriptionDelegation` PDA and does not change until the delegation
-is closed via `revoke_delegation`.
+Servers MUST maintain durable subscription state sufficient to
+enforce per-period charging rules across retries and concurrent
+requests. At minimum, servers MUST track:
 
-# Distribution Splits {#distribution-splits}
+- subscription identifier (base64url of the SubscriptionDelegation PDA)
+- plan identifier (base58 of the Plan PDA)
+- billing anchor
+- last successfully charged billing-period index
+- any in-flight billing-period index and renewal transaction signature
+- subscription expiry
+- cancellation status (derived from `delegation.expires_at_ts != 0`)
 
-The on-chain split between recipients is governed by
-`plan.destinations`, not by the challenge. The `methodDetails.splits`
-field, when present, is advisory: it allows the server to declare the
-expected distribution so the client can display it to the subscriber
-before signing. Clients SHOULD verify that the on-chain
-`plan.destinations` matches the advisory `splits` and refuse to sign
-if they diverge.
+When granting access in a later billing period, servers MUST:
 
-The subscriptions program emits one `SubscriptionTransferEvent` per
-destination when more than one is configured, allowing receipts to be
-attributed end-to-end. This specification does not define a wire
-representation for per-destination accounting; it is an application
-concern.
+- Verify the subscription has not expired or been cancelled by reading
+  `delegation.expires_at_ts` on-chain.
+- Determine the current billing-period index from the anchor and the
+  mapped period in seconds.
+- Verify that the current billing period has not already been charged
+  by reading `delegation.amount_pulled_in_period`.
+- Atomically record any renewal attempt for the current billing
+  period as in-flight before submitting `transfer_subscription`.
+- Mark the current billing period as charged only after the renewal
+  transaction settles successfully.
+- Grant access only after, or atomically with, durably recording the
+  successful renewal charge.
 
-# Authorized Signer
-
-For this profile, the activation transaction is signed by the
-subscriber's funding key. There is no concept of a delegated session
-signer (as in the session intent's `authorizedSigner`).
-
-A future revision of this specification MAY introduce a delegated
-signer for activation (for example, a `secp256r1` passkey credential
-verified by Solana's native verification program). Implementations
-MUST treat the funding key as the only authorized activation signer
-in this revision.
-
-# Fee Sponsorship
-
-When `methodDetails.feePayer` is `true`:
-
-- The challenge MUST include `methodDetails.feePayerKey`.
-- The client MUST build the activation transaction with
-  `feePayerKey` as the fee payer and MUST sign as subscriber (partial
-  signature).
-- The server MUST co-sign with the fee-payer key and broadcast. The
-  server MUST verify the transaction does not include unrelated
-  writable accounts or instructions that could redirect funds.
-
-Renewal transactions are submitted by the server and paid by the
-server's puller key by default; there is no client-side fee
-involvement after activation.
-
-# Server State Management {#server-state-management}
-
-Servers MUST maintain durable per-subscription state sufficient to:
-
-1. Detect that the current billing period has been charged before
-   serving content.
-2. Submit at most one successful renewal per period.
-3. Honor cancellation effective at `delegation.expires_at_ts`.
-4. Service idempotent retries during activation without producing
-   duplicate on-chain transactions.
-
-The minimum required state per subscription:
-
-| Field | Description |
-|-------|-------------|
-| `subscriptionId` | base64url of the on-chain `SubscriptionDelegation` PDA |
-| `planId` | base58 of the `Plan` PDA |
-| `subscriber` | base58 of the subscriber pubkey |
-| `mint` | base58 of the SPL token mint |
-| `billingAnchorTs` | initial `current_period_start_ts` from the on-chain delegation |
-| `periodLengthSeconds` | `period_hours * 3600` |
-| `lastChargedPeriodIndex` | index of the most recently charged period, derived from the on-chain state |
-| `expiresAtTs` | minimum of `plan.end_ts` (if `!= 0`) and the credential's `subscriptionExpires` (if present) |
-| `cancelled` | boolean derived from `delegation.expires_at_ts != 0` |
-| `activationTxSignature` | for audit |
-
-Server state SHOULD be treated as a cache over on-chain state; the
-on-chain delegation is the source of truth. Servers MUST re-read the
-on-chain delegation when:
-
-- a gated request arrives and the local cache indicates the current
-  period is unpaid;
-- a cancellation is detected by webhook or event subscription;
-- the local cache is older than a configurable freshness bound
-  (RECOMMENDED: one billing period or 1 hour, whichever is shorter).
-
-For idempotent retries, clients SHOULD include an `Idempotency-Key`
+For non-idempotent requests, clients SHOULD send an `Idempotency-Key`
 header per {{I-D.ietf-httpapi-idempotency-key-header}}. Servers MUST
-NOT collect the same activation charge twice for a duplicate
-idempotent request; the on-chain `subscribe` instruction additionally
-fails with `AlreadySubscribed` if a delegation already exists, so
-duplicate activations are constrained by the chain.
+NOT charge the same activation or billing period more than once for
+duplicate idempotent requests.
 
-# Error Responses
+## Cancellation
 
-Servers MUST use the problem types defined in {{I-D.httpauth-payment}}
-and {{RFC9457}}:
+Subscribers can revoke a Solana subscription at any time on-chain by
+submitting `cancel_subscription` against their
+`SubscriptionDelegation`. The program sets `delegation.expires_at_ts`
+to the end of the currently-paid billing period, after which
+`transfer_subscription` MUST fail with `SubscriptionCancelled`.
 
-| Condition | Problem Type | HTTP Status |
-|-----------|--------------|-------------|
-| Credential is malformed (missing fields, invalid base64, etc.) | `malformed-credential` | 402 |
-| Challenge has expired, has been used, or has invalid signature | `invalid-challenge` | 402 |
-| Activation transaction is well-formed but fails on-chain verification (wrong program, wrong amount, wrong mint, terms mismatch) | `verification-failed` | 402 |
-| Subscription is canceled or expired | `verification-failed` | 402 |
-| Current billing period is unpaid (renewal not yet collected) | `verification-failed` | 402 |
+Subscribers can additionally revoke every subscription tied to a
+`(subscriber, mint)` by closing and reopening their
+`SubscriptionAuthority`, which invalidates the delegation snapshot
+recorded in each subscription created against that authority.
 
-All 402 responses MUST include a fresh `WWW-Authenticate` challenge.
+Servers MUST NOT submit renewal charges for billing periods after
+cancellation takes effect. Servers SHOULD handle revocation
+gracefully by returning a fresh subscription challenge once the
+on-chain delegation has expired.
 
-# Security Considerations
+## Error Responses
 
-## Transport Security
+When a Solana subscription cannot be used to fulfill a request, the
+server MUST return an appropriate HTTP status code:
 
-All communication MUST use TLS 1.2 or higher.
+| Condition | Status Code | Behavior |
+|-----------|-------------|----------|
+| `subscriptionExpires` reached | 402 Payment Required | Issue new challenge |
+| On-chain cancellation effective or `SubscriptionAuthority` closed | 402 Payment Required | Issue new challenge |
+| Current billing period unpaid or `transfer_subscription` failed | 402 Payment Required | Issue new challenge |
+| Activation transaction failed verification | 402 Payment Required | Issue new challenge |
+| Invalid credential | 402 Payment Required | Issue new challenge |
 
-## Plan Spoofing
+For all 402 responses, the server MUST include a `WWW-Authenticate`
+header with a fresh challenge. Clients receiving a 402 after a
+previously valid subscription SHOULD treat the subscription as no
+longer usable and initiate a new subscription flow.
 
-Clients MUST re-derive the `Plan` PDA from `methodDetails.planId` and
-verify on-chain that the plan is owned by the program identified by
-`methodDetails.programId`. A malicious server could supply a `planId`
-pointing to a different program or to an account with different terms.
-
-Clients MUST verify that the on-chain plan's `amount_per_period`,
-`mint`, and `period_hours` match the challenge's `amount`,
-`methodDetails.mint`, and the mapping defined in {{period-mapping}}.
-Discrepancies MUST be treated as a malformed challenge.
-
-## Subscription Authority Kill Switch
-
-The `SubscriptionAuthority` PDA is per-(payer, mint) and shared across
-all subscriptions on that mint. Closing the authority via
-`close_subscription_authority` invalidates every delegation that
-references it through the `init_id` snapshot, returning
-`StaleSubscriptionAuthority` on subsequent pulls. Applications SHOULD
-expose this only as an explicit "revoke all subscriptions for token X"
-UX, never as a side effect of routine operations.
-
-Servers MUST NOT pull rent from the subscriber's authority account
-and MUST NOT rely on its long-term existence beyond the lifetime of
-their own delegations; a legitimate kill-switch event terminates all
-subscriptions, including their own.
-
-## Plan Immutability
-
-The on-chain `Plan` core terms are immutable (mint, amount_per_period,
-period_hours, destinations). Merchants MUST NOT attempt to mutate
-terms by re-creating the plan under the same address; clients MUST
-detect re-creation by checking that the `Plan` exists at the expected
-address and was not closed between subscription activations.
-
-Plans MAY transition to `Sunset` status; servers MUST stop issuing new
-subscription challenges against sunset plans, while honoring existing
-subscriptions until `end_ts`.
-
-## Account Ownership and CPI Validation
-
-Servers and clients MUST validate the expected program ownership of
-every account they read:
-
-- the `Plan` PDA: owned by the subscriptions program
-  (`methodDetails.programId`);
-- the `SubscriptionDelegation` PDA: owned by the subscriptions
-  program;
-- the `SubscriptionAuthority` PDA: owned by the subscriptions
-  program;
-- the subscriber and destination token accounts: owned by
-  `methodDetails.tokenProgram`;
-- the mint: owned by `methodDetails.tokenProgram`.
-
-The subscriptions program validates every external program account
-referenced during a CPI (system program, SPL Token / Token-2022,
-associated-token program) against the expected canonical IDs.
-Implementations MUST NOT allow user-controlled program accounts to
-influence the activation, transfer, or revocation paths.
-
-## Token-2022 Extension Policy
-
-For Token-2022 mints, the mint allowlist defined in this section is
-the only set of extensions permitted under this profile. The program
-re-validates the extension set on every token-touching instruction;
-unlisted or malformed extensions cause the program to fail closed.
-
-Implementations MUST NOT resolve transfer-hook extra accounts, route
-through fee withholding, or honor pause flags. A subscription created
-against a mint that later acquires a disallowed extension will fail
-all subsequent pulls; servers SHOULD detect this and surface it to
-subscribers as a forced cancellation.
-
-## Recurring Charge Awareness
-
-Clients MUST clearly communicate that activation authorizes future
-recurring charges, in compliance with the shared spec's requirement.
-Clients SHOULD display the per-period amount, period length, intended
-recipient, and (when present) the subscription expiry timestamp before
-prompting the subscriber to sign.
-
-## Duplicate Charge Prevention
-
-The on-chain per-period accounting (`amount_pulled_in_period`)
-prevents the server from over-charging within a billing period.
-Servers MUST additionally implement durable local state to prevent
-duplicate renewal submissions caused by retries, parallel workers, or
-crashes between RPC `sendTransaction` and confirmation.
-
-Servers SHOULD use a per-subscription lease (e.g., a database row
-lock with a short TTL) when submitting a renewal, releasing the lease
-only after confirming the on-chain state has advanced.
-
-## Cancellation Visibility
-
-Servers MUST read on-chain state, not just local state, when serving
-content for a subscription that may have been cancelled out-of-band.
-Servers SHOULD subscribe to `SubscriptionCancelledEvent` via a
-websocket-backed indexer and update local state promptly.
-
-## Splits Canonicalization
-
-When `methodDetails.splits` is present, the canonical preimage rules
-of the Solana session specification apply for the purpose of computing
-any advisory hash. The on-chain distribution is governed by
-`plan.destinations`; servers MUST NOT rely on the advisory splits as
-authority for fund routing.
-
-## Clock Skew
-
-The on-chain `current_period_start_ts` is set from `Clock` at
-activation time. Servers MUST use chain-derived timestamps when
-computing period boundaries; local wall-clock times are advisory.
-Servers MUST allow configurable clock-skew tolerance (RECOMMENDED:
-30 seconds) when interpreting `subscriptionExpires` against the
-challenge `expires`.
-
-## Caching
-
-Responses to subscription challenges (402 Payment Required) MUST
-include `Cache-Control: no-store` to prevent intermediaries from
-caching the challenge.
-
-Responses containing `Payment-Receipt` headers MUST include
-`Cache-Control: private` to prevent shared caches from storing
-receipts.
-
-# IANA Considerations
-
-The `subscription` payment intent is registered by
-{{I-D.payment-intent-subscription}}. This document does not register
-it again. The `solana` payment method is registered by the companion
-Solana charge specification; this document adds `subscription` to the
-set of intents that method supports.
-
---- back
-
-# Examples
+# Illustrative Lifecycle Examples
 
 This section is non-normative.
 
-## Activation
+## Daily Billing Example
 
 **Challenge:**
 
@@ -1086,14 +760,14 @@ The `request` decodes to:
   "periodCount": "30",
   "subscriptionExpires": "2026-07-14T12:00:00Z",
   "recipient": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  "externalId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
   "methodDetails": {
     "programId": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
-    "planId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
     "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
     "decimals": 6,
     "puller": "5fKb5cF22cFybZB1H4hLDydFhwoQy9JzKzRWaSbMkB6h",
-    "network": "mainnet-beta",
+    "network": "mainnet",
     "feePayer": true,
     "feePayerKey": "5fKb5cF22cFybZB1H4hLDydFhwoQy9JzKzRWaSbMkB6h"
   }
@@ -1156,7 +830,7 @@ If activation settles at `2026-01-15T12:03:10Z`, the
   "status": "success",
   "reference": "5J8...base58 transaction signature...Kt",
   "subscriptionId": "BXQGmO5VwTrl5RfFr6Y8XQZ4nPj9QqMOiKkRn3pZ4ZE",
-  "planId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
+  "externalId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
   "periodIndex": "0",
   "periodStartTs": "2026-01-15T12:03:10Z",
   "periodEndTs": "2026-02-14T12:03:10Z",
@@ -1165,81 +839,46 @@ If activation settles at `2026-01-15T12:03:10Z`, the
 }
 ~~~
 
-The server records:
-
-- `subscriptionId = "BXQGmO5VwTrl5RfFr6Y8XQZ4nPj9QqMOiKkRn3pZ4ZE"`
-- `planId = "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT"`
-- `billingAnchorTs = 2026-01-15T12:03:10Z`
-- `periodLengthSeconds = 2592000`
-- `lastChargedPeriodIndex = 0`
-- `expiresAtTs = 2026-07-14T12:00:00Z`
-
-## Renewal Across Multiple Periods
-
-Using the activation timestamp above, the billing periods are:
+The resulting billing periods are:
 
 - Period 0: `[2026-01-15T12:03:10Z, 2026-02-14T12:03:10Z)`
 - Period 1: `[2026-02-14T12:03:10Z, 2026-03-16T12:03:10Z)`
 - Period 2: `[2026-03-16T12:03:10Z, 2026-04-15T12:03:10Z)`
 
-Requests during Period 0 succeed without further on-chain activity.
-When Period 1 begins, the server's renewal worker submits one
+Requests during Period 0 do not require another renewal charge. When
+Period 1 begins, the server's renewal worker submits one
 `transfer_subscription` instruction to the subscriptions program. On
 success, the on-chain delegation advances to
 `current_period_start_ts = 2026-02-14T12:03:10Z` and
-`amount_pulled_in_period = 10000000`.
+`amount_pulled_in_period = 10000000`. After that renewal succeeds,
+additional requests during Period 1 do not permit another charge for
+Period 1.
 
-A subsequent gated request at, say, `2026-02-14T12:05:42Z` returns:
-
-~~~json
-{
-  "method": "solana",
-  "intent": "subscription",
-  "status": "success",
-  "reference": "9Ka...base58 renewal tx signature...rL",
-  "subscriptionId": "BXQGmO5VwTrl5RfFr6Y8XQZ4nPj9QqMOiKkRn3pZ4ZE",
-  "planId": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
-  "periodIndex": "1",
-  "periodStartTs": "2026-02-14T12:03:10Z",
-  "periodEndTs": "2026-03-16T12:03:10Z",
-  "expiresAt": "2026-07-14T12:00:00Z",
-  "timestamp": "2026-02-14T12:05:42Z"
-}
-~~~
-
-## Cancellation At Period End
+## Cancellation Example
 
 Suppose Period 2 has been charged and the subscriber cancels by
 submitting `cancel_subscription` on-chain at `2026-03-20T09:00:00Z`.
 The program sets `delegation.expires_at_ts = 2026-04-15T12:03:10Z`
 (end of Period 2).
 
-Requests before `2026-04-15T12:03:10Z` continue to succeed. The
+Cancellation takes effect at the end of the current paid billing
+period. The server continues honoring access through that time. The
 server's renewal worker MUST NOT submit a Period 3 charge: the
 on-chain `transfer_subscription` would fail with
 `SubscriptionCancelled`.
 
-Requests at or after `2026-04-15T12:03:10Z` receive:
+Requests at or after `2026-04-15T12:03:10Z` receive
+`402 Payment Required` with a fresh challenge.
 
-~~~http
-HTTP/1.1 402 Payment Required
-Cache-Control: no-store
-WWW-Authenticate: Payment id="n3xtP3ri0d",
-  realm="api.example.com",
-  method="solana",
-  intent="subscription",
-  request="<base64url-encoded JSON below>"
-~~~
-
-## Failed Renewal and Lapse
+## Failed Renewal Example
 
 If the subscriber's token balance is insufficient when the server
 attempts a Period 3 renewal, the on-chain transaction fails. The
-server records the failure but does not retry continuously; it returns
-`402 Payment Required` on subsequent gated requests.
+server records the failure but does not retry continuously; it
+returns `402 Payment Required` on subsequent gated requests.
 
-If a later retry within Period 3 succeeds, the server may grant access
-for Period 3 and update its local state.
+If a later retry within Period 3 succeeds, the server may grant
+access for Period 3 and update its local state.
 
 If Period 4 begins before any successful Period 3 charge, the next
 successful `transfer_subscription` collapses to Period 4 (the program
@@ -1247,7 +886,7 @@ advances `current_period_start_ts` to Period 4's start and resets
 `amount_pulled_in_period = 0`). The skipped Period 3 charge does not
 become additional on-chain spending authority.
 
-## Natural Expiry
+## Expiry Example
 
 When `subscriptionExpires = 2026-07-14T12:00:00Z` is reached, the
 server stops submitting renewal transactions. A subsequent
@@ -1256,9 +895,162 @@ itself does not enforce `subscriptionExpires`; it is a server-side
 contract derived from the credential), so the server MUST honor the
 expiry by ceasing renewal submissions and serving fresh challenges.
 
+Requests after that time receive `402 Payment Required` with a fresh
+challenge.
+
 Servers SHOULD additionally close the delegation via
 `revoke_delegation` once the grace period has elapsed and reclaim
 their rent if they sponsored activation.
+
+# Security Considerations
+
+## Recurring Charge Awareness
+
+Clients MUST clearly communicate that a Solana subscription
+authorizes future recurring on-chain transfers without requiring a
+new user action for each billing period. Wallets and client UIs
+SHOULD display the per-period amount, the period length, and the
+`subscriptionExpires` value (when present) at activation time.
+
+## Amount and Period Verification
+
+Clients MUST parse and verify the `request` payload before signing:
+
+1. Verify `amount` is reasonable for the service
+2. Verify `currency` is the expected mint
+3. Verify `periodUnit` and `periodCount` match expectations
+4. Verify `recipient` is controlled by the expected party
+5. Verify `subscriptionExpires` is acceptable when present
+6. Verify the on-chain `Plan` referenced by `externalId` carries
+   matching mint, per-period amount, and per-billing-period interval,
+   and lists the server's puller among its authorized pullers
+
+Clients MUST NOT sign an activation transaction whose on-chain `Plan`
+does not match the challenge. Clients MUST NOT rely on the
+`description` field for payment verification.
+
+## Duplicate Charge Prevention
+
+On-chain per-period accounting prevents overspending within a billing
+period, but it does not by itself make HTTP service delivery
+idempotent. Servers MUST implement durable local state to prevent
+duplicate activation and renewal charges caused by retries, parallel
+requests, or races between charging and service delivery.
+
+Servers SHOULD use a per-subscription lease (e.g., a database row
+lock with a short TTL) when submitting a renewal, releasing the lease
+only after the on-chain state has advanced.
+
+## Server Accountability
+
+Servers operating Solana subscriptions are responsible for:
+
+- Secure storage of subscription state and any sponsoring fee-payer
+  keys;
+- Not charging more than once per billing period;
+- Honoring on-chain cancellation and revocation promptly;
+- Providing transaction signatures and billing records to payers on
+  request.
+
+## Caching
+
+Responses to subscription challenges (402 Payment Required) MUST
+include `Cache-Control: no-store` to prevent sensitive payment data
+from being cached by intermediaries.
+
+Responses containing `Payment-Receipt` headers MUST include
+`Cache-Control: private` to prevent shared caches from storing
+payment receipts.
+
+## Destination Scoping
+
+Solana subscription delegations MUST be bound to the `recipient` (and
+any additional destinations) named by the on-chain `Plan`. Servers
+MUST reject credentials whose activation transaction routes value to
+any other recipient.
+
+## Plan Scope Minimization
+
+Subscription `Plan` accounts SHOULD use the narrowest destination set
+needed to fulfill the recurring charge. Implementations SHOULD avoid
+publishing a plan with more destinations than necessary, since the
+on-chain split applies to every pull.
+
+## Subscription Authority Isolation
+
+The `SubscriptionAuthority` is shared across every subscription the
+same payer holds for the same mint. Closing the authority
+invalidates every delegation created against it, terminating all
+subscriptions tied to that authority simultaneously.
+
+Servers MUST NOT rely on long-term existence of a particular
+authority instance beyond the lifetime of their own delegations.
+Applications SHOULD expose authority closure only as an explicit
+"revoke all subscriptions for this token" affordance, never as a side
+effect of routine operations.
+
+## Token-2022 Extension Policy {#token-extension-policy}
+
+Implementations MUST enforce a closed allow-list of permitted
+Token-2022 extensions at activation and re-validate it on every
+token-touching instruction. Extension presence alone is disqualifying;
+unlisted, unknown, or malformed extensions MUST be rejected before
+any token movement.
+
+The RECOMMENDED mint allow-list:
+
+- `MetadataPointer`
+- `TokenMetadata`
+- `GroupPointer`
+- `TokenGroup`
+- `GroupMemberPointer`
+- `TokenGroupMember`
+
+The RECOMMENDED token-account allow-list:
+
+- `ImmutableOwner`
+
+All other extensions MUST be rejected:
+
+| Extension | Reason |
+|-----------|--------|
+| `NonTransferable` | No transfer from the subscriber ATA can succeed |
+| `PermanentDelegate` | Delegate can move funds outside the per-period limit |
+| `DefaultAccountState` | Destination ATAs may be born non-`Initialized` |
+| `ConfidentialTransferMint` | Subscriptions program does not produce confidential-transfer proofs |
+| `TransferFeeConfig` | Withheld fees desync the on-chain accounting from settled amounts |
+| `TransferHook` | Hook program can revert any transfer |
+| `InterestBearing` | Visible amount changes over time |
+| `ScaledUiAmountConfig` | Display-vs-raw divergence breaks exact accounting |
+| `Pausable` | Mint-level pause can block scheduled pulls |
+| `MintCloseAuthority` | Mint identity can be recreated while delegations reference it |
+
+Implementations MUST NOT resolve transfer-hook extra accounts, route
+through fee withholding, or honor pause flags.
+
+## Account Ownership and Program-ID Validation
+
+Before deserializing or mutating any account, implementations MUST
+validate the expected program owner for:
+
+- the `Plan`, `SubscriptionDelegation`, and `SubscriptionAuthority`
+  PDAs (owned by the subscriptions program);
+- the subscriber and destination token accounts (owned by
+  `methodDetails.tokenProgram`);
+- the mint (owned by `methodDetails.tokenProgram`).
+
+Implementations MUST NOT allow user-controlled program accounts to
+influence the activation, transfer, or revocation paths.
+
+# IANA Considerations
+
+## Payment Intent Registration
+
+The `subscription` payment intent is registered by
+{{I-D.payment-intent-subscription}}. This document does not register
+it again.
+
+--- back
 
 # Acknowledgements
 
