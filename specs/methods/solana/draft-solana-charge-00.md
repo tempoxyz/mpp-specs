@@ -384,6 +384,15 @@ splits
   - `memo` (OPTIONAL): Human-readable label for this
     split (e.g., "platform fee", "referral"). MUST NOT
     exceed 566 bytes (Solana Memo Program limit).
+  - `ataCreationRequired` (OPTIONAL): Boolean. Defaults
+    to `false`. When `true`, the client MUST include an
+    idempotent Associated Token Account creation instruction
+    for this split recipient's ATA before the split transfer.
+    This field MUST NOT be `true` unless `currency` is an
+    SPL token mint address. In fee-sponsored pull mode
+    (`feePayer: true`), this field is the only authorization
+    for the server fee payer to fund split-recipient ATA
+    creation. See {{split-recipient-ata-creation}}.
 
   When present, the client MUST include a transfer
   instruction for each split in addition to the primary
@@ -492,6 +501,39 @@ transaction fees.
 This requests a total payment of 1.05 USDC. The platform
 receives 0.05 USDC and the primary recipient (seller)
 receives 1.00 USDC.
+
+### Split Recipient ATA Creation Example
+
+~~~json
+{
+  "amount": "1000000",
+  "currency": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "recipient": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "description": "Marketplace purchase with bridge settlement",
+  "methodDetails": {
+    "network": "mainnet",
+    "decimals": 6,
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "feePayer": true,
+    "feePayerKey": "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
+    "splits": [
+      {
+        "recipient": "3pF8Kg2aHbNvJkLMwEqR7YtDxZ5sGhJn4UV6mWcXrT9A",
+        "amount": "990000",
+        "memo": "bridge deposit",
+        "ataCreationRequired": true
+      }
+    ]
+  }
+}
+~~~
+
+This requests a total payment of 1 USDC. The bridge deposit
+split receives 0.99 USDC and the primary recipient receives
+0.01 USDC. Because the split sets `ataCreationRequired: true`,
+the fee payer authorizes funding the split recipient's ATA if
+it does not already exist. The top-level recipient is not
+covered by this authorization.
 
 # Credential Schema
 
@@ -667,6 +709,53 @@ When acting as fee payer, servers:
   Clients MAY use either `type="transaction"` or
   `type="signature"` credentials.
 
+## Split Recipient ATA Creation {#split-recipient-ata-creation}
+
+ATA creation is permitted only as setup for payment
+recipients. It does not authorize the creation of token
+accounts for unrelated owners. The challenge expresses a
+required split-recipient ATA setup on the split entry itself
+with `ataCreationRequired: true`.
+
+Every ATA creation instruction in an SPL token payment
+transaction MUST satisfy all of the following:
+
+- The instruction MUST be the Associated Token Program's
+  idempotent create instruction.
+- The instruction owner MUST be a recipient listed in
+  `splits`, subject to the fee payer restrictions below.
+- The instruction mint MUST be the challenge `currency`.
+- The instruction token program MUST be the challenge
+  `tokenProgram`. If `tokenProgram` is omitted, the token
+  program resolved from the mint account is used.
+- The ATA address MUST be the canonical Associated Token
+  Account PDA for the owner, mint, and token program.
+- The instruction payer MUST be the transaction fee payer.
+
+When a split sets `ataCreationRequired: true`:
+
+- The challenge `currency` MUST be an SPL token mint address.
+- The client MUST include an ATA creation instruction for that
+  split recipient before the split transfer.
+- The ATA creation instruction does not create an additional
+  payment recipient. The client MUST still include the split's
+  `transferChecked` payment instruction.
+
+In fee-sponsored pull mode (`feePayer: true`), the server fee
+payer only authorizes ATA creation for split recipients whose
+split entry sets `ataCreationRequired: true`. Clients MUST NOT
+include fee-payer-funded ATA creation instructions for the
+top-level `recipient`, unmarked split recipients, or arbitrary
+owners. If the top-level recipient's ATA does not exist, the
+server MUST NOT issue a challenge that requires creating it.
+
+When the client is the transaction fee payer (`feePayer` is
+`false` or omitted), clients MAY include ATA creation
+instructions only for split recipients, and MUST include one
+for each split whose entry sets `ataCreationRequired: true`.
+Clients MUST NOT include ATA creation instructions for the
+top-level `recipient` or any other owner.
+
 # Verification Procedure {#verification}
 
 Upon receiving a request with a credential, the server MUST:
@@ -703,6 +792,12 @@ For credentials with `type="transaction"`:
    - the transfer authority is signed by the client;
    - the transaction contains only expected transfer,
      ATA-creation, memo, and compute-budget instructions;
+   - when `feePayer` is `true`, ATA-creation instructions
+     funded by the server fee payer are limited to split
+     recipients whose split entry sets `ataCreationRequired`
+     to `true`, as described in {{split-recipient-ata-creation}};
+   - when `feePayer` is `false` or omitted, ATA-creation
+     instructions are limited to split recipients;
    - the payment semantics match the challenge request,
      as described in {{sol-verification}} or
      {{spl-verification}}.
@@ -830,6 +925,13 @@ not `"sol"`), the server MUST:
 
 If any required `transferChecked` instruction is missing,
 the server MUST reject the credential.
+
+Split recipient ATA creation does not alter SPL transfer
+verification. The selected challenge request defines the full
+set of required payment legs. A `transferChecked` instruction
+to an ATA created by the transaction satisfies a required
+payment leg only if that ATA owner appears in `splits` for the
+selected challenge.
 
 ## Replay Protection {#replay-protection}
 
@@ -964,19 +1066,33 @@ System Program `transfer` instruction with:
 
 The client MUST construct a transaction containing:
 
-1. An idempotent Associated Token Account creation
-   instruction for the recipient's ATA, ensuring
-   payment succeeds even if the recipient has never
-   held the token. The payer covers the rent-exempt
-   minimum (~0.002 SOL) if the account does not exist.
+1. Zero or more idempotent Associated Token Account creation
+   instructions permitted by {{split-recipient-ata-creation}}:
+   - When `feePayer` is `true`, the client MUST include an
+     idempotent ATA creation instruction for each split
+     recipient whose split entry sets `ataCreationRequired` to
+     `true`, and MUST NOT include ATA creation instructions
+     for the top-level `recipient`, unmarked split recipients,
+     or arbitrary owners.
+   - When `feePayer` is `false` or omitted, the client MAY
+     include idempotent ATA creation instructions only for split
+     recipients, and MUST include one for each split whose entry
+     sets `ataCreationRequired` to `true`. The client MUST NOT
+     include ATA creation instructions for the top-level
+     `recipient`.
+
+   The transaction fee payer covers the rent-exempt minimum
+   (~0.002 SOL) if the account does not exist.
 
 2. A `transferChecked` instruction on the appropriate
-   token program with:
+   token program for the primary payment, and one additional
+   `transferChecked` instruction for each split. Each transfer
+   uses:
    - `source`: the client's associated token account
    - `mint`: the `currency` field
-   - `destination`: the recipient's derived ATA
+   - `destination`: the payment recipient's derived ATA
    - `authority`: the client's signing account
-   - `amount`: the `amount` from the challenge
+   - `amount`: the primary remainder or split amount
    - `decimals`: the `decimals` from `methodDetails`
 
 ### Fee Payer Configuration
@@ -1194,8 +1310,13 @@ ATA Rent Drain
   The recipient can close the ATA to reclaim rent,
   then the next payment re-creates it at the fee
   payer's expense. Servers SHOULD verify the
-  recipient's ATA exists before co-signing, or factor
-  rent cost into the payment amount via `splits`.
+  top-level recipient's ATA exists before issuing a
+  challenge, because top-level recipient ATA creation is not
+  allowed by this specification. For split recipients,
+  servers that set `ataCreationRequired: true` are explicitly
+  accepting rent risk for those split recipient ATAs and SHOULD
+  apply stricter rate limits, authentication, and cost-recovery
+  policy.
 
 Fee Payer Balance Exhaustion
 : Servers MUST monitor fee payer balance and reject
