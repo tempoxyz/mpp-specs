@@ -13,6 +13,10 @@ author:
     ins: L. Galabru
     email: ludo.galabru@solana.org
     org: Solana Foundation
+  - name: Jo D.
+    ins: Jo D.
+    email: jo.desormeaux@solana.org
+    org: Solana Foundation
 
 normative:
   RFC2119:
@@ -70,7 +74,7 @@ informative:
     date: 2023
   SUBSCRIPTIONS-PROGRAM:
     title: "Subscriptions Solana Program"
-    target: https://github.com/solana-foundation/solana-program-subscriptions
+    target: https://github.com/solana-program/subscriptions
     author:
       - org: Solana Foundation
     date: 2026
@@ -152,9 +156,12 @@ Subscriptions Program
   {{SUBSCRIPTIONS-PROGRAM}}.
 
 Plan
-: An immutable on-chain PDA published by the merchant that defines a
-  subscription's terms: token mint, amount per billing period, period
-  length, allowed pullers, and recipient destinations. Derived from
+: An on-chain PDA published by the merchant that defines
+  subscription terms and lifecycle controls. Core billing terms --
+  token mint, amount per billing period, period length, creation
+  timestamp, and recipient destinations -- are immutable, while
+  status, end timestamp, allowed pullers, and metadata URI are mutable
+  until the plan is sunset. Derived from
   `["plan", owner, plan_id]`.
 
 Subscription Delegation
@@ -163,10 +170,10 @@ Subscription Delegation
   Derived from `["subscription", plan_pda, subscriber]`.
 
 Subscription Authority
-: A per-(payer, mint) on-chain PDA that holds the SPL Token delegate
-  authority over the payer's associated token account. The
-  subscriptions program signs transfers as this PDA. Derived from
-  `["SubscriptionAuthority", subscriber, mint]`.
+: A per-(subscriber, mint) on-chain PDA that holds the SPL Token
+  delegate authority over the associated token account for that
+  subscriber. The subscriptions program signs transfers as this PDA.
+  Derived from `["SubscriptionAuthority", subscriber, mint]`.
 
 # Intent Semantics
 
@@ -196,12 +203,12 @@ referenced by this specification:
   account.
 
 The program enforces per-period spending limits, recipient scoping,
-and missed-period non-accumulation: renewals advance the current
-billing-period start by whole multiples of the period length and
-reset the in-period counter to zero, so a successful pull authorizes
-at most one charge for the then-current billing period regardless of
-how many periods have elapsed. Cancellation is performed on-chain and
-takes effect at the end of the currently-paid billing period.
+and missed-period non-accumulation. When a transfer occurs after one
+or more billing periods have elapsed, renewals advance the current
+billing-period start by whole multiples of the period length and reset
+the in-period counter to zero. The on-chain limit is a per-period
+amount cap; servers can layer a policy of at most one successful
+renewal charge per billing period.
 
 ## Properties
 
@@ -347,10 +354,12 @@ All Solana-specific request parameters live in `methodDetails`:
 | `methodDetails.feePayerKey` | string | OPTIONAL | Base58 of the server fee-payer pubkey. REQUIRED when `feePayer` is `true` |
 | `methodDetails.recentBlockhash` | string | OPTIONAL | Pre-fetched blockhash to bind to the activation transaction |
 
-Servers MUST reject request objects where `currency`,
-`methodDetails.tokenProgram`, `methodDetails.decimals`, `amount`, or
+Servers MUST reject request objects where `currency`, `amount`, or
 the mapped per-billing-period interval diverge from the on-chain
-`Plan` referenced by `externalId`.
+`Plan` referenced by `externalId`. Servers MUST also verify that the
+mint account is owned by `methodDetails.tokenProgram` and that
+`methodDetails.decimals` matches the decimal precision recorded in the
+mint account.
 
 ## Implementor Guidance
 
@@ -595,7 +604,15 @@ the same billing period.
 
 The on-chain `transfer_subscription` advances
 `current_period_start_ts` by whole multiples of the period length and
-resets `amount_pulled_in_period` to zero on each successful pull. If
+The on-chain `transfer_subscription` advances
+`current_period_start_ts` by whole multiples of the period length and
+resets `amount_pulled_in_period` to zero when the period rolls over.
+Within a period the program accepts any transfer up to the remaining
+per-period cap. If one or more billing periods elapse without a charge,
+a later transaction authorizes at most one period's worth of pulls in
+the then-current billing period; missed periods do not accumulate.
+Servers MUST NOT treat missed billing periods as additional on-chain
+spending capacity.
 one or more billing periods elapse without a successful charge, a
 later transaction authorizes at most one charge in the then-current
 billing period. Servers MUST NOT treat missed billing periods as
@@ -605,8 +622,8 @@ additional on-chain spending capacity.
 
 After successful activation, the server MUST return a
 `subscriptionId` in the `Payment-Receipt`. On Solana, the
-`subscriptionId` is the base64url {{RFC4648}} encoding without
-padding of the `SubscriptionDelegation` account address. The
+`subscriptionId` is the base58-encoded `SubscriptionDelegation`
+account address.
 `subscriptionId` is stable across renewals: it is derived from the
 on-chain account, and remains valid for the lifetime of that account.
 
@@ -621,7 +638,7 @@ The receipt payload for a Solana subscription:
 | `method` | string | `"solana"` |
 | `reference` | string | Base58 of the settlement transaction signature |
 | `status` | string | `"success"` |
-| `subscriptionId` | string | Base64url of the `SubscriptionDelegation` account address, no padding |
+| `subscriptionId` | string | Base58 of the `SubscriptionDelegation` account address |
 | `periodIndex` | string | Decimal index of the billing period (`"0"` on activation) |
 | `periodStartTs` | string | {{RFC3339}} start of the current period |
 | `periodEndTs` | string | {{RFC3339}} end (exclusive) of the current period |
@@ -665,12 +682,15 @@ requests. At minimum, servers MUST track:
 - last successfully charged billing-period index
 - any in-flight billing-period index and renewal transaction signature
 - subscription expiry
-- cancellation status (derived from `delegation.expires_at_ts != 0`)
+- cancellation timestamp (`delegation.expires_at_ts`; `0` means active,
+  non-zero means cancellation is scheduled, and cancellation is effective
+  once the current time reaches that timestamp)
 
 When granting access in a later billing period, servers MUST:
 
-- Verify the subscription has not expired or been cancelled by reading
-  `delegation.expires_at_ts` on-chain.
+- Verify the subscription is still usable by reading
+  `delegation.expires_at_ts` on-chain; a non-zero timestamp only blocks
+  renewal once the current time is at or after that timestamp.
 - Determine the current billing-period index from the anchor and the
   mapped period in seconds.
 - Verify that the current billing period has not already been charged
@@ -689,16 +709,19 @@ duplicate idempotent requests.
 
 ## Cancellation
 
-Subscribers can revoke a Solana subscription at any time on-chain by
 submitting `cancel_subscription` against their
-`SubscriptionDelegation`. The program sets `delegation.expires_at_ts`
-to the end of the currently-paid billing period, after which
-`transfer_subscription` MUST fail with `SubscriptionCancelled`.
+`SubscriptionDelegation`. The normal cancellation path sets
+`delegation.expires_at_ts` to the end of the current billing period,
+after which `transfer_subscription` fails with
+`SubscriptionCancelled`. Implementations should also handle
+program-defined immediate-expiry cases, such as closed or mismatched
+plan accounts.
 
 Subscribers can additionally revoke every subscription tied to a
 `(subscriber, mint)` by closing and reopening their
-`SubscriptionAuthority`, which invalidates the delegation snapshot
-recorded in each subscription created against that authority.
+`SubscriptionAuthority`. Reopening creates a new authority instance,
+causing existing subscriptions that reference the prior authority
+instance to fail transfer validation.
 
 Servers MUST NOT submit renewal charges for billing periods after
 cancellation takes effect. Servers SHOULD handle revocation
@@ -890,9 +913,10 @@ expiry by ceasing renewal submissions and serving fresh challenges.
 Requests after that time receive `402 Payment Required` with a fresh
 challenge.
 
-Servers SHOULD additionally close the delegation via
-`revoke_delegation` once the grace period has elapsed and reclaim
-their rent if they sponsored activation.
+If the server sponsored activation, it can reclaim rent only when
+program revocation rules allow `revoke_delegation`, such as after
+on-chain cancellation has taken effect or the referenced plan has
+ended or been closed.
 
 # Security Considerations
 
@@ -985,42 +1009,18 @@ effect of routine operations.
 
 ## Token-2022 Extension Policy {#token-extension-policy}
 
-Implementations MUST enforce a closed allow-list of permitted
-Token-2022 extensions at activation and re-validate it on every
-token-touching instruction. Extension presence alone is disqualifying;
-unlisted, unknown, or malformed extensions MUST be rejected before
-any token movement.
+Implementations MUST validate Token-2022 mints and token accounts at
+activation and before each token-touching instruction according to the
+deployed validation policy of the subscriptions program.
 
-The RECOMMENDED mint allow-list:
+The canonical subscriptions program rejects Token-2022 mints with a
+configured `TransferHook` extension. An inert `TransferHook` extension
+whose authority and program id are both unset is allowed, because it
+cannot be activated later.
 
-- `MetadataPointer`
-- `TokenMetadata`
-- `GroupPointer`
-- `TokenGroup`
-- `GroupMemberPointer`
-- `TokenGroupMember`
-
-The RECOMMENDED token-account allow-list:
-
-- `ImmutableOwner`
-
-All other extensions MUST be rejected:
-
-| Extension | Reason |
-|-----------|--------|
-| `NonTransferable` | No transfer from the subscriber ATA can succeed |
-| `PermanentDelegate` | Delegate can move funds outside the per-period limit |
-| `DefaultAccountState` | Destination ATAs may be born non-`Initialized` |
-| `ConfidentialTransferMint` | Subscriptions program does not produce confidential-transfer proofs |
-| `TransferFeeConfig` | Withheld fees desync the on-chain accounting from settled amounts |
-| `TransferHook` | Hook program can revert any transfer |
-| `InterestBearing` | Visible amount changes over time |
-| `ScaledUiAmountConfig` | Display-vs-raw divergence breaks exact accounting |
-| `Pausable` | Mint-level pause can block scheduled pulls |
-| `MintCloseAuthority` | Mint identity can be recreated while delegations reference it |
-
-Implementations MUST NOT resolve transfer-hook extra accounts, route
-through fee withholding, or honor pause flags.
+Implementations MUST NOT resolve transfer-hook extra accounts for
+configured hooks or otherwise bypass the mint and token account
+validation performed by the program.
 
 ## Account Ownership and Program-ID Validation
 
