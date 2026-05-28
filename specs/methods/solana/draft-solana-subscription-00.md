@@ -272,8 +272,8 @@ Solana uses the shared `amount`, `currency`, `periodUnit`,
 `periodCount`, `subscriptionExpires`, `recipient`, `description`, and
 `externalId` fields from {{I-D.payment-intent-subscription}}, with
 their meanings preserved. The Solana profile elevates `recipient`,
-`externalId`, `subscriptionExpires`, and `description` from OPTIONAL
-to REQUIRED, and constrains the values that `periodUnit` may take.
+`externalId`, and `description` from OPTIONAL to REQUIRED, and
+constrains the values that `periodUnit` may take.
 
 ### Required Fields
 
@@ -285,9 +285,14 @@ to REQUIRED, and constrains the values that `periodUnit` may take.
 | `periodCount` | string | Positive integer count of `periodUnit` values per billing period |
 | `recipient` | string | Recipient address authorized for subscription charges. The activation transaction MUST bind the destination at sign time |
 | `externalId` | string | Base58 address of the on-chain `Plan` |
-| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format |
 | `description` | string | Human-readable subscription description |
 | `methodDetails` | object | Solana-specific extension data (see {{method-details}}) |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format. When omitted, the subscription has no HTTP-layer maximum lifetime |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
@@ -316,9 +321,12 @@ identified by `methodDetails.programId`, or whose snapshotted terms
 diverge from the challenge fields (mint, per-period amount, mapped
 per-billing-period interval).
 
-The `subscriptionExpires` field defines when the subscription itself
-expires. After this timestamp the server ceases renewal submissions
-and serves fresh challenges (see {{state-transitions}}).
+When `subscriptionExpires` is present, it defines an HTTP-layer
+maximum subscription lifetime: after that timestamp the server
+ceases renewal submissions and serves fresh challenges (see
+{{state-transitions}}). When omitted, the subscription runs until
+on-chain cancellation, plan end, or another invalidation event
+takes effect.
 
 ## Currency Formats {#currency-formats}
 
@@ -728,14 +736,14 @@ cancellation takes effect. Servers SHOULD handle revocation
 gracefully by returning a fresh subscription challenge once the
 on-chain delegation has expired.
 
-## Error Responses
+## Error Responses {#state-transitions}
 
 When a Solana subscription cannot be used to fulfill a request, the
 server MUST return an appropriate HTTP status code:
 
 | Condition | Status Code | Behavior |
 |-----------|-------------|----------|
-| `subscriptionExpires` reached | 402 Payment Required | Issue new challenge |
+| `subscriptionExpires` present and reached | 402 Payment Required | Issue new challenge |
 | On-chain cancellation effective or `SubscriptionAuthority` closed | 402 Payment Required | Issue new challenge |
 | Current billing period unpaid or `transfer_subscription` failed | 402 Payment Required | Issue new challenge |
 | Activation transaction failed verification | 402 Payment Required | Issue new challenge |
