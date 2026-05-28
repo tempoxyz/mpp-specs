@@ -30,10 +30,11 @@ normative:
   RFC8259:
   RFC8785:
   RFC9457:
-  I-D.httpauth-payment:
+  I-D.ryan-httpauth-payment-01:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/01/
     author:
+      - name: Brendan Ryan
       - name: Jake Moxey
     date: 2026-01
 
@@ -62,7 +63,7 @@ informative:
 
 This document defines the "session" intent for the "solana"
 payment method within the Payment HTTP Authentication Scheme
-{{I-D.httpauth-payment}}. Sessions enable metered, streaming,
+{{I-D.ryan-httpauth-payment-01}}. Sessions enable metered, streaming,
 or repeated-use access to resources through off-chain vouchers
 backed by an on-chain escrow. The client opens a payment
 channel by depositing into a channel program, authorizes
@@ -73,7 +74,7 @@ when the session closes.
 
 # Introduction
 
-HTTP Payment Authentication {{I-D.httpauth-payment}} defines
+HTTP Payment Authentication {{I-D.ryan-httpauth-payment-01}} defines
 a challenge-response mechanism that gates access to resources
 behind payments. This document registers the "session" intent
 for the "solana" payment method.
@@ -284,7 +285,11 @@ MUST implement.
 Each channel is represented by an on-chain account
 (typically a PDA derived from payer, payee, mint,
 authorized signer, and a salt) with the following
-logical fields:
+logical fields. Field names use camelCase; tag and
+enum-variant values (`Channel`, `ClosedChannel`,
+`Open`, `Closing`, `Finalized`) use PascalCase by
+convention, matching how they appear in Rust
+program source.
 
 | Field | Type | Storage | Description |
 |-------|------|---------|-------------|
@@ -313,8 +318,9 @@ set MUST bind the PDA to:
 
 - the payer public key;
 - the payee public key;
-- the mint address (native SOL is unsupported; see
-  {{native-sol}});
+- the mint address (native SOL is unsupported; clients
+  wishing to pay in SOL MUST wrap to wSOL before opening
+  a channel);
 - a client-chosen salt or nonce; and
 - the authorized signer public key (or payer if no
   delegation is used).
@@ -554,7 +560,7 @@ currency
   Native SOL is not supported; clients wishing to pay
   in SOL MUST wrap it to wSOL
   (`So11111111111111111111111111111111111111112`)
-  before opening a channel. {#native-sol}
+  before opening a channel.
 
 description
 : OPTIONAL. Human-readable description of the service
@@ -659,12 +665,11 @@ Opens a new payment channel.
 | `mint` | string | REQUIRED | Base58 SPL Token / Token-2022 mint (matches `currency` in the 402 challenge) |
 | `authorizedSigner` | string | REQUIRED | Base58 public key bound into the PDA seeds as the voucher signer; MAY equal `payer` or a delegated signer |
 | `salt` | string | REQUIRED | Decimal u64 PDA disambiguator |
-| `depositAmount` | string | REQUIRED | Initial deposit in base units; MUST equal the decoded `open` deposit and satisfy `depositAmount >= methodDetails.minimumDeposit` |
-| `gracePeriodSeconds` | integer | REQUIRED | Grace-period seconds bound into channel state at `open`; MUST be greater than zero and MUST match `methodDetails.gracePeriodSeconds` |
-| `distributionSplits` | array | OPTIONAL | Splits preimage (see `methodDetails.distributionSplits`); MUST byte-match the splits proposed in the 402 challenge |
+| `depositAmount` | string | REQUIRED | Initial deposit in base units; MUST equal the decoded `open` deposit and satisfy `depositAmount >= minimumDeposit` (when the challenge sets one) |
+| `gracePeriodSeconds` | integer | REQUIRED | Grace-period seconds bound into channel state at `open`; MUST be greater than zero and MUST match the challenge's `methodDetails.gracePeriodSeconds` |
+| `distributionSplits` | array | OPTIONAL | Splits preimage (see the challenge's `methodDetails.distributionSplits`); MUST byte-match the splits proposed in the 402 challenge |
 | `authorizationPolicy` | object | OPTIONAL | Voucher signer policy. When present, MUST be consistent with `authorizedSigner` |
 | `transaction` | string | REQUIRED | Base64-encoded (standard alphabet, padded) signed or partially signed transaction |
-| `expiresAt` | string | OPTIONAL | Session expiration (RFC 3339) |
 | `capabilities` | object | OPTIONAL | Implementation-specific extensions |
 
 The `transaction` contains the open instruction(s).
@@ -701,6 +706,24 @@ challenge, HTTP payload, decoded transaction, derived
 PDA, escrow ATA, token program, or confirmed on-chain
 state disagree. See {{open-settlement}} for the
 required decoding and validation sequence.
+
+Example `open` credential:
+
+~~~json
+{
+  "action": "open",
+  "channelId": "C4HnVjA7WMUtSQzAv4G6T3qBjLwK5jM7PvE2nQ5sZ3kP",
+  "payer":     "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  "payee":     "FNvFqYn4yV7HsoZyHRsbsj1Vd2HFcUe2NMRJq3rJxg7c",
+  "mint":      "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "authorizedSigner":
+               "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  "salt": "42",
+  "depositAmount": "10000000",
+  "gracePeriodSeconds": 900,
+  "transaction": "AQAB...base64..."
+}
+~~~
 
 ## Action: "voucher"
 
@@ -768,7 +791,7 @@ procedure, including how `settleAndFinalize` and
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel this voucher authorizes |
 | `cumulativeAmount` | string | REQUIRED | Total authorized spend (base units) |
-| `expiresAt` | string | OPTIONAL | Voucher expiration (ISO 8601) |
+| `expiresAt` | integer | OPTIONAL | Voucher expiration as a Unix timestamp in seconds (i64); `0` or omitted means no expiration. Encoded verbatim into the signed Borsh payload (see {{on-chain-voucher-encoding}}); no string/timezone conversion is performed at sign or verify time. |
 
 All other channel context (payer, recipient, token,
 network, program, and signer policy) is established
@@ -850,8 +873,8 @@ The server MUST verify each voucher:
 8. Verify `cumulativeAmount <= escrowedAmount` (does
    not exceed deposit).
 
-9. If `expiresAt` is present, verify the voucher has
-   not expired (with configurable clock skew
+9. If `expiresAt` is present and non-zero, verify
+   `now < expiresAt` (with configurable clock skew
    tolerance).
 
 10. Persist the new `acceptedCumulative` amount to
@@ -1285,7 +1308,7 @@ SHOULD support such requests where practical.
 # Error Responses
 
 Servers MUST use the standard problem types defined
-in {{I-D.httpauth-payment}}: `malformed-credential`,
+in {{I-D.ryan-httpauth-payment-01}}: `malformed-credential`,
 `invalid-challenge`, and `verification-failed`. The
 `detail` field SHOULD describe the specific failure
 (e.g., "Amount exceeds
