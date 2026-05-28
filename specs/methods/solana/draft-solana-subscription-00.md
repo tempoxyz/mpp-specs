@@ -264,9 +264,9 @@ base64url-encoded without padding per {{I-D.httpauth-payment}}.
 Solana uses the shared `amount`, `currency`, `periodUnit`,
 `periodCount`, `subscriptionExpires`, `recipient`, `description`, and
 `externalId` fields from {{I-D.payment-intent-subscription}}, with
-their meanings preserved. The Solana profile elevates `recipient` and
-`externalId` from OPTIONAL to REQUIRED, and constrains the values
-that `periodUnit` may take.
+their meanings preserved. The Solana profile elevates `recipient`,
+`externalId`, `subscriptionExpires`, and `description` from OPTIONAL
+to REQUIRED, and constrains the values that `periodUnit` may take.
 
 ### Required Fields
 
@@ -278,6 +278,9 @@ that `periodUnit` may take.
 | `periodCount` | string | Positive integer count of `periodUnit` values per billing period |
 | `recipient` | string | Recipient address authorized for subscription charges. The activation transaction MUST bind the destination at sign time |
 | `externalId` | string | Base58 address of the on-chain `Plan` |
+| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format |
+| `description` | string | Human-readable subscription description |
+| `methodDetails` | object | Solana-specific extension data (see {{method-details}}) |
 
 The `amount` value MUST be a string representation of a positive
 integer in base 10 with no sign, decimal point, exponent, or
@@ -306,24 +309,9 @@ identified by `methodDetails.programId`, or whose snapshotted terms
 diverge from the challenge fields (mint, per-period amount, mapped
 per-billing-period interval).
 
-### Optional Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `subscriptionExpires` | string | Subscription expiry timestamp in {{RFC3339}} format |
-| `description` | string | Human-readable subscription description |
-| `methodDetails` | object | Solana-specific extension data (see {{method-extensions}}) |
-
-Servers issuing `intent="subscription"` challenges SHOULD include the
-`expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
-using {{RFC3339}} format. Request objects MUST NOT duplicate the
-challenge expiry value. The `subscriptionExpires` field instead
-defines when the subscription itself expires.
-
-If the challenge includes `expires`, the `subscriptionExpires` value
-MUST be strictly later than the challenge `expires` timestamp. Servers
-MUST reject credentials where `subscriptionExpires` is at or before
-the challenge `expires`.
+The `subscriptionExpires` field defines when the subscription itself
+expires. After this timestamp the server ceases renewal submissions
+and serves fresh challenges (see {{state-transitions}}).
 
 ## Currency Formats {#currency-formats}
 
@@ -343,7 +331,7 @@ Base58 values in this profile use the standard Solana alphabet
 {{BASE58}}. Address comparisons are by decoded value, not raw string
 form.
 
-## Method Extensions {#method-extensions}
+## Method Details {#method-details}
 
 All Solana-specific request parameters live in `methodDetails`:
 
@@ -358,7 +346,6 @@ All Solana-specific request parameters live in `methodDetails`:
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, the client constructs the activation transaction with the server as fee payer |
 | `methodDetails.feePayerKey` | string | OPTIONAL | Base58 of the server fee-payer pubkey. REQUIRED when `feePayer` is `true` |
 | `methodDetails.recentBlockhash` | string | OPTIONAL | Pre-fetched blockhash to bind to the activation transaction |
-| `methodDetails.splits` | array | OPTIONAL | Advisory distribution; the on-chain split is governed by `plan.destinations` |
 
 Servers MUST reject request objects where `currency`,
 `methodDetails.tokenProgram`, `methodDetails.decimals`, `amount`, or
@@ -379,10 +366,13 @@ on-chain subscription system could express. Implementations should:
 - Refuse to map `periodUnit="month"` rather than approximate it with
   30-day or 31-day fixed periods. Clients receiving a `month` request
   for the Solana method should treat it as a server bug.
-- Avoid publishing one Solana `Plan` per billing-amount tier when the
-  amount and recipient set actually differ; combining them under a
-  single plan with looser destinations expands the on-chain spending
-  surface.
+- Avoid publishing a single `Plan` with a permissive destination
+  whitelist to cover multiple billing tiers or merchant accounts.
+  `Plan.destinations` is a whitelist of authorized receiver wallets,
+  not a payout split: each `transfer_subscription` pulls the full
+  amount to exactly one receiver. Widening the whitelist enlarges the
+  set of wallets a puller may direct funds to within the per-period
+  cap.
 - Submit at most one `transfer_subscription` per billing period per
   subscription, and never retry past the end of the period the
   transaction was constructed against.
@@ -466,8 +456,9 @@ The signed activation transaction MUST:
   `methodDetails.tokenProgram` for all token-touching instructions;
 - pull funds from the subscriber's associated token account for
   `methodDetails.mint`;
-- direct funds to the destination ATAs derived from
-  `plan.destinations`;
+- direct the first-period charge to a receiver ATA whose owner is
+  authorized by `plan.destinations` (any owner when the whitelist is
+  empty);
 - set the fee payer to `methodDetails.feePayerKey` when
   `methodDetails.feePayer` is `true`, and to the subscriber otherwise;
 - contain no instructions other than those above plus optional
@@ -476,8 +467,8 @@ The signed activation transaction MUST:
 The signed activation transaction MUST NOT contain SPL Token `Approve`
 or any other non-subscriptions-program instruction that could move the
 subscriber's tokens outside the per-period limit, and MUST NOT
-reference writable accounts that could redirect funds away from the
-plan destinations.
+reference writable accounts that could redirect funds to a receiver
+not authorized by `plan.destinations`.
 
 ## Single-Use
 
@@ -592,7 +583,8 @@ broader scopes than those required above.
 
 For each later billing period, the server MAY submit one
 `transfer_subscription` transaction using the registered subscription
-delegation to pull `amount` to the plan destinations.
+delegation to pull `amount` to a receiver ATA whose owner is
+authorized by `plan.destinations`.
 
 If the server grants access for a later billing period, it MUST
 ensure that the renewal charge for that period has been collected
@@ -964,17 +956,19 @@ payment receipts.
 
 ## Destination Scoping
 
-Solana subscription delegations MUST be bound to the `recipient` (and
-any additional destinations) named by the on-chain `Plan`. Servers
-MUST reject credentials whose activation transaction routes value to
-any other recipient.
+Solana subscription delegations MUST be bound to a receiver
+authorized by `plan.destinations`. Servers MUST reject credentials
+whose activation transaction routes value to any unauthorized
+receiver.
 
 ## Plan Scope Minimization
 
-Subscription `Plan` accounts SHOULD use the narrowest destination set
-needed to fulfill the recurring charge. Implementations SHOULD avoid
-publishing a plan with more destinations than necessary, since the
-on-chain split applies to every pull.
+`plan.destinations` is a whitelist, not a payout split: it bounds the
+set of wallets a puller may target on any given pull. Subscription
+`Plan` accounts SHOULD therefore enumerate only the receivers that
+will actually be used, and SHOULD avoid an empty (open) whitelist in
+production, since any pull within the per-period cap could otherwise
+be directed to an arbitrary receiver.
 
 ## Subscription Authority Isolation
 
