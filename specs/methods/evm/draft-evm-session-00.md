@@ -385,7 +385,7 @@ Each channel is identified by a unique `channelId` and stores:
 | `deposit` | uint128 | Total amount deposited |
 | `settled` | uint128 | Cumulative amount already withdrawn by payee |
 | `closeRequestedAt` | uint64 | Timestamp when close was requested (0 if not) |
-| `finalized` | bool | Whether channel is closed |
+| `finalized` | bool | Whether channel is closed. Sticky: set once and never cleared; the record is never deleted (see {{channel-reuse}}) |
 
 The `channelId` MUST be computed deterministically using the escrow
 contract's `computeChannelId()` function or equivalent logic:
@@ -441,9 +441,38 @@ Channels have no expiry — they remain open until explicitly closed.
 +---------------------------------------------------------------+
 ~~~
 
-## Contract Functions
+## Contract Functions {#contract-functions}
 
-Compliant escrow contracts MUST implement the following functions.
+The escrow surface is split into a **mandatory core** that every
+compliant contract MUST implement, and an **optional Relayed / Gasless
+Operations profile** ({{relayed-profile}}) that an implementation MAY
+omit in whole.
+
+Mandatory core:
+
+- `open`, `settle`, `topUp`, `close`, `requestClose`, `withdraw`
+
+Optional Relayed / Gasless Operations profile ({{relayed-profile}}):
+
+- Payer-funded via EIP-3009, relayer-submitted:
+  `openWithAuthorization`, `topUpWithAuthorization`
+- Payer-funded via Permit2, relayer-submitted: `openWithPermit2`,
+  `topUpWithPermit2`
+- Payee-initiated via EIP-712 payee authorization, relayer-submitted:
+  `settleWithAuthorization`, `closeWithAuthorization`
+
+The two payer-funded paths are alternatives, not both required: EIP-3009
+suits tokens that ship `receiveWithAuthorization` (e.g. USDC), while
+Permit2 covers any ERC-20 the payer has approved to the Permit2
+contract. An implementation MAY offer either or both.
+
+All six relayed functions share one shape: an off-chain authorization
+(EIP-3009 or Permit2 from the payer, or an EIP-712 payee authorization
+from the seller) plus submission by any relayer that pays gas. An
+implementation MAY support any subset, but a server MUST NOT advertise a
+capability (`feePayer: true`, or relayed settle/close) whose underlying
+function its escrow does not implement. Each function below that belongs
+to the profile is tagged accordingly; all others are mandatory.
 
 ### open
 
@@ -451,6 +480,16 @@ Opens a new channel with escrowed funds. The caller becomes the payer.
 Requires prior `approve(escrow, deposit)` on the ERC-20 token; the
 contract pulls funds via `transferFrom`. The contract MUST revert if
 a channel with the computed `channelId` already exists.
+
+Channel records MUST be retained permanently: the `finalized` flag is
+sticky (set once at close/withdraw and never cleared) and the channel
+record MUST NOT be deleted. Because `channelId` is derived only from
+stable inputs (`payer, payee, token, salt, authorizedSigner`,
+contract, chain) with no epoch component, deleting a finalized record
+would let the same inputs re-derive an identical `channelId` and EIP-712
+voucher digest, replaying old-epoch vouchers against a freshly funded
+channel. Retaining the record makes the "already exists" check above
+reject any re-open. See {{channel-reuse}}.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -471,6 +510,9 @@ function open(
 ~~~
 
 ### openWithAuthorization
+
+*Part of the optional Relayed / Gasless Operations profile
+({{relayed-profile}}).*
 
 Opens a channel using EIP-3009 {{EIP-3009}} authorization. The server
 (or any relayer) submits the transaction, pulling funds from the payer
@@ -498,7 +540,7 @@ via `receiveWithAuthorization` inside the contract.
 | `from` | address | Payer address (EIP-3009 `from`) |
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
-| `nonce` | bytes32 | EIP-3009 nonce (see {{front-running-protection}} for recommended derivation) |
+| `nonce` | bytes32 | EIP-3009 nonce; MUST equal the value derived per {{front-running-protection}} |
 | `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 
 ~~~solidity
@@ -516,7 +558,18 @@ function openWithAuthorization(
 ) external returns (bytes32 channelId);
 ~~~
 
+The `nonce` parameter is supplied by the caller for transparency,
+but the contract MUST recompute the expected nonce as
+`keccak256(abi.encode(from, payee, token, salt, authorizedSigner))`
+and revert if the supplied value does not match. Compliant
+implementations SHOULD revert with a dedicated error such as
+`NonceMismatch()` so callers can distinguish this failure mode.
+See {{front-running-protection}} for the threat model.
+
 ### openWithPermit2
+
+*Part of the optional Relayed / Gasless Operations profile
+({{relayed-profile}}).*
 
 Opens a channel using {{Permit2}} `SignatureTransfer` with a witness.
 The server (or any relayer) submits the transaction, pulling funds
@@ -586,8 +639,14 @@ channel. The contract MUST revert if `msg.sender != channel.payee`.
 | `cumulativeAmount` | uint128 | Cumulative total authorized |
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
-The contract computes `delta = cumulativeAmount - channel.settled`
-and transfers `delta` to the payee.
+The contract MUST revert (e.g., with `AmountNotIncreasing()`) if
+`cumulativeAmount <= channel.settled`; only a strictly increasing
+cumulative amount advances settlement. Otherwise the contract computes
+`delta = cumulativeAmount - channel.settled`, sets
+`channel.settled = cumulativeAmount`, and transfers `delta` to the
+payee. This on-chain check is the last line of defense for the
+rollback prevention described in {{rollback-prevention}}; a server-side
+check alone does not constrain a payee calling the contract directly.
 
 ~~~solidity
 function settle(
@@ -619,6 +678,9 @@ function topUp(
 
 ### topUpWithAuthorization
 
+*Part of the optional Relayed / Gasless Operations profile
+({{relayed-profile}}).*
+
 Adds funds using EIP-3009 authorization. The server calls this on
 behalf of the payer.
 
@@ -626,19 +688,19 @@ behalf of the payer.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Existing channel identifier |
 | `additionalDeposit` | uint128 | Additional amount |
-| `topUpSalt` | bytes32 | Random value for nonce derivation |
 | `from` | address | Payer address |
+| `topUpSalt` | bytes32 | Random value for nonce derivation |
 | `validAfter` | uint256 | EIP-3009 validity start |
 | `validBefore` | uint256 | EIP-3009 validity end |
-| `nonce` | bytes32 | EIP-3009 nonce (see {{front-running-protection}} for recommended derivation) |
+| `nonce` | bytes32 | EIP-3009 nonce; MUST equal the value derived per {{front-running-protection}} |
 | `signature` | bytes | Packed EIP-3009 authorization signature (65 bytes) |
 
 ~~~solidity
 function topUpWithAuthorization(
     bytes32 channelId,
     uint128 additionalDeposit,
-    bytes32 topUpSalt,
     address from,
+    bytes32 topUpSalt,
     uint256 validAfter,
     uint256 validBefore,
     bytes32 nonce,
@@ -646,7 +708,16 @@ function topUpWithAuthorization(
 ) external;
 ~~~
 
+As with `openWithAuthorization`, the contract MUST recompute the
+expected nonce as
+`keccak256(abi.encode(channelId, additionalDeposit, from, topUpSalt))`
+and revert (e.g., with `NonceMismatch()`) if the supplied `nonce`
+does not match. Clients MUST use the same derivation when signing.
+
 ### topUpWithPermit2
+
+*Part of the optional Relayed / Gasless Operations profile
+({{relayed-profile}}).*
 
 Adds funds using {{Permit2}} `SignatureTransfer` with a witness.
 Mirrors `openWithPermit2` for an existing channel. The escrow MUST
@@ -738,10 +809,12 @@ function withdraw(bytes32 channelId) external;
 | `topUpWithAuthorization` | Anyone (typically server) | Adds funds via EIP-3009; no caller restriction because the EIP-3009 signature provides authorization |
 | `topUpWithPermit2` | Anyone (typically server) | Adds funds via Permit2; no caller restriction because the Permit2 signature provides authorization |
 | `close` | Payee only | Closes with final voucher |
+| `settleWithAuthorization` | Anyone (typically relayer) | Settles via payee EIP-712 authorization; payee signature, not `msg.sender`, authorizes |
+| `closeWithAuthorization` | Anyone (typically relayer) | Closes via payee EIP-712 authorization; payee signature, not `msg.sender`, authorizes |
 | `requestClose` | Payer only | Initiates forced close |
 | `withdraw` | Payer only | Withdraws after grace period |
 
-## Signature Verification
+## Signature Verification {#signature-verification}
 
 The escrow contract MUST perform the following verification for all
 functions that accept voucher signatures (`settle`, `close`):
@@ -766,6 +839,37 @@ functions that accept voucher signatures (`settle`, `close`):
 Failure to enforce these requirements on-chain would allow attackers to
 bypass server-side validation by submitting transactions directly to
 the contract.
+
+## Contract Errors {#contract-errors}
+
+This subsection is informative. The normative requirement is that the
+escrow reverts under each condition below, as stated in the relevant
+function and security sections; the error names are a RECOMMENDED common
+vocabulary for implementers, tooling, and diagnostics. Implementations
+MAY use different names or revert representations. On-the-wire, a
+reverted transaction is reported to clients as the
+`transaction-reverted` problem type ({{error-responses}}), not as a raw
+Solidity selector.
+
+| Suggested error | Revert condition | Functions |
+|-----------------|------------------|-----------|
+| `ChannelAlreadyExists` | A channel with the computed `channelId` already exists, including a finalized one ({{channel-reuse}}) | `open`, `openWithAuthorization`, `openWithPermit2` |
+| `ChannelNotFound` | No channel for the given `channelId` | `settle`, `topUp*`, `close*`, `requestClose`, `withdraw` |
+| `ChannelFinalized` | Channel is already finalized | `settle`, `topUp*`, `close*` |
+| `NotPayee` | `msg.sender != channel.payee` | `settle`, `close` |
+| `NotPayer` | `msg.sender != channel.payer` | `topUp`, `requestClose`, `withdraw` |
+| `AmountNotIncreasing` | `cumulativeAmount <= channel.settled` on a non-forfeit path ({{rollback-prevention}}) | `settle*`, `close*` |
+| `AmountExceedsDeposit` | `cumulativeAmount > channel.deposit` | `settle*`, `close*` |
+| `InvalidSignature` | Voucher or payee signature fails recovery, signer mismatch, or non-canonical high-s ({{signature-verification}}) | `settle*`, `close*` |
+| `NonceMismatch` | Supplied EIP-3009 `nonce` ≠ value derived from channel parameters ({{front-running-protection}}) | `openWithAuthorization`, `topUpWithAuthorization` |
+| `NonceAlreadyUsed` | `(channel.payee, channelId, nonce)` already consumed ({{payee-relayed}}) | `settleWithAuthorization`, `closeWithAuthorization` |
+| `AuthorizationExpired` | `block.timestamp > deadline` on a payee authorization ({{payee-relayed}}) | `settleWithAuthorization`, `closeWithAuthorization` |
+| `CloseNotReady` | `withdraw` called before the close grace period elapsed | `withdraw` |
+| `ZeroDeposit` | Deposit amount is `0` | `open*`, `topUp*` |
+| `DepositOverflow` | Deposit would exceed the `uint128` bound | `open*`, `topUp*` |
+
+In the table, a trailing `*` denotes the base function plus its
+`WithAuthorization` and `WithPermit2` variants where they exist.
 
 # Request Schema
 
@@ -798,6 +902,18 @@ consumption: `total = amount * units_consumed`.
 | `methodDetails.channelId` | string | OPTIONAL | Channel ID if resuming an existing channel |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (base units). Default: `"0"` (any positive increment accepted). See {{dos-mitigation}} |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays gas for open/topUp (default: `false`) |
+| `methodDetails.feePayerAuthorizations` | array | CONDITIONAL | Authorization formats the server and its escrow support, as an ordered list of `authorization.type` values (`"eip-3009"`, `"permit2"`). REQUIRED when `feePayer` is `true`; omitted/ignored otherwise. Order expresses server preference |
+
+When `feePayer` is `true`, the server MUST advertise
+`feePayerAuthorizations` listing every authorization format its escrow
+actually implements (`openWithPermit2` deployed ⇒ include `"permit2"`,
+etc.). The client MUST choose one `authorization.type` from this list
+that it can produce, and MUST NOT submit a format absent from the list.
+This makes the supported paths discoverable in-band rather than relying
+on out-of-band documentation. A contract MAY additionally expose its
+relayed-path support on-chain (e.g. via an introspection view) for
+clients that verify the escrow directly, but the challenge field is the
+authoritative signal for the session flow.
 
 Channel reuse is OPTIONAL. Servers MAY include `channelId` to suggest
 resuming an existing channel:
@@ -877,9 +993,11 @@ by `payload.authorization.type` in the credential:
 
 Selection rules:
 
-1. The server MAY advertise which authorization formats it accepts
-   via out-of-band documentation. The credential's
-   `payload.authorization.type` is the on-the-wire discriminator.
+1. The server advertises which authorization formats it accepts in the
+   challenge's `methodDetails.feePayerAuthorizations` (REQUIRED when
+   `feePayer` is `true`). The client selects one format from that list
+   that it can produce; the credential's `payload.authorization.type`
+   is the on-the-wire discriminator for the choice.
 2. **EIP-3009 path**: The client signs the EIP-712 typed data for
    `receiveWithAuthorization`. The server calls
    `openWithAuthorization()` or `topUpWithAuthorization()`. The
@@ -914,32 +1032,106 @@ When `feePayer: false` or omitted:
 `settle` and `close` are server-originated on-chain transactions. The
 server pays gas for these regardless of the `feePayer` setting.
 
-### Implementer Note: Gasless Settlement (Non-Normative) {#gasless-settlement-note}
+By default the payee (merchant) holds the native token of the target
+chain to pay gas for `settle()` and `close()`. Merchants that prefer
+not to maintain a native-token gas balance MAY instead use the
+relayed payee-side functions defined in the Relayed / Gasless
+Operations profile ({{relayed-profile}}): `settleWithAuthorization`
+and `closeWithAuthorization`. These let the payee sign an EIP-712
+authorization off-chain and have any relayer submit and pay gas.
 
-This specification assumes the payee (merchant) holds the native
-token of the target chain to pay gas for `settle()` and `close()`.
-In practice, some merchants — particularly those receiving stablecoin
-payments on a chain whose native token they do not otherwise hold —
-may prefer not to maintain a native-token gas balance.
+## Relayed / Gasless Operations Profile {#relayed-profile}
 
-To accommodate this, implementers MAY add meta-transaction variants
-of the payee-only functions, for example
-`settleWithAuthorization(channelId, cumulativeAmount, voucherSignature, payeeAuth)`
-and `closeWithAuthorization(channelId, cumulativeAmount, voucherSignature, payeeAuth)`,
-where `payeeAuth` is an EIP-712 signature from `channel.payee` over
-the call parameters. The contract verifies the payee signature and
-permits any caller (typically a relayer service) to submit the
-transaction and pay gas. The relayer recovers its costs out-of-band,
-e.g., by deducting from the settled amount before paying out to the
-merchant.
+This profile is OPTIONAL. An implementation MAY omit it entirely, or
+implement any subset of its functions. The mandatory core
+({{contract-functions}}) is sufficient to operate a channel when the
+party initiating each transaction pays its own gas. The profile exists
+only to let a relayer submit and fund a transaction on behalf of a
+party that authorized it off-chain.
 
-These variants are **not part of this specification** and are not
-required for compliance. Implementations that add them MUST ensure
-the meta-transaction signature is bound to a unique nonce or to the
-`channelId` + `cumulativeAmount` pair to prevent replay, and SHOULD
-publish the additional EIP-712 type strings out-of-band.
-Interoperability across implementations is not guaranteed for these
-extensions; clients SHOULD treat them as implementation-specific.
+A server MUST NOT advertise a capability whose backing function its
+escrow does not implement: `feePayer: true` requires at least one of
+the payer-funded functions for the offered `authorization.type`, and
+relayed settlement requires the corresponding payee-side function.
+
+### Payer-funded functions
+
+`openWithAuthorization`, `openWithPermit2`, `topUpWithAuthorization`,
+and `topUpWithPermit2` are specified in {{contract-functions}}. They
+are callable by anyone; the payer's funds move only under the payer's
+own EIP-3009 or Permit2 signature, and the channel parameters the
+contract trusts are bound into that signature as required by
+{{front-running-protection}} (deterministic nonce for EIP-3009, named
+witness for Permit2).
+
+### Payee-initiated functions {#payee-relayed}
+
+`settleWithAuthorization` and `closeWithAuthorization` let the payee
+authorize a settlement or close off-chain and have any relayer submit
+it. Each requires **two** signatures: the payer/`authorizedSigner`
+`Voucher` ({{voucher-format}}) that authorizes the amount, and an
+EIP-712 authorization from `channel.payee` that authorizes this
+specific relayed call.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channelId` | bytes32 | Channel identifier |
+| `cumulativeAmount` | uint128 | Cumulative amount to settle/finalize |
+| `nonce` | uint256 | Payee-chosen, unused value in the `(payee, channelId)` scope |
+| `deadline` | uint256 | Unix seconds; contract MUST revert after this |
+| `payeeSignature` | bytes | EIP-712 payee authorization (65 bytes) |
+| `voucherSignature` | bytes | EIP-712 `Voucher` signature; MAY be empty on the `close` forfeit path (`cumulativeAmount <= channel.settled`) |
+
+~~~solidity
+function settleWithAuthorization(
+    bytes32 channelId,
+    uint128 cumulativeAmount,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata payeeSignature,
+    bytes calldata voucherSignature
+) external;
+
+function closeWithAuthorization(
+    bytes32 channelId,
+    uint128 cumulativeAmount,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata payeeSignature,
+    bytes calldata voucherSignature
+) external;
+~~~
+
+The payee authorization uses these EIP-712 types under the same domain
+separator as the `Voucher` ({{voucher-format}}):
+
+~~~
+SettleAuthorization(bytes32 channelId,uint128 cumulativeAmount,uint256 nonce,uint256 deadline)
+CloseAuthorization(bytes32 channelId,uint128 cumulativeAmount,uint256 nonce,uint256 deadline)
+~~~
+
+Requirements for these functions:
+
+1. The contract MUST recover the `payeeSignature` signer and verify it
+   equals `channel.payee` (EOA via ECDSA, contract wallet via
+   ERC-1271).
+2. The contract MUST verify the `Voucher` signature exactly as `settle`
+   / `close` do ({{signature-verification}}), including the strictly
+   increasing rule ({{rollback-prevention}}); the `close` forfeit path
+   (`cumulativeAmount <= channel.settled`) MAY omit `voucherSignature`.
+3. Replay protection: the contract MUST maintain a used-set keyed by
+   `(channel.payee, channelId, nonce)` and revert (e.g.,
+   `NonceAlreadyUsed()`) if the nonce was already consumed; `settle`
+   and `close` authorizations MUST share the same used-set so a nonce
+   cannot be reused across the two. Any caller MAY submit; the payee
+   signature — not `msg.sender` — provides authorization.
+4. The contract MUST revert (e.g., `AuthorizationExpired()`) when
+   `block.timestamp > deadline`.
+
+The nonce is an arbitrary unused `uint256` (no ordering requirement),
+mirroring the Permit2 unordered-nonce model rather than a sequential
+counter. Payees SHOULD set a short `deadline` to bound the lifetime of
+an unsubmitted authorization.
 
 # Credential Schema
 
@@ -1060,7 +1252,17 @@ The `authorization` object takes one of two shapes.
 | `value` | string | REQUIRED | Deposit amount in base units |
 | `validAfter` | string | REQUIRED | Unix timestamp, valid from. `"0"` = immediately |
 | `validBefore` | string | REQUIRED | Unix timestamp, expires |
-| `nonce` | string | REQUIRED | `bytes32` hex. EIP-3009 nonce |
+| `nonce` | string | REQUIRED | `bytes32` hex. EIP-3009 nonce; MUST be derived from channel parameters per {{front-running-protection}} |
+
+The `nonce` MUST be derived from the surrounding payload's channel
+parameters: for `action="open"`,
+`nonce = keccak256(abi.encode(from, payee, token, salt, authorizedSigner))`;
+for `action="topUp"`,
+`nonce = keccak256(abi.encode(channelId, additionalDeposit, from, topUpSalt))`.
+The client MUST sign the EIP-3009 typed data with this derived nonce
+and MUST transmit it in the credential. The escrow contract recomputes
+the expected nonce from its own function arguments and reverts if the
+caller-supplied value does not match.
 
 **Permit2 shape** (`authorization.type="permit2"`):
 
@@ -1415,13 +1617,37 @@ action-specific verification:
    stored challenge parameters
 5. Verify the challenge has not expired
 
+## Transaction Outcome Checks {#tx-outcome}
+
+Whenever a server relies on an on-chain transaction — verifying a
+client-submitted `txHash` (`type="hash"`) or submitting one itself
+(`type="transaction"`, `settle`, `close`) — it MUST read the receipt's
+`status` field and MUST NOT treat the transaction as effective on
+`status` alone being present.
+
+- `status == 0x1` (success): the call's on-chain effects occurred;
+  proceed to verify channel state.
+- `status == 0x0` (reverted): the transaction was mined but **no state
+  changed** (e.g. `NonceMismatch`, `AmountNotIncreasing`,
+  `ChannelAlreadyExists`, or a failed token pull). The server MUST fail
+  fast with a typed error and MUST NOT keep polling for a state change
+  that will never come.
+- No receipt yet (not mined): distinct from a revert; the server MAY
+  await or retry up to a bounded timeout.
+
+A reverted `status == 0x0` is a definitive negative outcome, not a
+pending one; conflating the two is what causes close/settlement paths
+to hang on a spinner.
+
 ## Open Verification
 
 On `action="open"`, servers MUST:
 
 **When `type="hash"`:**
 
-1. Verify the txHash via `eth_getTransactionReceipt`
+1. Verify the txHash via `eth_getTransactionReceipt`, checking
+   `receipt.status` per {{tx-outcome}} (a reverted `0x0` MUST be
+   rejected immediately, not awaited)
 2. Verify the transaction successfully caused `open()` to be
    executed on the expected escrow, either directly or through an
    ERC-4337 EntryPoint-mediated UserOperation
@@ -1457,7 +1683,8 @@ On `action="topUp"`, servers MUST:
 **When `type="hash"`:**
 
 1. Verify the txHash shows a successful `topUp()` execution on the
-   expected escrow, either directly or through an ERC-4337
+   expected escrow (check `receipt.status` per {{tx-outcome}}; reject a
+   reverted `0x0` immediately), either directly or through an ERC-4337
    EntryPoint-mediated UserOperation
 2. Verify that this execution affected the specific `payload.channelId`
 3. Query updated channel state
@@ -1481,51 +1708,71 @@ On `action="topUp"`, servers MUST:
 
 On `action="voucher"`, servers MUST:
 
-1. If `cumulativeAmount <= highestVoucherAmount`, return `200 OK`
-   without changing state (idempotent replay)
-2. Verify `channel.closeRequestedAt == 0` (no pending close).
+1. Verify `channel.closeRequestedAt == 0` (no pending close).
    Reject vouchers on channels with a pending forced close.
-3. If `deposit` field is present, process deposit first:
+2. If `deposit` field is present, process deposit first:
     - For `authorization.type="eip-3009"`, call
       `openWithAuthorization` or `topUpWithAuthorization`
     - For `authorization.type="permit2"`, call
       `openWithPermit2` or `topUpWithPermit2`
     - Verify updated channel state
-4. Verify monotonicity:
-    - `cumulativeAmount > highestVoucherAmount`
+3. Verify voucher signature using EIP-712 recovery
+4. Verify signature uses canonical low-s values
+5. Recover signer and verify it matches the expected signer from
+   on-chain state (`channel.authorizedSigner` if non-zero, otherwise
+   `channel.payer`). For ERC-1271 contract wallets, verify via
+   `isValidSignature`.
+6. If `cumulativeAmount <= highestVoucherAmount`, return `200 OK`
+   without changing state (idempotent replay).
+7. Verify monotonicity:
     - `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
-5. Verify `cumulativeAmount <= channel.deposit` (ensures the
+8. Verify `cumulativeAmount <= channel.deposit` (ensures the
    settlement delta `cumulativeAmount - channel.settled` does not
    exceed available funds `channel.deposit - channel.settled`)
-6. Verify voucher signature using EIP-712 recovery
-7. Verify signature uses canonical low-s values
-8. Recover signer and verify it matches expected signer from on-chain
 9. Persist voucher to durable storage before providing service
 10. Update `highestVoucherAmount = cumulativeAmount`
 
-Note: Steps 2, 4-5 (cheap checks) are ordered before steps 6-8
-(expensive `ecrecover`) for efficiency. Step 3 (deposit processing)
-is placed early because subsequent checks depend on updated channel
-state.
+Signature and signer verification (steps 3-5) MUST be performed
+before the idempotency short-circuit in step 6. Because `voucher`
+and `close` credentials MAY omit the `source` field and identify
+the payer from channel state, returning `200 OK` for a stale
+`cumulativeAmount` before verifying the signature would let any
+party that knows a `channelId` trigger successful-looking
+responses, and — when the voucher is submitted alongside a
+service request — consume already-authorized balance on the
+payer's behalf.
+
+Implementations MAY cache successfully-verified voucher signatures
+keyed by `(channelId, cumulativeAmount, signature)` and short-circuit
+on an exact bit-for-bit replay before re-running `ecrecover`. This
+optimization is safe because the cache hit itself proves the
+signature was previously verified.
 
 ## Idempotency
 
-Servers MUST treat voucher submissions idempotently:
+Servers MUST treat voucher submissions idempotently **only after
+the voucher signature and signer have been verified** per steps
+3-5 of {{voucher-verification}}:
 
-- If `cumulativeAmount == highestVoucherAmount`, the server
-  MUST return `200 OK` without changing state
-- If `cumulativeAmount < highestVoucherAmount`, the server
-  MUST return `200 OK` without changing state
-- Only vouchers with `cumulativeAmount > highestVoucherAmount`
-  proceed to the monotonicity and balance checks in
-  {{voucher-verification}}
+- If signature verification fails, the server MUST return an error
+  response per {{error-responses}}, regardless of how
+  `cumulativeAmount` compares to `highestVoucherAmount`.
+- After successful signature and signer verification:
+    - If `cumulativeAmount == highestVoucherAmount`, the server
+      MUST return `200 OK` without changing state.
+    - If `cumulativeAmount < highestVoucherAmount`, the server
+      MUST return `200 OK` without changing state.
+    - Only vouchers with `cumulativeAmount > highestVoucherAmount`
+      proceed to the monotonicity and balance checks in
+      {{voucher-verification}}.
 
-## Error Responses
+## Error Responses {#error-responses}
 
 | Status | When |
 |--------|------|
 | 400 Bad Request | Malformed payload or missing fields |
 | 402 Payment Required | Invalid signature or signer mismatch |
+| 409 Conflict | A submitted/verified on-chain transaction reverted (`receipt.status == 0x0`, see {{tx-outcome}}) |
 | 410 Gone | Channel finalized or not found |
 
 Error responses use Problem Details {{RFC9457}}. Problem type URIs:
@@ -1540,6 +1787,36 @@ Error responses use Problem Details {{RFC9457}}. Problem type URIs:
 | `https://paymentauth.org/problems/session/channel-finalized` | Channel closed |
 | `https://paymentauth.org/problems/session/challenge-not-found` | Challenge unknown or expired |
 | `https://paymentauth.org/problems/session/insufficient-balance` | Insufficient authorized balance |
+| `https://paymentauth.org/problems/session/transaction-reverted` | An on-chain open/topUp/settle/close transaction reverted |
+
+These problem types are the **interoperable error surface**: they are
+what a client consumes, and they MUST be uniform across deployments
+regardless of how each escrow names its internal reverts
+({{contract-errors}}). Accordingly, when a server-submitted transaction
+reverts ({{tx-outcome}}) — a `feePayer: true` open/topUp, a relayed
+settle/close — or when an action fails server-side validation, the
+server MUST report the failure using the most specific applicable
+problem type, falling back to `transaction-reverted` when none is more
+specific. Servers MUST NOT surface a raw on-chain revert selector or an
+implementation-specific error string as the problem `type`.
+
+Recommended mapping from on-chain revert condition ({{contract-errors}})
+to problem type:
+
+| Revert condition | Problem type |
+|------------------|--------------|
+| `AmountExceedsDeposit` | `amount-exceeds-deposit` |
+| `ChannelNotFound` | `channel-not-found` |
+| `ChannelFinalized` | `channel-finalized` |
+| `InvalidSignature` | `invalid-signature` |
+| Insufficient on-chain balance / token pull failed | `insufficient-balance` |
+| `NonceMismatch`, `NonceAlreadyUsed`, `AuthorizationExpired`, `AmountNotIncreasing`, `ChannelAlreadyExists`, or any other | `transaction-reverted` |
+
+For `feePayer: false`, where the client broadcasts its own `open` /
+`topUp`, the client determines the outcome by querying channel state
+(Open/TopUp Verification, {{tx-outcome}}) rather than decoding the
+revert, so it likewise does not depend on the escrow's internal error
+encoding.
 
 Example error response:
 
@@ -1644,6 +1921,11 @@ Servers MAY settle at any time:
 - When unsettled amount exceeds a threshold
 - Based on gas cost optimization
 
+For every server-submitted `settle()` or `close()`, the server MUST
+check `receipt.status` per {{tx-outcome}} and treat a reverted `0x0`
+as a definitive failure to settle (surface a typed error and retry as
+appropriate), never as a pending result to be polled to timeout.
+
 ## Cooperative Close
 
 When the client sends `action="close"`:
@@ -1653,8 +1935,14 @@ When the client sends `action="close"`:
    voucher is insufficient, the server SHOULD settle using the
    highest previously accepted voucher instead of the close voucher
 2. Server calls `close(channelId, cumulativeAmount, signature)`
-3. Contract settles delta and refunds remainder to payer
-4. Server returns receipt with transaction hash
+3. Server MUST check the resulting `receipt.status` per {{tx-outcome}}.
+   On a reverted `0x0`, the server MUST NOT report the channel as
+   closed or block the client on a spinner; it MUST surface a typed
+   error and MAY retry (e.g. re-submit with the highest accepted
+   voucher, or after diagnosing the revert reason)
+4. On `status == 0x1`, the contract has settled the delta and refunded
+   the remainder to the payer; the server returns a receipt with the
+   transaction hash
 
 ## Forced Close
 
@@ -1765,7 +2053,29 @@ Vouchers are bound to a specific channel and contract via:
 - Cumulative amount semantics (can only increase)
 
 EIP-3009 nonces prevent replay of deposit authorizations at the
-contract level.
+contract level. Because the nonce is derived deterministically from
+the channel parameters (see {{front-running-protection}}), each
+unique `(payee, salt, authorizedSigner)` open or `(channelId,
+additionalDeposit, topUpSalt)` top-up produces a distinct nonce and
+the token contract rejects any reuse for the same `from`.
+
+## Channel Re-Use / Cross-Epoch Replay {#channel-reuse}
+
+`channelId` is derived from stable inputs only — `(payer, payee, token,
+salt, authorizedSigner, address(this), chainId)` — with no epoch or
+open-nonce. After a channel is closed, the same inputs (notably the same
+`salt`) re-derive a byte-identical `channelId`, and because the EIP-712
+domain and `Voucher` struct are unchanged, an old voucher's digest is
+also byte-identical. If the contract permitted re-opening that
+`channelId`, the payee could replay a stale high-water voucher against
+the new deposit.
+
+The escrow MUST prevent this by retaining finalized channel records
+permanently (sticky `finalized` flag, no struct deletion) so the `open`
+"already exists" check rejects every re-open of a used `channelId`. This
+matches the Tempo reference design, which likewise carries a persistent
+`finalized` flag and folds no epoch into `channelId`. Clients that want a
+fresh channel after close MUST choose a new `salt`.
 
 ## Cross-Chain Replay
 
@@ -1777,10 +2087,12 @@ invalid on other chains.
 EIP-712 signatures bind all voucher fields. Any modification
 invalidates the signature.
 
-## Rollback Prevention
+## Rollback Prevention {#rollback-prevention}
 
-Server MUST only accept strictly increasing `cumulativeAmount`.
-Old vouchers are automatically superseded.
+Server MUST only accept strictly increasing `cumulativeAmount`, and the
+escrow contract MUST enforce the same on-chain in `settle` (reverting
+when `cumulativeAmount <= channel.settled`). Old vouchers are
+automatically superseded.
 
 ## Overflow Protection
 
@@ -1841,7 +2153,7 @@ transaction, the server loses its escrow guarantee. Mitigations:
 - Voucher-based payments are not affected (off-chain)
 - Settlement transactions should use appropriate gas pricing
 
-## Front-Running Protection
+## Front-Running Protection {#front-running-protection}
 
 The escrow contract's `channelId` is deterministic. An attacker who
 observes a pending `open()` transaction could front-run it. However,
@@ -1890,10 +2202,11 @@ mechanisms:
   address), and the underlying transfer signature would remain
   valid.
 
-To close this gap on the EIP-3009 path, escrow implementations
-SHOULD derive the EIP-3009 nonce deterministically from the
-channel parameters rather than accepting an arbitrary random
-value:
+To close this gap on the EIP-3009 path, compliant escrow contracts
+MUST derive the EIP-3009 nonce deterministically from the channel
+parameters and MUST validate the caller-supplied `nonce` argument
+against the derived value, reverting (e.g., with `NonceMismatch()`)
+on any mismatch:
 
 ~~~
 // openWithAuthorization (EIP-3009 nonce, bytes32)
@@ -1903,14 +2216,25 @@ nonce = keccak256(abi.encode(from, payee, token, salt, authorizedSigner))
 nonce = keccak256(abi.encode(channelId, additionalDeposit, from, topUpSalt))
 ~~~
 
-The contract recomputes the nonce from the function parameters
-and passes it to `receiveWithAuthorization`. If an attacker
-substitutes different parameters, the nonce changes, and the
-underlying signature verification fails. The client MUST use the
-same derivation formula when signing the authorization.
-Including `from` ensures the nonce is bound to the depositor
-identity, even though the underlying signature already covers
-`from` directly.
+The contract passes the validated nonce to `receiveWithAuthorization`.
+If an attacker calls the escrow with a substituted `payee`, `salt`,
+`authorizedSigner`, `channelId`, `additionalDeposit`, or `topUpSalt`,
+the derived nonce differs from the one the payer signed; the contract
+MUST reject the call before invoking the token, and even if it did not,
+the underlying signature verification at the token contract would
+revert.
+
+The `nonce` is exposed as an explicit function parameter (rather than
+derived silently) so that callers and indexers can observe the value
+the payer signed; the on-chain check is what makes the binding
+non-bypassable. Implementations MUST NOT skip this check, and MUST NOT
+fall back to using the caller-supplied value unchanged.
+
+Clients MUST use the same derivation formula when signing the
+EIP-3009 authorization and MUST transmit the derived nonce in the
+credential. Including `from` ensures the nonce is bound to the
+depositor identity, even though the underlying signature already
+covers `from` directly.
 
 Trade-off note: The deterministic-nonce approach for EIP-3009
 trades signing-time UX (the nonce appears as an opaque hash in
@@ -2031,6 +2355,7 @@ This document registers the following problem types:
 | `.../session/channel-finalized` | Channel Finalized | 410 |
 | `.../session/challenge-not-found` | Challenge Not Found | 402 |
 | `.../session/insufficient-balance` | Insufficient Balance | 402 |
+| `.../session/transaction-reverted` | Transaction Reverted | 409 |
 
 Base URI: `https://paymentauth.org/problems`
 
