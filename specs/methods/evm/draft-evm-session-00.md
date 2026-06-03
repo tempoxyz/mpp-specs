@@ -722,15 +722,17 @@ does not match. Clients MUST use the same derivation when signing.
 Adds funds using {{Permit2}} `SignatureTransfer` with a witness.
 Mirrors `openWithPermit2` for an existing channel. The escrow MUST
 call `permitWitnessTransferFrom` with a `ChannelTopUpWitness`
-binding `(channelId, topUpSalt)`, so the payer's wallet shows the
-target channel and the contract enforces that the signature cannot
-be redirected to a different channel.
+binding `channelId`, so the payer's wallet shows the target channel
+and the contract enforces that the signature cannot be redirected to
+a different channel. Unlike the EIP-3009 path, no `topUpSalt` is
+required: Permit2's unordered nonce already provides replay
+protection for repeated top-ups, and `channelId` alone binds the
+deposit to the channel.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `channelId` | bytes32 | Existing channel identifier |
 | `additionalDeposit` | uint128 | Additional amount |
-| `topUpSalt` | bytes32 | Random value bound into the witness |
 | `from` | address | Payer address |
 | `nonce` | uint256 | Permit2 nonce (any unused value; bitmap-based replay protection) |
 | `deadline` | uint256 | Permit2 signature deadline (Unix seconds) |
@@ -740,7 +742,6 @@ be redirected to a different channel.
 function topUpWithPermit2(
     bytes32 channelId,
     uint128 additionalDeposit,
-    bytes32 topUpSalt,
     address from,
     uint256 nonce,
     uint256 deadline,
@@ -903,6 +904,7 @@ consumption: `total = amount * units_consumed`.
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (base units). Default: `"0"` (any positive increment accepted). See {{dos-mitigation}} |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays gas for open/topUp (default: `false`) |
 | `methodDetails.feePayerAuthorizations` | array | CONDITIONAL | Authorization formats the server and its escrow support, as an ordered list of `authorization.type` values (`"eip-3009"`, `"permit2"`). REQUIRED when `feePayer` is `true`; omitted/ignored otherwise. Order expresses server preference |
+| `methodDetails.permit2Contract` | string | OPTIONAL | Permit2 contract address used as the EIP-712 `verifyingContract` on the `permit2` authorization path. Defaults to the canonical deterministic Permit2 deployment; REQUIRED when the target chain's Permit2 is not at the canonical address. The client MUST use this value (or the canonical default when omitted) as `verifyingContract` when signing, and it MUST match the escrow's configured Permit2 address |
 
 When `feePayer` is `true`, the server MUST advertise
 `feePayerAuthorizations` listing every authorization format its escrow
@@ -1269,25 +1271,37 @@ caller-supplied value does not match.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | string | REQUIRED | `"permit2"` |
-| `from` | string | REQUIRED | Payer address (Permit2 `owner`) |
-| `token` | string | REQUIRED | ERC-20 token address (= `request.currency`) |
-| `amount` | string | REQUIRED | Deposit amount in base units (Permit2 `permitted.amount`) |
-| `nonce` | string | REQUIRED | Decimal string. uint256 Permit2 nonce |
+| `from` | string | REQUIRED | Payer address (Permit2 `owner`; recovered from the signature) |
+| `permitted` | object | REQUIRED | Permit2 `TokenPermissions`: `{ "token": <ERC-20 address = request.currency>, "amount": <deposit in base units> }` |
+| `nonce` | string | REQUIRED | Decimal string. uint256 Permit2 unordered nonce (any unused value) |
 | `deadline` | string | REQUIRED | Decimal string. Unix timestamp after which the signature is invalid |
+| `witness` | object | REQUIRED | Channel-parameter witness. For `open`: `{ "payee", "salt", "authorizedSigner" }`. For `topUp`: `{ "channelId" }` |
 
-The `spender` covered by the Permit2 signature is the escrow
-contract address (`methodDetails.escrowContract`); it is implied
-by `msg.sender` when the escrow calls `permitWitnessTransferFrom`
-and therefore is not transmitted in the payload. Clients MUST set
-`spender = methodDetails.escrowContract` when constructing the
-EIP-712 hash.
+The `authorization` object carries every field the Permit2 signature
+covers, so the signed digest is reconstructable from the object alone
+(plus the domain below). This mirrors the EIP-3009 shape, whose fields
+are likewise exactly what that scheme signs.
 
-The witness fields (`payee`, `salt`, `authorizedSigner` for `open`;
-`channelId`, `topUpSalt` for `topUp`) are not duplicated inside the
-`authorization` object — they are sourced from the surrounding open
-or topUp payload. The client MUST construct the witness from those
-outer fields when signing, and the server MUST pass the same values
-to the escrow when submitting the on-chain call.
+The `spender` is the one signed field deliberately omitted: Permit2
+fixes `spender = msg.sender` inside `permitWitnessTransferFrom`, so it
+is always the escrow contract. Clients MUST set
+`spender = methodDetails.escrowContract` when constructing the EIP-712
+hash; the escrow supplies it implicitly on-chain.
+
+The `witness` object MUST carry the channel parameters:
+
+- For `open`: `payee`, `salt`, `authorizedSigner`. `payee` MUST equal
+  the challenge `request.recipient`; `salt` and `authorizedSigner`
+  MUST equal the corresponding open-payload fields (an omitted
+  `authorizedSigner` is the zero address).
+- For `topUp`: `channelId`, which MUST equal the payload `channelId`.
+
+The channel parameters the server passes to the escrow are
+authoritative: the escrow reconstructs the witness from them and the
+Permit2 verification reverts on any mismatch. A server MUST reject the
+credential if `authorization.witness` disagrees with those
+authoritative values rather than forwarding a signature that will
+revert on-chain.
 
 The Permit2 EIP-712 domain and struct types are:
 
@@ -1304,7 +1318,7 @@ TokenPermissions(address token,uint256 amount)
 
 // For topUp (action="topUp"):
 PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,ChannelTopUpWitness witness)
-ChannelTopUpWitness(bytes32 channelId,bytes32 topUpSalt)
+ChannelTopUpWitness(bytes32 channelId)
 TokenPermissions(address token,uint256 amount)
 ~~~
 
@@ -1316,11 +1330,15 @@ encoding rules.
 
 Note that the Permit2 domain omits the `version` field. The
 canonical Permit2 contract is deployed at the same deterministic
-address on most major EVM chains; servers MUST publish (or refer
-to a well-known list of) the address used on the target
-`chainId`.
+address on most major EVM chains. The client uses
+`methodDetails.permit2Contract` when present, and otherwise the
+canonical deterministic address, as `verifyingContract`. The escrow's
+configured Permit2 address MUST be the same one the client signed
+against; a mismatch makes the Permit2 signature fail verification
+on-chain. Servers MUST advertise `methodDetails.permit2Contract` on
+any chain whose Permit2 is not at the canonical address.
 
-**Example:**
+**Example (EIP-3009):**
 
 ~~~json
 {
@@ -1354,6 +1372,56 @@ to a well-known list of) the address used on the target
 }
 ~~~
 
+**Example (Permit2):**
+
+~~~json
+{
+  "challenge": {
+    "id": "kM9xPqWvT2nJrHsY4aDfEb",
+    "realm": "api.llm-service.com",
+    "method": "evm",
+    "intent": "session",
+    "request": "eyJ...",
+    "expires": "2026-04-01T12:05:00Z"
+  },
+  "payload": {
+    "action": "open",
+    "type": "transaction",
+    "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "authorization": {
+      "type": "permit2",
+      "from": "0xaabbccddee11223344556677889900aabbccddee",
+      "permitted": {
+        "token": "0x74b7F16337b8972027F6196A17a631ac6dE26d22",
+        "amount": "10000000"
+      },
+      "nonce": "1",
+      "deadline": "1743523500",
+      "witness": {
+        "payee": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+        "salt": "0xaaaa1234bbbb5678cccc9012dddd3456eeee7890ffff1234aaaa5678bbbb9012",
+        "authorizedSigner": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00"
+      }
+    },
+    "signature": "0xfedcba...permit2sig",
+    "cumulativeAmount": "0",
+    "voucherSignature": "0x123456...vouchersig",
+    "authorizedSigner": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+    "salt": "0xaaaa1234bbbb5678cccc9012dddd3456eeee7890ffff1234aaaa5678bbbb9012"
+  }
+}
+~~~
+
+The `authorization.witness.payee` equals the challenge
+`request.recipient`, and `witness.salt` / `witness.authorizedSigner`
+equal the top-level `salt` / `authorizedSigner` (they appear in both
+places because the witness is a faithful copy of what was signed,
+while the top-level fields are what the server passes to the escrow).
+The server treats the top-level channel parameters as authoritative
+when calling `openWithPermit2`; the Permit2 signature reverts on-chain
+if the witness it reconstructs disagrees. `spender` is not shown
+because Permit2 fixes it to the escrow (`msg.sender`).
+
 ### TopUp Payload {#topup-payload}
 
 The `topUp` action adds funds to an existing channel. It resets any
@@ -1379,10 +1447,17 @@ REQUIRED, as described in the Credential Structure section.
 | `action` | string | REQUIRED | `"topUp"` |
 | `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
-| `salt` | string | REQUIRED | Random bytes32 hex; passed as `topUpSalt` for nonce derivation |
+| `salt` | string | CONDITIONAL | Random bytes32 hex; passed as `topUpSalt` for EIP-3009 nonce derivation. REQUIRED when `authorization.type="eip-3009"`; omitted for `"permit2"` (the Permit2 path uses no `topUpSalt`) |
 | `authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
 | `signature` | string | REQUIRED | Authorization signature |
-| `additionalDeposit` | string | REQUIRED | Additional amount to deposit |
+| `additionalDeposit` | string | REQUIRED | Additional amount to deposit. MUST equal the authorization amount (`authorization.value` for `"eip-3009"`, `authorization.permitted.amount` for `"permit2"`) |
+
+The top-level `additionalDeposit` and the authorization amount MUST be
+equal: the server passes this value as the `additionalDeposit` argument
+to `topUpWithAuthorization` / `topUpWithPermit2`, and the escrow binds
+it into the token-pull signature (EIP-3009 `value`, or Permit2
+`permitted.amount`). A server MUST reject the credential if the two
+disagree.
 
 ### Voucher Payload {#voucher-payload}
 
@@ -1409,7 +1484,7 @@ atomically.
 | `deposit.action` | string | REQUIRED | `"open"` or `"topUp"` |
 | `deposit.authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
 | `deposit.signature` | string | REQUIRED | Authorization signature (65 bytes, hex-encoded) |
-| `deposit.salt` | string | REQUIRED | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"`; passed as `topUpSalt` for nonce derivation when `deposit.action` is `"topUp"` |
+| `deposit.salt` | string | CONDITIONAL | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"` (REQUIRED). When `deposit.action` is `"topUp"`, passed as `topUpSalt` for EIP-3009 nonce derivation (REQUIRED for `"eip-3009"`; unused by `"permit2"`) |
 | `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Defaults to payer (`authorization.from`) if omitted. Only applicable when `deposit.action` is `"open"` |
 
 When `deposit` is present, the server processes the deposit first by
@@ -2179,11 +2254,10 @@ token-transfer layer by both supported authorization formats:
   `permitWitnessTransferFrom` (the escrow contract) can spend the
   signature. The `transferDetails.to` is also constrained to
   the escrow contract address. The channel parameters (`payee`,
-  `salt`, `authorizedSigner` for `open`; `channelId`, `topUpSalt`
-  for `topUp`) are bound into the signature as a named EIP-712
-  witness, so an attacker who substitutes any of those values when
-  calling the escrow causes the Permit2 signature verification to
-  revert.
+  `salt`, `authorizedSigner` for `open`; `channelId` for `topUp`)
+  are bound into the signature as a named EIP-712 witness, so an
+  attacker who substitutes any of those values when calling the
+  escrow causes the Permit2 signature verification to revert.
 
 The two paths achieve channel-parameter integrity by different
 mechanisms:
