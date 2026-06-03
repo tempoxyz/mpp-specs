@@ -372,6 +372,12 @@ Timestamps in EIP-712 signed data use Unix seconds as decimal strings.
 Streaming payment channels require an on-chain escrow contract that
 holds user deposits and enforces voucher-based withdrawals.
 
+The escrow's deposit accounting assumes the `currency` token transfers
+exactly the requested amount. Implementations MUST restrict the escrow
+to well-behaved ERC-20 tokens and MUST NOT use it with fee-on-transfer
+or rebasing tokens: those would make `channel.deposit` over-record the
+balance actually held, letting a payee settle more than was escrowed.
+
 ## Channel State {#channel-state}
 
 Each channel is identified by a unique `channelId` and stores:
@@ -405,7 +411,10 @@ channelId = keccak256(abi.encode(
 Note: The `channelId` includes `address(this)` (the escrow contract
 address) and `block.chainid`, explicitly binding the channel to a
 specific contract deployment and chain. This computation is identical
-to the Tempo escrow specification.
+to the Tempo escrow specification. For the relayed open functions
+(`openWithAuthorization`, `openWithPermit2`), `payer` in this
+computation is the `from` argument (the depositor), not the relayer
+that submits the transaction.
 
 ## Channel Lifecycle
 
@@ -640,8 +649,10 @@ channel. The contract MUST revert if `msg.sender != channel.payee`.
 | `signature` | bytes | EIP-712 signature from authorized signer |
 
 The contract MUST revert (e.g., with `AmountNotIncreasing()`) if
-`cumulativeAmount <= channel.settled`; only a strictly increasing
-cumulative amount advances settlement. Otherwise the contract computes
+`cumulativeAmount <= channel.settled`, and (e.g., with
+`AmountExceedsDeposit()`) if `cumulativeAmount > channel.deposit`; only
+a strictly increasing cumulative amount within the deposited balance
+advances settlement. Otherwise the contract computes
 `delta = cumulativeAmount - channel.settled`, sets
 `channel.settled = cumulativeAmount`, and transfers `delta` to the
 payee. This on-chain check is the last line of defense for the
@@ -727,7 +738,9 @@ and the contract enforces that the signature cannot be redirected to
 a different channel. Unlike the EIP-3009 path, no `topUpSalt` is
 required: Permit2's unordered nonce already provides replay
 protection for repeated top-ups, and `channelId` alone binds the
-deposit to the channel.
+deposit to the channel. Because this function takes no `token`
+argument, the escrow sets `permitted.token = channel.token` from the
+existing channel record when reconstructing the Permit2 permit.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -776,7 +789,9 @@ function close(
 
 ### requestClose
 
-User requests channel closure, starting a grace period.
+User requests channel closure, starting a grace period. The contract
+MUST revert if `msg.sender != channel.payer`, if no channel exists for
+`channelId`, or if the channel is already finalized.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -788,7 +803,22 @@ function requestClose(bytes32 channelId) external;
 
 ### withdraw
 
-User withdraws remaining funds after grace period expires.
+User withdraws the unsettled remainder after the forced-close grace
+period expires. The contract MUST revert if
+`msg.sender != channel.payer`, if the channel is already finalized, if
+no close has been requested (`channel.closeRequestedAt == 0`), or if the
+grace period has not elapsed
+(`block.timestamp < channel.closeRequestedAt + CLOSE_GRACE_PERIOD`). On
+success it transfers `channel.deposit - channel.settled` to the payer
+and sets `finalized` atomically with the payout.
+
+The `closeRequestedAt == 0` check is essential: without it,
+`block.timestamp >= 0 + CLOSE_GRACE_PERIOD` is trivially true, so a
+payer could call `withdraw` without ever calling `requestClose`,
+draining the channel before the payee settles outstanding vouchers and
+bypassing the grace period entirely. The `finalized` check prevents a
+second payout (a cooperative `close` followed by `requestClose` +
+`withdraw`) from drawing on the contract's pooled balance.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -856,7 +886,7 @@ Solidity selector.
 |-----------------|------------------|-----------|
 | `ChannelAlreadyExists` | A channel with the computed `channelId` already exists, including a finalized one ({{channel-reuse}}) | `open`, `openWithAuthorization`, `openWithPermit2` |
 | `ChannelNotFound` | No channel for the given `channelId` | `settle`, `topUp*`, `close*`, `requestClose`, `withdraw` |
-| `ChannelFinalized` | Channel is already finalized | `settle`, `topUp*`, `close*` |
+| `ChannelFinalized` | Channel is already finalized | `settle`, `topUp*`, `close*`, `requestClose`, `withdraw` |
 | `NotPayee` | `msg.sender != channel.payee` | `settle`, `close` |
 | `NotPayer` | `msg.sender != channel.payer` | `topUp`, `requestClose`, `withdraw` |
 | `AmountNotIncreasing` | `cumulativeAmount <= channel.settled` on a non-forfeit path ({{rollback-prevention}}) | `settle*`, `close*` |
@@ -865,7 +895,7 @@ Solidity selector.
 | `NonceMismatch` | Supplied EIP-3009 `nonce` ≠ value derived from channel parameters ({{front-running-protection}}) | `openWithAuthorization`, `topUpWithAuthorization` |
 | `NonceAlreadyUsed` | `(channel.payee, channelId, nonce)` already consumed ({{payee-relayed}}) | `settleWithAuthorization`, `closeWithAuthorization` |
 | `AuthorizationExpired` | `block.timestamp > deadline` on a payee authorization ({{payee-relayed}}) | `settleWithAuthorization`, `closeWithAuthorization` |
-| `CloseNotReady` | `withdraw` called before the close grace period elapsed | `withdraw` |
+| `CloseNotReady` | `withdraw` called with no pending close (`closeRequestedAt == 0`) or before the close grace period elapsed | `withdraw` |
 | `ZeroDeposit` | Deposit amount is `0` | `open*`, `topUp*` |
 | `DepositOverflow` | Deposit would exceed the `uint128` bound | `open*`, `topUp*` |
 
@@ -981,7 +1011,7 @@ by `payload.authorization.type` in the credential:
 
 - **EIP-3009** ({{EIP-3009}}, `type="eip-3009"`): the token itself
   implements `receiveWithAuthorization`. Suitable for stablecoins
-  such as USDC, USDP, and EURC that ship EIP-3009. No prior approval
+  such as USDC and EURC that ship EIP-3009. No prior approval
   is required from the payer.
 - **Permit2** ({{Permit2}}, `type="permit2"`): the canonical Permit2
   contract (deployed at the same deterministic address on most major
@@ -1064,7 +1094,10 @@ are callable by anyone; the payer's funds move only under the payer's
 own EIP-3009 or Permit2 signature, and the channel parameters the
 contract trusts are bound into that signature as required by
 {{front-running-protection}} (deterministic nonce for EIP-3009, named
-witness for Permit2).
+witness for Permit2). On the top-up paths the funding `from` need not
+equal `channel.payer`: the contract credits the existing channel, and
+any refund on close or withdraw is still paid to `channel.payer`, so a
+third-party top-up can only add funds, never redirect them.
 
 ### Payee-initiated functions {#payee-relayed}
 
@@ -1271,7 +1304,7 @@ caller-supplied value does not match.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | string | REQUIRED | `"permit2"` |
-| `from` | string | REQUIRED | Payer address (Permit2 `owner`; recovered from the signature) |
+| `from` | string | REQUIRED | Payer address (Permit2 `owner`); the Permit2 signature is verified against this address |
 | `permitted` | object | REQUIRED | Permit2 `TokenPermissions`: `{ "token": <ERC-20 address = request.currency>, "amount": <deposit in base units> }` |
 | `nonce` | string | REQUIRED | Decimal string. uint256 Permit2 unordered nonce (any unused value) |
 | `deadline` | string | REQUIRED | Decimal string. Unix timestamp after which the signature is invalid |
@@ -1485,7 +1518,7 @@ atomically.
 | `deposit.authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
 | `deposit.signature` | string | REQUIRED | Authorization signature (65 bytes, hex-encoded) |
 | `deposit.salt` | string | CONDITIONAL | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"` (REQUIRED). When `deposit.action` is `"topUp"`, passed as `topUpSalt` for EIP-3009 nonce derivation (REQUIRED for `"eip-3009"`; unused by `"permit2"`) |
-| `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Defaults to payer (`authorization.from`) if omitted. Only applicable when `deposit.action` is `"open"` |
+| `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Omitted ⇒ the zero address, which the contract treats as the payer; clients MUST use the zero address (not `authorization.from`) when deriving the EIP-3009 nonce or constructing the Permit2 witness. Only applicable when `deposit.action` is `"open"` |
 
 When `deposit` is present, the server processes the deposit first by
 calling the matching escrow function (`openWithAuthorization` /
@@ -2205,6 +2238,21 @@ The escrow contract MUST enforce canonical (low-s) signatures to prevent
 this. See the signature verification requirements in the Contract
 Functions section.
 
+## Reentrancy
+
+Functions that transfer tokens out — `settle`, `close`, `withdraw`, and
+their relayed variants — MUST follow the checks-effects-interactions
+pattern: all state changes (`channel.settled`, `channel.finalized`, and
+the payee-relayed nonce used-set) MUST be committed before the external
+token transfer. The core functions are additionally protected by their
+`msg.sender` access checks (a re-entrant call from a malicious token
+carries `msg.sender == token` and fails the payer/payee check), but
+`settleWithAuthorization` and `closeWithAuthorization` are callable by
+any relayer, so implementations MUST apply a reentrancy guard or rely
+strictly on checks-effects-interactions for those paths. Restricting the
+escrow to well-behaved tokens without transfer callbacks (e.g. USDC)
+further reduces this surface.
+
 ## No Voucher Expiry
 
 Vouchers have no `validUntil` field. Channels have no
@@ -2335,8 +2383,8 @@ When `feePayer` is `true` and `authorization.type="permit2"`,
 the payer must have previously approved the canonical Permit2
 contract for the token (typically a one-time, unlimited
 approval). The same reasoning applies: Permit2 is trusted code
-with deterministic behavior, and each `permitTransferFrom` is
-gated by a single-use nonce.
+with deterministic behavior, and each Permit2 `SignatureTransfer` is
+gated by a single-use unordered nonce.
 
 ## Contract Wallet Signer Mutability {#contract-wallet-signer-mutability}
 
@@ -2414,6 +2462,8 @@ This document registers the following payment intent in the
 | Intent | Applicable Methods | Description | Reference |
 |--------|-------------------|-------------|-----------|
 | `session` | `evm` | Streaming payment channel on any EVM chain | This document |
+
+Contact: OKG (<michael.wong@okg.com>)
 
 ## Problem Type Registration
 
