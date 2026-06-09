@@ -46,6 +46,12 @@ normative:
   I-D.solana-charge:
     title: Solana Charge Intent for HTTP Payment Authentication
     target: https://paymentauth.org/draft-solana-charge-00.html
+  CAIP-2:
+    title: Chain Agnostic Improvement Proposal 2
+    target: https://chainagnostic.org/CAIPs/caip-2
+  CAIP-10:
+    title: Chain Agnostic Improvement Proposal 10
+    target: https://chainagnostic.org/CAIPs/caip-10
   SIP-005:
     title: Stacks Blocks, Transactions, and Accounts
     target: https://raw.githubusercontent.com/stacksgov/sips/main/sips/sip-005/sip-005-blocks-and-transactions.md
@@ -249,14 +255,18 @@ through Circle Gateway discovery and estimate APIs or a conforming SDK.
 
 ## Method Details
 
-`methodDetails.profile` selects the active `usdc` profile. Exactly one of
-`methodDetails.evm`, `methodDetails.solana`, `methodDetails.stacks`, or
-`methodDetails.gateway` MUST be present, and it MUST match
-`methodDetails.profile`.
+`methodDetails.type` selects the active `usdc` profile. Its value MUST
+be one of `evm`, `solana`, `stacks`, or `gateway`.
+
+The `methodDetails` object MUST include exactly one profile details
+object, and that object MUST use the same name as `methodDetails.type`.
+For example, when `methodDetails.type = "solana"`,
+`methodDetails.solana` MUST be present and `methodDetails.evm`,
+`methodDetails.stacks`, and `methodDetails.gateway` MUST be absent.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `profile` | string | REQUIRED | One of `evm`, `solana`, `stacks`, or `gateway`. |
+| `type` | string | REQUIRED | One of `evm`, `solana`, `stacks`, or `gateway`. |
 | `evm` | object | CONDITIONAL | EVM details. Required for EVM direct USDC charge. |
 | `solana` | object | CONDITIONAL | Solana details. Required for Solana direct USDC charge. |
 | `stacks` | object | CONDITIONAL | Stacks details. Required for Stacks USDCx charge. |
@@ -376,7 +386,11 @@ so the payer's source-network choice is constrained by
 | `destinationNetwork` | string | REQUIRED | CAIP-2 destination network where the merchant wants to receive USDC. |
 | `maxFee` | string | REQUIRED | Absolute upper bound on the signed Gateway authorization fee cap, in USDC base units. |
 | `maxFeeBps` | number | OPTIONAL | Additional ratio cap. When present, `authorizationFeeCap * 10000 <= request.amount * maxFeeBps`. |
-| `credentialTypes` | array | OPTIONAL | If present, MUST contain only `gateway-transfer` in v00. If absent, `gateway-transfer` is implied. |
+| `credentialTypes` | array | OPTIONAL | If present, MUST contain only `transfer` in v00. If absent, `transfer` is implied. |
+
+Gateway network fields use CAIP-2 {{CAIP-2}} identifiers. Gateway
+account identifiers use CAIP-10 {{CAIP-10}} account IDs in the form
+`<CAIP-2 network>:<account address>`.
 
 Circle Gateway maps source and destination networks to Gateway domains,
 token identifiers, wallet contracts, minter contracts, recipient setup
@@ -440,7 +454,7 @@ keccak256(UTF-8 bytes of JCS({
   "method": "usdc",
   "realm": <challenge.realm>,
   "intent": "charge",
-  "profile": "gateway",
+  "type": "gateway",
   "requestHash": <requestHash>,
   "sourceNetwork": <selected source network>,
   "destinationNetwork": <destination network>,
@@ -646,17 +660,18 @@ For Gateway Transfer, the credential object contains:
 | `payload` | object | REQUIRED | Gateway Transfer payload. |
 | `source` | string | REQUIRED | CAIP-10 source depositor account ID. |
 
-The Gateway Transfer `payload.type` MUST be `gateway-transfer`. The
-payload carries the selected source for this charge. It does not repeat
-the full `acceptedSources` list from the request.
+The Gateway Transfer `payload.type` MUST be `transfer`. This value is
+scoped to `methodDetails.type="gateway"`. The payload carries the
+selected source for this charge. It does not repeat the full
+`acceptedSources` list from the request.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `type` | string | REQUIRED | MUST be `gateway-transfer`. |
+| `type` | string | REQUIRED | MUST be `transfer`. |
 | `sourceNetwork` | string | REQUIRED | Selected CAIP-2 source network. MUST be one entry from `methodDetails.gateway.acceptedSources`. |
 | `destinationNetwork` | string | REQUIRED | CAIP-2 destination network. |
 | `maxFee` | string | REQUIRED | Maximum Gateway fee authorized by the payer, in USDC base units. |
-| `authorization` | object | REQUIRED | Circle Gateway signed authorization package, or SDK-produced versioned object, for the selected source network. It MUST expose the signed fields required by {{verification-procedure}} to the verifier. |
+| `authorization` | object | REQUIRED | Circle Gateway signed authorization package, or SDK-produced versioned object, for the selected source network. |
 
 The Gateway authorization package represents one Gateway transfer for
 the selected source network. Its internal encoding is Circle Gateway
@@ -664,7 +679,9 @@ versioned data, not a PaymentAuth extension point. When this document
 names Gateway fields such as source depositor, source signer,
 TransferSpec value, fee cap, destination recipient, recipient setup
 options, or salt, it refers to their Gateway semantics. The wire object
-MAY carry those values under versioned Gateway field names.
+MAY carry those values under versioned Gateway field names. The
+authorization object MUST expose the signed fields required by
+{{verification-procedure}} to the verifier.
 
 The surrounding PaymentAuth credential binds that Gateway package to
 `credential.challenge.id` and `credential.challenge.realm` by requiring
@@ -684,8 +701,8 @@ verification:
 2. Verify `method="usdc"` and `intent="charge"`.
 3. Verify `credential.challenge` matches the selected challenge.
 4. Verify the challenge has not expired.
-5. Verify `methodDetails.profile` is present and exactly one matching
-   profile object is present.
+5. Verify `methodDetails.type` is present, exactly one profile object
+   is present, and the present object key matches `methodDetails.type`.
 6. Verify `amount` is a positive integer in base units.
 7. Verify the selected token is a supported USDC asset form for the
    selected profile.
@@ -701,7 +718,7 @@ controls required by local policy.
 
 For EVM, servers then apply {{I-D.evm-charge}} verification with the
 USDC restrictions in {{evm-profile}}. Servers MUST verify
-`methodDetails.profile = "evm"`. For `payload.type="authorization"`,
+`methodDetails.type = "evm"`. For `payload.type="authorization"`,
 the EIP-3009 fields are carried directly in `payload` as defined by
 {{I-D.evm-charge}}. The server MUST verify `payload.to` and
 `request.recipient` identify the same 20-byte EVM address,
@@ -712,7 +729,7 @@ case-sensitive string equality.
 
 For Solana, servers then apply {{I-D.solana-charge}} verification with
 the USDC restrictions in {{solana-profile}}. Servers MUST verify
-`methodDetails.profile = "solana"`. Servers MUST also verify that
+`methodDetails.type = "solana"`. Servers MUST also verify that
 `payload.challengeBinding.type = "challenge-binding-v00"` and that
 `payload.challengeBinding.signature` authenticates the challenge-binding
 binding message under the same source key that authorizes the token
@@ -754,7 +771,7 @@ exposure exceed local policy.
 For Stacks, servers MUST verify:
 
 1. `payload.type = "transaction"`.
-2. `methodDetails.profile = "stacks"`.
+2. `methodDetails.type = "stacks"`.
 3. `source` uses `stacks:<chainId>:<standard-principal>` and the
    chain id matches `methodDetails.stacks.chainId`.
 4. `methodDetails.stacks.decimals = 6`.
@@ -789,8 +806,9 @@ For Stacks, servers MUST verify:
     `principal = source-principal`, `asset_info = (contractAddress,
     contractName, assetName)`, `condition_code = SentEq`, and
     `amount = request.amount`.
-19. The SIP-018 challenge-binding signature recovers to the principal
-    in `source`.
+19. The SIP-018 challenge-binding signature authenticates the
+    challenge-binding message defined in this document and recovers to
+    the principal in `source`.
 20. The origin auth nonce is fresh under the server's local Stacks
     nonce policy.
 21. The transaction reaches the server's local Stacks confirmation
@@ -798,8 +816,8 @@ For Stacks, servers MUST verify:
 
 For Gateway Transfer, servers MUST verify:
 
-1. `payload.type = "gateway-transfer"`.
-2. `methodDetails.profile = "gateway"`.
+1. `payload.type = "transfer"`.
+2. `methodDetails.type = "gateway"`.
 3. `request.currency = "usdc"`.
 4. `credential.source` is a CAIP-10 account for
    `payload.sourceNetwork` and identifies the source depositor.
@@ -885,73 +903,50 @@ intent outside this document.
 
 # Receipt Schema
 
-The receipt MUST identify the selected challenge, network, token,
-payer, recipient, amount, and final transaction reference.
-
 Upon successful settlement, servers MUST return a `Payment-Receipt`
 header per {{I-D.httpauth-payment}}. The decoded receipt payload
-contains:
+contains the following fields. Fields are REQUIRED unless the
+description says OPTIONAL.
+
+The receipt is a settlement pointer interpreted together with the
+original challenge and request. It does not repeat every request or
+verification field.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `method` | string | MUST be `usdc`. |
+| `type` | string | Selected USDC profile: `evm`, `solana`, `stacks`, or `gateway`. |
+| `challengeId` | string | Original challenge ID. |
+| `reference` | string | Final settlement reference. |
+| `status` | string | MUST be `success` only after the selected profile has completed settlement. |
+| `timestamp` | string | RFC3339 settlement time. |
+| `network` | string | Settlement network identifier. |
+| `externalId` | string | OPTIONAL. Echo of `request.externalId`. |
+
+For direct EVM, `reference` is the EVM transaction hash. For direct
+Solana, `reference` is the Solana transaction signature. For direct
+Stacks, `reference` is the Stacks transaction ID.
+
+For Gateway Transfer, `reference` is the final destination settlement
+reference exposed by Circle Gateway, and `network` MUST be
+`methodDetails.gateway.destinationNetwork`. The receipt MAY include a
+`gateway` object with Gateway audit handles. SDKs that do not need
+Gateway reconciliation MAY ignore this object.
+
+When present, the `gateway` object contains:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `method` | string | REQUIRED | MUST be `usdc`. |
-| `intent` | string | REQUIRED | MUST be `charge`. |
-| `challengeId` | string | REQUIRED | Original challenge ID. |
-| `reference` | string | REQUIRED | Transaction hash, signature, or transaction ID. |
-| `referenceType` | string | REQUIRED | `tx_hash`, `tx_signature`, or `tx_id`. |
-| `status` | string | REQUIRED | `success` only after the selected profile has completed settlement. |
-| `timestamp` | string | REQUIRED | RFC3339 settlement time. |
-| `source` | string | REQUIRED | Payer account or address. |
-| `recipient` | string | REQUIRED | Recipient account or address. |
-| `amount` | string | REQUIRED | Amount in base units. |
-| `currency` | string | REQUIRED | Same token identifier used in the request. |
-| `settlement` | object | REQUIRED | Chain-local settlement reference. |
-| `externalId` | string | OPTIONAL | Echo of `request.externalId`. |
+| `transferId` | string | OPTIONAL | Circle Gateway transfer UUID when available. |
+| `sourceNetwork` | string | OPTIONAL | CAIP-2 source network used by the Gateway transfer. |
+| `destinationNetwork` | string | OPTIONAL | CAIP-2 destination network. When present, MUST equal receipt `network`. |
+| `transferSpecHash` | string | OPTIONAL | Gateway-returned hash of the TransferSpec used by the transfer. |
 
-The `settlement` object MUST include:
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `profile` | string | REQUIRED | `direct` or `gateway-transfer`. |
-| `state` | string | REQUIRED | MUST be `completed`. |
-| `network` | string | REQUIRED | Settlement network identifier. |
-| `assetForm` | string | REQUIRED | `native` or `xreserve_backed`. |
-
-For EVM, `referenceType` SHOULD be `tx_hash`.
-
-For Solana, `referenceType` SHOULD be `tx_signature`.
-
-For Stacks, `referenceType` SHOULD be `tx_id`.
-
-For Gateway Transfer, `settlement.profile` MUST be
-`gateway-transfer`, `settlement.network` MUST be the destination
-network, and `referenceType` MUST identify the final destination
-settlement reference exposed by Circle Gateway. EVM destinations
-normally use `tx_hash`; Solana destinations normally use
-`tx_signature`. The `settlement` object MUST include a `gateway`
-object with the source network actually used for settlement. It does
-not repeat the full `acceptedSources` list from the request.
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `transferId` | string | REQUIRED | Circle Gateway transfer UUID. |
-| `sourceNetwork` | string | REQUIRED | CAIP-2 source network used by the Gateway transfer. |
-| `destinationNetwork` | string | REQUIRED | CAIP-2 destination network. |
-| `transferSpecHash` | string | REQUIRED | Gateway-returned hash of the TransferSpec used by the transfer. |
-| `destinationReference` | string | OPTIONAL | Destination settlement reference when available. |
-| `destinationReferenceType` | string | OPTIONAL | Reference type for `destinationReference`. |
-| `status` | string | REQUIRED | Raw Circle Gateway transfer status. MUST be `finalized` for a successful charge receipt. |
-| `amount` | string | REQUIRED | Merchant amount in USDC base units. |
-| `maxFee` | string | REQUIRED | Maximum Gateway fee authorized by the payer. |
-| `fees` | object | OPTIONAL | Gateway fee summary returned by Circle Gateway. Fee summary amounts use Circle Gateway reporting units and are payer-paid. This field MUST be included when Circle Gateway returns a settled fee summary for the transfer. |
-
-The receipt `transferSpecHash` is evidence returned by Circle Gateway.
-It is not supplied by the client credential. A verifier MAY use Circle
-Gateway TransferSpec lookup {{CIRCLE-GATEWAY-TRANSFER-SPEC}} to inspect
-the settled TransferSpec after acceptance or settlement. For Gateway
-Transfer, the concrete token identity is verifiable from the Gateway
-transfer item or TransferSpec lookup keyed by `transferSpecHash`; the
-receipt does not repeat per-chain token addresses.
+The receipt `gateway.transferSpecHash` is evidence returned by Circle
+Gateway. It is not supplied by the client credential. A verifier MAY
+use Circle Gateway TransferSpec lookup
+{{CIRCLE-GATEWAY-TRANSFER-SPEC}} to inspect the settled TransferSpec
+after acceptance or settlement.
 
 # Security Considerations
 
@@ -1092,7 +1087,7 @@ The decoded request is:
   "description": "Arc Testnet USDC charge",
   "externalId": "invoice-evm-001",
   "methodDetails": {
-    "profile": "evm",
+    "type": "evm",
     "evm": {
       "chainId": 5042002,
       "decimals": 6,
@@ -1108,7 +1103,7 @@ The server advertises the challenge:
 
 ```http
 HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment realm="api.example.com", method="usdc", intent="charge", id="usdc_evm_direct_001", request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXNjcmlwdGlvbiI6IkFyYyBUZXN0bmV0IFVTREMgY2hhcmdlIiwiZXh0ZXJuYWxJZCI6Imludm9pY2UtZXZtLTAwMSIsIm1ldGhvZERldGFpbHMiOnsiZXZtIjp7ImNoYWluSWQiOjUwNDIwMDIsImNyZWRlbnRpYWxUeXBlcyI6WyJhdXRob3JpemF0aW9uIl0sImRlY2ltYWxzIjo2fSwicHJvZmlsZSI6ImV2bSJ9LCJyZWNpcGllbnQiOiIweGMwNDE5M0M1MGNEMkU2YTFDNzk1OTNlNDYzNjQ0OTZGZTVmY2Q5YjYifQ", expires="2026-04-01T12:05:00Z"
+WWW-Authenticate: Payment realm="api.example.com", method="usdc", intent="charge", id="usdc_evm_direct_001", request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXNjcmlwdGlvbiI6IkFyYyBUZXN0bmV0IFVTREMgY2hhcmdlIiwiZXh0ZXJuYWxJZCI6Imludm9pY2UtZXZtLTAwMSIsIm1ldGhvZERldGFpbHMiOnsiZXZtIjp7ImNoYWluSWQiOjUwNDIwMDIsImNyZWRlbnRpYWxUeXBlcyI6WyJhdXRob3JpemF0aW9uIl0sImRlY2ltYWxzIjo2fSwidHlwZSI6ImV2bSJ9LCJyZWNpcGllbnQiOiIweGMwNDE5M0M1MGNEMkU2YTFDNzk1OTNlNDYzNjQ0OTZGZTVmY2Q5YjYifQ", expires="2026-04-01T12:05:00Z"
 ```
 
 The client returns an EIP-3009 authorization credential:
@@ -1120,7 +1115,7 @@ The client returns an EIP-3009 authorization credential:
     "realm": "api.example.com",
     "method": "usdc",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXNjcmlwdGlvbiI6IkFyYyBUZXN0bmV0IFVTREMgY2hhcmdlIiwiZXh0ZXJuYWxJZCI6Imludm9pY2UtZXZtLTAwMSIsIm1ldGhvZERldGFpbHMiOnsiZXZtIjp7ImNoYWluSWQiOjUwNDIwMDIsImNyZWRlbnRpYWxUeXBlcyI6WyJhdXRob3JpemF0aW9uIl0sImRlY2ltYWxzIjo2fSwicHJvZmlsZSI6ImV2bSJ9LCJyZWNpcGllbnQiOiIweGMwNDE5M0M1MGNEMkU2YTFDNzk1OTNlNDYzNjQ0OTZGZTVmY2Q5YjYifQ",
+    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXNjcmlwdGlvbiI6IkFyYyBUZXN0bmV0IFVTREMgY2hhcmdlIiwiZXh0ZXJuYWxJZCI6Imludm9pY2UtZXZtLTAwMSIsIm1ldGhvZERldGFpbHMiOnsiZXZtIjp7ImNoYWluSWQiOjUwNDIwMDIsImNyZWRlbnRpYWxUeXBlcyI6WyJhdXRob3JpemF0aW9uIl0sImRlY2ltYWxzIjo2fSwidHlwZSI6ImV2bSJ9LCJyZWNpcGllbnQiOiIweGMwNDE5M0M1MGNEMkU2YTFDNzk1OTNlNDYzNjQ0OTZGZTVmY2Q5YjYifQ",
     "expires": "2026-04-01T12:05:00Z"
   },
   "source": "eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
@@ -1131,7 +1126,7 @@ The client returns an EIP-3009 authorization credential:
     "value": "1000000",
     "validAfter": "0",
     "validBefore": "1775045100",
-    "nonce": "0x349f879fd77eb5a560c759b5d63e7f52cc04a82015b0cd5cce6d4b308fb36f3e",
+    "nonce": "0x03e1d1aa38e2c56a0bb12e2d4562082c1c26496553f838064f3e6b4c3db9d2c2",
     "signature": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
   }
 }
@@ -1150,23 +1145,13 @@ The decoded receipt payload is:
 ```json
 {
   "method": "usdc",
-  "intent": "charge",
+  "type": "evm",
   "challengeId": "usdc_evm_direct_001",
   "reference": "0x3c5b4a1f00000000000000000000000000000000000000000000000000008d0a2c4e6b",
-  "referenceType": "tx_hash",
   "status": "success",
   "timestamp": "2026-04-01T12:00:04Z",
-  "source": "eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-  "recipient": "0xc04193C50cD2E6a1C79593e46364496Fe5fcd9b6",
-  "amount": "1000000",
-  "currency": "0x3600000000000000000000000000000000000000",
-  "externalId": "invoice-evm-001",
-  "settlement": {
-    "profile": "direct",
-    "state": "completed",
-    "network": "eip155:5042002",
-    "assetForm": "native"
-  }
+  "network": "eip155:5042002",
+  "externalId": "invoice-evm-001"
 }
 ```
 
@@ -1182,7 +1167,7 @@ The decoded request is:
   "description": "Solana devnet USDC charge",
   "externalId": "invoice-sol-001",
   "methodDetails": {
-    "profile": "solana",
+    "type": "solana",
     "solana": {
       "network": "devnet",
       "decimals": 6,
@@ -1202,7 +1187,7 @@ The client returns the Solana transaction credential defined by
     "realm": "api.example.com",
     "method": "usdc",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiI0ek1NQzlzcnQ1Umk1WDE0R0FnWGhhSGlpM0duUEFFRVJZUEpnWkpEbmNEVSIsImRlc2NyaXB0aW9uIjoiU29sYW5hIGRldm5ldCBVU0RDIGNoYXJnZSIsImV4dGVybmFsSWQiOiJpbnZvaWNlLXNvbC0wMDEiLCJtZXRob2REZXRhaWxzIjp7InByb2ZpbGUiOiJzb2xhbmEiLCJzb2xhbmEiOnsiZGVjaW1hbHMiOjYsIm5ldHdvcmsiOiJkZXZuZXQiLCJ0b2tlblByb2dyYW0iOiJUb2tlbmtlZ1FmZVp5aU53QUpiTmJHS1BGWENXdUJ2ZjlTczYyM1ZRNURBIn19LCJyZWNpcGllbnQiOiJBS25MNE5OZjNER1daSlM2Y1BrbkJ1RUduVnNWNEE0bTV0Z2ViTEhhUlNaOSJ9",
+    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiI0ek1NQzlzcnQ1Umk1WDE0R0FnWGhhSGlpM0duUEFFRVJZUEpnWkpEbmNEVSIsImRlc2NyaXB0aW9uIjoiU29sYW5hIGRldm5ldCBVU0RDIGNoYXJnZSIsImV4dGVybmFsSWQiOiJpbnZvaWNlLXNvbC0wMDEiLCJtZXRob2REZXRhaWxzIjp7InNvbGFuYSI6eyJkZWNpbWFscyI6NiwibmV0d29yayI6ImRldm5ldCIsInRva2VuUHJvZ3JhbSI6IlRva2Vua2VnUWZlWnlpTndBSmJOYkdLUEZYQ1d1QnZmOVNzNjIzVlE1REEifSwidHlwZSI6InNvbGFuYSJ9LCJyZWNpcGllbnQiOiJBS25MNE5OZjNER1daSlM2Y1BrbkJ1RUduVnNWNEE0bTV0Z2ViTEhhUlNaOSJ9",
     "expires": "2026-04-01T12:05:00Z"
   },
   "source": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy",
@@ -1234,23 +1219,13 @@ The decoded receipt payload is:
 ```json
 {
   "method": "usdc",
-  "intent": "charge",
+  "type": "solana",
   "challengeId": "usdc_solana_direct_001",
   "reference": "5j7s2KpP4uYc8LmZqEhNwR3vJbXt6yA1DsVfBgCoM9TpHxUeQk",
-  "referenceType": "tx_signature",
   "status": "success",
   "timestamp": "2026-04-01T12:00:05Z",
-  "source": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy",
-  "recipient": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
-  "amount": "1000000",
-  "currency": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  "externalId": "invoice-sol-001",
-  "settlement": {
-    "profile": "direct",
-    "state": "completed",
-    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-    "assetForm": "native"
-  }
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "externalId": "invoice-sol-001"
 }
 ```
 
@@ -1266,7 +1241,7 @@ The decoded request is:
   "description": "Stacks testnet USDCx charge",
   "externalId": "invoice-stx-001",
   "methodDetails": {
-    "profile": "stacks",
+    "type": "stacks",
     "stacks": {
       "network": "testnet",
       "chainId": "2147483648",
@@ -1291,7 +1266,7 @@ The client returns a Stacks transaction credential:
     "realm": "api.example.com",
     "method": "usdc",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiJTVDFQUUhRS1YwUkpYWkZZMURHWDhNTlNOWVZFM1ZHWkpTUlRQR1pHTS51c2RjeDo6dXNkY3gtdG9rZW4iLCJkZXNjcmlwdGlvbiI6IlN0YWNrcyB0ZXN0bmV0IFVTREN4IGNoYXJnZSIsImV4dGVybmFsSWQiOiJpbnZvaWNlLXN0eC0wMDEiLCJtZXRob2REZXRhaWxzIjp7InN0YWNrcyI6eyJhc3NldE5hbWUiOiJ1c2RjeC10b2tlbiIsImNoYWluSWQiOiIyMTQ3NDgzNjQ4IiwiY29udHJhY3RBZGRyZXNzIjoiU1QxUFFIUUtWMFJKWFpGWTFER1g4TU5TTllWRTNWR1pKU1JUUEdaR00iLCJjb250cmFjdE5hbWUiOiJ1c2RjeCIsImRlY2ltYWxzIjo2LCJmZWVQYXllciI6dHJ1ZSwiZmVlUGF5ZXJBZGRyZXNzIjoiU1Q0NDg4QksyTUtQRlFCV1BDN1lZWktDUk1RTjUyU1QwWlY2RVdUNSIsImZ1bmN0aW9uTmFtZSI6InRyYW5zZmVyIiwibmV0d29yayI6InRlc3RuZXQifX0sInJlY2lwaWVudCI6IlNUM0ZCUjJBR0s1SDlRQkRIM0VFTjZERjhFSzhKWTdSWDhOUVhNTlJRIn0",
+    "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiJTVDFQUUhRS1YwUkpYWkZZMURHWDhNTlNOWVZFM1ZHWkpTUlRQR1pHTS51c2RjeDo6dXNkY3gtdG9rZW4iLCJkZXNjcmlwdGlvbiI6IlN0YWNrcyB0ZXN0bmV0IFVTREN4IGNoYXJnZSIsImV4dGVybmFsSWQiOiJpbnZvaWNlLXN0eC0wMDEiLCJtZXRob2REZXRhaWxzIjp7InN0YWNrcyI6eyJhc3NldE5hbWUiOiJ1c2RjeC10b2tlbiIsImNoYWluSWQiOiIyMTQ3NDgzNjQ4IiwiY29udHJhY3RBZGRyZXNzIjoiU1QxUFFIUUtWMFJKWFpGWTFER1g4TU5TTllWRTNWR1pKU1JUUEdaR00iLCJjb250cmFjdE5hbWUiOiJ1c2RjeCIsImRlY2ltYWxzIjo2LCJmZWVQYXllciI6dHJ1ZSwiZmVlUGF5ZXJBZGRyZXNzIjoiU1Q0NDg4QksyTUtQRlFCV1BDN1lZWktDUk1RTjUyU1QwWlY2RVdUNSIsImZ1bmN0aW9uTmFtZSI6InRyYW5zZmVyIiwibmV0d29yayI6InRlc3RuZXQifSwidHlwZSI6InN0YWNrcyJ9LCJyZWNpcGllbnQiOiJTVDNGQlIyQUdLNUg5UUJESDNFRU42REY4RUs4Slk3Ulg4TlFYTU5SUSJ9",
     "expires": "2026-04-01T12:05:00Z"
   },
   "source": "stacks:2147483648:ST8H248H248H248H248H248H248H248H26RCPJ4T",
@@ -1320,23 +1295,13 @@ The decoded receipt payload is:
 ```json
 {
   "method": "usdc",
-  "intent": "charge",
+  "type": "stacks",
   "challengeId": "usdc_stacks_direct_001",
   "reference": "0x9a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f50617283a4b5c6d7e8f90",
-  "referenceType": "tx_id",
   "status": "success",
   "timestamp": "2026-04-01T12:01:45Z",
-  "source": "stacks:2147483648:ST8H248H248H248H248H248H248H248H26RCPJ4T",
-  "recipient": "ST3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8NQXMNRQ",
-  "amount": "1000000",
-  "currency": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx::usdcx-token",
-  "externalId": "invoice-stx-001",
-  "settlement": {
-    "profile": "direct",
-    "state": "completed",
-    "network": "stacks:2147483648",
-    "assetForm": "xreserve_backed"
-  }
+  "network": "stacks:2147483648",
+  "externalId": "invoice-stx-001"
 }
 ```
 
@@ -1359,7 +1324,7 @@ The decoded request is:
   "description": "Arc Gateway balance to Solana merchant",
   "externalId": "invoice-gw-001",
   "methodDetails": {
-    "profile": "gateway",
+    "type": "gateway",
     "gateway": {
       "acceptedSources": [
         "eip155:5042002",
@@ -1368,7 +1333,7 @@ The decoded request is:
       "destinationNetwork": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
       "maxFee": "500000",
       "credentialTypes": [
-        "gateway-transfer"
+        "transfer"
       ]
     }
   }
@@ -1379,7 +1344,7 @@ The server advertises the challenge:
 
 ```http
 HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment realm="api.example.com", method="usdc", intent="charge", id="usdc_gateway_transfer_001", request="eyJhbW91bnQiOiIyNTAwMDAwMCIsImN1cnJlbmN5IjoidXNkYyIsImRlc2NyaXB0aW9uIjoiQXJjIEdhdGV3YXkgYmFsYW5jZSB0byBTb2xhbmEgbWVyY2hhbnQiLCJleHRlcm5hbElkIjoiaW52b2ljZS1ndy0wMDEiLCJtZXRob2REZXRhaWxzIjp7ImdhdGV3YXkiOnsiYWNjZXB0ZWRTb3VyY2VzIjpbImVpcDE1NTo1MDQyMDAyIiwic29sYW5hOkV0V1RSQUJaYVlxNmlNZmVZS291UnUxNjZWVTJ4cWExIl0sImNyZWRlbnRpYWxUeXBlcyI6WyJnYXRld2F5LXRyYW5zZmVyIl0sImRlc3RpbmF0aW9uTmV0d29yayI6InNvbGFuYTpFdFdUUkFCWmFZcTZpTWZlWUtvdVJ1MTY2VlUyeHFhMSIsIm1heEZlZSI6IjUwMDAwMCJ9LCJwcm9maWxlIjoiZ2F0ZXdheSJ9LCJyZWNpcGllbnQiOiJBS25MNE5OZjNER1daSlM2Y1BrbkJ1RUduVnNWNEE0bTV0Z2ViTEhhUlNaOSJ9", expires="2026-04-01T12:05:00Z"
+WWW-Authenticate: Payment realm="api.example.com", method="usdc", intent="charge", id="usdc_gateway_transfer_001", request="eyJhbW91bnQiOiIyNTAwMDAwMCIsImN1cnJlbmN5IjoidXNkYyIsImRlc2NyaXB0aW9uIjoiQXJjIEdhdGV3YXkgYmFsYW5jZSB0byBTb2xhbmEgbWVyY2hhbnQiLCJleHRlcm5hbElkIjoiaW52b2ljZS1ndy0wMDEiLCJtZXRob2REZXRhaWxzIjp7ImdhdGV3YXkiOnsiYWNjZXB0ZWRTb3VyY2VzIjpbImVpcDE1NTo1MDQyMDAyIiwic29sYW5hOkV0V1RSQUJaYVlxNmlNZmVZS291UnUxNjZWVTJ4cWExIl0sImNyZWRlbnRpYWxUeXBlcyI6WyJ0cmFuc2ZlciJdLCJkZXN0aW5hdGlvbk5ldHdvcmsiOiJzb2xhbmE6RXRXVFJBQlphWXE2aU1mZVlLb3VSdTE2NlZVMnhxYTEiLCJtYXhGZWUiOiI1MDAwMDAifSwidHlwZSI6ImdhdGV3YXkifSwicmVjaXBpZW50IjoiQUtuTDROTmYzREdXWkpTNmNQa25CdUVHblZzVjRBNG01dGdlYkxIYVJTWjkifQ", expires="2026-04-01T12:05:00Z"
 ```
 
 The client returns a Gateway Transfer credential. The nested Gateway
@@ -1394,12 +1359,12 @@ vectors.
     "realm": "api.example.com",
     "method": "usdc",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIyNTAwMDAwMCIsImN1cnJlbmN5IjoidXNkYyIsImRlc2NyaXB0aW9uIjoiQXJjIEdhdGV3YXkgYmFsYW5jZSB0byBTb2xhbmEgbWVyY2hhbnQiLCJleHRlcm5hbElkIjoiaW52b2ljZS1ndy0wMDEiLCJtZXRob2REZXRhaWxzIjp7ImdhdGV3YXkiOnsiYWNjZXB0ZWRTb3VyY2VzIjpbImVpcDE1NTo1MDQyMDAyIiwic29sYW5hOkV0V1RSQUJaYVlxNmlNZmVZS291UnUxNjZWVTJ4cWExIl0sImNyZWRlbnRpYWxUeXBlcyI6WyJnYXRld2F5LXRyYW5zZmVyIl0sImRlc3RpbmF0aW9uTmV0d29yayI6InNvbGFuYTpFdFdUUkFCWmFZcTZpTWZlWUtvdVJ1MTY2VlUyeHFhMSIsIm1heEZlZSI6IjUwMDAwMCJ9LCJwcm9maWxlIjoiZ2F0ZXdheSJ9LCJyZWNpcGllbnQiOiJBS25MNE5OZjNER1daSlM2Y1BrbkJ1RUduVnNWNEE0bTV0Z2ViTEhhUlNaOSJ9",
+    "request": "eyJhbW91bnQiOiIyNTAwMDAwMCIsImN1cnJlbmN5IjoidXNkYyIsImRlc2NyaXB0aW9uIjoiQXJjIEdhdGV3YXkgYmFsYW5jZSB0byBTb2xhbmEgbWVyY2hhbnQiLCJleHRlcm5hbElkIjoiaW52b2ljZS1ndy0wMDEiLCJtZXRob2REZXRhaWxzIjp7ImdhdGV3YXkiOnsiYWNjZXB0ZWRTb3VyY2VzIjpbImVpcDE1NTo1MDQyMDAyIiwic29sYW5hOkV0V1RSQUJaYVlxNmlNZmVZS291UnUxNjZWVTJ4cWExIl0sImNyZWRlbnRpYWxUeXBlcyI6WyJ0cmFuc2ZlciJdLCJkZXN0aW5hdGlvbk5ldHdvcmsiOiJzb2xhbmE6RXRXVFJBQlphWXE2aU1mZVlLb3VSdTE2NlZVMnhxYTEiLCJtYXhGZWUiOiI1MDAwMDAifSwidHlwZSI6ImdhdGV3YXkifSwicmVjaXBpZW50IjoiQUtuTDROTmYzREdXWkpTNmNQa25CdUVHblZzVjRBNG01dGdlYkxIYVJTWjkifQ",
     "expires": "2026-04-01T12:05:00Z"
   },
   "source": "eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
   "payload": {
-    "type": "gateway-transfer",
+    "type": "transfer",
     "sourceNetwork": "eip155:5042002",
     "destinationNetwork": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
     "maxFee": "500000",
@@ -1451,33 +1416,18 @@ The decoded receipt payload is:
 ```json
 {
   "method": "usdc",
-  "intent": "charge",
+  "type": "gateway",
   "challengeId": "usdc_gateway_transfer_001",
   "reference": "5j7s2KpP4uYc8LmZqEhNwR3vJbXt6yA1DsVfBgCoM9TpHxUeQk",
-  "referenceType": "tx_signature",
   "status": "success",
   "timestamp": "2026-04-01T12:02:17Z",
-  "source": "eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
-  "recipient": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
-  "amount": "25000000",
-  "currency": "usdc",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
   "externalId": "invoice-gw-001",
-  "settlement": {
-    "profile": "gateway-transfer",
-    "state": "completed",
-    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-    "assetForm": "native",
-    "gateway": {
-      "transferId": "550e8400-e29b-41d4-a716-446655440000",
-      "sourceNetwork": "eip155:5042002",
-      "destinationNetwork": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
-      "transferSpecHash": "0xca85000000000000000000000000000000000000000000000000000000000000",
-      "destinationReference": "5j7s2KpP4uYc8LmZqEhNwR3vJbXt6yA1DsVfBgCoM9TpHxUeQk",
-      "destinationReferenceType": "tx_signature",
-      "status": "finalized",
-      "amount": "25000000",
-      "maxFee": "500000"
-    }
+  "gateway": {
+    "transferId": "550e8400-e29b-41d4-a716-446655440000",
+    "sourceNetwork": "eip155:5042002",
+    "destinationNetwork": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "transferSpecHash": "0xca85000000000000000000000000000000000000000000000000000000000000"
   }
 }
 ```
