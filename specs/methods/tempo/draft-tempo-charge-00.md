@@ -201,7 +201,7 @@ For zero-amount charges, mode negotiation does not apply. Clients use a
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431,
+    "chainId": 4217,
     "feePayer": true,
     "supportedModes": ["pull"]
   }
@@ -281,7 +281,7 @@ required payment effects are present regardless of call ordering.
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431,
+    "chainId": 4217,
     "feePayer": true,
     "splits": [
       {
@@ -333,7 +333,7 @@ JSON object per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge from the server |
 | `payload` | object | REQUIRED | Tempo-specific payload object |
-| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:42431:0x...`) |
+| `source` | string | OPTIONAL | Payer identifier as a DID (e.g., `did:pkh:eip155:4217:0x...`) |
 
 The `source` field, if present, SHOULD use the `did:pkh` method with the
 chain ID applicable to the challenge and the payer's Ethereum address.
@@ -369,7 +369,7 @@ present, the transaction MUST include transfers for each split entry
     "signature": "0x76f901...signed transaction bytes...",
     "type": "transaction"
   },
-  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -401,7 +401,7 @@ mode.
     "hash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
     "type": "hash"
   },
-  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -484,7 +484,7 @@ Upon successful verification, servers return a receipt per
     "signature": "0xabcdef1234567890...",
     "type": "proof"
   },
-  "source": "did:pkh:eip155:42431:0x1234567890abcdef1234567890abcdef12345678"
+  "source": "did:pkh:eip155:4217:0x1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -773,7 +773,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJzdXBwb3J0ZWRNb2RlcyI6WyJwdWxsIl19fQ",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsInN1cHBvcnRlZE1vZGVzIjpbInB1bGwiXX19",
   expires="2025-01-06T12:00:00Z"
 Cache-Control: no-store
 ~~~
@@ -786,7 +786,7 @@ The `request` decodes to:
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431,
+    "chainId": 4217,
     "supportedModes": ["pull"]
   }
 }
@@ -799,7 +799,7 @@ This requests a transfer of 1.00 pathUSD (1000000 base units).
 ~~~http
 GET /api/resource HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsic2lnbmF0dXJlIjoiMHg3NmY5MDEuLi4iLCJ0eXBlIjoidHJhbnNhY3Rpb24ifSwic291cmNlIjoiZGlkOnBraDplaXAxNTU6NDI0MzE6MHgxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4In0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIn0sInBheWxvYWQiOnsic2lnbmF0dXJlIjoiMHg3NmY5MDEuLi4iLCJ0eXBlIjoidHJhbnNhY3Rpb24ifSwic291cmNlIjoiZGlkOnBraDplaXAxNTU6NDIxNzoweDEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2NzgifQ
 ~~~
 
 # Split Payment Example
@@ -812,7 +812,7 @@ WWW-Authenticate: Payment id="sP1itPaym3ntEx4mple",
   realm="marketplace.example.com",
   method="tempo",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyNDMxLCJmZWVQYXllciI6dHJ1ZSwic3BsaXRzIjpbeyJhbW91bnQiOiI1MDAwMCIsInJlY2lwaWVudCI6IjB4QTFCMkMzRDRFNUY2QTFCMkMzRDRFNUY2QTFCMkMzRDRFNUY2QTFCMiJ9XX0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9",
+  request="eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDIwYzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJtZXRob2REZXRhaWxzIjp7ImNoYWluSWQiOjQyMTcsImZlZVBheWVyIjp0cnVlLCJzcGxpdHMiOlt7ImFtb3VudCI6IjUwMDAwIiwicmVjaXBpZW50IjoiMHhBMUIyQzNENEU1RjZBMUIyQzNENEU1RjZBMUIyQzNENEU1RjZBMUIyIn1dfSwicmVjaXBpZW50IjoiMHg3NDJkMzVDYzY2MzRDMDUzMjkyNWEzYjg0NEJjOWU3NTk1ZjhmRTAwIn0",
   expires="2025-06-01T12:00:00Z"
 Cache-Control: no-store
 ~~~
@@ -825,7 +825,7 @@ The `request` decodes to:
   "currency": "0x20c0000000000000000000000000000000000000",
   "recipient": "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE00",
   "methodDetails": {
-    "chainId": 42431,
+    "chainId": 4217,
     "feePayer": true,
     "splits": [
       {
