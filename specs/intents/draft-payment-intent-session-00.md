@@ -298,16 +298,16 @@ delivered beyond authorized or funded value.
 
 The `request` parameter for a "session" intent is a JSON object with the
 shared fields defined by this specification and optional method-specific
-extensions in the `methodDetails` field.  The `request` JSON MUST be
-serialized using JSON Canonicalization Scheme (JCS) and base64url-encoded
-without padding per {{I-D.httpauth-payment}}.
+extensions.  The `request` JSON MUST be serialized using JSON
+Canonicalization Scheme (JCS) and base64url-encoded without padding per
+{{I-D.httpauth-payment}}.
 
 ## Shared Fields
 
 All payment methods implementing the "session" intent MUST support these
-shared fields.  Payment methods MAY require additional fields in
-`methodDetails` or elevate OPTIONAL shared fields to REQUIRED in their
-method specification.
+shared fields.  Payment methods MAY require additional top-level request
+fields, require additional fields in `methodDetails`, or elevate OPTIONAL
+shared fields to REQUIRED in their method specification.
 
 ### Required Fields
 
@@ -348,10 +348,15 @@ and how to interpret `amount` for each format.
 
 ## Method Extensions
 
-Payment methods MAY define additional request fields in the
-`methodDetails` object.  Clients that do not recognize a payment method
-SHOULD ignore `methodDetails` but MUST still be able to display the
-shared fields to users.
+Payment methods MAY define additional request fields either as
+method-specific top-level fields or in the `methodDetails` object.
+Existing payment methods can use top-level fields for wire compatibility
+or broadly useful client display.  New payment methods SHOULD place
+method-specific extension data in `methodDetails` unless a top-level field
+is needed for compatibility, generic client display, or common session
+semantics.  Clients that do not recognize a payment method SHOULD ignore
+method-specific fields but MUST still be able to display the shared fields
+to users.
 
 Method-specific fields can include channel programs, escrow contracts,
 invoice details, deposit suggestions, minimum balance requirements,
