@@ -1565,7 +1565,7 @@ extends the receipt with balance tracking:
 | `intent` | string | `"session"` |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} response time |
-| `reference` | string | Payment reference; for session receipts, the `channelId` |
+| `reference` | string | Stable session reference; equal to `channelId` |
 | `challengeId` | string | Challenge identifier for audit correlation |
 | `channelId` | string | The channel identifier |
 | `acceptedCumulative` | string | Highest voucher amount accepted |
@@ -1573,9 +1573,11 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
-The `reference` field serves as the core spec's payment reference and is
-the channel ID. The `txHash` field is OPTIONAL because not every response
-involves an on-chain settlement; voucher updates are off-chain.
+The `reference` field is the core spec's stable receipt reference and
+MUST equal `channelId`.  The `txHash` field is optional settlement
+evidence because not every response involves an on-chain settlement;
+voucher updates are off-chain.  When present, `txHash` can also serve as
+a method-specific settlement reference.
 
 The `units` field indicates what was consumed for **this specific request**.
 When the challenge includes `unitType`, clients can use it to interpret the
@@ -1590,8 +1592,8 @@ challenge.
   "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:08:30Z",
-  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "237500",
@@ -1607,8 +1609,8 @@ challenge.
   "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
-  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "250000",
@@ -2325,7 +2327,8 @@ and Problem Details.
     },
     "reference": {
       "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{64}$"
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Stable session reference; equal to channelId"
     },
     "challengeId": { "type": "string" },
     "channelId": {
