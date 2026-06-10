@@ -45,6 +45,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   RFC8610:
@@ -73,11 +81,12 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the "tempo" payment method
-in the Payment HTTP Authentication Scheme. It specifies unidirectional
-streaming payment channels for incremental, voucher-based payments
-suitable for low-cost metered services, including both legacy
-contract-backed channels and TIP-20 channel precompile-backed channels.
+This document defines the "tempo" payment method implementation of the
+"session" payment intent for the Payment HTTP Authentication Scheme. It
+specifies unidirectional streaming payment channels for incremental,
+voucher-based payments suitable for low-cost metered services, including
+both legacy contract-backed channels and TIP-20 channel precompile-backed
+channels.
 
 --- middle
 
@@ -1798,14 +1807,10 @@ but MUST clearly document the value and ensure clients are aware.
 
 ## Payment Intent Registration
 
-This document registers the following payment intent in the "HTTP Payment
-Intents" registry established by {{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `session` | `tempo` | Streaming payment channel | This document |
-
-Contact: Tempo Labs (<contact@tempo.xyz>)
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `tempo` payment method implements the
+registered `session` intent.
 
 ## Problem Type Registration
 
