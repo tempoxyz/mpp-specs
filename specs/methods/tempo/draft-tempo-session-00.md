@@ -45,6 +45,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   RFC8610:
@@ -73,10 +81,10 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the "tempo" payment method
-in the Payment HTTP Authentication Scheme. It specifies unidirectional
-streaming payment channels for incremental, voucher-based payments
-suitable for low-cost the metered services.
+This document defines the "tempo" payment method implementation of the
+"session" payment intent for the Payment HTTP Authentication Scheme. It
+specifies unidirectional streaming payment channels for incremental,
+voucher-based payments suitable for low-cost metered services.
 
 --- middle
 
@@ -1349,6 +1357,7 @@ extends the receipt with balance tracking:
 | `intent` | string | `"session"` |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} response time |
+| `reference` | string | Stable session reference; equal to `channelId` |
 | `challengeId` | string | Challenge identifier for audit correlation |
 | `channelId` | string | The channel identifier |
 | `acceptedCumulative` | string | Highest voucher amount accepted |
@@ -1356,9 +1365,11 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
-The `txHash` field serves as the core spec's `reference` field in
-{{I-D.httpauth-payment}}. It is OPTIONAL because not every
-response involves an on-chain settlement—voucher updates are off-chain.
+The `reference` field is the core spec's stable receipt reference and
+MUST equal `channelId`.  The `txHash` field is optional settlement
+evidence because not every response involves an on-chain settlement;
+voucher updates are off-chain.  When present, `txHash` can also serve as
+a method-specific settlement reference.
 
 The `units` field indicates what was consumed for **this specific request**.
 When the challenge includes `unitType`, clients can use it to interpret the
@@ -1374,6 +1385,7 @@ challenge.
   "status": "success",
   "timestamp": "2025-01-06T12:08:30Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "237500",
@@ -1390,6 +1402,7 @@ challenge.
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "250000",
@@ -1588,14 +1601,10 @@ but MUST clearly document the value and ensure clients are aware.
 
 ## Payment Intent Registration
 
-This document registers the following payment intent in the "HTTP Payment
-Intents" registry established by {{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `session` | `tempo` | Streaming payment channel | This document |
-
-Contact: Tempo Labs (<contact@tempo.xyz>)
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `tempo` payment method implements the
+registered `session` intent.
 
 ## Problem Type Registration
 
@@ -2039,7 +2048,7 @@ and Problem Details.
   "$id": "https://paymentauth.org/schemas/session-receipt.json",
   "title": "Session Receipt",
   "type": "object",
-  "required": ["method", "intent", "status", "timestamp", "challengeId", "channelId", "acceptedCumulative", "spent"],
+  "required": ["method", "intent", "status", "timestamp", "reference", "challengeId", "channelId", "acceptedCumulative", "spent"],
   "properties": {
     "method": { "const": "tempo" },
     "intent": { "const": "session" },
@@ -2047,6 +2056,11 @@ and Problem Details.
     "timestamp": {
       "type": "string",
       "format": "date-time"
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Stable session reference; equal to channelId"
     },
     "challengeId": { "type": "string" },
     "channelId": {
