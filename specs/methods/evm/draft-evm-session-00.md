@@ -70,6 +70,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   EIP-55:
@@ -113,11 +121,11 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the "evm" payment method
-in the Payment HTTP Authentication Scheme. It specifies unidirectional
-streaming payment channels for incremental, voucher-based payments on
-any EVM-compatible blockchain, suitable for metered services such as
-LLM inference.
+This document defines the "evm" payment method implementation of the
+"session" intent for the Payment HTTP Authentication Scheme. It specifies
+unidirectional streaming payment channels for incremental, voucher-based
+payments on any EVM-compatible blockchain, suitable for metered services
+such as LLM inference.
 
 --- middle
 
@@ -127,11 +135,8 @@ This document is published as Informational but contains normative
 requirements using BCP 14 keywords {{RFC2119}} {{RFC8174}} to ensure
 interoperability between implementations.
 
-The `session` intent is an **experimental intent** defined in
-this method specification per the contribution guidelines. It
-has not yet been formalized in `specs/intents/`. Once a second
-method implements the same intent pattern, common semantics
-SHOULD be extracted into a standalone intent specification.
+This document defines the "evm" payment method implementation of the
+"session" intent registered by {{I-D.payment-intent-session}}.
 
 The `session` intent establishes a unidirectional streaming
 payment channel using on-chain escrow and off-chain {{EIP-712}}
@@ -288,7 +293,7 @@ The following diagrams illustrate the two open modes.
       |                             |-------------------------->  |
       |                             |                             |
       |  (11) 200 OK + Receipt      |                             |
-      |       (includes reference)  |                             |
+      |       (includes txHash)     |                             |
       |<--------------------------  |                             |
       |                             |                             |
 ~~~
@@ -2114,16 +2119,21 @@ trailer if the client advertises `TE: trailers`.
 | `intent` | string | REQUIRED | `"session"` |
 | `status` | string | REQUIRED | `"success"` |
 | `timestamp` | string | REQUIRED | {{RFC3339}} response time |
+| `reference` | string | REQUIRED | Stable session reference; equal to `channelId` |
 | `challengeId` | string | REQUIRED | Challenge identifier |
 | `channelId` | string | REQUIRED | Channel identifier |
 | `acceptedCumulative` | string | REQUIRED | Highest voucher accepted |
 | `spent` | string | REQUIRED | Total amount charged |
 | `chainId` | number | REQUIRED | EVM chain ID where settlement occurs |
 | `units` | number | OPTIONAL | Units consumed this request |
-| `reference` | string | OPTIONAL | On-chain tx hash (on settlement/close) |
+| `txHash` | string | OPTIONAL | On-chain transaction hash (present on settlement/close) |
 | `confirmations` | number | OPTIONAL | Block confirmations at receipt time |
 
-The `reference` field is the `reference` defined in {{I-D.httpauth-payment}}, containing the on-chain transaction hash when present. It is OPTIONAL because not every response involves on-chain settlement — voucher updates are off-chain.
+The `reference` field is the core spec's stable receipt reference and
+MUST equal `channelId`. The `txHash` field is optional settlement
+evidence because not every response involves an on-chain settlement;
+voucher updates are off-chain. When present, `txHash` can also serve as
+a method-specific settlement reference.
 
 **Example receipt (per-request):**
 
@@ -2134,6 +2144,7 @@ The `reference` field is the `reference` defined in {{I-D.httpauth-payment}}, co
   "status": "success",
   "timestamp": "2026-04-01T12:08:30Z",
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "reference": "0x6d0f4fdf...",
   "channelId": "0x6d0f4fdf...",
   "chainId": 196,
   "acceptedCumulative": "250000",
@@ -2151,11 +2162,12 @@ The `reference` field is the `reference` defined in {{I-D.httpauth-payment}}, co
   "status": "success",
   "timestamp": "2026-04-01T12:10:00Z",
   "challengeId": "kM9xPqWvT2nJrHsY4aDfEb",
+  "reference": "0x6d0f4fdf...",
   "channelId": "0x6d0f4fdf...",
   "chainId": 196,
   "acceptedCumulative": "250000",
   "spent": "250000",
-  "reference": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890"
+  "txHash": "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890"
 }
 ~~~
 
@@ -2465,15 +2477,10 @@ This document does not create a separate registration.
 
 ## Payment Intent Registration
 
-This document registers the following payment intent in the
-"HTTP Payment Intents" registry established by
-{{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `session` | `evm` | Streaming payment channel on any EVM chain | This document |
-
-Contact: OKG (<michael.wong@okg.com>)
+The `session` intent is registered by
+{{I-D.payment-intent-session}}. This document does not register a new
+payment intent; it defines how the `evm` payment method implements the
+registered `session` intent.
 
 ## Problem Type Registration
 
