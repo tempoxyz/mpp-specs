@@ -12,7 +12,7 @@ author:
   - name: Jacob Brans
     ins: J. Brans
     email: jbrans@visa.com
-    organization: Visa
+    org: Visa
 
 normative:
   RFC2119:
@@ -27,7 +27,7 @@ normative:
   RFC9110:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
