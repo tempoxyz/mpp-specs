@@ -258,7 +258,7 @@ The following diagrams illustrate the two open modes.
       |                             |                             |
       |  (4) Authorization: Payment |                             |
       |      action="open"          |                             |
-      |      type="transaction"     |                             |
+      |      type="authorization"   |                             |
       |-------------------------->  |                             |
       |                             |  (5) openWithAuthz(...)     |
       |                             |-------------------------->  |
@@ -933,16 +933,22 @@ consumption: `total = amount * units_consumed`.
 | `methodDetails.channelId` | string | OPTIONAL | Channel ID if resuming an existing channel |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (base units). Default: `"0"` (any positive increment accepted). See {{dos-mitigation}} |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays gas for open/topUp (default: `false`) |
-| `methodDetails.feePayerAuthorizations` | array | CONDITIONAL | Authorization formats the server and its escrow support, as an ordered list of `authorization.type` values (`"eip-3009"`, `"permit2"`). REQUIRED when `feePayer` is `true`; omitted/ignored otherwise. Order expresses server preference |
+| `methodDetails.credentialTypes` | array | OPTIONAL | Credential formats the server accepts, as an ordered list of top-level `payload.type` values. EVM session uses the shared EVM values `"permit2"`, `"authorization"`, and `"hash"`; it omits the charge-only full signed transaction path. Order expresses server preference |
 | `methodDetails.permit2Contract` | string | OPTIONAL | Permit2 contract address used as the EIP-712 `verifyingContract` on the `permit2` authorization path. Defaults to the canonical deterministic Permit2 deployment; REQUIRED when the target chain's Permit2 is not at the canonical address. The client MUST use this value (or the canonical default when omitted) as `verifyingContract` when signing, and it MUST match the escrow's configured Permit2 address |
 
-When `feePayer` is `true`, the server MUST advertise
-`feePayerAuthorizations` listing every authorization format its escrow
-actually implements (`openWithPermit2` deployed ⇒ include `"permit2"`,
-etc.). The client MUST choose one `authorization.type` from this list
-that it can produce, and MUST NOT submit a format absent from the list.
-This makes the supported paths discoverable in-band rather than relying
-on out-of-band documentation. A contract MAY additionally expose its
+Servers MAY advertise `credentialTypes` listing every credential format
+they accept for this challenge. The list uses the same ordered
+preference semantics as the EVM charge intent: clients select the first
+listed type they can produce unless local policy chooses otherwise, and
+MUST NOT submit a format absent from the list. If `credentialTypes` is omitted, it defaults to `["hash"]`.
+
+When `feePayer` is `true`, servers that want clients to use a
+server-submitted open/topUp format MUST include at least one such type
+backed by the escrow (`openWithAuthorization` deployed ⇒ include
+`"authorization"`; `openWithPermit2` deployed ⇒ include `"permit2"`).
+They MAY also include `"hash"` as a client-broadcast fallback. This
+makes the supported paths discoverable in-band rather than relying on
+out-of-band documentation. A contract MAY additionally expose its
 relayed-path support on-chain (e.g. via an introspection view) for
 clients that verify the escrow directly, but the challenge field is the
 authoritative signal for the session flow.
@@ -1007,9 +1013,9 @@ signature instead of broadcasting an on-chain transaction. The server
 submits the on-chain transaction and pays gas from its own balance.
 
 This specification supports two authorization formats, distinguished
-by `payload.authorization.type` in the credential:
+by the credential's top-level `payload.type`:
 
-- **EIP-3009** ({{EIP-3009}}, `type="eip-3009"`): the token itself
+- **EIP-3009** ({{EIP-3009}}, `type="authorization"`): the token itself
   implements `receiveWithAuthorization`. Suitable for stablecoins
   such as USDC and EURC that ship EIP-3009. No prior approval
   is required from the payer.
@@ -1025,11 +1031,12 @@ by `payload.authorization.type` in the credential:
 
 Selection rules:
 
-1. The server advertises which authorization formats it accepts in the
-   challenge's `methodDetails.feePayerAuthorizations` (REQUIRED when
-   `feePayer` is `true`). The client selects one format from that list
-   that it can produce; the credential's `payload.authorization.type`
-   is the on-the-wire discriminator for the choice.
+1. The server advertises accepted credential formats in the challenge's
+   `methodDetails.credentialTypes`, or defaults to `"hash"` when that
+   field is omitted. For `feePayer: true`, the client selects one
+   advertised server-submitted format (`"authorization"` or `"permit2"`)
+   that it can produce; the credential's top-level `payload.type` is
+   the on-the-wire discriminator for the choice.
 2. **EIP-3009 path**: The client signs the EIP-712 typed data for
    `receiveWithAuthorization`. The server calls
    `openWithAuthorization()` or `topUpWithAuthorization()`. The
@@ -1045,7 +1052,8 @@ Selection rules:
    pulls tokens via the prior Permit2 approval.
 
 When `feePayer` is `true`, the `currency` token MUST support at
-least one of the two paths advertised by the server. Servers MUST
+least one of the two server-submitted paths advertised by the server.
+Servers MUST
 NOT advertise `feePayer: true` for tokens whose authorization paths
 they cannot service.
 
@@ -1058,6 +1066,11 @@ When `feePayer: false` or omitted:
 - **Smart Wallet clients**: Client batches `approve + open` in a
   UserOperation (ERC-4337 {{ERC-4337}}). A Paymaster MAY sponsor gas
   for this client-submitted transaction path.
+
+Servers that accept this client-broadcast path either omit
+`methodDetails.credentialTypes` (defaulting to `"hash"`) or include
+`"hash"` in the list; clients MUST NOT submit `type="hash"` when
+`credentialTypes` is present and omits `"hash"`.
 
 ## Server-Initiated Operations
 
@@ -1083,7 +1096,7 @@ party that authorized it off-chain.
 
 A server MUST NOT advertise a capability whose backing function its
 escrow does not implement: `feePayer: true` requires at least one of
-the payer-funded functions for the offered `authorization.type`, and
+the payer-funded functions for the offered top-level `type`, and
 relayed settlement requires the corresponding payee-side function.
 
 ### Payer-funded functions
@@ -1179,12 +1192,12 @@ base64url-encoded JSON object per {{I-D.httpauth-payment}}.
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge parameters |
 | `payload` | object | REQUIRED | Session-specific payload object |
-| `source` | string | CONDITIONAL | Payer identifier as a DID. REQUIRED when payload `type="hash"`; NOT REQUIRED when `type="transaction"` |
+| `source` | string | CONDITIONAL | Payer identifier as a DID. REQUIRED when payload `type="hash"`; NOT REQUIRED when `type="authorization"` or `type="permit2"` |
 
 The `source` field SHOULD use the `did:pkh` method {{DID-PKH}} with
 the chain ID from the challenge and the payer's Ethereum address
-(e.g., `did:pkh:eip155:196:0xConsumer...`). When `type="transaction"`,
-the payer is identified via `authorization.from`.
+(e.g., `did:pkh:eip155:196:0xConsumer...`). When `type="authorization"`
+or `type="permit2"`, the payer is identified via `authorization.from`.
 
 ## Payload Actions
 
@@ -1256,20 +1269,20 @@ hash credentials.
 }
 ~~~
 
-### Open Payload (feePayer: true) {#open-transaction}
+### Open Payload (feePayer: true) {#open-server-submitted}
 
 When `feePayer` is `true`, the client submits a token-pull
 authorization for the server to call the corresponding
 `openWith…()` function on the escrow contract. The
-`authorization.type` field selects the format.
+top-level `type` field selects the format.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | string | REQUIRED | `"open"` |
-| `type` | string | REQUIRED | `"transaction"` |
+| `type` | string | REQUIRED | `"authorization"` for EIP-3009, or `"permit2"` for Permit2 |
 | `channelId` | string | REQUIRED | Channel identifier (hex bytes32) |
-| `authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` |
-| `signature` | string | REQUIRED | Authorization signature (65 bytes hex). EIP-3009 signature if `authorization.type="eip-3009"`; Permit2 EIP-712 signature if `authorization.type="permit2"` |
+| `authorization` | object | REQUIRED | Token-pull authorization parameters; shape determined by the top-level `type` |
+| `signature` | string | REQUIRED | Authorization signature (65 bytes hex). EIP-3009 signature if `type="authorization"`; Permit2 EIP-712 signature if `type="permit2"` |
 | `cumulativeAmount` | string | REQUIRED | Initial cumulative amount (typically `"0"`) |
 | `voucherSignature` | string | REQUIRED | EIP-712 voucher signature for the initial amount |
 | `authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers (defaults to payer if omitted) |
@@ -1277,11 +1290,10 @@ authorization for the server to call the corresponding
 
 The `authorization` object takes one of two shapes.
 
-**EIP-3009 shape** (`authorization.type="eip-3009"`):
+**EIP-3009 shape** (`type="authorization"`):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"eip-3009"` |
 | `from` | string | REQUIRED | Payer address |
 | `to` | string | REQUIRED | Escrow contract address (= `methodDetails.escrowContract`) |
 | `value` | string | REQUIRED | Deposit amount in base units |
@@ -1299,11 +1311,10 @@ and MUST transmit it in the credential. The escrow contract recomputes
 the expected nonce from its own function arguments and reverts if the
 caller-supplied value does not match.
 
-**Permit2 shape** (`authorization.type="permit2"`):
+**Permit2 shape** (`type="permit2"`):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | REQUIRED | `"permit2"` |
 | `from` | string | REQUIRED | Payer address (Permit2 `owner`); the Permit2 signature is verified against this address |
 | `permitted` | object | REQUIRED | Permit2 `TokenPermissions`: `{ "token": <ERC-20 address = request.currency>, "amount": <deposit in base units> }` |
 | `nonce` | string | REQUIRED | Decimal string. uint256 Permit2 unordered nonce (any unused value) |
@@ -1385,10 +1396,9 @@ any chain whose Permit2 is not at the canonical address.
   },
   "payload": {
     "action": "open",
-    "type": "transaction",
+    "type": "authorization",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "authorization": {
-      "type": "eip-3009",
       "from": "0xaabbccddee11223344556677889900aabbccddee",
       "to": "0x1234567890abcdef1234567890abcdef12345678",
       "value": "10000000",
@@ -1419,10 +1429,9 @@ any chain whose Permit2 is not at the canonical address.
   },
   "payload": {
     "action": "open",
-    "type": "transaction",
+    "type": "permit2",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "authorization": {
-      "type": "permit2",
       "from": "0xaabbccddee11223344556677889900aabbccddee",
       "permitted": {
         "token": "0x74b7F16337b8972027F6196A17a631ac6dE26d22",
@@ -1478,12 +1487,12 @@ REQUIRED, as described in the Credential Structure section.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `action` | string | REQUIRED | `"topUp"` |
-| `type` | string | REQUIRED | `"transaction"` |
+| `type` | string | REQUIRED | `"authorization"` for EIP-3009, or `"permit2"` for Permit2 |
 | `channelId` | string | REQUIRED | Channel ID |
-| `salt` | string | CONDITIONAL | Random bytes32 hex; passed as `topUpSalt` for EIP-3009 nonce derivation. REQUIRED when `authorization.type="eip-3009"`; omitted for `"permit2"` (the Permit2 path uses no `topUpSalt`) |
-| `authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
+| `salt` | string | CONDITIONAL | Random bytes32 hex; passed as `topUpSalt` for EIP-3009 nonce derivation. REQUIRED when `type="authorization"`; omitted for `"permit2"` (the Permit2 path uses no `topUpSalt`) |
+| `authorization` | object | REQUIRED | Token-pull authorization parameters; shape determined by the top-level `type`, using the same shapes defined in {{open-server-submitted}} |
 | `signature` | string | REQUIRED | Authorization signature |
-| `additionalDeposit` | string | REQUIRED | Additional amount to deposit. MUST equal the authorization amount (`authorization.value` for `"eip-3009"`, `authorization.permitted.amount` for `"permit2"`) |
+| `additionalDeposit` | string | REQUIRED | Additional amount to deposit. MUST equal the authorization amount (`authorization.value` for `"authorization"`, `authorization.permitted.amount` for `"permit2"`) |
 
 The top-level `additionalDeposit` and the authorization amount MUST be
 equal: the server passes this value as the `additionalDeposit` argument
@@ -1515,15 +1524,16 @@ atomically.
 |-------|------|----------|-------------|
 | `deposit` | object | OPTIONAL | Deposit extension |
 | `deposit.action` | string | REQUIRED | `"open"` or `"topUp"` |
-| `deposit.authorization` | object | REQUIRED | Token-pull authorization parameters; format determined by `authorization.type` (`"eip-3009"` or `"permit2"`), using the same shapes defined in {{open-transaction}} |
+| `deposit.type` | string | REQUIRED | `"authorization"` for EIP-3009, or `"permit2"` for Permit2 |
+| `deposit.authorization` | object | REQUIRED | Token-pull authorization parameters; shape determined by `deposit.type`, using the same shapes defined in {{open-server-submitted}} |
 | `deposit.signature` | string | REQUIRED | Authorization signature (65 bytes, hex-encoded) |
-| `deposit.salt` | string | CONDITIONAL | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"` (REQUIRED). When `deposit.action` is `"topUp"`, passed as `topUpSalt` for EIP-3009 nonce derivation (REQUIRED for `"eip-3009"`; unused by `"permit2"`) |
+| `deposit.salt` | string | CONDITIONAL | Random bytes32 hex. Used for channelId computation when `deposit.action` is `"open"` (REQUIRED). When `deposit.action` is `"topUp"`, passed as `topUpSalt` for EIP-3009 nonce derivation (REQUIRED for `type="authorization"`; unused by `"permit2"`) |
 | `deposit.authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers. Omitted ⇒ the zero address, which the contract treats as the payer; clients MUST use the zero address (not `authorization.from`) when deriving the EIP-3009 nonce or constructing the Permit2 witness. Only applicable when `deposit.action` is `"open"` |
 
 When `deposit` is present, the server processes the deposit first by
 calling the matching escrow function (`openWithAuthorization` /
-`topUpWithAuthorization` for `authorization.type="eip-3009"`, or
-`openWithPermit2` / `topUpWithPermit2` for `authorization.type="permit2"`),
+`topUpWithAuthorization` for `deposit.type="authorization"`, or
+`openWithPermit2` / `topUpWithPermit2` for `deposit.type="permit2"`),
 then validates and accepts the voucher. If the deposit fails, the
 server MUST reject the entire credential.
 
@@ -1578,9 +1588,9 @@ revert if `open` is called on an existing `channelId`.
     "signature": "0xabcdef...vouchersig",
     "deposit": {
       "action": "topUp",
+      "type": "authorization",
       "salt": "0xcccc5678dddd9012eeee3456ffff7890aaaa1234bbbb5678cccc9012dddd3456",
       "authorization": {
-        "type": "eip-3009",
         "from": "0xaabbccddee11223344556677889900aabbccddee",
         "to": "0x1234567890abcdef1234567890abcdef12345678",
         "value": "5000000",
@@ -1729,9 +1739,9 @@ action-specific verification:
 
 Whenever a server relies on an on-chain transaction — verifying a
 client-submitted `txHash` (`type="hash"`) or submitting one itself
-(`type="transaction"`, `settle`, `close`) — it MUST read the receipt's
-`status` field and MUST NOT treat the transaction as effective on
-`status` alone being present.
+(`type="authorization"`, `type="permit2"`, `settle`, `close`) — it
+MUST read the receipt's `status` field and MUST NOT treat the
+transaction as effective on `status` alone being present.
 
 - `status == 0x1` (success): the call's on-chain effects occurred;
   proceed to verify channel state.
@@ -1771,14 +1781,14 @@ On `action="open"`, servers MUST:
 5. Verify the initial voucher signature (see {{voucher-verification}})
 6. Initialize server-side accounting state
 
-**When `type="transaction"`:**
+**When `type="authorization"` or `type="permit2"`:**
 
-1. Verify the `authorization` parameters according to
-   `authorization.type`:
-    - `"eip-3009"`: validate EIP-3009 fields and signature
+1. Verify the `authorization` parameters according to the top-level
+   `type`:
+    - `"authorization"`: validate EIP-3009 fields and signature
     - `"permit2"`: validate Permit2 fields and signature
 2. Call the matching escrow function:
-    - `"eip-3009"`: `openWithAuthorization()`
+    - `"authorization"`: `openWithAuthorization()`
     - `"permit2"`: `openWithPermit2()`
 3. Verify channel state as above
 4. Verify the initial voucher signature
@@ -1800,14 +1810,14 @@ On `action="topUp"`, servers MUST:
    `payload.additionalDeposit`
 5. Update server-side balance
 
-**When `type="transaction"`:**
+**When `type="authorization"` or `type="permit2"`:**
 
-1. Verify the `authorization` parameters according to
-   `authorization.type`:
-    - `"eip-3009"`: validate EIP-3009 fields and signature
+1. Verify the `authorization` parameters according to the top-level
+   `type`:
+    - `"authorization"`: validate EIP-3009 fields and signature
     - `"permit2"`: validate Permit2 fields and signature
 2. Call the matching escrow function:
-    - `"eip-3009"`: `topUpWithAuthorization()`
+    - `"authorization"`: `topUpWithAuthorization()`
     - `"permit2"`: `topUpWithPermit2()`
 3. Verify updated channel state
 4. Update server-side balance
@@ -1819,9 +1829,9 @@ On `action="voucher"`, servers MUST:
 1. Verify `channel.closeRequestedAt == 0` (no pending close).
    Reject vouchers on channels with a pending forced close.
 2. If `deposit` field is present, process deposit first:
-    - For `authorization.type="eip-3009"`, call
+    - For `deposit.type="authorization"`, call
       `openWithAuthorization` or `topUpWithAuthorization`
-    - For `authorization.type="permit2"`, call
+    - For `deposit.type="permit2"`, call
       `openWithPermit2` or `topUpWithPermit2`
     - Verify updated channel state
 3. Verify voucher signature using EIP-712 recovery
@@ -2379,7 +2389,7 @@ possible (e.g., via ERC-4337 UserOperations or
 multicall) to minimize the window between approval and
 channel creation.
 
-When `feePayer` is `true` and `authorization.type="permit2"`,
+When `feePayer` is `true` and `type="permit2"`,
 the payer must have previously approved the canonical Permit2
 contract for the token (typically a one-time, unlimited
 approval). The same reasoning applies: Permit2 is trusted code
@@ -2569,13 +2579,17 @@ Client                  Server               X Layer
   |----------------------->|                      |
   | 402 + WWW-Authenticate |                      |
   | feePayer=true           |                      |
+  | credentialTypes=       |                      |
+  | ["permit2",            |                      |
+  |  "authorization",      |                      |
+  |  "hash"]               |                      |
   |<-----------------------|                      |
   |                        |                      |
   | Sign EIP-3009 (5 USDC) |                      |
   | Sign voucher (cum=0)   |                      |
   | Credential:            |                      |
   | action="open"          |                      |
-  | type="transaction"     |                      |
+  | type="authorization"   |                      |
   |----------------------->|                      |
   |                        | openWithAuthz(...)   |
   |                        |--------------------->|
@@ -2591,6 +2605,7 @@ Client                  Server               X Layer
   | action="voucher"       |                      |
   | cum=4800000            |                      |
   | deposit={action:"topUp"|                      |
+  |   type:"authorization" |                      |
   |   authorization:{...}} |                      |
   |----------------------->|                      |
   |                        | topUpWithAuthz(...)  |
