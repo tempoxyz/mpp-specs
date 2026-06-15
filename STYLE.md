@@ -176,7 +176,7 @@ implicitly version 1:
 
 ```json
 {
-  "chainId": 42431,
+  "chainId": 4217,
   "feePayer": true
 }
 ```
@@ -187,7 +187,7 @@ a `version` field starting at `2`:
 ```json
 {
   "version": 2,
-  "chainId": 42431,
+  "chainId": 4217,
   "feePayer": true
 }
 ```

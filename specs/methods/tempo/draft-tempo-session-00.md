@@ -41,7 +41,7 @@ normative:
   RFC9457:
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
@@ -247,7 +247,7 @@ JSON to avoid precision loss with large numbers:
 |-------|----------|---------|
 | `cumulativeAmount` | Decimal string | `"250000"` |
 | `requestedAt` | Decimal string (Unix seconds) | `"1736165100"` |
-| `chainId` | JSON number | `42431` |
+| `chainId` | JSON number | `4217` |
 
 The `chainId` uses JSON number encoding as values are small enough to
 avoid precision issues.
@@ -540,7 +540,7 @@ promote common fields to the core schema.
 | `methodDetails.channelId` | string | OPTIONAL | Channel ID if resuming an existing channel |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (server policy hint) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
-| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
+| `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 4217) |
 
 Channel reuse is OPTIONAL. Servers MAY include `channelId` to suggest
 resuming an existing channel:
@@ -567,7 +567,7 @@ mappings to suggest channel reuse, reducing on-chain transactions.
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
@@ -586,7 +586,7 @@ deposit of 10.00 tokens. The client generates a random salt locally.
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
@@ -943,7 +943,7 @@ The `domain` object MUST contain:
 |-------|------|-------|
 | `name` | string | `"Tempo Stream Channel"` |
 | `version` | string | `"1"` |
-| `chainId` | number | Tempo chain ID (e.g., `42431`) |
+| `chainId` | number | Tempo chain ID (e.g., `4217`) |
 | `verifyingContract` | string | Escrow contract address from challenge |
 
 ## Signing Procedure
@@ -1646,7 +1646,7 @@ The `request` decodes to:
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
-    "chainId": 42431
+    "chainId": 4217
   }
 }
 ~~~
