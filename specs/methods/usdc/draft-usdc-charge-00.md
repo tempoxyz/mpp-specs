@@ -58,9 +58,6 @@ normative:
   SIP-010:
     title: Stacks Fungible Token Standard
     target: https://raw.githubusercontent.com/stacksgov/sips/main/sips/sip-010/sip-010-fungible-token-standard.md
-  SIP-018:
-    title: Stacks Signed Structured Data
-    target: https://raw.githubusercontent.com/stacksgov/sips/main/sips/sip-018/sip-018-signed-structured-data.md
   CIRCLE-GATEWAY-INFO:
     title: Circle Gateway GET /v1/info
     target: https://developers.circle.com/api-reference/gateway/all/get-gateway-info
@@ -100,9 +97,10 @@ and broadcast mechanics in the relevant chain profile.
 This version covers direct USDC charges on EVM and Solana by
 profiling the existing PaymentAuth EVM and Solana charge
 specifications. The EVM profile is intentionally limited to EIP-3009
-authorization credentials in v00. It also defines a direct Stacks
-USDCx profile because Stacks USDCx is backed by USDC through xReserve
-and is not covered by a generic MPP chain method today.
+authorization credentials in v00. It also defines a direct
+USDCx on Stacks profile because USDCx on Stacks is backed by USDC
+through xReserve and is not covered by a generic MPP chain method
+today.
 
 This version also defines a Gateway Transfer charge profile for
 cross-chain USDC payments through Circle Gateway. The merchant chooses
@@ -137,8 +135,7 @@ Normatively specified:
 
 - EVM direct USDC charges, by reference to {{I-D.evm-charge}}.
 - Solana direct USDC charges, by reference to {{I-D.solana-charge}}.
-- Stacks direct USDCx charges using SIP-010 transfers and SIP-018
-  challenge binding.
+- Stacks direct USDCx charges using SIP-010 transfers.
 - Gateway Transfer charges through Circle Gateway that settle on the
   merchant's selected destination network before a successful receipt is
   returned.
@@ -189,10 +186,10 @@ capitals.
   deployment.
 
 **USDCx on Stacks**
-: The SIP-010 token issued by the partner-deployed Stacks USDCx
-  contract and backed 1:1 by USDC controlled through Circle xReserve on
-  supported source chains. USDCx is not native USDC, so this profile
-  treats it as a distinct asset form.
+: The SIP-010 token issued by the partner-deployed USDCx on Stacks
+  contract and backed 1:1 by USDC deposited into a Circle xReserve
+  smart contract on supported source chains. USDCx is not native USDC,
+  so this profile treats it as a distinct asset form.
 
 **Direct Charge**
 : A payment where the server returns a successful receipt only after
@@ -269,8 +266,25 @@ For example, when `methodDetails.type = "solana"`,
 | `type` | string | REQUIRED | One of `evm`, `solana`, `stacks`, or `gateway`. |
 | `evm` | object | CONDITIONAL | EVM details. Required for EVM direct USDC charge. |
 | `solana` | object | CONDITIONAL | Solana details. Required for Solana direct USDC charge. |
-| `stacks` | object | CONDITIONAL | Stacks details. Required for Stacks USDCx charge. |
+| `stacks` | object | CONDITIONAL | Stacks details. Required for USDCx on Stacks charge. |
 | `gateway` | object | CONDITIONAL | Circle Gateway Transfer details. Required for Gateway Transfer charge. |
+
+This `methodDetails.type` discriminator with a nested per-profile
+object is intentionally not the flat `methodDetails` shape used by
+{{I-D.evm-charge}} and {{I-D.solana-charge}}. A parser written for the
+base specs' flat `methodDetails` will not work here; implementations
+MUST select the active profile object by `methodDetails.type`.
+
+Identifier formats otherwise follow each profile's base specification.
+The direct EVM and Solana profiles use the payer and recipient
+identifier formats defined by {{I-D.evm-charge}} and
+{{I-D.solana-charge}}. CAIP-2 {{CAIP-2}} network identifiers and CAIP-10
+{{CAIP-10}} account identifiers are used normatively in the Gateway
+Transfer profile, where one charge can route across chain families and a
+chain-native identifier alone would be ambiguous, and in the Stacks
+profile, which has no base MPP chain method to inherit from. The receipt
+`network` field is a single, deliberate cross-profile identifier
+described in {{receipt-schema}}.
 
 ## EVM Profile {#evm-profile}
 
@@ -327,16 +341,27 @@ Servers SHOULD verify that `tokenProgram` equals the owner program of
 the mint account returned by Solana RPC. A mismatch MUST cause
 credential rejection.
 
-Solana credentials for this profile MUST use `payload.type="transaction"`.
-Unlike the base Solana charge profile, this profile also requires a
-detached challenge-binding signature. The transaction signature alone
-prevents network replay, but it does not prove that the transaction was
-created for this exact `usdc` challenge.
+Solana credentials for this profile MUST use `payload.type="transaction"`
+and inherit base Solana pull-mode verification from
+{{I-D.solana-charge}}. The credential echoes the challenge, and the
+server binds settlement to it through challenge consumption and
+transaction-signature replay protection as defined by
+{{I-D.solana-charge}}.
+
+Deployments that need third-party verifier or facilitator proof MAY
+define a stricter challenge-bound authorization profile in a later
+version.
 
 ## Stacks Profile {#stacks-profile}
 
-Stacks uses SIP-005 {{SIP-005}} consensus-serialized transactions and
-SIP-018 {{SIP-018}} challenge binding.
+Stacks uses SIP-005 {{SIP-005}} consensus-serialized transactions.
+
+Unlike EVM and Solana, Stacks has no base MPP chain method to inherit
+from, so this document defines server-broadcast transaction
+verification directly. The server verifies the SIP-010 transfer, its
+post-condition, and the origin signature, then binds settlement to the
+challenge through challenge consumption and transaction-id replay
+protection.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -350,27 +375,27 @@ SIP-018 {{SIP-018}} challenge binding.
 | `feePayer` | boolean | OPTIONAL | Whether the server sponsors fees using Stacks sponsored transaction authorization. |
 | `feePayerAddress` | string | CONDITIONAL | Required when `feePayer=true`; absent otherwise. |
 
-The Stacks USDCx mainnet token identity at publication time is:
+The USDCx on Stacks mainnet token identity at publication time is:
 
 ```text
 SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx::usdcx-token
 ```
 
-The Stacks USDCx testnet token identity used by the examples is:
+The USDCx on Stacks testnet token identity used by the examples is:
 
 ```text
 ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.usdcx::usdcx-token
 ```
 
-Servers MUST verify the advertised token tuple against a
-Circle-recognized USDCx registry or an explicit implementation
-allowlist. Until a public registry is available, a v00 allowlist entry
-MUST include `network`, `chainId`, `contractAddress`, `contractName`,
-`assetName`, `decimals`, and the xReserve control surface used for
-issuance and redemption checks. A token identifier that appears only in
-a partner-published registry MUST NOT be accepted if it contradicts the
-Circle-recognized registry or allowlist. The parsed
-`methodDetails.stacks` tuple MUST match `request.currency`.
+Servers MUST verify the advertised token tuple against the Circle
+xReserve registry or an explicit implementation allowlist. Until a
+public registry is available, a v00 allowlist entry MUST include
+`network`, `chainId`, `contractAddress`, `contractName`, `assetName`,
+`decimals`, and the xReserve control surface used for issuance and
+redemption checks. A token identifier that appears only in a
+partner-published registry MUST NOT be accepted if it contradicts the
+Circle xReserve registry or allowlist. The parsed `methodDetails.stacks`
+tuple MUST match `request.currency`.
 
 ## Gateway Transfer Profile {#gateway-transfer-profile}
 
@@ -450,20 +475,20 @@ challenge-bound `salt`. In v00, the salt binding is:
 
 ```text
 keccak256(UTF-8 bytes of JCS({
-  "id": <challenge.id>,
+  "id": "CHALLENGE_ID",
   "method": "usdc",
-  "realm": <challenge.realm>,
+  "realm": "CHALLENGE_REALM",
   "intent": "charge",
   "type": "gateway",
-  "requestHash": <requestHash>,
-  "sourceNetwork": <selected source network>,
-  "destinationNetwork": <destination network>,
-  "sourceDepositor": <source depositor account>,
-  "sourceSigner": <source signer account>,
-  "recipient": <request.recipient>,
-  "destinationRecipient": <destination recipient account>,
-  "amount": <TransferSpec.value>,
-  "maxFee": <Gateway authorization fee cap>
+  "requestHash": "REQUEST_HASH",
+  "sourceNetwork": "SELECTED_SOURCE_NETWORK",
+  "destinationNetwork": "DESTINATION_NETWORK",
+  "sourceDepositor": "SOURCE_DEPOSITOR_ACCOUNT",
+  "sourceSigner": "SOURCE_SIGNER_ACCOUNT",
+  "recipient": "REQUEST_RECIPIENT",
+  "destinationRecipient": "DESTINATION_RECIPIENT_ACCOUNT",
+  "amount": "TRANSFER_SPEC_VALUE",
+  "maxFee": "GATEWAY_AUTHORIZATION_FEE_CAP"
 }))
 ```
 
@@ -504,11 +529,11 @@ was accepted.
 
 # Credential Schema
 
-EVM credentials inherit {{I-D.evm-charge}} authorization payloads, with
-the nonce derivation below. Solana credentials inherit
-{{I-D.solana-charge}} pull-mode transaction payloads and add the required
-challenge-binding object defined in this section. Stacks and Gateway
-Transfer define their profile-specific payloads below.
+EVM credentials use {{I-D.evm-charge}} authorization payloads, except
+for the nonce derivation, which this profile overrides as defined
+below. Solana credentials inherit {{I-D.solana-charge}} pull-mode
+transaction payloads. Stacks and Gateway Transfer define their
+profile-specific payloads below.
 
 For EVM authorization credentials, the EIP-3009 fields are carried
 directly in `payload` as defined by {{I-D.evm-charge}}. `payload.nonce`
@@ -517,23 +542,31 @@ representing exactly 32 bytes. The nonce MUST equal:
 
 ```text
 keccak256(UTF-8 bytes of JCS({
-  "id": <challenge.id>,
+  "id": "CHALLENGE_ID",
   "method": "usdc",
-  "realm": <challenge.realm>,
+  "realm": "CHALLENGE_REALM",
   "intent": "charge",
-  "requestHash": <requestHash>
+  "requestHash": "REQUEST_HASH"
 }))
 ```
 
 `requestHash` is `keccak256` of the UTF-8 bytes of the exact
 JCS-canonicalized request JSON before base64url encoding.
 
-This is stricter than the base EVM charge profile. The base EVM profile
+This nonce derivation overrides, and does not inherit, the base EVM
+charge profile's derivation in {{I-D.evm-charge}}. The base EVM profile
 binds EIP-3009 authorization nonces to `challenge.id` and
 `challenge.realm`. The `usdc` profile also binds the method, intent, and
 request hash, so an authorization cannot move between `evm`, `usdc`,
 `charge`, another intent, or a different request with the same amount and
-recipient.
+recipient. Because the derivation differs, a generic `method="evm"`
+verifier computes a different expected nonce and will reject these
+credentials; `usdc` EVM credentials are therefore not interchangeable
+with `method="evm"` credentials.
+
+When present, the EVM credential `source` follows {{I-D.evm-charge}} and
+is OPTIONAL; the RECOMMENDED form is
+`did:pkh:eip155:<chainId>:<address>`.
 
 For Solana transaction credentials, the credential object contains:
 
@@ -541,7 +574,7 @@ For Solana transaction credentials, the credential object contains:
 | --- | --- | --- | --- |
 | `challenge` | object | REQUIRED | Echo of the server challenge. |
 | `payload` | object | REQUIRED | Solana payment payload. |
-| `source` | string | REQUIRED | CAIP-10 account ID using `solana:<genesis-hash-prefix>:<pubkey>`. |
+| `source` | string | OPTIONAL | Payer account, per {{I-D.solana-charge}}. MAY be a base58 public key or a DID (RECOMMENDED `did:pkh:solana:<genesis-hash-prefix>:<pubkey>`). |
 
 The Solana `payload.type` MUST be `transaction`. The payload carries:
 
@@ -549,37 +582,6 @@ The Solana `payload.type` MUST be `transaction`. The payload carries:
 | --- | --- | --- | --- |
 | `type` | string | REQUIRED | MUST be `transaction`. |
 | `transaction` | string | REQUIRED | Base64-encoded serialized Solana transaction. |
-| `challengeBinding` | object | REQUIRED | Detached challenge-binding signature. |
-
-The `challengeBinding` object contains:
-
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `type` | string | REQUIRED | MUST be `challenge-binding-v00`. |
-| `signature` | string | REQUIRED | Base64-encoded 64-byte Ed25519 signature. |
-
-The client MUST sign the following JCS-canonicalized binding message:
-
-```text
-{
-  "type": "challenge-binding-v00",
-  "method": "usdc",
-  "challenge": <exact credential.challenge object>,
-  "source": <exact source CAIP-10 account ID>,
-  "transactionBytesDigest": <lowercase hexadecimal SHA-256 digest of base64-decoded transaction bytes>
-}
-```
-
-The signing input is:
-
-```text
-SHA-256("CIRCLE::USDC::ChallengeBindingV00") ||
-UTF-8(JCS(binding_message))
-```
-
-The signature MUST verify under the same Ed25519 public key that
-authorizes the Solana token transfer. `transactionBytesDigest` is used
-only for challenge binding. It is not the Solana transaction signature.
 
 For Stacks, the credential object contains:
 
@@ -599,56 +601,16 @@ The Stacks `payload.type` MUST be `transaction`. The payload carries:
 | --- | --- | --- | --- |
 | `type` | string | REQUIRED | MUST be `transaction`. |
 | `transaction` | string | REQUIRED | Base64-encoded Stacks consensus-serialized transaction. |
-| `challengeBinding` | object | REQUIRED | SIP-018 challenge-binding signature. |
 | `transactionFormat` | string | OPTIONAL | MUST be `stacks_transaction_v1` when present. |
-| `signatures` | array | OPTIONAL | MUST be absent for Stacks. |
 
 The Stacks transaction MUST call the SIP-010 `transfer` function with
 `amount`, `sender`, `recipient`, and optional memo arguments. It MUST
 include a post-condition that pins a `SentEq` transfer of
 `request.amount` for the advertised USDCx asset.
 
-`payload.challengeBinding.type` MUST be `challenge-binding-v00`.
-`payload.challengeBinding.signature` MUST be a base64-encoded 65-byte
-recoverable secp256k1 signature in `r || s || v` order, with `v` in
-`{0x00, 0x01}`. This document defines the SIP-018 domain tuple for the
-challenge-binding message. The `USDCPaymentAuth` name is a
-draft-specific domain label, not a token name or a Circle registry
-identifier.
-
-```text
-domain = (tuple
-  (name "USDCPaymentAuth")
-  (version "usdc-charge-v00")
-  (chain-id uCHAIN_ID))
-
-message:
-  binding = JCS-canonicalized challenge binding message
-```
-
-`CHAIN_ID` is `methodDetails.stacks.chainId` parsed as a base-10 integer
-and encoded as a SIP-018 Clarity `uint`. It MUST NOT be encoded as a
-`string-ascii` or `string-utf8` value.
-
-The challenge binding message is the following JCS-canonicalized JSON
-object:
-
-```text
-{
-  "type": "challenge-binding-v00",
-  "method": "usdc",
-  "challenge": <exact credential.challenge object>,
-  "source": "<exact source CAIP-10 account ID>",
-  "transactionBytesDigest": "<lowercase hexadecimal SHA-256 digest of base64-decoded transaction bytes>"
-}
-```
-
-The recovered public key MUST derive to the principal in `source`.
-
-When present, `transactionFormat` MUST be
-`stacks_transaction_v1`. `signatures` MUST be absent for Stacks
-because origin and sponsor signatures are embedded in the transaction
-auth field.
+When present, `transactionFormat` MUST be `stacks_transaction_v1`. For
+Stacks, origin and sponsor signatures are carried in the transaction
+auth field, not in a separate credential field.
 
 ## Gateway Transfer Credential
 
@@ -712,9 +674,8 @@ verification:
    exists.
 10. Verify replay protection for the selected credential type.
 
-For Stacks USDCx, the applicable controls include the
-Circle-recognized xReserve controls and any partner-chain token
-controls required by local policy.
+For USDCx on Stacks, the applicable controls include the Circle xReserve
+controls and any partner-chain token controls required by local policy.
 
 For EVM, servers then apply {{I-D.evm-charge}} verification with the
 USDC restrictions in {{evm-profile}}. Servers MUST verify
@@ -729,44 +690,33 @@ case-sensitive string equality.
 
 For Solana, servers then apply {{I-D.solana-charge}} verification with
 the USDC restrictions in {{solana-profile}}. Servers MUST verify
-`methodDetails.type = "solana"`. Servers MUST also verify that
-`payload.challengeBinding.type = "challenge-binding-v00"` and that
-`payload.challengeBinding.signature` authenticates the challenge-binding
-binding message under the same source key that authorizes the token
-transfer. If `methodDetails.solana.feePayer=true`, the transaction MUST
-set `methodDetails.solana.feePayerKey` as fee payer and the only
-missing required signature MUST be the server fee-payer signature. The
-server MUST reject any
-Solana credential whose transaction bytes or challenge-binding
-signature have already been consumed. The server MUST reject stale
-transactions by verifying that the transaction uses a currently valid
-recent blockhash, or a durable nonce whose `(nonceAccount, nonceValue)`
-has not already been admitted by this deployment.
+`methodDetails.type = "solana"`. If `methodDetails.solana.feePayer=true`,
+the transaction MUST set `methodDetails.solana.feePayerKey` as fee payer
+and the only missing required signature MUST be the server fee-payer
+signature. The server MUST reject any Solana credential whose
+transaction bytes have already been consumed. The server MUST reject
+stale transactions by verifying that the transaction uses a currently
+valid recent blockhash.
 
 USDC Solana verification is intentionally narrower than the generic
 Solana transaction profile. Servers MUST reject transactions with
 instructions outside the allowed set for this profile: SPL Token
 transfer instructions for the advertised mint, associated-token-account
 setup for the advertised recipient and mint when needed, bounded
-Compute Budget instructions, optional Memo instructions, and durable
-nonce advancement when a durable nonce is used. Token-2022, delegate
-authority, and multisig authority flows are out of scope in v00.
+Compute Budget instructions, and optional Memo instructions. Token-2022,
+delegate authority, and multisig authority flows are out of scope in
+v00.
 Servers MUST verify that the source token account is owned by the
-source account, that the recipient token account is the associated
+transfer authority, that the recipient token account is the associated
 token account for `request.recipient` and `request.currency` unless an
 equivalent explicit token account is allowed by local policy, and that
 the token transfer amount equals `request.amount`. An equivalent
 explicit token account MUST be initialized for `request.currency` and
 owned by `request.recipient`.
 
-For durable nonce transactions, servers MUST verify that the
-transaction contains the expected `AdvanceNonceAccount` instruction,
-that the nonce account is accepted by local policy, that the nonce
-authority signed, and that the stored nonce value matches the
-transaction's recent blockhash. When `feePayer=true`, the server MUST
-simulate the final transaction after adding the fee-payer signature and
-MUST reject transactions whose compute units, account writes, or fee
-exposure exceed local policy.
+When `feePayer=true`, the server MUST simulate the final transaction
+after adding the fee-payer signature and MUST reject transactions whose
+compute units, account writes, or fee exposure exceed local policy.
 
 For Stacks, servers MUST verify:
 
@@ -778,8 +728,9 @@ For Stacks, servers MUST verify:
 5. `request.currency` equals
    `<contractAddress>.<contractName>::<assetName>` using the parsed
    values in `methodDetails.stacks`.
-6. `(contractAddress, contractName, assetName)` matches a
-   Circle-recognized USDCx SIP-010 token for the selected chain.
+6. `(contractAddress, contractName, assetName)` matches a USDCx SIP-010
+   token in the Circle xReserve registry or an explicit implementation
+   allowlist for the selected chain.
 7. `payload.transaction` decodes as a SIP-005 consensus-serialized
    transaction.
 8. The transaction version byte matches `methodDetails.stacks.network`
@@ -806,12 +757,9 @@ For Stacks, servers MUST verify:
     `principal = source-principal`, `asset_info = (contractAddress,
     contractName, assetName)`, `condition_code = SentEq`, and
     `amount = request.amount`.
-19. The SIP-018 challenge-binding signature authenticates the
-    challenge-binding message defined in this document and recovers to
-    the principal in `source`.
-20. The origin auth nonce is fresh under the server's local Stacks
+19. The origin auth nonce is fresh under the server's local Stacks
     nonce policy.
-21. The transaction reaches the server's local Stacks confirmation
+20. The transaction reaches the server's local Stacks confirmation
     threshold.
 
 For Gateway Transfer, servers MUST verify:
@@ -901,7 +849,7 @@ profile's settlement has completed. If the server wants admission before
 onchain settlement, it MUST use a separate deferred-settlement method or
 intent outside this document.
 
-# Receipt Schema
+# Receipt Schema {#receipt-schema}
 
 Upon successful settlement, servers MUST return a `Payment-Receipt`
 header per {{I-D.httpauth-payment}}. The decoded receipt payload
@@ -920,7 +868,7 @@ verification field.
 | `reference` | string | Final settlement reference. |
 | `status` | string | MUST be `success` only after the selected profile has completed settlement. |
 | `timestamp` | string | RFC3339 settlement time. |
-| `network` | string | Settlement network identifier. |
+| `network` | string | CAIP-2 {{CAIP-2}} settlement network identifier. |
 | `externalId` | string | OPTIONAL. Echo of `request.externalId`. |
 
 For direct EVM, `reference` is the EVM transaction hash. For direct
@@ -948,15 +896,23 @@ use Circle Gateway TransferSpec lookup
 {{CIRCLE-GATEWAY-TRANSFER-SPEC}} to inspect the settled TransferSpec
 after acceptance or settlement.
 
+The receipt uses a single CAIP-2 {{CAIP-2}} `network` field for every
+profile. This is a deliberate, method-wide settlement locator and
+intentionally differs from the base EVM charge receipt, which uses a
+numeric `chainId`, and the base Solana charge receipt, which has no
+network field. A `method="usdc"` receipt consumer reads `network` for
+every profile instead of branching on the profile type.
+
 # Security Considerations
 
 ## Supported USDC Asset Forms
 
 This profile defines which USDC asset forms can satisfy `method="usdc"`
 in v00. Servers MUST verify that the selected token matches a native
-USDC deployment published by Circle, or, for Stacks, a Circle-recognized
-USDCx deployment. Other bridged, wrapped, or synthetic USDC-like assets
-need a separate profile or explicit method details.
+USDC deployment published by Circle, or, for Stacks, a USDCx token
+listed in the Circle xReserve registry or an explicit implementation
+allowlist. Other bridged, wrapped, or synthetic USDC-like assets need a
+separate profile or explicit method details.
 
 Gateway Wallet deposits remain subject to Circle Gateway recovery and
 withdrawal rules. Gateway supports delayed trustless withdrawal from
@@ -966,9 +922,9 @@ Transfer idempotently retryable.
 
 ## Blocklist and Pause Controls
 
-Native USDC and Stacks USDCx have different control surfaces. Native
+Native USDC and USDCx on Stacks have different control surfaces. Native
 USDC has token-level pause and blocklist controls on the selected
-chain. For Stacks USDCx, xReserve {{CIRCLE-XRESERVE}} source-chain
+chain. For USDCx on Stacks, xReserve {{CIRCLE-XRESERVE}} source-chain
 controls gate deposits and withdrawals, but those controls do not freeze
 same-chain partner token transfers by themselves. Same-chain USDCx
 transfers depend on the partner-chain token controls.
@@ -976,9 +932,9 @@ transfers depend on the partner-chain token controls.
 Servers MUST apply every control surface that is relevant to the
 selected profile before accepting a credential. For native USDC, a
 payer or recipient present in the applicable token blocklist MUST
-cause rejection. For Stacks USDCx, servers MUST check the
-Circle-recognized xReserve control surface and the partner-chain token
-control surface required by local policy. Cached control data MUST
+cause rejection. For USDCx on Stacks, servers MUST check the
+Circle xReserve control surface and the partner-chain token control
+surface required by local policy. Cached control data MUST
 have an explicit freshness bound.
 
 ## Replay Protection
@@ -995,19 +951,20 @@ The nonce already commits to `method`, `intent`,
 `challenge.id`, `challenge.realm`, and `requestHash`, so this key
 protects both onchain replay and cross-context replay.
 
-For Solana transaction credentials, the persistent replay key MUST
-include `(network, transactionSignature)` after broadcast or
-confirmation. Servers MUST also keep a replay key for the detached
-challenge-binding material, `(network, transactionBytesDigest,
-challengeBinding.signature)`, so the same signed transaction bytes
-cannot be admitted twice before or around broadcast. For durable nonce
-transactions, servers MUST also key replay protection on `(network,
-nonceAccount, nonceValue)`.
+For Solana transaction credentials, replay protection follows
+{{I-D.solana-charge}}. Servers MUST maintain consumed transaction
+signatures and atomically consume the selected challenge before
+returning a successful receipt. Servers that admit pull-mode
+transactions before broadcast SHOULD also deduplicate on `(network,
+transactionBytesDigest)` to avoid concurrent admission of the same
+serialized transaction.
 
-For Stacks transaction credentials, the replay key MUST include both
-`(stacks:<chainId>, transactionBytesDigest)` before or around
-broadcast, the transaction id after broadcast, and
-`(stacks:<chainId>, <origin-principal>, <origin-nonce>)`.
+For Stacks transaction credentials, the replay key MUST include the
+transaction id after broadcast and `(stacks:CHAIN_ID,
+ORIGIN_PRINCIPAL, ORIGIN_NONCE)`. Servers that admit transactions before
+broadcast SHOULD also deduplicate on `(stacks:CHAIN_ID,
+transactionBytesDigest)` to avoid concurrent admission of the same
+serialized transaction.
 
 For Gateway Transfer credentials, replay protection MUST cover the
 selected challenge and the challenge-bound Gateway salt before the
@@ -1118,7 +1075,7 @@ The client returns an EIP-3009 authorization credential:
     "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiIweDM2MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJkZXNjcmlwdGlvbiI6IkFyYyBUZXN0bmV0IFVTREMgY2hhcmdlIiwiZXh0ZXJuYWxJZCI6Imludm9pY2UtZXZtLTAwMSIsIm1ldGhvZERldGFpbHMiOnsiZXZtIjp7ImNoYWluSWQiOjUwNDIwMDIsImNyZWRlbnRpYWxUeXBlcyI6WyJhdXRob3JpemF0aW9uIl0sImRlY2ltYWxzIjo2fSwidHlwZSI6ImV2bSJ9LCJyZWNpcGllbnQiOiIweGMwNDE5M0M1MGNEMkU2YTFDNzk1OTNlNDYzNjQ0OTZGZTVmY2Q5YjYifQ",
     "expires": "2026-04-01T12:05:00Z"
   },
-  "source": "eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "source": "did:pkh:eip155:5042002:0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
   "payload": {
     "type": "authorization",
     "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
@@ -1137,7 +1094,7 @@ receipt, and returns:
 
 ```http
 HTTP/1.1 200 OK
-Payment-Receipt: <base64url-jcs-receipt>
+Payment-Receipt: BASE64URL_JCS_RECEIPT
 ```
 
 The decoded receipt payload is:
@@ -1190,14 +1147,10 @@ The client returns the Solana transaction credential defined by
     "request": "eyJhbW91bnQiOiIxMDAwMDAwIiwiY3VycmVuY3kiOiI0ek1NQzlzcnQ1Umk1WDE0R0FnWGhhSGlpM0duUEFFRVJZUEpnWkpEbmNEVSIsImRlc2NyaXB0aW9uIjoiU29sYW5hIGRldm5ldCBVU0RDIGNoYXJnZSIsImV4dGVybmFsSWQiOiJpbnZvaWNlLXNvbC0wMDEiLCJtZXRob2REZXRhaWxzIjp7InNvbGFuYSI6eyJkZWNpbWFscyI6NiwibmV0d29yayI6ImRldm5ldCIsInRva2VuUHJvZ3JhbSI6IlRva2Vua2VnUWZlWnlpTndBSmJOYkdLUEZYQ1d1QnZmOVNzNjIzVlE1REEifSwidHlwZSI6InNvbGFuYSJ9LCJyZWNpcGllbnQiOiJBS25MNE5OZjNER1daSlM2Y1BrbkJ1RUduVnNWNEE0bTV0Z2ViTEhhUlNaOSJ9",
     "expires": "2026-04-01T12:05:00Z"
   },
-  "source": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy",
+  "source": "did:pkh:solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy",
   "payload": {
     "type": "transaction",
-    "transaction": "<base64-solana-transaction>",
-    "challengeBinding": {
-      "type": "challenge-binding-v00",
-      "signature": "<base64-ed25519-signature>"
-    }
+    "transaction": "BASE64_SOLANA_TRANSACTION"
   }
 }
 ```
@@ -1211,7 +1164,7 @@ returns:
 
 ```http
 HTTP/1.1 200 OK
-Payment-Receipt: <base64url-jcs-receipt>
+Payment-Receipt: BASE64URL_JCS_RECEIPT
 ```
 
 The decoded receipt payload is:
@@ -1272,11 +1225,7 @@ The client returns a Stacks transaction credential:
   "source": "stacks:2147483648:ST8H248H248H248H248H248H248H248H26RCPJ4T",
   "payload": {
     "type": "transaction",
-    "transaction": "<base64-sip005-serialized-transaction>",
-    "challengeBinding": {
-      "type": "challenge-binding-v00",
-      "signature": "<base64-sip018-signature>"
-    },
+    "transaction": "BASE64_SIP005_SERIALIZED_TRANSACTION",
     "transactionFormat": "stacks_transaction_v1"
   }
 }
@@ -1287,7 +1236,7 @@ returns:
 
 ```http
 HTTP/1.1 200 OK
-Payment-Receipt: <base64url-jcs-receipt>
+Payment-Receipt: BASE64URL_JCS_RECEIPT
 ```
 
 The decoded receipt payload is:
@@ -1408,7 +1357,7 @@ that includes the Gateway-returned `transferSpecHash`:
 
 ```http
 HTTP/1.1 200 OK
-Payment-Receipt: <base64url-jcs-receipt>
+Payment-Receipt: BASE64URL_JCS_RECEIPT
 ```
 
 The decoded receipt payload is:
