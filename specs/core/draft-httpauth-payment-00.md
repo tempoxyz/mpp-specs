@@ -240,9 +240,13 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
 
 ### Required Parameters
 
-**`id`**: Unique challenge identifier. Servers MUST bind this value to the
-  challenge parameters (Section 5.1.3) to enable verification. Clients MUST
-  include this value unchanged in the credential.
+**`id`**: Unique challenge identifier. This parameter is REQUIRED and its
+  value MUST be non-empty after `auth-param` parsing and `quoted-string`
+  unescaping. Servers MUST NOT emit a Payment challenge with a missing or
+  empty `id`; clients and parsers MUST reject challenges whose `id` is
+  missing or empty. Servers MUST bind this value to the challenge parameters
+  (Section 5.1.3) to enable verification. Clients MUST include this value
+  unchanged in the credential.
 
 **`realm`**: Protection space identifier per {{RFC9110}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
@@ -908,6 +912,7 @@ auth-params       = auth-param *( OWS "," OWS auth-param )
 auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; Required parameters: id, realm, method, intent, request
+; The id parameter is required by prose to be non-empty after parsing.
 ; Optional parameters: expires, digest, description, opaque
 
 ; HTTP Authorization Credentials
