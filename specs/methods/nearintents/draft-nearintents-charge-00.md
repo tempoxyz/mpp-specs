@@ -22,6 +22,18 @@ normative:
   RFC8259:
   RFC8785:
   RFC9457:
+  CAIP-2:
+    title: "CAIP-2: Blockchain ID Specification"
+    target: https://chainagnostic.org/CAIPs/caip-2
+    author:
+      - org: Chain Agnostic Standards Alliance
+    date: 2020
+  CAIP-19:
+    title: "CAIP-19: Asset Type and Asset ID Specification"
+    target: https://chainagnostic.org/CAIPs/caip-19
+    author:
+      - org: Chain Agnostic Standards Alliance
+    date: 2021
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
     target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
@@ -39,18 +51,6 @@ normative:
     date: 2026
 
 informative:
-  CAIP-2:
-    title: "CAIP-2: Blockchain ID Specification"
-    target: https://chainagnostic.org/CAIPs/caip-2
-    author:
-      - org: Chain Agnostic Standards Alliance
-    date: 2020
-  CAIP-19:
-    title: "CAIP-19: Asset Type and Asset ID Specification"
-    target: https://chainagnostic.org/CAIPs/caip-19
-    author:
-      - org: Chain Agnostic Standards Alliance
-    date: 2021
   DID-PKH:
     title: "did:pkh Method Specification"
     target: https://github.com/w3c-ccg/did-pkh
@@ -185,18 +185,17 @@ leg** is carried in `methodDetails`:
   swap, not by the merchant.
 - `currency` and `amount` describe the **source asset** and the **deposit
   amount** the client sends to `recipient`.
-- `methodDetails.network` is the **origin chain** where `recipient` lives
+- `methodDetails.originNetwork` is the **origin chain** where `recipient` lives
   and where the transaction hash is anchored.
 - `methodDetails.destinationNetwork`, `methodDetails.destinationAsset`,
   `methodDetails.destinationRecipient`, and `methodDetails.amountOut`
   describe the asset, chain, beneficiary, and exact amount the **merchant**
   receives once the swap completes.
 
-This mapping keeps push-mode verification — "confirm an on-chain
-transfer of `amount` `currency` to `recipient`" — directly applicable:
-the verified transfer is the deposit, and the cross-chain swap is an
-extension that executes after the verified payment and delivers to the
-merchant.
+This mapping keeps push-mode verification — confirm an on-chain transfer
+to `recipient` of the `currency` the client was asked to send — directly
+applicable: the verified deposit is the payment, and the cross-chain swap
+is an extension that executes afterward and delivers to the merchant.
 
 ## Relationship to the Charge Intent
 
@@ -263,8 +262,8 @@ This specification implements the shared request fields defined in
 
 | Field         | Type   | Presence | Description                                                                                          |
 | ------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
-| `amount`      | string | REQUIRED | Deposit amount the client sends on the origin chain, in base units of `currency` (stringified integer). Corresponds to the 1Click quote `maxAmountIn`. |
-| `currency`    | string | REQUIRED | Source asset identifier on the origin chain (see {{asset-identifiers}}).                              |
+| `amount`      | string | REQUIRED | Deposit amount the client is asked to send, in base units of `currency` (the 1Click quote `maxAmountIn`): the upper bound that guarantees the merchant receives `methodDetails.amountOut`. A requested/display value — the verifier actually requires `methodDetails.minAmountIn`, not `amount` (see {{verification}}). |
+| `currency`    | string | REQUIRED | Source asset the client pays with, as a CAIP-19 {{CAIP-19}} asset identifier (see {{asset-identifiers}}); chain component MUST equal `methodDetails.originNetwork`. |
 | `recipient`   | string | REQUIRED | 1Click deposit address on the origin chain. The payee of the client's on-chain transfer.             |
 | `description` | string | OPTIONAL | Human-readable payment description. MUST NOT be relied upon for verification per {{I-D.httpauth-payment}}. |
 | `externalId`  | string | OPTIONAL | Merchant reference (order ID, invoice number, etc.).                                                 |
@@ -274,30 +273,37 @@ Challenge expiry is conveyed by the `expires` auth-param in
 
 ## Asset Identifiers {#asset-identifiers}
 
-The format of `currency` (and of `methodDetails.destinationAsset`)
-depends on the chain:
+Both `currency` and `methodDetails.destinationAsset` MUST be CAIP-19
+{{CAIP-19}} asset identifiers. CAIP-19 encodes the chain and the asset in
+one self-describing string, so both legs of the swap use the same
+convention and either side can be parsed without external context:
 
-| Chain type                         | Identifier format                | Example                                                            |
-| ---------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| EVM chains                         | ERC-20 contract address          | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`                       |
-| Solana                             | SPL token mint address           | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`                      |
-| NEAR                               | NEP-141 contract account ID      | `wrap.near`                                                        |
-| Native assets without a contract   | CAIP-19 {{CAIP-19}} asset id     | `bip122:000000000019d6689c085ae165831e93/slip44:0` (BTC)          |
+| Chain type                  | CAIP-19 {{CAIP-19}} form            | Example                                                                                     |
+| --------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| EVM chains                  | `eip155:<chainId>/erc20:<address>`  | `eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831`                              |
+| Solana                      | `solana:<genesisHash>/token:<mint>` | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp/token:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| NEAR (NEP-141)              | `near:mainnet/nep141:<account>`     | `near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`       |
+| Native assets (no contract) | `<caip2>/slip44:<coinType>`         | `bip122:000000000019d6689c085ae165831e93/slip44:0` (BTC)                                     |
 
 Implementations MUST NOT use informal short identifiers (e.g., `"arb"`,
-`"BTC"`) in `currency` or `destinationAsset`. Addresses MUST be compared
-by their decoded value, not by string form.
+`"BTC"`) or bare contract addresses without the CAIP-19 chain prefix in
+`currency` or `destinationAsset`. The chain component of `currency` MUST
+equal `methodDetails.originNetwork`, and the chain component of
+`destinationAsset` MUST equal `methodDetails.destinationNetwork`. CAIP-19
+identifiers MUST be compared by their parsed components, with the address
+or reference component compared in the relevant chain's canonical form
+(for example, EVM addresses compared case-insensitively).
 
 ## Method Details
 
 | Field                            | Type    | Presence | Description                                                                                          |
 | -------------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `methodDetails.network`          | string  | REQUIRED | CAIP-2 {{CAIP-2}} identifier of the origin chain (where `recipient` lives and the deposit tx is anchored). |
+| `methodDetails.originNetwork`          | string  | REQUIRED | CAIP-2 {{CAIP-2}} identifier of the origin chain (where `recipient` lives and the deposit tx is anchored). |
 | `methodDetails.destinationNetwork` | string | REQUIRED | CAIP-2 {{CAIP-2}} identifier of the chain where the merchant receives the destination asset.         |
-| `methodDetails.destinationAsset` | string  | REQUIRED | Destination asset identifier the merchant receives (see {{asset-identifiers}}).                      |
+| `methodDetails.destinationAsset` | string  | REQUIRED | Destination asset the merchant receives, as a CAIP-19 {{CAIP-19}} asset identifier (see {{asset-identifiers}}); chain component MUST equal `methodDetails.destinationNetwork`. |
 | `methodDetails.destinationRecipient` | string | REQUIRED | Merchant address on the destination chain that receives `amountOut`.                                 |
 | `methodDetails.amountOut`        | string  | REQUIRED | Exact amount the merchant receives, in base units of `destinationAsset`. Guaranteed via `EXACT_OUTPUT`. |
-| `methodDetails.minAmountIn`      | string  | REQUIRED | Minimum deposit amount the backend accepts, in base units of `currency`. Deposits below this are refunded. |
+| `methodDetails.minAmountIn`      | string  | REQUIRED | Minimum deposit the backend accepts, in base units of `currency`. Threshold checked at verification ({{verification}}, step 3): a confirmed deposit MUST be at least `minAmountIn`. Deposits below it yield `INCOMPLETE_DEPOSIT` and are refunded to `refundTo`. |
 | `methodDetails.depositMemo`      | string \| null | OPTIONAL | Deposit memo required by some origin chains (e.g., Stellar). Absent or `null` when not required.     |
 | `methodDetails.slippageTolerance` | number | OPTIONAL | Slippage tolerance in basis points (e.g., `100` = 1%).                                               |
 | `methodDetails.timeEstimate`     | number  | OPTIONAL | Estimated swap completion time in seconds, from the 1Click quote.                                    |
@@ -314,14 +320,14 @@ If `methodDetails.credentialTypes` is omitted, servers MUST accept
 ~~~json
 {
   "amount": "1005000",
-  "currency": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "currency": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   "recipient": "0x76b4c56085ED136a8744D52bE956396624a730E8",
   "description": "Cross-chain premium data access",
   "externalId": "order_12345",
   "methodDetails": {
-    "network": "eip155:42161",
+    "originNetwork": "eip155:42161",
     "destinationNetwork": "near:mainnet",
-    "destinationAsset": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    "destinationAsset": "near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
     "destinationRecipient": "merchant.near",
     "amountOut": "1000000",
     "minAmountIn": "1000000",
@@ -365,7 +371,7 @@ the server to verify.
 | Field  | Type   | Presence | Description                                                            |
 | ------ | ------ | -------- | ---------------------------------------------------------------------- |
 | `type` | string | REQUIRED | `"hash"`                                                               |
-| `hash` | string | REQUIRED | Transaction hash of the client's deposit on the origin chain (`methodDetails.network`). Format is origin-chain-native. |
+| `hash` | string | REQUIRED | Transaction hash of the client's deposit on the origin chain (`methodDetails.originNetwork`). Format is origin-chain-native. |
 
 The address the deposit must pay is not repeated in the payload: it is
 the challenge `recipient`, which is bound into the challenge `id` (see
@@ -453,7 +459,7 @@ credential.
 2. `payload.hash` has not been previously consumed (see {{replay}}).
 
 3. The transaction identified by `payload.hash` exists on
-   `methodDetails.network`, is confirmed to that chain's policy
+   `methodDetails.originNetwork`, is confirmed to that chain's policy
    (see {{settlement}}), and transfers at least `methodDetails.minAmountIn`
    of `currency` to the challenge `recipient` (the deposit address),
    including `methodDetails.depositMemo` when non-null. This confirmation
@@ -465,7 +471,12 @@ credential.
 4. The deposit address (`recipient`) corresponds to an active,
    non-expired, non-settled quote in the server's state.
 
-5. Mark `payload.hash` as consumed (see {{replay}}).
+5. Claim `payload.hash` as **in-flight** for this challenge, rejecting any
+   concurrent or later submission of the same hash while settlement runs.
+   The hash is **permanently consumed only on a terminal settlement state**
+   (see {{settlement}} and {{replay}}); verification alone does not burn the
+   credential. On a non-success terminal state the client recovers with a
+   fresh challenge (see {{client-recovery}}).
 
 Verification confirms that the client has paid the origin-chain leg. The
 cross-chain swap that delivers the destination asset to the merchant is
@@ -520,6 +531,25 @@ before granting access. The server:
    {{error-codes}}. On `INCOMPLETE_DEPOSIT`, returns `payment-insufficient`.
    In all non-success terminal cases the backend refunds the deposit to
    `methodDetails.refundTo`; the server MUST NOT grant access.
+
+5. On reaching any terminal status, permanently consume `payload.hash`
+   (see {{replay}}). After a terminal state the quote and its deposit
+   address are spent — the deposit was either delivered (`SUCCESS`) or
+   refunded — so the same hash MUST NOT be accepted again.
+
+## Client Recovery {#client-recovery}
+
+A non-success terminal state (`FAILED`, `REFUNDED`, `INCOMPLETE_DEPOSIT`,
+or a settlement timeout) is terminal for this credential: the deposit is
+refunded to `methodDetails.refundTo`, and because the quote and deposit
+address are single-use, the same `payload.hash` cannot be retried. To pay
+again, the client re-requests the resource to obtain a **fresh challenge**
+(a new quote, hence a new deposit address), sends a new deposit, and
+submits a new credential. Consistent with {{error-codes}}, the server
+returns each non-success terminal state as a 402 carrying that fresh
+`WWW-Authenticate: Payment` challenge, which the client uses to begin a
+new attempt. Burning the original hash is therefore safe: it can never
+deliver the resource, and the funds it represents have been refunded.
 
 ## Settlement Finality {#finality}
 
@@ -591,11 +621,14 @@ method enforces replay protection on two layers:
   and the 1Click backend processes at most one swap per address. The server
   MUST reject any credential whose `recipient` (deposit address) does not
   correspond to an active, non-expired, non-settled quote in its state.
-- **Consumed transaction hashes**: the server MUST maintain a set of
-  consumed `payload.hash` values. Before accepting a credential, the server
-  MUST check whether the hash has already been consumed and reject it if so.
-  After successful verification, the server MUST atomically mark the hash as
-  consumed.
+- **Single-use transaction hashes**: the server MUST track each
+  `payload.hash` and reject any hash that is already in-flight or consumed.
+  At verification the hash is claimed as in-flight (atomically, satisfying
+  the concurrency requirement below); it is **permanently consumed only
+  when settlement reaches a terminal state** — `SUCCESS` or any
+  failure/refund — so a credential is never burned before its outcome is
+  known and is never reusable afterward. On a non-success terminal state
+  the client obtains a fresh challenge to retry (see {{client-recovery}}).
 
 When a single origin transaction is one of several deposits aggregated
 by the backend to one address (e.g., a top-up after an under-deposit),
@@ -621,7 +654,7 @@ transmitted over HTTPS connections.
 Before broadcasting a deposit, clients MUST decode and verify the
 challenge `request` per {{I-D.httpauth-payment}}: that `amount`,
 `currency`, and `recipient` (the deposit address) are as expected, that
-`methodDetails.network` is the intended origin chain, and that the
+`methodDetails.originNetwork` is the intended origin chain, and that the
 destination leg (`destinationNetwork`, `destinationAsset`,
 `destinationRecipient`, `amountOut`) matches what the client intends the
 merchant to receive. Clients MUST NOT rely on `description`.
@@ -743,14 +776,14 @@ Decoded `request`:
 ~~~json
 {
   "amount": "1005000",
-  "currency": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "currency": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   "recipient": "0x76b4c56085ED136a8744D52bE956396624a730E8",
   "description": "Cross-chain premium data access",
   "externalId": "order_12345",
   "methodDetails": {
-    "network": "eip155:42161",
+    "originNetwork": "eip155:42161",
     "destinationNetwork": "near:mainnet",
-    "destinationAsset": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    "destinationAsset": "near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
     "destinationRecipient": "merchant.near",
     "amountOut": "1000000",
     "minAmountIn": "1000000",
@@ -834,9 +867,9 @@ Decoded `request`:
   "currency": "bip122:000000000019d6689c085ae165831e93/slip44:0",
   "recipient": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
   "methodDetails": {
-    "network": "bip122:000000000019d6689c085ae165831e93",
+    "originNetwork": "bip122:000000000019d6689c085ae165831e93",
     "destinationNetwork": "near:mainnet",
-    "destinationAsset": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+    "destinationAsset": "near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
     "destinationRecipient": "merchant.near",
     "amountOut": "1000000",
     "minAmountIn": "37500",
@@ -862,7 +895,7 @@ Accept-Payment: nearintents/charge
 ~~~
 
 The server MAY return several `nearintents/charge` challenges, each on a
-different origin `methodDetails.network` with its own `recipient`
+different origin `methodDetails.originNetwork` with its own `recipient`
 deposit address, allowing the client to choose:
 
 ~~~http
