@@ -37,6 +37,14 @@ normative:
       - name: Brendan Ryan
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   SOLANA-DOCS:
@@ -61,14 +69,15 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the "solana"
-payment method within the Payment HTTP Authentication Scheme
-{{I-D.ryan-httpauth-payment-01}}. Sessions enable metered, streaming,
-or repeated-use access to resources through off-chain vouchers
-backed by an on-chain escrow. The client opens a payment
-channel by depositing into a channel program, authorizes
-incremental spend via signed vouchers, and settles on-chain
-when the session closes.
+This document defines the "solana" payment method implementation
+of the "session" intent registered by
+{{I-D.payment-intent-session}}, for use within the Payment HTTP
+Authentication Scheme {{I-D.ryan-httpauth-payment-01}}. Sessions
+enable metered, streaming, or repeated-use access to resources
+through off-chain vouchers backed by an on-chain escrow. The
+client opens a payment channel by depositing into a channel
+program, authorizes incremental spend via signed vouchers, and
+settles on-chain when the session closes.
 
 --- middle
 
@@ -76,8 +85,11 @@ when the session closes.
 
 HTTP Payment Authentication {{I-D.ryan-httpauth-payment-01}} defines
 a challenge-response mechanism that gates access to resources
-behind payments. This document registers the "session" intent
-for the "solana" payment method.
+behind payments. The "session" intent and its shared semantics —
+lifecycle operations, accounting invariants, request fields, and
+receipt shape — are registered and defined by
+{{I-D.payment-intent-session}}. This document defines how the
+"solana" payment method implements that intent.
 
 The `session` intent establishes a unidirectional
 streaming payment channel using on-chain escrow and
@@ -410,19 +422,20 @@ Advances the on-chain `settled` watermark using a
 voucher signed by `authorizedSigner`. Permissionless;
 authority is the voucher signature.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `voucher` | `VoucherArgs` | On-chain voucher payload (see {{on-chain-voucher-encoding}}) |
+`settle` takes no instruction-data arguments; the
+voucher is carried entirely by the preceding Ed25519
+precompile instruction.
 
 The submitter MUST bundle a Solana native `ed25519`
 precompile instruction immediately before `settle`
 in the same transaction. The program reads the
 verified message bytes via the Instructions sysvar,
-asserts they byte-equal the `voucher` argument, and
-asserts the precompile-recorded signer equals
+decodes the voucher (`channelId`, `cumulativeAmount`,
+`expiresAt`) from them (see {{on-chain-voucher-encoding}}),
+and asserts the precompile-recorded signer equals
 `authorizedSigner`. The program then verifies
-`settled < voucher.cumulativeAmount <= deposit` and
-writes `settled = voucher.cumulativeAmount`. No
+`settled < cumulativeAmount <= deposit` and
+writes `settled = cumulativeAmount`. No
 token transfer occurs in `settle`.
 
 ### topUp
@@ -462,8 +475,7 @@ transitions the channel to `Finalized`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `voucher` | `VoucherArgs` | Final voucher payload (used when `hasVoucher != 0`) |
-| `hasVoucher` | u8 | `0` skips voucher verification; non-zero applies `voucher` |
+| `hasVoucher` | u8 | `0` finalizes with no settlement (full refund); non-zero verifies and settles the voucher carried by the preceding Ed25519 precompile instruction (read via the Instructions sysvar) before finalizing |
 
 The payee MUST be a signer. Callable from `Open`
 and from `Closing` while `now < closureStartedAt + gracePeriod`;
@@ -743,6 +755,17 @@ total = amount × units_consumed
 The credential payload uses a discriminated union on
 the `action` field. Four actions are defined.
 
+These actions map to the abstract session lifecycle
+operations of {{I-D.payment-intent-session}} as
+follows:
+
+| Abstract Operation | This Method's `action` |
+|--------------------|------------------------|
+| Open | `open` |
+| Use | `voucher` |
+| Top-Up | `topUp` |
+| Close | `close` |
+
 ## Action: "open"
 
 Opens a new payment channel.
@@ -1006,12 +1029,10 @@ programs MUST:
 - validate the Instructions sysvar account address;
 - use checked instruction-loading helpers provided by
   the Solana SDK;
-- correlate the verified message bytes to the exact
-  on-chain voucher payload accepted by the channel
-  instruction in the same transaction
-  (see {{on-chain-voucher-encoding}}); the bytes the
-  precompile recorded MUST byte-equal the channel
-  instruction's voucher argument, and the precompile-
+- decode the on-chain voucher payload directly from
+  the verified message bytes recorded by the precompile
+  in the same transaction
+  (see {{on-chain-voucher-encoding}}); the precompile-
   recorded signer MUST equal `authorizedSigner`;
 - reject signature-verification instructions that are
   replayed, unrelated, or positioned such that the
@@ -1050,8 +1071,8 @@ count (u32 LE) || [ recipient (32 bytes) || shareBps (u16 LE) ] × count
 Implementations MUST use a collision-resistant hash
 with a 32-byte digest. The chosen algorithm MUST be
 fixed at deployment and documented for clients so
-they can reproduce it. Blake3 is RECOMMENDED; the
-specific hash implementation (e.g., the `sol_blake3`
+they can reproduce it. SHA-256 is RECOMMENDED; the
+specific hash implementation (e.g., the `sol_sha256`
 syscall versus a bundled library) is an
 implementation detail that does not affect wire
 compatibility.
@@ -1772,12 +1793,11 @@ verification program and MUST define a distinct
 
 ## Payment Intent Registration
 
-This document requests registration of the following
-entry in the "HTTP Payment Intents" registry:
-
-| Intent | Applicable Methods | Description | Reference |
-|--------|-------------------|-------------|-----------|
-| `session` | `solana` | Metered Solana payments via off-chain vouchers | This document |
+The `session` intent is registered by
+{{I-D.payment-intent-session}}. This document does not
+register a new payment intent; it defines how the
+`solana` payment method implements the registered
+`session` intent.
 
 --- back
 
