@@ -11,7 +11,7 @@ This replaces the old hand-maintained index.html so that new specs
 import os
 import re
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPECS_DIR = os.path.join(ROOT, "specs")
@@ -139,7 +139,10 @@ def build_tree(specs):
 
 
 def main():
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=False)
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATES_DIR),
+        autoescape=select_autoescape(default_for_string=True, default=True),
+    )
     tpl = env.get_template("index.html")
 
     specs = collect_specs()

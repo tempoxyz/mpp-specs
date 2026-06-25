@@ -12,7 +12,7 @@ Jinja2 is already available via xml2rfc's dependencies.
 import json
 import os
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(ROOT, "pages", "templates")
@@ -86,7 +86,10 @@ def make_example(slug, title, http_status):
 
 
 def main():
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=False)
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATES_DIR),
+        autoescape=select_autoescape(default_for_string=True, default=True),
+    )
     problem_tpl = env.get_template("problem.html")
     index_tpl = env.get_template("problems_index.html")
 
