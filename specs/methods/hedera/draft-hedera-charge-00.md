@@ -4,7 +4,7 @@ abbrev: Hedera Charge
 docname: draft-hedera-charge-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: independent
 consensus: false
 
@@ -37,8 +37,7 @@ normative:
     date: 2026
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: >
-      https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01

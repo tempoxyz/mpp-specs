@@ -12,15 +12,15 @@ author:
   - name: Brett DiNovi
     ins: B. DiNovi
     email: bread@megaeth.com
-    organization: MegaETH Labs
+    org: MegaETH Labs
   - name: Conner Swenberg
     ins: C. Swenberg
     email: conner.swenberg@coinbase.com
-    organization: Coinbase
+    org: Coinbase
   - name: Kyle Scott
     ins: K. Scott
     email: kscott@monad.foundation
-    organization: Monad Foundation
+    org: Monad Foundation
 
 normative:
   RFC2119:
@@ -40,7 +40,7 @@ normative:
     date: 2026
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
