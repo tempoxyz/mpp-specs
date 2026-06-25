@@ -76,7 +76,8 @@ informative:
 This document defines the "session" intent for the "tempo" payment method
 in the Payment HTTP Authentication Scheme. It specifies unidirectional
 streaming payment channels for incremental, voucher-based payments
-suitable for low-cost the metered services.
+suitable for low-cost metered services, including both legacy
+contract-backed channels and TIP-20 channel precompile-backed channels.
 
 --- middle
 
@@ -217,6 +218,22 @@ Base Units
 : The smallest indivisible unit of a TIP-20 token. TIP-20 tokens use
   6 decimal places; one million base units equals 1.00 tokens.
 
+# Protocol Versions {#protocol-versions}
+
+Tempo session challenges can identify the channel backend through
+`methodDetails.sessionProtocol`:
+
+| Value | Channel backend | Description |
+|-------|-----------------|-------------|
+| `v1` | Contract-backed escrow | The legacy `TempoStreamChannel` contract interface described in {{channel-state}}. |
+| `v2` | TIP-20 channel precompile | The TIP-20 channel escrow precompile described in {{precompile-channel-state}}. |
+
+If `methodDetails.sessionProtocol` is absent, clients MAY treat the
+challenge as `v1` for backwards compatibility. New servers SHOULD emit
+`"sessionProtocol": "v2"` when using the TIP-20 channel precompile. A
+client MUST NOT answer a challenge using a different session protocol than
+the one indicated by the challenge.
+
 # Encoding Conventions {#encoding}
 
 This section defines normative encoding rules for interoperability.
@@ -263,9 +280,10 @@ seconds as decimal strings.
 Streaming payment channels require an on-chain escrow contract that holds
 user deposits and enforces voucher-based withdrawals.
 
-## Channel State {#channel-state}
+## Contract-Backed Channel State {#channel-state}
 
-Each channel is identified by a unique `channelId` and stores:
+For `sessionProtocol: "v1"`, each channel is identified by a unique
+`channelId` and stores:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -298,6 +316,59 @@ address) and `block.chainid`, explicitly binding the channel to a
 specific contract deployment and chain. Clients MUST use the contract's
 `computeChannelId()` function or equivalent logic to ensure
 interoperability.
+
+## Precompile-Backed Channel State {#precompile-channel-state}
+
+For `sessionProtocol: "v2"`, the channel is identified by a descriptor
+and the TIP-20 channel escrow precompile.
+
+### Channel Descriptor
+
+The descriptor is carried in each v2 credential payload and contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `payer` | address | Wallet that funds the channel and authorizes voucher spend |
+| `payee` | address | Wallet that receives settlement from the channel |
+| `operator` | address | Optional payee-side operator authorized for channel operations; zero address if unset |
+| `token` | address | TIP-20 token escrowed by the channel |
+| `salt` | bytes32 | Payer-selected entropy |
+| `authorizedSigner` | address | Voucher signer; zero address delegates to `payer` |
+| `expiringNonceHash` | bytes32 | Hash of the sender-signed expiring-nonce open transaction |
+
+The v2 `channelId` MUST be computed as:
+
+~~~
+channelId = keccak256(abi.encode(
+    payer,
+    payee,
+    operator,
+    token,
+    salt,
+    authorizedSigner,
+    expiringNonceHash,
+    escrow,
+    chainId
+))
+~~~
+
+The `escrow` value is the precompile or escrow address from
+`methodDetails.escrowContract`, and `chainId` is
+`methodDetails.chainId`. Servers MUST recompute this value from the
+descriptor and reject credentials whose `channelId` does not match.
+
+For v2, servers MUST verify that:
+
+- `descriptor.payee` matches the challenge `recipient`
+- `descriptor.token` matches the challenge `currency`
+- `descriptor.operator` matches `methodDetails.operator` when present,
+  or is the zero address when no operator is advertised
+- `descriptor.expiringNonceHash` matches the open transaction being
+  broadcast
+
+V2 channel amounts use unsigned 96-bit integer semantics. Clients and
+servers MUST reject deposits, voucher amounts, settlement amounts, and
+close capture amounts that exceed `2^96 - 1`.
 
 ## Channel Lifecycle
 
@@ -539,8 +610,10 @@ promote common fields to the core schema.
 | `methodDetails.escrowContract` | string | REQUIRED | Address of the channel escrow contract |
 | `methodDetails.channelId` | string | OPTIONAL | Channel ID if resuming an existing channel |
 | `methodDetails.minVoucherDelta` | string | OPTIONAL | Minimum amount increase between vouchers (server policy hint) |
-| `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 4217) |
+| `methodDetails.operator` | string | OPTIONAL | V2 payee-side operator address clients encode in new channel descriptors |
+| `methodDetails.sessionProtocol` | string | OPTIONAL | Session protocol version, either `"v1"` or `"v2"` |
+| `methodDetails.sessionSnapshot` | object | OPTIONAL | V2 reusable channel snapshot; see {{session-snapshot}} |
 
 Channel reuse is OPTIONAL. Servers MAY include `channelId` to suggest
 resuming an existing channel:
@@ -556,6 +629,51 @@ resuming an existing channel:
 Servers MAY cache `(payer address, payee address, token) → channelId`
 mappings to suggest channel reuse, reducing on-chain transactions.
 
+When `methodDetails.sessionProtocol` is `"v2"`, servers MUST include
+`methodDetails.chainId` and `methodDetails.escrowContract` in the
+challenge after applying defaults. The `escrowContract` value identifies
+the TIP-20 channel escrow precompile or compatible deployment. Servers
+MAY include `methodDetails.operator`; if omitted, clients MUST use the
+zero address for the descriptor `operator`.
+
+## Session Snapshot {#session-snapshot}
+
+For v2 reusable channels, servers MAY include a snapshot of channel state
+in `methodDetails.sessionSnapshot` and MAY also send it in the
+`Payment-Session-Snapshot` response header. The header value is a
+base64url-encoded JSON object without padding. Servers MAY also send a
+`Payment-Session` header containing the reusable `channelId`.
+
+A session snapshot contains:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acceptedCumulative` | string | REQUIRED | Highest cumulative voucher amount accepted by the server |
+| `chainId` | number | REQUIRED | Tempo chain ID |
+| `channelId` | string | REQUIRED | V2 channel identifier |
+| `closeRequestedAt` | string | OPTIONAL | Close-request timestamp if the channel is closing |
+| `deposit` | string | REQUIRED | Current on-chain deposit |
+| `descriptor` | object | REQUIRED | Channel descriptor from {{precompile-channel-state}} |
+| `escrow` | string | REQUIRED | Escrow precompile or contract address |
+| `requiredCumulative` | string | REQUIRED | Minimum cumulative amount required for the challenged request |
+| `settled` | string | REQUIRED | Amount already settled on-chain |
+| `spent` | string | REQUIRED | Amount consumed according to server accounting |
+| `units` | number | OPTIONAL | Units delivered according to server accounting |
+
+Clients MAY use a valid snapshot to avoid local channel lookup. Clients
+MUST verify that the snapshot `channelId`, descriptor, `escrow`, and
+`chainId` are consistent with the v2 channel ID derivation before using
+it to construct a credential.
+
+### Bootstrap Preflight
+
+Servers MAY support same-resource bootstrap for reusable v2 channels. A
+client sends a `HEAD` request to the protected resource. If the server
+needs payer identity before it can resolve a channel, it MAY challenge
+with a zero-amount `tempo` `charge` request. After the client proves the
+zero-amount challenge, the server returns `204 No Content` and MAY include
+`Payment-Session` and `Payment-Session-Snapshot` headers.
+
 **Example (new channel):**
 
 ~~~json
@@ -567,7 +685,8 @@ mappings to suggest channel reuse, reducing on-chain transactions.
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
-    "chainId": 4217
+    "chainId": 4217,
+    "sessionProtocol": "v2"
   }
 }
 ~~~
@@ -586,7 +705,8 @@ deposit of 10.00 tokens. The client generates a random salt locally.
   "methodDetails": {
     "escrowContract": "0x1234567890abcdef1234567890abcdef12345678",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
-    "chainId": 4217
+    "chainId": 4217,
+    "sessionProtocol": "v2"
   }
 }
 ~~~
@@ -732,6 +852,7 @@ to broadcast.
 | `channelId` | string | REQUIRED | Channel identifier (hex-encoded bytes32) |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
 | `authorizedSigner` | string | OPTIONAL | Address delegated to sign vouchers |
+| `descriptor` | object | REQUIRED for v2 | Channel descriptor from {{precompile-channel-state}} |
 | `cumulativeAmount` | string | REQUIRED | Initial cumulative amount (typically `"0"`) |
 | `signature` | string | REQUIRED | EIP-712 voucher signature for the initial amount |
 
@@ -740,10 +861,16 @@ The `transaction` field contains the complete signed Tempo Transaction
 broadcasts the transaction, optionally adding a fee payer signature if
 `feePayer: true` was specified in the challenge (see {{fee-payment}}).
 
-The server recovers the `payer` address from the signed transaction and
-uses it to compute the `channelId` deterministically (see {{channel-state}}).
-The `authorizedSigner` is inferred from the calldata inside `transaction`
-and verified when the transaction is signed.
+For v1, the server recovers the `payer` address from the signed transaction
+and uses it to compute the `channelId` deterministically (see
+{{channel-state}}). The `authorizedSigner` is inferred from the calldata
+inside `transaction` and verified when the transaction is signed.
+
+For v2, the client MUST include `descriptor`. The server MUST verify that
+the descriptor matches the signed open transaction, the challenge payment
+fields, and the `channelId` derivation in {{precompile-channel-state}}. If
+`authorizedSigner` is present in the payload, it MUST match
+`descriptor.authorizedSigner`.
 
 The initial voucher (`cumulativeAmount` and `signature`) proves the client
 controls the signing key and establishes the voucher chain.
@@ -764,6 +891,15 @@ controls the signing key and establishes the voucher chain.
     "action": "open",
     "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "descriptor": {
+      "payer": "0x1111111111111111111111111111111111111111",
+      "payee": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+      "operator": "0x0000000000000000000000000000000000000000",
+      "token": "0x20c0000000000000000000000000000000000000",
+      "salt": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authorizedSigner": "0x0000000000000000000000000000000000000000",
+      "expiringNonceHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
     "transaction": "0x76f901...signed transaction bytes...",
     "cumulativeAmount": "0",
     "signature": "0xabcdef1234567890..."
@@ -798,6 +934,7 @@ challenge `id` with problem type `challenge-not-found`.
 | `type` | string | REQUIRED | `"transaction"` |
 | `channelId` | string | REQUIRED | Channel ID |
 | `transaction` | string | REQUIRED | Signed transaction bytes |
+| `descriptor` | object | REQUIRED for v2 | Channel descriptor from {{precompile-channel-state}} |
 | `additionalDeposit` | string | REQUIRED | Additional amount to deposit in base units |
 
 **Example:**
@@ -816,6 +953,15 @@ challenge `id` with problem type `challenge-not-found`.
     "action": "topUp",
     "type": "transaction",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "descriptor": {
+      "payer": "0x1111111111111111111111111111111111111111",
+      "payee": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+      "operator": "0x0000000000000000000000000000000000000000",
+      "token": "0x20c0000000000000000000000000000000000000",
+      "salt": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authorizedSigner": "0x0000000000000000000000000000000000000000",
+      "expiringNonceHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
     "transaction": "0x76f901...signed topUp transaction bytes...",
     "additionalDeposit": "5000000"
   }
@@ -834,6 +980,7 @@ The `voucher` action submits an updated cumulative voucher during streaming.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel identifier |
+| `descriptor` | object | REQUIRED for v2 | Channel descriptor from {{precompile-channel-state}} |
 | `cumulativeAmount` | string | REQUIRED | Cumulative amount authorized |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
 
@@ -852,6 +999,15 @@ The `voucher` action submits an updated cumulative voucher during streaming.
   "payload": {
     "action": "voucher",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "descriptor": {
+      "payer": "0x1111111111111111111111111111111111111111",
+      "payee": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+      "operator": "0x0000000000000000000000000000000000000000",
+      "token": "0x20c0000000000000000000000000000000000000",
+      "salt": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authorizedSigner": "0x0000000000000000000000000000000000000000",
+      "expiringNonceHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
     "cumulativeAmount": "250000",
     "signature": "0xabcdef1234567890..."
   }
@@ -868,11 +1024,14 @@ on-chain.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `channelId` | string | REQUIRED | Channel identifier |
+| `descriptor` | object | REQUIRED for v2 | Channel descriptor from {{precompile-channel-state}} |
 | `cumulativeAmount` | string | REQUIRED | Final cumulative amount for settlement |
 | `signature` | string | REQUIRED | EIP-712 voucher signature |
 
 The server uses the voucher fields (channelId, cumulativeAmount, signature)
-to call `close(channelId, cumulativeAmount, signature)` on-chain.
+to close the channel on-chain. For v2, the server MUST use the descriptor
+to identify the channel and MUST reject a close credential whose descriptor
+does not match the stored channel.
 
 **Example:**
 
@@ -889,6 +1048,15 @@ to call `close(channelId, cumulativeAmount, signature)` on-chain.
   "payload": {
     "action": "close",
     "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "descriptor": {
+      "payer": "0x1111111111111111111111111111111111111111",
+      "payee": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+      "operator": "0x0000000000000000000000000000000000000000",
+      "token": "0x20c0000000000000000000000000000000000000",
+      "salt": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authorizedSigner": "0x0000000000000000000000000000000000000000",
+      "expiringNonceHash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
     "cumulativeAmount": "500000",
     "signature": "0xabcdef1234567890..."
   }
@@ -930,6 +1098,9 @@ The `types` object MUST contain exactly:
 }
 ~~~
 
+For `sessionProtocol: "v2"`, `cumulativeAmount` is encoded as `uint96`
+instead of `uint128`.
+
 Note: The `EIP712Domain` type is implicit per EIP-712 and SHOULD NOT be
 included in the `types` object. The domain separator is computed from
 the `domain` object using the canonical type string
@@ -941,7 +1112,7 @@ The `domain` object MUST contain:
 
 | Field | Type | Value |
 |-------|------|-------|
-| `name` | string | `"Tempo Stream Channel"` |
+| `name` | string | `"Tempo Stream Channel"` for v1; `"TIP20 Channel Reserve"` for v2 |
 | `version` | string | `"1"` |
 | `chainId` | number | Tempo chain ID (e.g., `4217`) |
 | `verifyingContract` | string | Escrow contract address from challenge |
@@ -976,6 +1147,9 @@ To sign a voucher, implementations MUST:
    )
    ~~~
 
+   For v2, the struct type string is
+   `Voucher(bytes32 channelId,uint96 cumulativeAmount)`.
+
 3. Compute the signing hash:
 
    ~~~
@@ -1009,6 +1183,9 @@ On `action="open"`, servers MUST:
    `channelId` deterministically (see {{channel-state}}). If `feePayer: true`,
    add fee payer signature using domain `0x78` (see {{fee-payment}}) and
    broadcast. Otherwise, broadcast as-is.
+   For v2, servers MUST also verify the payload `descriptor`, the computed
+   `channelId`, the descriptor `expiringNonceHash`, and the emitted channel
+   open receipt before accepting the credential.
 2. Query the escrow contract to verify channel state:
    - Channel exists with the computed `channelId`
    - `channel.payee` matches server's address
@@ -1034,6 +1211,9 @@ On `action="topUp"`, servers MUST:
    with the specified `additionalDeposit` amount. If
    `feePayer: true`, add fee payer signature using domain `0x78` (see
    {{fee-payment}}) and broadcast. Otherwise, broadcast as-is.
+   For v2, servers MUST verify that the payload `descriptor` matches the
+   stored channel and that the top-up receipt references the credential
+   `channelId`.
 2. Query the escrow contract to verify updated channel state:
    - `channel.deposit` increased by `additionalDeposit`
    - Channel is not finalized
@@ -1044,18 +1224,23 @@ On `action="topUp"`, servers MUST:
 
 On `action="voucher"`, servers MUST:
 
-1. Verify voucher signature using EIP-712 recovery
-2. Verify signature uses canonical low-s values (see {{signature-malleability}})
-3. Recover signer and MUST verify it matches expected signer from on-chain state
-4. Verify `channel.closeRequestedAt == 0` (no pending close request).
+1. Verify the credential descriptor for v2, including channel ID, payee,
+   token, operator, escrow address, and chain ID binding.
+2. Verify voucher signature using EIP-712 recovery
+3. Verify signature uses canonical low-s values (see {{signature-malleability}})
+4. Recover signer and MUST verify it matches expected signer from on-chain state
+5. Verify `channel.closeRequestedAt == 0` (no pending close request).
    Servers MUST reject vouchers on channels with a pending forced close
    to prevent service delivery that cannot be settled.
-5. Verify monotonicity:
-   - `cumulativeAmount > highestVoucherAmount`
-   - `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
-6. Verify `cumulativeAmount <= channel.deposit`
-7. Persist voucher to durable storage before providing service
-8. Update `highestVoucherAmount = cumulativeAmount`
+6. Verify monotonicity:
+   - `cumulativeAmount >= highestVoucherAmount`
+   - if `cumulativeAmount == highestVoucherAmount`, treat the request as
+     an idempotent retry and do not change voucher state
+   - if `cumulativeAmount > highestVoucherAmount`,
+     `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
+7. Verify `cumulativeAmount <= channel.deposit`
+8. Persist voucher to durable storage before providing service
+9. Update `highestVoucherAmount = cumulativeAmount`
 
 Servers MUST derive the expected signer from on-chain channel state by
 querying the escrow contract. The expected signer is `channel.authorizedSigner`
@@ -1071,9 +1256,9 @@ unrecoverable fund loss if the server crashes after service delivery.
 Servers MUST treat voucher submissions idempotently:
 
 - Resubmitting a voucher with the same `cumulativeAmount` as the highest
-  accepted MUST return 200 OK with the current `highestAmount`
+  accepted MUST return 200 OK with the current `acceptedCumulative`
 - Submitting a voucher with lower `cumulativeAmount` than highest accepted
-  MUST return 200 OK with the current `highestAmount` (not an error)
+  MUST be rejected
 - Clients MAY safely retry voucher submissions after network failures
 
 ## Rejection and Error Responses {#error-responses}
@@ -1132,6 +1317,13 @@ MUST maintain:
 | `acceptedCumulative` | uint128 | Highest valid voucher amount accepted (monotonically increasing) |
 | `spent` | uint128 | Cumulative amount charged for delivered service (monotonically increasing) |
 | `settledOnChain` | uint128 | Last cumulative amount settled on-chain (informational) |
+| `deposit` | uint128 or uint96 | Latest verified on-chain deposit |
+| `closeRequestedAt` | uint64 | Latest verified close-request timestamp, or zero |
+
+For v2 channels, `acceptedCumulative`, `spent`, `settledOnChain`, and
+`deposit` are uint96 values. Servers MUST key channel state by normalized
+lowercase `channelId`. Channel state updates MUST be linearizable per
+channel across concurrent requests.
 
 The `available` balance is computed as:
 
@@ -1282,12 +1474,27 @@ same amount will only refund the payer the remaining deposit.
 When the client sends `action="close"`:
 
 1. Server receives the signed close request
-2. Server calls `close(channelId, cumulativeAmount, signature)` on-chain
-3. Contract settles any delta and refunds remainder to payer
+2. Server verifies the close voucher covers at least the greater of
+   server-recorded `spent` and current on-chain `settled`
+3. Server closes on-chain, capturing only the amount actually owed to the
+   payee and refunding the remainder to the payer
 4. Server returns receipt with transaction hash
 
 Servers SHOULD close promptly when clients request—the economic
 incentive is to claim earned funds immediately.
+
+Servers MUST NOT capture more than the amount actually consumed by
+delivered service. A client can pre-authorize more funds than were spent;
+the server MUST use its accounting state to determine the close capture
+amount and MUST NOT treat `cumulativeAmount` alone as the amount to
+capture. For v2, the close capture amount is:
+
+~~~
+captureAmount = max(spent, settledOnChain)
+~~~
+
+and `captureAmount` MUST be less than or equal to both the close voucher
+`cumulativeAmount` and the on-chain `deposit`.
 
 ## Forced Close
 
@@ -1349,6 +1556,7 @@ extends the receipt with balance tracking:
 | `intent` | string | `"session"` |
 | `status` | string | `"success"` |
 | `timestamp` | string | {{RFC3339}} response time |
+| `reference` | string | Payment reference; for session receipts, the `channelId` |
 | `challengeId` | string | Challenge identifier for audit correlation |
 | `channelId` | string | The channel identifier |
 | `acceptedCumulative` | string | Highest voucher amount accepted |
@@ -1356,9 +1564,9 @@ extends the receipt with balance tracking:
 | `units` | number | OPTIONAL: Units consumed this request (e.g., tokens, bytes) |
 | `txHash` | string | OPTIONAL: On-chain transaction hash (present on settlement/close) |
 
-The `txHash` field serves as the core spec's `reference` field in
-{{I-D.httpauth-payment}}. It is OPTIONAL because not every
-response involves an on-chain settlement—voucher updates are off-chain.
+The `reference` field serves as the core spec's payment reference and is
+the channel ID. The `txHash` field is OPTIONAL because not every response
+involves an on-chain settlement; voucher updates are off-chain.
 
 The `units` field indicates what was consumed for **this specific request**.
 When the challenge includes `unitType`, clients can use it to interpret the
@@ -1373,6 +1581,7 @@ challenge.
   "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:08:30Z",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
@@ -1389,6 +1598,7 @@ challenge.
   "intent": "session",
   "status": "success",
   "timestamp": "2025-01-06T12:10:00Z",
+  "reference": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId": "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
@@ -1435,9 +1645,9 @@ To mitigate voucher flooding, servers MUST implement rate limiting:
 - Servers MAY implement additional IP-based rate limiting for
   unauthenticated requests
 - Servers MUST enforce `minVoucherDelta` when present to prevent tiny increments
-- Servers SHOULD skip expensive signature verification for vouchers that
-  do not advance state (return 200 OK with current `highestAmount` per
-  {{idempotency}})
+- Servers MAY skip expensive signature verification for vouchers whose
+  `cumulativeAmount` is below the accepted cumulative amount, because such
+  vouchers are rejected before they can advance state
 
 Servers SHOULD perform format validation (field presence, hex encoding,
 length checks) before expensive ECDSA signature recovery to minimize
@@ -1646,7 +1856,8 @@ The `request` decodes to:
   "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
   "methodDetails": {
     "escrowContract": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
-    "chainId": 4217
+    "chainId": 4217,
+    "sessionProtocol": "v2"
   }
 }
 ~~~
@@ -1764,10 +1975,10 @@ The credential payload for a close request:
 
 The voucher fields contain the final cumulative amount for on-chain settlement.
 
-# Reference Implementation
+# Legacy Contract Reference Implementation
 
-This appendix provides reference implementation details. These are
-informative and not normative.
+This appendix provides legacy v1 contract reference implementation details.
+These are informative and not normative.
 
 ## Solidity Interface
 
@@ -1982,7 +2193,47 @@ prefer JSON Schema over CDDL.
           "default": false,
           "description": "If true, server pays transaction fees"
         },
-        "chainId": { "type": "integer" }
+        "chainId": { "type": "integer" },
+        "operator": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$",
+          "description": "OPTIONAL: v2 channel operator"
+        },
+        "sessionProtocol": {
+          "enum": ["v1", "v2"],
+          "description": "OPTIONAL: session protocol version"
+        },
+        "sessionSnapshot": { "$ref": "#/$defs/sessionSnapshot" }
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "required": ["payer", "payee", "operator", "token", "salt", "authorizedSigner", "expiringNonceHash"],
+      "properties": {
+        "payer": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "payee": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "operator": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "token": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "salt": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+        "authorizedSigner": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "expiringNonceHash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }
+      }
+    },
+    "sessionSnapshot": {
+      "type": "object",
+      "required": ["acceptedCumulative", "chainId", "channelId", "deposit", "descriptor", "escrow", "requiredCumulative", "settled", "spent"],
+      "properties": {
+        "acceptedCumulative": { "type": "string", "pattern": "^[0-9]+$" },
+        "chainId": { "type": "integer" },
+        "channelId": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+        "closeRequestedAt": { "type": "string", "pattern": "^[0-9]+$" },
+        "deposit": { "type": "string", "pattern": "^[0-9]+$" },
+        "descriptor": { "$ref": "#/$defs/descriptor" },
+        "escrow": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "requiredCumulative": { "type": "string", "pattern": "^[0-9]+$" },
+        "settled": { "type": "string", "pattern": "^[0-9]+$" },
+        "spent": { "type": "string", "pattern": "^[0-9]+$" },
+        "units": { "type": "integer" }
       }
     }
   }
@@ -2010,6 +2261,10 @@ prefer JSON Schema over CDDL.
       "pattern": "^0x[0-9a-fA-F]{64}$",
       "description": "Channel identifier"
     },
+    "descriptor": {
+      "$ref": "#/$defs/descriptor",
+      "description": "REQUIRED for v2"
+    },
     "cumulativeAmount": {
       "type": "string",
       "pattern": "^[0-9]+$",
@@ -2019,6 +2274,21 @@ prefer JSON Schema over CDDL.
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{128,130}$",
       "description": "EIP-712 voucher signature"
+    }
+  },
+  "$defs": {
+    "descriptor": {
+      "type": "object",
+      "required": ["payer", "payee", "operator", "token", "salt", "authorizedSigner", "expiringNonceHash"],
+      "properties": {
+        "payer": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "payee": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "operator": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "token": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "salt": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+        "authorizedSigner": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+        "expiringNonceHash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }
+      }
     }
   }
 }
@@ -2039,7 +2309,7 @@ and Problem Details.
   "$id": "https://paymentauth.org/schemas/session-receipt.json",
   "title": "Session Receipt",
   "type": "object",
-  "required": ["method", "intent", "status", "timestamp", "challengeId", "channelId", "acceptedCumulative", "spent"],
+  "required": ["method", "intent", "status", "timestamp", "reference", "challengeId", "channelId", "acceptedCumulative", "spent"],
   "properties": {
     "method": { "const": "tempo" },
     "intent": { "const": "session" },
@@ -2047,6 +2317,10 @@ and Problem Details.
     "timestamp": {
       "type": "string",
       "format": "date-time"
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
     },
     "challengeId": { "type": "string" },
     "channelId": {
