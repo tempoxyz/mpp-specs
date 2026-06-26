@@ -321,6 +321,7 @@ program source.
 | `payee` | Pubkey | Seed + Account state | Server authorized to settle; receives the implicit-remainder share on `distribute` |
 | `authorizedSigner` | Pubkey | Seed + Account state | Voucher signer; MAY equal `payer` or a delegated signer |
 | `mint` | Pubkey | Seed + Account state | SPL Token or Token-2022 mint. Stored (not seed-only) so refund / distribution CPIs can be validated without re-binding seeds |
+| `rentPayer` | Pubkey | Account state | The operator / transaction submitter that funded the channel PDA and escrow ATA rent at `open`. Recorded so `distribute` can reclaim the freed SOL rent to this account at `finalize` without an off-chain input. Distinct from `payer`: the client (`payer`) only moves stablecoin and never needs SOL |
 
 The `channelId` is the base58-encoded address of the
 channel account (PDA). Channel programs MUST derive
@@ -404,7 +405,7 @@ system-owned, data-empty account holding only lamports)
 or a pre-existing canonical escrow ATA is accepted
 rather than reverting. Prefunded balances are never
 credited to channel state — surplus PDA lamports refund
-to the payer at tombstone, and surplus escrow tokens are
+to `rentPayer` at tombstone, and surplus escrow tokens are
 swept to the treasury at `finalize`.
 
 Servers MUST use a `salt` unique per channel. Reusing
@@ -533,13 +534,16 @@ deltas from the advanced watermark, so residual value
 remains claimable as a share's cumulative entitlement
 crosses the next whole unit. From `Finalized`,
 `distribute` additionally — when
-`payerWithdrawnAt == 0` — transfers
+`payerWithdrawnAt == 0` — transfers the token refund
 `deposit - settled` to the payer, stamps
 `payerWithdrawnAt`, sweeps the final irreducible
 residual dust to the treasury ATA, closes the escrow
 ATA, and tombstones the channel PDA (see
-{{tombstoning}}). `distribute` MUST NOT be callable
-from `Closing`.
+{{tombstoning}}). The freed SOL rent from closing the
+escrow ATA and tombstoning the PDA is reclaimed to
+`Channel.rentPayer` (the operator), not the payer; the
+token refund still goes to the payer. `distribute` MUST
+NOT be callable from `Closing`.
 
 On a nonzero beneficiary share whose canonical ATA is
 unusable — missing or uninitialized, frozen, closed or
@@ -575,7 +579,9 @@ data to 1 byte and write the `ClosedChannel`
 discriminator at offset 0. The rent difference
 between the pre-tombstone balance and the 1-byte
 tombstone rent-exempt minimum MUST be returned to
-the payer. `withdrawPayer` MUST NOT tombstone.
+the channel's `rentPayer` (the operator that funded
+the rent at `open`), not the payer. `withdrawPayer`
+MUST NOT tombstone.
 
 Implementations MUST NOT treat a fee-payer
 signature as satisfying payer or payee authority
@@ -1151,8 +1157,10 @@ When `feePayer` is `true` in the challenge:
 - **Settle/Close**: The server initiates these
   operations and always pays the fee.
 
-This ensures clients never need SOL for transaction
-fees during the entire session lifecycle.
+This ensures clients never need SOL — neither for
+transaction fees nor for channel rent — during the
+entire session lifecycle; the client transacts in
+stablecoin only.
 
 # Server State Management
 
@@ -1363,6 +1371,8 @@ idempotent request.
      challenge policy;
    - authorized signer matches the open parameters;
    - `distributionHash` matches the proposed splits;
+   - `rentPayer` equals the operator / fee-payer key
+     that funded the channel rent;
    - channel is not finalized; and
    - `closureStartedAt` is `0`.
 12. Create server-side channel state.
