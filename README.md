@@ -2,11 +2,15 @@
 
 The open protocol for machine-to-machine payments.
 
-* **[IETF Draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)** — the core specification submitted to the IETF
-* **[Full Rendered Spec](https://tempoxyz.github.io/payment-auth-spec/)** — all specs including methods and extensions
+* **[IETF Draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**: the core specification
+* **[Full Rendered Spec](https://tempoxyz.github.io/payment-auth-spec/)**: all specs including methods and extensions
 * **[Learn more](https://mpp.dev)**
 
-## Overview
+## What is MPP?
+
+The [Machine Payments Protocol (MPP)](https://mpp.dev/) is an open standard for machine-to-machine payments, co-authored by [Tempo](https://tempo.xyz/) and [Stripe](https://stripe.com/). Paying for an internet resource, such as an API call, a dataset, or a unit of compute, still typically requires an account, API key, or billing relationship set up in advance. MPP lets any client pay as part of the HTTP exchange using the native `402 Payment Required` status code.
+
+Primary use cases include agentic payments, such as an AI agent paying per API call, machine-to-machine commerce, and usage-based billing without pre-provisioned accounts.
 
 MPP lets businesses offer services to agents, apps, and humans via a standard HTTP control flow. The protocol defines a payment-method agnostic core alongside extensions for specific payment method flows, discovery, and identity.
 
@@ -46,9 +50,13 @@ See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventi
 The specification is modular, separating stable protocol mechanics from evolving payment ecosystems:
 
 * **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
-* **[Intents](specs/intents/)**: Abstract payment patterns—charge, authorize, subscription. Define *what* kind of payment without specifying *how*.
+* **[Intents](specs/intents/)**: Abstract payment patterns such as charge, authorize, and subscription. Define *what* kind of payment without specifying *how*.
 * **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
 * **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
+
+## Related projects
+
+The [MPP repository](https://github.com/tempoxyz/mpp) contains the [mpp.dev](https://mpp.dev/) documentation and service directory. SDKs are available for [TypeScript](https://github.com/wevm/mppx), [Python](https://github.com/tempoxyz/pympp), [Rust](https://github.com/tempoxyz/mpp-rs), [Go](https://github.com/tempoxyz/mpp-go), and [Ruby](https://github.com/stripe/mpp-rb).
 
 ## Contributing
 
