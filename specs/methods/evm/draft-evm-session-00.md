@@ -4,7 +4,7 @@ abbrev: EVM Session
 docname: draft-evm-session-00
 version: 00
 category: info
-ipr: trust200902
+ipr: noModificationTrust200902
 submissiontype: IETF
 consensus: true
 
@@ -12,19 +12,19 @@ author:
   - name: Xin Tian
     ins: X. Tian
     email: xin.tian@okg.com
-    organization: OKG
+    org: OKG
   - name: Eason Wang
     ins: E. Wang
     email: wangyuxin@okg.com
-    organization: OKG
+    org: OKG
   - name: Michael Wong
     ins: M. Wong
     email: michael.wong@okg.com
-    organization: OKG
+    org: OKG
   - name: Aaron Zhou
     ins: A. Zhou
     email: guoliang.zhou@okg.com
-    organization: OKG
+    org: OKG
 
 normative:
   RFC2119:
@@ -66,7 +66,7 @@ normative:
     date: 2026
   I-D.httpauth-payment:
     title: "The 'Payment' HTTP Authentication Scheme"
-    target: https://datatracker.ietf.org/doc/draft-ietf-httpauth-payment/
+    target: https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/
     author:
       - name: Jake Moxey
     date: 2026-01
