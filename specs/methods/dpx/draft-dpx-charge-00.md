@@ -44,10 +44,10 @@ informative:
     target: https://stability.untitledfinancial.com
   DPX-DOCS:
     title: DPX Protocol Documentation
-    target: https://docs.dpxprotocol.com
+    target: https://docs.untitledfinancial.com
   DPX-MCP:
     title: DPX MCP Server
-    target: https://dpxprotocol.com/mcp
+    target: https://mcp.untitledfinancial.com/mcp
   EIP-20:
     title: ERC-20 Token Standard
     target: https://eips.ethereum.org/EIPS/eip-20
@@ -455,7 +455,7 @@ Method Registry per Section 12.3 of [I-D.httpauth-payment]:
 
 - **[DPX-ORACLE]** "DPX Stability Oracle", https://stability.untitledfinancial.com
 
-- **[DPX-DOCS]** "DPX Protocol Documentation", https://docs.dpxprotocol.com
+- **[DPX-DOCS]** "DPX Protocol Documentation", https://docs.untitledfinancial.com
 
 - **[EIP-20]** "ERC-20 Token Standard", https://eips.ethereum.org/EIPS/eip-20
 
