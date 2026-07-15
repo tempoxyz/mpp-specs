@@ -1,8 +1,8 @@
 ---
 title: "NEAR Intents Charge Intent for HTTP Payment Authentication"
 abbrev: "NEAR Intents Charge"
-docname: draft-nearintents-charge-00
-version: 00
+docname: draft-nearintents-charge-01
+version: "01"
 category: info
 ipr: noModificationTrust200902
 submissiontype: independent
@@ -315,6 +315,15 @@ If `methodDetails.credentialTypes` is omitted, servers MUST accept
 `"hash"`. Servers MUST NOT advertise credential types other than
 `"hash"` for this method.
 
+The server MUST determine `methodDetails.refundTo` before requesting
+the wet 1Click quote. It SHOULD resolve an origin-chain address
+controlled by the payer from authenticated request context. If it
+instead uses a fixed merchant address, it MUST disclose the resulting
+off-band refund-recovery policy. Transport-specific payer-hint
+negotiation is outside this document. Regardless of how the address is
+obtained, it is carried in the challenge-bound request, and the client
+MUST verify that it is an acceptable refund destination before paying.
+
 **Example (decoded `request`):**
 
 ~~~json
@@ -414,9 +423,10 @@ Servers SHOULD set `expires` such that the remaining window before the
 quote deadline accommodates origin-chain confirmation plus
 `methodDetails.timeEstimate`. Because the deposit address is
 time-limited, servers SHOULD cache the challenge for a given resource
-until the quote deadline and reissue the same challenge (including the
-same `recipient`) for repeated requests, regenerating only when the
-deadline passes.
+and refund destination until the quote deadline and reissue the same
+challenge (including the same `recipient`) for repeated requests,
+regenerating when either the deadline or `methodDetails.refundTo`
+changes.
 
 # Challenge Binding {#challenge-binding}
 
@@ -504,9 +514,11 @@ Other failure conditions map to the standard problem types of
 | Swap failed or refunded after a verified deposit       | `settlement-failed`     |
 | Credential malformed (bad base64url or JSON)           | `malformed-credential`  |
 
-As required by {{I-D.httpauth-payment}}, every rejection returns HTTP
-402 with a fresh `WWW-Authenticate: Payment` challenge and a Problem
-Details {{RFC9457}} body with `Content-Type: application/problem+json`.
+Payment verification failures return HTTP 402 with a fresh
+`WWW-Authenticate: Payment` challenge and a Problem Details {{RFC9457}}
+body with `Content-Type: application/problem+json`, as required by
+{{I-D.httpauth-payment}}. A non-success terminal settlement response
+follows the additional challenge-recovery rules in {{client-recovery}}.
 
 # Settlement Procedure {#settlement}
 
@@ -523,33 +535,50 @@ before granting access. The server:
    `expires` window is exceeded. Terminal statuses are `SUCCESS`,
    `FAILED`, `REFUNDED`, and `INCOMPLETE_DEPOSIT`.
 
-3. On `SUCCESS` — the merchant has received `methodDetails.amountOut` of
+3. The server MUST confirm, using the origin chain's canonical
+   transaction identifier rules ({{replay}}), that `payload.hash` is
+   among the origin-chain transactions reported for the deposit address.
+   An unrelated presented hash MUST NOT be consumed, and the quote MUST
+   remain available for an observed origin-chain transaction.
+
+4. On `SUCCESS` — the merchant has received `methodDetails.amountOut` of
    `methodDetails.destinationAsset` on `methodDetails.destinationNetwork` —
    returns the resource with a `Payment-Receipt` header per {{receipt}}.
 
-4. On `FAILED` or `REFUNDED`, returns a `settlement-failed` error per
+5. On `FAILED` or `REFUNDED`, returns a `settlement-failed` error per
    {{error-codes}}. On `INCOMPLETE_DEPOSIT`, returns `payment-insufficient`.
    In all non-success terminal cases the backend refunds the deposit to
    `methodDetails.refundTo`; the server MUST NOT grant access.
 
-5. On reaching any terminal status, permanently consume `payload.hash`
-   (see {{replay}}). After a terminal state the quote and its deposit
-   address are spent — the deposit was either delivered (`SUCCESS`) or
-   refunded — so the same hash MUST NOT be accepted again.
+6. After a terminal status has been matched to `payload.hash`,
+   permanently consume that hash (see {{replay}}). The quote and its
+   deposit address are spent — the deposit was either delivered
+   (`SUCCESS`) or refunded — so the same hash MUST NOT be accepted
+   again.
 
 ## Client Recovery {#client-recovery}
 
-A non-success terminal state (`FAILED`, `REFUNDED`, `INCOMPLETE_DEPOSIT`,
-or a settlement timeout) is terminal for this credential: the deposit is
+A non-success terminal state (`FAILED`, `REFUNDED`, or
+`INCOMPLETE_DEPOSIT`) is terminal for this credential: the deposit is
 refunded to `methodDetails.refundTo`, and because the quote and deposit
-address are single-use, the same `payload.hash` cannot be retried. To pay
-again, the client re-requests the resource to obtain a **fresh challenge**
-(a new quote, hence a new deposit address), sends a new deposit, and
-submits a new credential. Consistent with {{error-codes}}, the server
-returns each non-success terminal state as a 402 carrying that fresh
-`WWW-Authenticate: Payment` challenge, which the client uses to begin a
-new attempt. Burning the original hash is therefore safe: it can never
-deliver the resource, and the funds it represents have been refunded.
+address are single-use, the same `payload.hash` cannot be retried. To
+pay again, the client MUST obtain a **fresh challenge** (a new quote,
+hence a new deposit address) before sending a new deposit. It MUST NOT
+send another deposit against the spent challenge. A server MAY include
+the fresh challenge in the terminal 402 response. If the server prepares
+`WWW-Authenticate` before settlement retires the quote, the terminal 402
+MAY instead repeat the spent challenge. When the terminal 402 repeats
+the original challenge `id` or `recipient`, the client MUST re-request
+the resource without the spent credential to obtain a fresh challenge,
+then send a new deposit and submit a new credential. Burning the original
+hash is therefore safe: it can never deliver the resource, and the funds
+it represents have been refunded.
+
+A transport failure or settlement polling timeout is not a terminal
+backend state. The server MUST release the in-flight claim without
+consuming the hash, and the client MAY re-present the same credential
+after the backend recovers or settlement progresses, provided the
+challenge remains valid.
 
 ## Settlement Finality {#finality}
 
@@ -629,6 +658,14 @@ method enforces replay protection on two layers:
   failure/refund — so a credential is never burned before its outcome is
   known and is never reusable afterward. On a non-success terminal state
   the client obtains a fresh challenge to retry (see {{client-recovery}}).
+  Store-key canonicalization and equality comparison MUST follow the
+  origin chain's canonical transaction identifier rules;
+  implementations MUST NOT blindly lowercase identifiers. For
+  `eip155` and `bip122`, implementations compare the hexadecimal value
+  case-insensitively and ignore an optional `0x` prefix. For NEAR and
+  Solana, base58 transaction identifiers are case-sensitive and MUST be
+  compared exactly. Other namespaces MUST apply their own canonical
+  rules.
 
 When a single origin transaction is one of several deposits aggregated
 by the backend to one address (e.g., a top-up after an under-deposit),
@@ -657,7 +694,10 @@ challenge `request` per {{I-D.httpauth-payment}}: that `amount`,
 `methodDetails.originNetwork` is the intended origin chain, and that the
 destination leg (`destinationNetwork`, `destinationAsset`,
 `destinationRecipient`, `amountOut`) matches what the client intends the
-merchant to receive. Clients MUST NOT rely on `description`.
+merchant to receive. Clients MUST also verify that
+`methodDetails.refundTo` is controlled by the payer or is otherwise
+acceptable under an explicit merchant recovery policy. Clients MUST NOT
+rely on `description`.
 
 ## Hash Credential Binding {#hash-binding}
 
@@ -693,17 +733,20 @@ merchant or refund the deposit to `methodDetails.refundTo`. The
 and is enforced by the backend, not by an on-chain contract that the
 client co-signs. This is comparable to entrusting a payment processor
 with a transfer. The automatic refund path bounds the client's downside:
-every non-success terminal state refunds the deposit. Clients and
-autonomous agents applying per-method risk policies can identify this
-trust model from the `method` (`nearintents`) and
-`methodDetails.settlementBackend`.
+every non-success terminal state refunds the deposit, provided the
+client verified that `methodDetails.refundTo` is an acceptable
+destination. Clients and autonomous agents applying per-method risk
+policies can identify this trust model from the `method`
+(`nearintents`) and `methodDetails.settlementBackend`.
 
 ## Idempotency and Side Effects
 
 Per {{I-D.httpauth-payment}}, servers MUST NOT perform side effects for
 unpaid requests, and SHOULD honour `Idempotency-Key` for non-idempotent
-methods so that client retries with the same credential do not trigger a
-second settlement.
+methods so that transport retries do not repeat protected application
+side effects. Payment replay protection and application response
+idempotency are separate responsibilities; rejecting a consumed payment
+hash does not by itself replay the original protected response.
 
 # IANA Considerations {#iana}
 
