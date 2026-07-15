@@ -1,7 +1,7 @@
 ---
-title: "{Network}" Payment Method for HTTP Payment Authentication
-abbrev: "{Network}" Payment Method
-docname: draft-{network}-payment-method-00
+title: "{Network} {Intent} for HTTP Payment Authentication"
+abbrev: "{Network} {Intent}"
+docname: draft-{network}-{intent}-00
 version: 00
 category: info
 ipr: noModificationTrust200902
@@ -17,9 +17,10 @@ author:
 
 ## Abstract
 
-This document defines the "{network}" payment method for use with the Payment
-HTTP Authentication Scheme [I-D.httpauth-payment]. It specifies how clients
-and servers exchange payments using [Network Name]'s payment infrastructure.
+This document defines the "{intent}" intent for the "{network}" payment
+method using the Payment HTTP Authentication Scheme
+[I-D.httpauth-payment]. It specifies how clients and servers exchange
+payments using [Network Name]'s payment infrastructure.
 
 ## Status of This Memo
 

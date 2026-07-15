@@ -60,7 +60,7 @@ This ensures intents are battle-tested before standardization, preventing premat
 |------|---------|---------|
 | Core | `draft-httpauth-payment-XX` | `draft-httpauth-payment-00` |
 | Intent | `draft-payment-intent-{name}-XX` | `draft-payment-intent-charge-00` |
-| Method | `draft-{network}-payment-method-XX` | `draft-tempo-payment-method-00` |
+| Method | `draft-{network}-{intent}-XX` | `draft-tempo-charge-00` |
 | Extension | `draft-payment-{feature}-XX` | `draft-payment-discovery-00` |
 
 ## Writing Style
