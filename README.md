@@ -3,7 +3,7 @@
 The open protocol for machine-to-machine payments.
 
 * **[IETF Draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)**: the core specification
-* **[Full Rendered Spec](https://tempoxyz.github.io/payment-auth-spec/)**: all specs including methods and extensions
+* **[Full Rendered Spec](https://paymentauth.org/)**: all specs including methods and extensions
 * **[Learn more](https://mpp.dev)**
 
 ## What is MPP?
