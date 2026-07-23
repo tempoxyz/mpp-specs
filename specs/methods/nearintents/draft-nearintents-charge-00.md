@@ -132,7 +132,7 @@ Client                  Server            Origin Chain      1Click / Solvers
   |----------------------->|                    |                  |
   |                        | (2) quote          |                  |
   |                        |-------------------------------------->|
-  |                        |   depositAddress, maxAmountIn, ...     |
+  |                        |   depositAddress, AmountIn, ...     |
   |                        |<--------------------------------------|
   | (3) 402 Payment Req    |                    |                  |
   |     intent="charge"    |                    |                  |
@@ -262,7 +262,7 @@ This specification implements the shared request fields defined in
 
 | Field         | Type   | Presence | Description                                                                                          |
 | ------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
-| `amount`      | string | REQUIRED | Deposit amount the client is asked to send, in base units of `currency` (the 1Click quote `maxAmountIn`): the upper bound that guarantees the merchant receives `methodDetails.amountOut`. A requested/display value — the verifier actually requires `methodDetails.minAmountIn`, not `amount` (see {{verification}}). |
+| `amount`      | string | REQUIRED | Deposit amount the client is asked to send, in base units of `currency` (the 1Click quote `AmountIn`): the upper bound that guarantees the merchant receives `methodDetails.amountOut`. A requested/display value — the verifier actually requires `methodDetails.minAmountIn`, not `amount` (see {{verification}}). |
 | `currency`    | string | REQUIRED | Source asset the client pays with, as a CAIP-19 {{CAIP-19}} asset identifier (see {{asset-identifiers}}); chain component MUST equal `methodDetails.originNetwork`. |
 | `recipient`   | string | REQUIRED | 1Click deposit address on the origin chain. The payee of the client's on-chain transfer.             |
 | `description` | string | OPTIONAL | Human-readable payment description. MUST NOT be relied upon for verification per {{I-D.httpauth-payment}}. |
