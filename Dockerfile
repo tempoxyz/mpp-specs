@@ -1,4 +1,4 @@
-FROM ruby:4.0.5-slim@sha256:f7866408e569d1699d9aceaa7f2726b231119871d42bb271fef1fb573c2418c5
+FROM ruby:4.0.5-slim@sha256:42ad5227a4b2758f32563b34b5967e1055e75c80243eef04e6d2572887d1dec4
 
 # Install dependencies including WeasyPrint requirements for PDF generation
 RUN apt-get update && \
