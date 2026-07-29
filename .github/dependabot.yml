@@ -1,41 +1,30 @@
 version: 2
+
+multi-ecosystem-groups:
+  weekly-dependencies:
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+
 updates:
   - package-ecosystem: pip
     directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    groups:
-      python-deps:
-        patterns: ["*"]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: bundler
     directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    groups:
-      ruby-deps:
-        patterns: ["*"]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    groups:
-      actions:
-        patterns: ["*"]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: docker
     directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    groups:
-      docker-deps:
-        patterns: ["*"]
+    patterns: ["*"]
+    multi-ecosystem-group: weekly-dependencies
