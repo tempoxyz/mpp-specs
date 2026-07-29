@@ -316,13 +316,15 @@ If `methodDetails.credentialTypes` is omitted, servers MUST accept
 `"hash"` for this method.
 
 The server MUST determine `methodDetails.refundTo` before requesting
-the wet 1Click quote. It SHOULD resolve an origin-chain address
-controlled by the payer from authenticated request context. If it
-instead uses a fixed merchant address, it MUST disclose the resulting
-off-band refund-recovery policy. Transport-specific payer-hint
-negotiation is outside this document. Regardless of how the address is
-obtained, it is carried in the challenge-bound request, and the client
-MUST verify that it is an acceptable refund destination before paying.
+the executable 1Click quote from the NEAR Intents 1Click Swap API: the
+quote that returns the single-use deposit address and can actually be
+paid. It SHOULD resolve an origin-chain address controlled by the payer
+from authenticated request context. If it instead uses a fixed merchant
+address, it MUST disclose the resulting off-band refund-recovery
+policy. Transport-specific payer-hint negotiation is outside this
+document. Regardless of how the address is obtained, it is carried in
+the challenge-bound request, and the client MUST verify that it is an
+acceptable refund destination before paying.
 
 **Example (decoded `request`):**
 
