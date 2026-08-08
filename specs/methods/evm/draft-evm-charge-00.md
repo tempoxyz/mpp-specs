@@ -151,7 +151,7 @@ This specification defines four credential types:
   - The server naturally sponsors gas (fee payer)
   - Split payments are atomic via batch transfers
   - No nonce management burden on the client
-  - `externalId` is cryptographically bound via witness data
+  - `externalId` is cryptographically bound via the challenge hash
 
 - **`type="authorization"`**: The client signs an
   off-chain EIP-3009 {{EIP-3009}} `transferWithAuthorization`
@@ -450,10 +450,12 @@ in array order.
 
 The Permit2 witness mechanism provides cryptographic
 binding between the payment authorization and the
-challenge. When `externalId` is present in the challenge
-request, the client MUST include it in the EIP-712
-witness struct. When `externalId` is absent from the challenge request,
-`PaymentWitness.externalId` is the empty string (`""`). The server MUST
+challenge. The witness commits to `challengeHash`, which
+is derived from `challenge.id` and `challenge.realm`.
+Because `challenge.id` is an HMAC over the serialized
+challenge request (see {{I-D.httpauth-payment}}), every
+request field, including `externalId` when present, is
+already bound through `challengeHash`. The server MUST
 verify the witness matches before submitting the transaction.
 
 The witness type is defined as:
@@ -461,7 +463,6 @@ The witness type is defined as:
 ~~~solidity
 struct PaymentWitness {
     bytes32 challengeHash;
-    string externalId;
 }
 ~~~
 
@@ -480,7 +481,7 @@ against a different challenge, even if the payment
 parameters are identical.
 
 The witness type string for EIP-712 is:
-`"PaymentWitness witness)PaymentWitness(bytes32 challengeHash, string externalId)TokenPermissions(address token,uint256 amount)"`
+`"PaymentWitness witness)PaymentWitness(bytes32 challengeHash)TokenPermissions(address token,uint256 amount)"`
 
 This specification defines that witness schema directly for
 challenge binding. Implementations MUST use the exact type
