@@ -82,9 +82,9 @@ method in the Payment HTTP Authentication Scheme
 exchange one-time ERC-20 token transfers on any EVM-compatible
 blockchain.
 
-Four credential types are supported: `type="permit2"`
-(RECOMMENDED), where the client signs an off-chain Permit2
-authorization and the server submits the transfer;
+Four credential types are supported: `type="permit2"`, where
+the client signs an off-chain Permit2 authorization and the
+server submits the transfer;
 `type="authorization"` (opt-in for EIP-3009 tokens), where
 the client signs an off-chain transfer authorization and
 the server submits it directly to the token contract;
@@ -142,10 +142,9 @@ splits or server-paid fees. Servers SHOULD prefer
 
 This specification defines four credential types:
 
-- **`type="permit2"` (RECOMMENDED)**: The client signs an
+- **`type="permit2"`**: The client signs an
   off-chain EIP-712 Permit2 authorization. The server constructs
-  and submits the on-chain transaction. This is the preferred
-  flow because:
+  and submits the on-chain transaction. Benefits include:
 
   - The client never interacts with the chain directly
   - The server naturally sponsors gas (fee payer)
@@ -175,9 +174,11 @@ This specification defines four credential types:
   for some hardware wallets that cannot hand off a
   signed-but-unbroadcast transaction.
 
-Servers that support Permit2 SHOULD advertise it as the preferred
-credential type. Clients SHOULD prefer `type="permit2"` when
-available.
+Servers that support EIP-3009 SHOULD advertise `type="authorization"`
+as the preferred credential type when the `currency` token is known
+to implement EIP-3009 and the challenge does not include `splits`.
+Otherwise, servers that support Permit2 SHOULD advertise
+`type="permit2"` as the preferred credential type.
 
 ## Charge Flow
 
@@ -303,12 +304,13 @@ Valid values: `"permit2"`, `"authorization"`, `"transaction"`,
 `"hash"`.
 
 If omitted, servers MUST accept `"transaction"` and SHOULD
-accept `"hash"`. Servers that support Permit2 SHOULD include
-`"permit2"` as the first entry to indicate preference.
-Servers MUST only include `"authorization"` when the
-`currency` token is known to implement EIP-3009.
-Clients SHOULD use the first type in the list that they
-support.
+accept `"hash"`. Servers MUST only include `"authorization"` when
+the `currency` token is known to implement EIP-3009. For challenges
+without `splits`, servers that support EIP-3009 SHOULD include
+`"authorization"` as the first entry to indicate preference.
+Otherwise, servers that support Permit2 SHOULD include `"permit2"`
+as the first entry to indicate preference. Clients SHOULD use the
+first type in the list that they support.
 
 ### Payment Splits {#split-payments}
 
@@ -396,10 +398,10 @@ with the chain ID from the challenge and the payer's address
 
 ## Permit2 Payload (type="permit2") {#permit2-payload}
 
-The RECOMMENDED credential type. The client signs an off-chain
-EIP-712 Permit2 authorization message. The server constructs
-and submits the on-chain transaction, paying gas from its own
-balance. The client never interacts with the chain directly.
+The client signs an off-chain EIP-712 Permit2 authorization
+message. The server constructs and submits the on-chain
+transaction, paying gas from its own balance. The client never
+interacts with the chain directly.
 
 This type requires that the Permit2 contract is deployed on
 the target chain and that the client has an active ERC-20
