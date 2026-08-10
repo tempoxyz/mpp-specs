@@ -1,0 +1,31 @@
+{
+  "name": "mpp-validator-suite",
+  "version": "1.0.0",
+  "description": "Automated Schema Validator and Specification Inspector Studio for Machine Payments Protocol (MPP) RFCs and payloads.",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "mpp-specs-cli": "./bin/mpp-specs-cli.js"
+  },
+  "scripts": {
+    "start": "node src/server/studio.js",
+    "cli": "node bin/mpp-specs-cli.js",
+    "test": "node tests/run-all.js"
+  },
+  "keywords": [
+    "mpp",
+    "mpp-specs",
+    "schema-validator",
+    "rfc",
+    "http-402",
+    "stripe",
+    "tempo"
+  ],
+  "author": "Tempo & Stripe MPP Community",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
