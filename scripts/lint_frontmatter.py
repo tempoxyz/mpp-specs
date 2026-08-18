@@ -13,12 +13,18 @@ EXPECTED_IPR = "noModificationTrust200902"
 ID_HTTPAUTH_PAYMENT_TITLE = "The 'Payment' HTTP Authentication Scheme"
 ID_HTTPAUTH_PAYMENT_TARGET = "https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/"
 
+# Transitional drafts that intentionally retain non-standard frontmatter.
+IGNORED_DOCNAMES = {"draft-hedera-session-00"}
+
 
 def lint_file(path: Path) -> list[str]:
     """Lint a single file and return list of errors."""
     errors = []
     post = frontmatter.load(path)
     meta = post.metadata
+
+    if meta.get("docname") in IGNORED_DOCNAMES:
+        return errors
 
     # Check required fields
     for field in REQUIRED_FIELDS:

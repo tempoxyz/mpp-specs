@@ -244,9 +244,9 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   value MUST be non-empty after `auth-param` parsing and `quoted-string`
   unescaping. Servers MUST NOT emit a Payment challenge with a missing or
   empty `id`; clients and parsers MUST reject challenges whose `id` is
-  missing or empty. Servers MUST bind this value to the challenge parameters
-  (Section 5.1.3) to enable verification. Clients MUST include this value
-  unchanged in the credential.
+  missing or empty. Servers MUST bind this value to the challenge
+  parameters as described in {{challenge-binding}}. Clients MUST include
+  this value unchanged in the credential.
 
 **`realm`**: Protection space identifier per {{RFC9110}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
@@ -274,7 +274,8 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   Servers SHOULD include this parameter when the payment challenge applies
   to a request with a body (e.g., POST, PUT, PATCH). When present, clients
   MUST submit the credential with a request body whose digest matches this
-  value. See Section 5.1.3 for body binding requirements.
+  value. See {{request-body-digest-binding}} for body binding
+  requirements.
 
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an {{RFC3339}} date-time string (e.g., `"2025-01-15T12:00:00Z"`).
@@ -291,16 +292,22 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   (a flat string-to-string map). Clients MUST return this parameter
   unchanged in the credential and MUST NOT modify it. The JSON MUST be
   serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} before
-  base64url encoding. Servers SHOULD include `opaque` in the challenge
+  base64url encoding. Servers MUST include `opaque` in the challenge
   binding ({{challenge-binding}}) to ensure tamper protection.
 
 Unknown parameters MUST be ignored by clients.
 
 #### Challenge Binding
 
-Servers SHOULD bind the challenge `id` to the challenge parameters (Section 5.1.1 and Section 5.1.2) to prevent request integrity attacks where a client could
-sign or submit a payment different from what the server intended. Servers
-MUST verify that credentials present an `id` matching the expected binding.
+Servers MUST bind the challenge `id` to `realm`, `method`, `intent`, and
+`request`, and to `expires`, `digest`, and `opaque` when present. This
+prevents request integrity attacks where a client signs or submits a
+payment different from what the server intended. The `description`
+parameter is excluded because it is not used for payment verification.
+
+Servers MUST verify the binding when processing a credential and MUST
+reject a credential whose echoed challenge parameters do not match the
+expected binding.
 
 The binding mechanism is implementation-defined. Servers MAY use stateful
 storage (e.g., database lookup) or stateless verification (e.g., HMAC,
