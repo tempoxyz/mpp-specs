@@ -107,10 +107,26 @@ of a specified amount in exchange for resource access.
 
 ## Atomicity
 
-The "charge" intent implies atomic exchange: the server SHOULD NOT
+The "charge" intent implies atomic exchange: the server MUST NOT
 provide partial access if payment verification fails. Either the full
 resource is provided (payment succeeded) or access is denied (payment
-failed).
+failed). This aligns with the unpaid-request side-effect boundary
+already required by {{I-D.httpauth-payment}} under "Idempotency and
+Side Effects".
+
+Partial access includes, but is not limited to:
+
+- Any response body bytes, including a partial buffered payload
+- Streamed output, including the first token or chunk of a streaming
+  response
+- Invocation of tools, functions, or external APIs on behalf of the
+  request
+- Initiation of an asynchronous task, job, or subscription
+
+If verification fails after any such effect has already occurred, the
+server MUST treat this as an implementation defect to be corrected,
+not as a conforming outcome; there is no MAY-level exception for
+"already-started" delivery.
 
 # Request Schema
 
