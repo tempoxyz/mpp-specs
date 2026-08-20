@@ -1,8 +1,8 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-httpauth-payment-00
-version: 00
+docname: draft-httpauth-payment-01
+version: 01
 category: std
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -101,8 +101,8 @@ Payment Challenge
   payment requirements for accessing a resource.
 
 Payment Credential
-: An `Authorization` header with scheme "Payment" containing payment
-  authorization data.
+: An HTTP header field with scheme "Payment" containing payment
+  authorization data. Its field name is selected by the Payment challenge.
 
 Payment Method
 : A mechanism for transferring value, identified by a registered
@@ -224,6 +224,23 @@ When a resource requires both authentication and payment, servers SHOULD:
 This ordering prevents information leakage about payment requirements to
 unauthenticated clients.
 
+When authentication succeeds but the resource also requires payment, the
+server MAY include the `header` parameter in its Payment challenge to
+select a header field other than `Authorization` for the Payment credential.
+This allows the client to retain its ordinary authentication credential in
+`Authorization`. Servers that do not include `header` retain the default
+behavior defined in {{credential-header}}.
+
+For example, a request can carry both a Bearer credential and a Payment
+credential:
+
+~~~http
+GET /resource HTTP/1.1
+Host: api.example.com
+Authorization: Bearer mF_9.B5f-4.1JqM
+Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOiJ...
+~~~
+
 # The Payment Authentication Scheme
 
 ## Challenge (WWW-Authenticate)
@@ -286,6 +303,16 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see {{amount-verification}}).
 
+**`header`**: The HTTP field name in which the client MUST send the Payment
+  credential. The value MUST be a valid `field-name` as defined by
+  {{RFC9110}}. When this parameter is absent, the client MUST send the
+  credential in the `Authorization` header. Clients that do not support the
+  named field MUST NOT send a Payment credential for that challenge. Servers
+  MUST include this parameter in the challenge binding when it is present.
+  Clients MUST echo it unchanged in the credential's `challenge` object.
+  `Payment-Authorization` is RECOMMENDED when a resource needs to preserve
+  `Authorization` for ordinary authentication.
+
 **`opaque`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
   server-defined correlation data (e.g., a payment processor intent
   identifier). The value MUST be a JSON object whose values are strings
@@ -300,7 +327,7 @@ Unknown parameters MUST be ignored by clients.
 #### Challenge Binding
 
 Servers MUST bind the challenge `id` to `realm`, `method`, `intent`, and
-`request`, and to `expires`, `digest`, and `opaque` when present. This
+`request`, and to `expires`, `digest`, `opaque`, and `header` when present. This
 prevents request integrity attacks where a client signs or submits a
 payment different from what the server intended. The `description`
 parameter is excluded because it is not used for payment verification.
@@ -318,9 +345,11 @@ authenticated encryption) to validate the binding.
 Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
 the challenge `id` as follows:
 
-The HMAC input is constructed from exactly seven fixed positional
-slots. Required fields supply their string value; optional fields use
-an empty string (`""`) when absent. The slots are:
+The HMAC input is constructed from seven fixed positional slots. Required
+fields supply their string value; optional fields use an empty string (`""`)
+when absent. When the `header` parameter is present, an eighth slot is
+appended with its value. This preserves the HMAC input for header-less
+challenges issued by earlier implementations. The slots are:
 
 | Slot | Field | Value |
 |------|-------|-------|
@@ -331,15 +360,18 @@ an empty string (`""`) when absent. The slots are:
 | 4 | `expires` | Optional. String value if present; empty string if absent. |
 | 5 | `digest` | Optional. String value if present; empty string if absent. |
 | 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
+| 7 | `header` | Present only when the `header` parameter is present. Its field-name value. |
 
 The computation proceeds as follows:
 
-1. Populate all seven slots as described above.
+1. Populate all seven base slots as described above. If `header` is present,
+   append the eighth slot.
 
-2. Join all seven slots with the pipe character (`|`) as delimiter.
-   Every slot is always present in the joined string; absent optional
+2. Join the populated slots with the pipe character (`|`) as delimiter.
+   Every base slot is always present in the joined string; absent optional
    fields appear as empty segments (e.g., `...|expires||opaque_b64url`
-   when `digest` is absent).
+   when `digest` is absent). The header slot is omitted entirely when the
+   `header` parameter is absent.
 
 3. Compute HMAC-SHA256 over the resulting string using a server secret.
 
@@ -355,16 +387,18 @@ input = "|".join([
     expires or "",
     digest or "",
     opaque_b64url or "",
+    # append header only when it is present
 ])
+if header is present:
+    input = input + "|" + header
 id = base64url(HMAC-SHA256(server_secret, input))
 ~~~
 
-Optional fields use fixed positional slots with empty strings when
+The base optional fields use fixed positional slots with empty strings when
 absent, rather than being omitted. This avoids ambiguity between
-combinations of optional fields — for example, `(expires set, no
-digest)` and `(no expires, digest set)` produce distinct inputs — and
-ensures that adding a new optional slot in a future revision does not
-change the HMAC for challenges that omit it.
+combinations of optional fields — for example, `(expires set, no digest)`
+and `(no expires, digest set)` produce distinct inputs. The conditional
+header slot preserves compatibility with challenges that predate `header`.
 
 #### Example Challenge
 
@@ -411,10 +445,12 @@ When verifying a credential with a `digest` parameter, servers MUST:
 3. Reject the credential if the digests do not match
 
 
-## Credentials (Authorization)
+## Credentials {#credential-header}
 
-The Payment credential is sent in the `Authorization` header using
-base64url encoding without padding per {{RFC4648}} Section 5:
+The Payment credential is sent in the HTTP field named by the challenge's
+`header` parameter. When `header` is absent, it is sent in the
+`Authorization` header. The field value uses base64url encoding without
+padding per {{RFC4648}} Section 5:
 
 ~~~abnf
 credentials     = "Payment" 1*SP base64url-nopad
@@ -443,6 +479,7 @@ The `challenge` object contains the parameters from the original challenge:
 | `opaque` | string | Base64url-encoded server correlation data (if present in challenge) |
 | `digest` | string | Content digest  |
 | `expires` | string | Challenge expiration timestamp |
+| `header` | string | Credential header field name (if present in challenge) |
 
 The `payload` field contains the payment-method-specific data needed to
 complete the payment challenge. Payment method specifications define the
@@ -820,7 +857,7 @@ while the actual `request` payload requests a different amount.
 
 ## Credential Storage
 
-Implementations MUST treat `Authorization: Payment` headers and
+Implementations MUST treat any header carrying a Payment credential and
 `Payment-Receipt` headers as sensitive data.
 
 ## Intermediary Handling of 402
@@ -920,7 +957,7 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 
 ; Required parameters: id, realm, method, intent, request
 ; The id parameter is required by prose to be non-empty after parsing.
-; Optional parameters: expires, digest, description, opaque
+; Optional parameters: expires, digest, description, header, opaque
 
 ; HTTP Authorization Credentials
 payment-credentials = "Payment" 1*SP base64url-nopad
@@ -1193,9 +1230,9 @@ WWW-Authenticate: Payment id="mF8uJkLpO3qRtYsA6wDcVb", realm="api.example.com", 
 ~~~
 
 When a server returns multiple challenges, clients SHOULD select one
-based on their capabilities and user preferences. Clients MUST send
-only one `Authorization: Payment` header in the subsequent request,
-corresponding to the selected challenge.
+based on their capabilities and user preferences. Clients MUST send only
+one Payment credential in the subsequent request, in the header prescribed
+by the selected challenge.
 
 Servers receiving multiple Payment credentials in a single request
 SHOULD reject with 400 (Bad Request).
