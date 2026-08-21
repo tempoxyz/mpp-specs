@@ -460,6 +460,23 @@ from the challenge, binding the proof to the issuing origin and
 preventing cross-realm replay of a proof obtained from a different
 server.
 
+### Proof Contract Versions
+
+The domain `version` identifies the proof contract. Three versions have
+shipped:
+
+| Version | `Proof` fields | Description |
+|---------|----------------|-------------|
+| `"1"` | `challengeId` | Initial contract. Binds a proof to a single challenge. |
+| `"2"` | `challengeId`, `realm` | Adds realm binding, so a proof obtained from one server cannot be replayed against another. |
+| `"3"` | `account`, `challengeId`, `realm` | Adds payer binding, so a proof cannot be replayed against a different account, including across an access key authorized for multiple accounts. |
+
+Implementations MUST use version `"3"`. The domain `version` is part of
+the EIP-712 digest, so a signature produced under version `"1"` or
+`"2"` does not verify against the version `"3"` typed data. Servers
+MUST NOT accept proof signatures made under domain version `"1"` or
+`"2"`.
+
 ### Proof Verification
 
 Servers MUST verify proof credentials as follows:
