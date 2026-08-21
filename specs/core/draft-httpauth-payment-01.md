@@ -2,7 +2,7 @@
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
 docname: draft-httpauth-payment-01
-version: 01
+version: "01"
 category: std
 ipr: noModificationTrust200902
 submissiontype: IETF
