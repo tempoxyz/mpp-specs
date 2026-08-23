@@ -421,6 +421,12 @@ discovery clients and registries.
 
 ## Output Schema
 
+This section reiterates existing OpenAPI response and
+schema semantics for payable operations. It defines no
+new output-schema extension or schema dialect. The
+guidance appears here because successful response shape
+is useful to evaluate before payment.
+
 Each payable operation SHOULD describe every successful
 response representation it intends to return using the
 standard OpenAPI `responses` object. Each JSON response
