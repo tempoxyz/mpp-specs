@@ -159,7 +159,8 @@ conditions.
 |-----------|--------|----------|
 | Resource requires payment, no credential provided | 402 | Fresh challenge in `WWW-Authenticate` |
 | Malformed credential (invalid base64url, bad JSON) | 402 | Fresh challenge + `malformed-credential` problem |
-| Unknown, expired, or already-used challenge `id` | 402 | Fresh challenge + `invalid-challenge` problem |
+| Unknown or already-used challenge `id` | 402 | Fresh challenge + `invalid-challenge` problem |
+| Expired challenge `id` | 402 | Fresh challenge + `payment-expired` problem |
 | Payment proof invalid or verification failed | 402 | Fresh challenge + `verification-failed` problem |
 | Payment verified, access granted | 200 | Resource + optional `Payment-Receipt` |
 | Payment verified, but policy denies access | 403 | No challenge (payment was valid) |
@@ -634,7 +635,7 @@ below, and the canonical base URI for problem types is
 | `verification-failed` | 402 | Proof invalid |
 | `method-unsupported` | 400 | Method not accepted |
 | `malformed-credential` | 402 | Invalid credential format |
-| `invalid-challenge` | 402 | Challenge ID unknown, expired, or already used |
+| `invalid-challenge` | 402 | Challenge ID unknown or already used |
 
 ## Retry Behavior
 
