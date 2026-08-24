@@ -1,8 +1,8 @@
 ---
 title: Service Discovery for HTTP Payment Authentication
 abbrev: Payment Discovery
-docname: draft-payment-discovery-00
-version: 00
+docname: draft-payment-discovery-01
+version: "01"
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -83,11 +83,11 @@ the "Payment" HTTP authentication scheme. Services
 publish an OpenAPI document annotated with payment
 extensions that describe pricing, payment methods, and
 intent types. The OpenAPI document serves as the
-canonical machine-readable contract, providing both
-payment metadata and input schemas so that agents can
-discover and invoke endpoints. The runtime 402
-challenge remains authoritative for all payment
-parameters.
+canonical machine-readable contract, providing payment
+metadata and, when declared, input and output schemas
+so that agents can discover and invoke endpoints. The
+runtime 402 challenge remains authoritative for all
+payment parameters.
 
 --- middle
 
@@ -111,9 +111,9 @@ document annotated with two extensions:
 - `x-payment-info`: Per-operation payment requirements
   including one or more payment offers.
 
-OpenAPI provides both payment metadata and input
-schemas, enabling agents to discover and invoke
-endpoints without additional documentation.
+OpenAPI provides payment metadata and can provide input
+and output schemas, enabling agents to discover and
+invoke endpoints without additional documentation.
 
 Discovery is OPTIONAL. Servers MAY implement this
 mechanism to improve client experience. Clients MUST
@@ -382,7 +382,7 @@ multiple intents at the same time:
 }
 ~~~
 
-## 402 Response Declaration
+## 402 Response Declaration {#payable-402-response}
 
 Each payable operation MUST include a `402` response
 in its `responses` object:
@@ -418,6 +418,87 @@ Input schemas enable agents to construct valid requests
 without additional documentation. Operations that omit
 input schemas MAY be marked as "schema-missing" by
 discovery clients and registries.
+
+## Output Schema
+
+This section reiterates existing OpenAPI response and
+schema semantics for payable operations. It defines no
+new output-schema extension or schema dialect. The
+guidance appears here because successful response shape
+is useful to evaluate before payment.
+
+Each payable operation SHOULD describe every successful
+response representation it intends to return using the
+standard OpenAPI `responses` object. Each JSON response
+representation SHOULD include a `schema` member under
+its actual media type.
+
+A schema attached to one response status and media type
+describes only that representation. It does not describe
+other success statuses or media types. A client MUST NOT
+treat a schema for one successful representation as an
+operation-wide guarantee unless every successful
+representation declared by the OpenAPI document entails
+the same guarantee.
+
+~~~yaml
+responses:
+  "200":
+    description: "Successful response"
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+          additionalProperties: false
+  "402":
+    description: "Payment Required"
+~~~
+
+Output schemas enable agents to evaluate seller-declared
+response shapes before invoking an operation. Operations
+that omit every successful response schema MAY be marked
+"output-schema-missing" by discovery clients and
+registries. A document with schemas for only some
+successful representations does not provide an
+operation-wide output guarantee.
+
+The following MUST NOT be treated as requiredness
+guarantees:
+
+- the OpenAPI `example` or `examples` fields
+- the schema `default` field
+- property presence in an example object
+- a property listed in `properties` but omitted
+  from `required`
+- GraphQL selection sets that are not represented
+  in the OpenAPI document
+
+Schema interpretation MUST follow the OpenAPI version
+and JSON Schema dialect declared by the document. A
+`required` property name alone does not establish that
+the enclosing instance is an object or that the value
+is non-null. A client MUST NOT claim that a response
+path is always present and non-null unless every
+applicable success status, media type, and valid schema
+branch entails that claim, including applicable type,
+composition, reference, and array-cardinality semantics.
+A client that cannot evaluate the declared dialect or
+resolve relevant schema semantics SHOULD fail closed.
+
+Any projected output guarantee remains seller-declared
+discovery metadata. It MUST NOT be described as a
+runtime observation or runtime validation.
+
+Payable operations still MUST include a 402 response
+as specified in {{payable-402-response}}. Output
+schemas are not payment terms. Presence or absence of
+an output schema MUST NOT change whether an operation
+is payable.
 
 ## Caching
 
@@ -505,7 +586,28 @@ capabilities may have changed.
         },
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id"],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "example": {
+                    "id": "cmpl_123",
+                    "model": "example-model"
+                  }
+                }
+              }
+            }
           },
           "402": {
             "description": "Payment Required"
@@ -567,6 +669,10 @@ Specifically:
   precedence.
 - Clients MUST NOT cache discovery data as a
   substitute for processing 402 challenges.
+- Output schemas describe successful JSON payloads
+  for evaluation before a request. They are not
+  payment terms and do not replace the runtime 402
+  challenge or the actual HTTP response.
 
 Discovery exists to help clients and agents find and
 evaluate services before making requests, not to
@@ -586,8 +692,8 @@ payment parameters.
 ## Information Disclosure
 
 OpenAPI documents reveal payment capabilities, endpoint
-structure, input schemas, and pricing to
-unauthenticated clients. Service operators SHOULD
+structure, input schemas, output schemas, and pricing
+to unauthenticated clients. Service operators SHOULD
 consider whether this disclosure is acceptable for
 their use case.
 
@@ -603,6 +709,20 @@ headers on OpenAPI document responses.
 This document has no IANA actions.
 
 --- back
+
+# Changes from draft-payment-discovery-00
+
+This revision adds an Output Schema section parallel
+to Input Schema. It scopes output claims to every
+applicable success status, media type, and schema
+branch, and distinguishes seller-declared schema
+evidence from runtime validation. The example OpenAPI
+document includes one JSON 200 schema and keeps a
+second paid operation description-only. Information
+Disclosure now covers output schemas. Payment
+challenges remain authoritative. No payment method,
+intent, amount, currency, or settlement behavior is
+specified or changed.
 
 # Registry and Aggregator Guidance
 
