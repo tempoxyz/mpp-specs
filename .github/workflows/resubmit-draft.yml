@@ -11,9 +11,14 @@ on:
     - cron: "0 12 * * 1"
   workflow_dispatch:
 
+# The bump branch is pushed and the PR opened with a short-lived GitHub App
+# token minted via github-sts (authorized by .github/sts/resubmit-draft.sts.yaml)
+# rather than the built-in GITHUB_TOKEN, which is not allowed to create pull
+# requests. id-token lets the job request the OIDC token the STS exchange
+# verifies.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  id-token: write
 
 jobs:
   bump-and-pr:
@@ -48,14 +53,24 @@ jobs:
           NEW_VER=$(scripts/bump_and_rename.sh)
           echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch GitHub token via STS
+        if: steps.check.outputs.skip == 'false'
+        id: sts
+        uses: tempoxyz/gh-actions/actions/github-sts@183a02178c660ce295e9a262edc5857cb7135f06 # main
+        with:
+          policy: resubmit-draft
+
       - name: Create PR
         if: steps.check.outputs.skip == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.sts.outputs.token }}
         run: |
           BRANCH="ietf/resubmit-${{ steps.bump.outputs.new_ver }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Checkout runs with persist-credentials: false; authenticate the
+          # push through the gh credential helper using GH_TOKEN instead.
+          gh auth setup-git
+          git config user.name "tempo-github-sts[bot]"
+          git config user.email "312736176+tempo-github-sts[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A
           git commit -m "chore: bump draft revision to -${{ steps.bump.outputs.new_ver }}"

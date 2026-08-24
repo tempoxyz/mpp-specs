@@ -1,0 +1,10 @@
+# Allow the Resubmit IETF Draft workflow (schedule/workflow_dispatch on main)
+# to mint a short-lived token that pushes the revision-bump branch and opens
+# the resubmission PR. Replaces the built-in GITHUB_TOKEN so the org can turn
+# off "Allow GitHub Actions to create and approve pull requests".
+subject: repo:tempoxyz@211589300/mpp-specs@1128606548:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: tempoxyz/mpp-specs/\.github/workflows/resubmit-draft\.yml@refs/heads/main
+permissions:
+  contents: write
+  pull_requests: write
