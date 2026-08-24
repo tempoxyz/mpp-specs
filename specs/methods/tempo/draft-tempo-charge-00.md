@@ -431,24 +431,51 @@ The typed-data domain and types are:
 {
   "domain": {
     "name": "MPP",
-    "version": "1",
+    "version": "3",
     "chainId": <challenge methodDetails.chainId>
   },
   "types": {
     "Proof": [
-      { "name": "challengeId", "type": "string" }
+      { "name": "account", "type": "address" },
+      { "name": "challengeId", "type": "string" },
+      { "name": "realm", "type": "string" }
     ]
   },
   "primaryType": "Proof",
   "message": {
-    "challengeId": "<challenge.id>"
+    "account": "<address from credential.source>",
+    "challengeId": "<challenge.id>",
+    "realm": "<challenge realm>"
   }
 }
 ~~~
 
 The `challengeId` in the message MUST be the `id` from the challenge
 that was issued to the client. This binds the signature to exactly one
-challenge, preventing cross-challenge replay.
+challenge, preventing cross-challenge replay. The `account` MUST be
+the address from `credential.source`, binding the proof to the paying
+account so that a signature cannot be replayed against another account
+controlled by the same signing key. The `realm` MUST be the `realm`
+from the challenge, binding the proof to the issuing origin and
+preventing cross-realm replay of a proof obtained from a different
+server.
+
+### Proof Contract Versions
+
+The domain `version` identifies the proof contract. Three versions have
+shipped:
+
+| Version | `Proof` fields | Description |
+|---------|----------------|-------------|
+| `"1"` | `challengeId` | Initial contract. Binds a proof to a single challenge. |
+| `"2"` | `challengeId`, `realm` | Adds realm binding, so a proof obtained from one server cannot be replayed against another. |
+| `"3"` | `account`, `challengeId`, `realm` | Adds payer binding, so a proof cannot be replayed against a different account, including across an access key authorized for multiple accounts. |
+
+Implementations MUST use version `"3"`. The domain `version` is part of
+the EIP-712 digest, so a signature produced under version `"1"` or
+`"2"` does not verify against the version `"3"` typed data. Servers
+MUST NOT accept proof signatures made under domain version `"1"` or
+`"2"`.
 
 ### Proof Verification
 
@@ -458,9 +485,19 @@ Servers MUST verify proof credentials as follows:
    `did:pkh:eip155:<chainId>:<address>`
 2. Verify the chain ID from `source` matches
    `methodDetails.chainId` from the challenge
-3. Recover the signer from `payload.signature` using the EIP-712
-   domain, types, and message described above
-4. Verify the recovered signer matches the address in `source`
+3. Reconstruct the typed data described above with `account` set to
+   the address from `source`, `challengeId` set to the challenge `id`,
+   and `realm` set to the challenge `realm`
+4. Verify `payload.signature` is a valid signature over that typed
+   data by the address from `source`. Recovering the signer and
+   comparing it to the address from `source` satisfies this check;
+   servers MAY additionally accept contract-account signatures
+   (ERC-1271).
+5. If step 4 fails, servers MAY instead recover the signer of
+   `payload.signature` and accept the credential only if that signer
+   is an access key currently authorized on-chain for the account in
+   `source`. Servers MUST NOT otherwise accept a credential whose
+   signer differs from the address in `source`.
 
 ### Proof Receipt
 
