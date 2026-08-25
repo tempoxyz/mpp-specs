@@ -103,8 +103,8 @@ Payment Challenge
 Payment Credential
 : An HTTP header field with scheme "Payment" containing payment
   authorization data. The default field name is `Authorization`. A
-  Payment challenge MAY select a different field with the `header`
-  parameter (see {{credential-header}}).
+  Payment challenge MAY select `Payment-Authorization` with the
+  `header` parameter (see {{credential-header}}).
 
 Payment Method
 : A mechanism for transferring value, identified by a registered
@@ -231,9 +231,9 @@ unauthenticated clients.
 
 When authentication succeeds but the resource also requires payment, the
 server MAY include the `header` parameter in its Payment challenge to
-select a field other than the default `Authorization` for the Payment
-credential (see {{credential-header}}). A challenge that omits `header`
-defaults to `Authorization`. A challenge that includes
+select `Payment-Authorization` instead of the default `Authorization`
+for the Payment credential (see {{credential-header}}). A challenge that
+omits `header` defaults to `Authorization`. A challenge that includes
 `header="Payment-Authorization"` requires the client to send the Payment
 credential in the `Payment-Authorization` header. This allows the client
 to retain its ordinary authentication credential in `Authorization`.
@@ -323,22 +323,21 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   relied upon for payment verification (see {{amount-verification}}).
 
 **`header`**: Selects the HTTP field for the Payment credential, as
-  specified in {{credential-header}}. The value MUST be a valid
-  `field-name` as defined by {{RFC9110}}. The default field is
+  specified in {{credential-header}}. When present, the value MUST be
+  `Payment-Authorization` to avoid collision with other HTTP fields.
+  The default field is
   `Authorization`. A challenge that omits this parameter selects that
   default: the client MUST send the credential in the `Authorization`
-  header. A challenge that includes this parameter selects the named
-  field instead of the default; the client MUST send the credential in
-  that field. For example, `header="Payment-Authorization"` requires
-  the credential to be sent in the `Payment-Authorization` header.
-  Clients MUST NOT send the credential in a different field than the
-  one selected by the challenge. Clients that do not support the named
-  field MUST NOT send a Payment credential for that challenge. Servers
-  MUST include this parameter in the challenge binding when it is
-  present. Clients MUST echo it unchanged in the credential's
-  `challenge` object. `Payment-Authorization` is RECOMMENDED when a
-  resource needs to preserve `Authorization` for ordinary
-  authentication.
+  header. A challenge that includes this parameter selects
+  `Payment-Authorization`; the client MUST send the credential in that
+  field. Clients MUST NOT send the credential in a different field than
+  the one selected by the challenge. Clients that do not support
+  `Payment-Authorization` MUST NOT send a Payment credential for that
+  challenge. Servers MUST include this parameter in the challenge
+  binding when it is present. Clients MUST echo it unchanged in the
+  credential's `challenge` object. `Payment-Authorization` is
+  RECOMMENDED when a resource needs to preserve `Authorization` for
+  ordinary authentication.
 
 **`opaque`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
   server-defined correlation data (e.g., a payment processor intent
@@ -387,7 +386,7 @@ challenges issued by earlier implementations. The slots are:
 | 4 | `expires` | Optional. String value if present; empty string if absent. |
 | 5 | `digest` | Optional. String value if present; empty string if absent. |
 | 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
-| 7 | `header` | Present only when the `header` parameter is present. Its field-name value. |
+| 7 | `header` | Present only when the `header` parameter is present. The value `Payment-Authorization`. |
 
 The computation proceeds as follows:
 
@@ -501,12 +500,16 @@ A challenge that omits the `header` parameter selects this default.
 Clients receiving such a challenge MUST send the Payment credential in
 the `Authorization` header.
 
-A challenge that includes the `header` parameter selects the named field
-instead of the default. Clients receiving such a challenge MUST send the
-Payment credential in that field. For example, a challenge containing
-`header="Payment-Authorization"` requires the credential to be sent in
-the `Payment-Authorization` header. Clients MUST NOT send the credential
-in a different field than the one selected by the challenge.
+A challenge that includes the `header` parameter selects
+`Payment-Authorization` instead of the default. The value MUST be
+`Payment-Authorization`; this specification does not allow any other
+field name, to avoid collision with other HTTP fields. Servers MUST NOT
+emit a `header` parameter with any other value. Clients receiving such a
+challenge MUST send the Payment credential in the
+`Payment-Authorization` header. Clients MUST NOT send the credential in
+a different field than the one selected by the challenge. Clients MUST
+treat any other `header` value as an unrecognized challenge and MUST NOT
+send a Payment credential for it.
 
 Servers MUST accept a Payment credential for a given challenge only from
 the field selected by that challenge. A Payment credential received in
@@ -542,7 +545,7 @@ The `challenge` object contains the parameters from the original challenge:
 | `opaque` | string | Base64url-encoded server correlation data (if present in challenge) |
 | `digest` | string | Content digest  |
 | `expires` | string | Challenge expiration timestamp |
-| `header` | string | HTTP field name selected by the challenge (included only when the challenge contained `header`) |
+| `header` | string | `Payment-Authorization` when the challenge selected that field (included only when the challenge contained `header`) |
 
 The `payload` field contains the payment-method-specific data needed to
 complete the payment challenge. Payment method specifications define the
@@ -583,9 +586,9 @@ Decoded credential:
 ### Example Credential with Alternate Header
 
 This credential corresponds to a challenge that included
-`header="Payment-Authorization"`. The client MUST send it in that
-named field, and MUST echo `header` in the credential's `challenge`
-object:
+`header="Payment-Authorization"`. The client MUST send it in
+`Payment-Authorization`, and MUST echo `header` in the credential's
+`challenge` object:
 
 ~~~http
 GET /api/data HTTP/1.1
@@ -986,6 +989,14 @@ Responses containing `Payment-Receipt` headers MUST include
 `Cache-Control: private` to prevent shared caches from storing
 payment receipts.
 
+When a request carries a Payment credential in a field other than
+`Authorization`, every corresponding response MUST include
+`Cache-Control: private` or `Cache-Control: no-store`. {{RFC9111}}
+Section 3.5 restricts shared caching of responses to requests that
+contain `Authorization`; that protection does not apply to
+`Payment-Authorization`. `Payment-Receipt` is optional and does not by
+itself prevent shared caches from storing those responses.
+
 ## Cross-Origin Considerations
 
 Clients (particularly browser-based wallets) SHOULD:
@@ -1018,6 +1029,7 @@ This document registers the following header fields:
 | Field Name | Status | Reference |
 |------------|--------|-----------|
 | Accept-Payment | permanent | This document, {{client-payment-preferences}} |
+| Payment-Authorization | permanent | This document, {{credential-header}} |
 | Payment-Receipt | permanent | This document, {{payment-receipt-header}} |
 
 ## Payment Method Registry {#payment-method-registry}
@@ -1062,8 +1074,9 @@ auth-param        = token BWS "=" BWS ( token / quoted-string )
 ; Optional parameters: expires, digest, description, header, opaque
 
 ; Payment credential field value (Authorization by default;
-; a different field when the challenge includes header)
+; Payment-Authorization when the challenge includes header)
 payment-credentials = "Payment" 1*SP base64url-nopad
+Payment-Authorization = payment-credentials
 
 ; Client payment preferences
 Accept-Payment = #payment-range
@@ -1337,7 +1350,7 @@ based on their capabilities and user preferences. Clients MUST send only
 one Payment credential in the subsequent request, in the field selected
 by that challenge ({{credential-header}}). A selected challenge that
 omits `header` uses `Authorization`; a selected challenge that includes
-`header` requires the credential in the named field.
+`header` requires the credential in `Payment-Authorization`.
 
 Servers receiving multiple Payment credentials in a single request
 SHOULD reject with 400 (Bad Request).
