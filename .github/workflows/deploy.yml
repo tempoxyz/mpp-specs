@@ -50,11 +50,22 @@ jobs:
       - name: Publish spec artifacts as GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+          RELEASE_TAG: spec-artifacts-${{ github.sha }}
         run: |
-          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create latest artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf \
+          if release_is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [[ "$release_is_draft" == "false" ]]; then
+              echo "Release $RELEASE_TAG is already published"
+              exit 0
+            fi
+
+            gh release delete "$RELEASE_TAG" --yes --cleanup-tag
+          fi
+
+          gh release create "$RELEASE_TAG" artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf \
+            --target "$COMMIT_SHA" \
             --title "Latest spec artifacts" \
-            --notes "Auto-published spec build artifacts from commit ${{ github.sha }}.
+            --notes "Auto-published spec build artifacts from commit $COMMIT_SHA.
 
           Contains HTML, TXT, XML, and PDF renderings of all IETF Payment Auth specifications." \
             --latest
