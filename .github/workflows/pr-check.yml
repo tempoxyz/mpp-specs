@@ -56,15 +56,30 @@ jobs:
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/check.sh
 
-      - name: Download main branch artifacts
+      # deploy.yml uploads the published specs as an ietf-specs-<sha> artifact on each
+      # successful run on main. Resolve the newest such run, then fetch with the
+      # GitHub-authored action; each artifact is extracted into its own directory.
+      - name: Find latest main deploy run
         if: github.event_name == 'pull_request'
-        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
+        id: main-deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [[ -z "$run_id" ]]; then
+            echo "::warning::No successful deploy.yml run on main; every spec will be reported as new"
+          fi
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download main branch artifacts
+        if: github.event_name == 'pull_request' && steps.main-deploy.outputs.run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: main
-          workflow: deploy.yml
-          name_is_regexp: true
-          name: ietf-specs-.*
+          run-id: ${{ steps.main-deploy.outputs.run-id }}
+          github-token: ${{ github.token }}
+          pattern: ietf-specs-*
           path: /tmp/main-artifacts
         continue-on-error: true
 
