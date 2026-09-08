@@ -341,9 +341,10 @@ chain ID applicable to the challenge and the payer's Ethereum address.
 ## Transaction Payload (type="transaction")
 
 When `type` is `"transaction"`, `signature` contains the complete signed
-Tempo Transaction (type 0x76) serialized as RLP and hex-encoded with
-`0x` prefix. The transaction MUST authorize payment in the requested
-TIP-20 token sufficient to satisfy the challenge parameters, using one
+Tempo Transaction (type 0x76) {{TEMPO-TX-SPEC}} serialized as RLP and
+hex-encoded with `0x` prefix. The transaction MUST authorize payment in
+the requested TIP-20 token sufficient to satisfy the challenge
+parameters, using one
 or more `transfer` and/or `transferWithMemo` calls. When `splits` are
 present, the transaction MUST include transfers for each split entry
 (see {{split-payments}}). This payload type corresponds to `pull` mode.
@@ -535,8 +536,9 @@ transaction fees on behalf of the client.
 When `feePayer: true`:
 
 1. **Client signs with placeholder**: The client signs the Tempo Transaction
-   with `fee_payer_signature` set to a placeholder value (`0x00`) and
-   `fee_token` left empty. The client uses signature domain `0x76`.
+   {{TEMPO-TX-SPEC}} with `fee_payer_signature` set to a placeholder value
+   (`0x00`) and `fee_token` left empty. The client uses signature domain
+   `0x76`.
 
 2. **Server receives credential**: The server extracts the client-signed
    transaction from the credential payload.
