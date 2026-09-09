@@ -30,7 +30,7 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+      - uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@6f436eb3a168279692739e8c0c9fdb52b94bfae7
 
       - name: Test registry and coverage checks
         run: uv run --with jinja2==3.1.6 --with pytest==9.1.1 python -m pytest scripts/test_problem_pages.py -v
