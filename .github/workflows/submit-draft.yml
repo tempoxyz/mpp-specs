@@ -20,9 +20,34 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Detect unpublished revision
+        id: detect
+        run: |
+          DRAFT=draft-httpauth-payment
+          SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
+          DOCNAME=$(grep '^docname:' "$SPEC" | awk '{print $2}')
+          LOCAL_VER=$(grep '^version:' "$SPEC" | awk '{print $2}')
+          REMOTE_VER=$(curl --fail --silent --show-error --retry 3 \
+            "https://datatracker.ietf.org/api/v1/doc/document/$DRAFT/" | jq -er '.rev')
+          EXPECTED_VER=$(printf '%02d' $((10#$REMOTE_VER + 1)))
+
+          echo "docname=$DOCNAME" >> "$GITHUB_OUTPUT"
+          if [[ "$LOCAL_VER" == "$REMOTE_VER" ]]; then
+            echo "Revision -$LOCAL_VER is already published — skipping"
+            echo "submit=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$LOCAL_VER" == "$EXPECTED_VER" ]]; then
+            echo "Submitting $DOCNAME; IETF currently has revision -$REMOTE_VER"
+            echo "submit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Local revision -$LOCAL_VER does not follow IETF revision -$REMOTE_VER"
+            exit 1
+          fi
+
       - uses: tempoxyz/gh-actions/vendor/docker/setup-buildx-action@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        if: steps.detect.outputs.submit == 'true'
 
       - uses: tempoxyz/gh-actions/vendor/docker/build-push-action@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        if: steps.detect.outputs.submit == 'true'
         with:
           context: .
           load: true
@@ -31,22 +56,16 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build XML
+        if: steps.detect.outputs.submit == 'true'
         run: |
           mkdir -p .cache
           docker run --rm --user $(id -u):$(id -g) -e HOME=/data \
             -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
 
-      - name: Detect spec version
-        id: detect
-        run: |
-          SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
-          DOCNAME=$(grep '^docname:' "$SPEC" | awk '{print $2}')
-          echo "docname=$DOCNAME" >> "$GITHUB_OUTPUT"
-          echo "Submitting $DOCNAME"
-
       - name: Submit to IETF datatracker
+        if: steps.detect.outputs.submit == 'true'
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          RESPONSE=$(curl --silent --show-error --retry 3 -w "\n%{http_code}" \
             -F "user=${{ secrets.IETF_USER }}" \
             -F "xml=@artifacts/${{ steps.detect.outputs.docname }}.xml" \
             https://datatracker.ietf.org/api/submission)
@@ -61,17 +80,25 @@ jobs:
             exit 1
           fi
 
-          STATUS_URL=$(echo "$BODY" | jq -r '.status_url // empty')
-          if [[ -n "$STATUS_URL" ]]; then
-            echo "Polling status at $STATUS_URL"
-            for i in $(seq 1 10); do
-              sleep 5
-              STATE=$(curl -s "$STATUS_URL" | jq -r '.state')
-              echo "  Attempt $i: state=$STATE"
-              if [[ "$STATE" != "validating" ]]; then
-                break
-              fi
-            done
+          STATUS_URL=$(echo "$BODY" | jq -er '.status_url')
+          echo "Polling status at $STATUS_URL"
+          STATE=validating
+          for i in $(seq 1 10); do
+            sleep 5
+            STATE=$(curl --fail --silent --show-error --retry 3 "$STATUS_URL" | jq -er '.state')
+            echo "  Attempt $i: state=$STATE"
+            if [[ "$STATE" != "validating" ]]; then
+              break
+            fi
+          done
+
+          if [[ "$STATE" == "validating" ]]; then
+            echo "::error::IETF validation did not finish before timeout"
+            exit 1
+          fi
+          if [[ "$STATE" == "cancel" ]]; then
+            echo "::error::IETF validation failed or the submission was canceled"
+            exit 1
           fi
 
-          echo "::notice::Submission complete — an author must confirm via email."
+          echo "::notice::IETF validation completed with state=$STATE — an author must confirm via email."

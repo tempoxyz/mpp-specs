@@ -1,13 +1,13 @@
 name: Resubmit IETF Draft
 
 # IETF I-Ds expire after 185 days (~6 months).
-# This checks weekly and opens a version-bump PR once 165 days have passed.
+# This checks weekly and opens a version-bump PR within 35 days of expiry.
 # Merging the PR triggers submit-draft.yml which submits to the IETF
 # datatracker automatically. An author must then confirm via email.
 
 on:
   schedule:
-    # Check weekly; the job skips unless 165+ days since last revision bump
+    # Check weekly; the job skips while the draft has more than 35 days left
     - cron: "0 12 * * 1"
   workflow_dispatch:
 
@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  pull-requests: read
 
 jobs:
   bump-and-pr:
@@ -29,21 +30,50 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check if 165+ days since last bump
+      - name: Check IETF expiry and revision
         id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          DRAFT=draft-httpauth-payment
           SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
-          LAST_TOUCH=$(git log -1 --format=%ct -- "$SPEC")
+          LOCAL_VER=$(basename "$SPEC" .md | grep -oE '[0-9]+$')
+          METADATA=$(curl --fail --silent --show-error --retry 3 \
+            "https://datatracker.ietf.org/api/v1/doc/document/$DRAFT/")
+          REMOTE_VER=$(echo "$METADATA" | jq -er '.rev')
+          EXPIRES=$(echo "$METADATA" | jq -er '.expires')
           NOW=$(date +%s)
-          DAYS_AGO=$(( (NOW - LAST_TOUCH) / 86400 ))
-          echo "days_since_bump=$DAYS_AGO" >> "$GITHUB_OUTPUT"
-          if [[ "$DAYS_AGO" -lt 165 ]]; then
-            echo "Only $DAYS_AGO days since last bump — skipping (threshold: 165)"
+          EXPIRY=$(date --date="$EXPIRES" +%s)
+          DAYS_LEFT=$(( (EXPIRY - NOW) / 86400 ))
+          echo "days_left=$DAYS_LEFT" >> "$GITHUB_OUTPUT"
+
+          if (( 10#$LOCAL_VER > 10#$REMOTE_VER )); then
+            echo "Repository revision -$LOCAL_VER is awaiting publication; IETF has -$REMOTE_VER"
             echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "$DAYS_AGO days since last bump — time to resubmit"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if (( 10#$LOCAL_VER < 10#$REMOTE_VER )); then
+            echo "::error::Repository revision -$LOCAL_VER is behind IETF revision -$REMOTE_VER"
+            exit 1
+          fi
+          if (( DAYS_LEFT > 35 )); then
+            echo "$DAYS_LEFT days until expiry — skipping (threshold: 35)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NEW_VER=$(printf '%02d' $((10#$REMOTE_VER + 1)))
+          OPEN_PRS=$(gh pr list --state open --head "ietf/resubmit-$NEW_VER" \
+            --json number --jq 'length')
+          if (( OPEN_PRS > 0 )); then
+            echo "Revision -$NEW_VER PR already exists — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$DAYS_LEFT days until expiry — preparing revision -$NEW_VER"
+          echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Bump revision
         if: steps.check.outputs.skip == 'false'
@@ -51,6 +81,10 @@ jobs:
         run: |
           chmod +x scripts/bump_and_rename.sh
           NEW_VER=$(scripts/bump_and_rename.sh)
+          if [[ "$NEW_VER" != "${{ steps.check.outputs.new_ver }}" ]]; then
+            echo "::error::Expected revision ${{ steps.check.outputs.new_ver }}, got $NEW_VER"
+            exit 1
+          fi
           echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
 
       - name: Fetch GitHub token via STS

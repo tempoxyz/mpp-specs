@@ -32,7 +32,7 @@ git -C "$ROOT_DIR" mv "$CURRENT_FILE" "$NEW_FILE"
 
 # Update frontmatter version and docname
 sed -i.bak "s/^docname: .*$/docname: ${PREFIX}-${NEW_VER}/" "$NEW_FILE"
-sed -i.bak "s/^version: .*$/version: ${NEW_VER}/" "$NEW_FILE"
+sed -i.bak "s/^version: .*$/version: \"${NEW_VER}\"/" "$NEW_FILE"
 rm -f "$NEW_FILE.bak"
 
 echo "$NEW_VER"
