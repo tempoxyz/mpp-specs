@@ -120,5 +120,18 @@
     {% endfor %}
   </table>
 
+  <h2>SDK</h2>
+  <p>Implementation-defined problem types used by SDKs.</p>
+  <table>
+    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
+    {% for p in sdk_problems %}
+    <tr>
+      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
+      <td><code>{{ p.http_status }}</code></td>
+      <td>{{ p.description }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
 </body>
 </html>

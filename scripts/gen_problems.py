@@ -73,7 +73,15 @@ SESSION_PROBLEMS = [
      "spec_label": "draft-tempo-session"},
 ]
 
-ALL_PROBLEMS = CORE_PROBLEMS + SESSION_PROBLEMS
+# Implementation-defined types are documented separately from the spec registries.
+SDK_PROBLEMS = [
+    {"slug": "bad-request", "title": "Bad Request", "http_status": 400,
+     "description": "The request is malformed or contains invalid parameters. Correct the request before retrying.",
+     "spec_label": "mppx BadRequestError",
+     "spec_url": "https://github.com/wevm/mppx/blob/43ec92c36f575339cf7c45ae466507048783a0d3/src/Errors.ts#L249-L260"},
+]
+
+ALL_PROBLEMS = CORE_PROBLEMS + SESSION_PROBLEMS + SDK_PROBLEMS
 
 
 def make_example(slug, title, http_status):
@@ -121,6 +129,7 @@ def main():
     html = index_tpl.render(
         core_problems=CORE_PROBLEMS,
         session_problems=SESSION_PROBLEMS,
+        sdk_problems=SDK_PROBLEMS,
     )
     with open(os.path.join(PAGES_DIR, "index.html"), "w") as f:
         f.write(html)
