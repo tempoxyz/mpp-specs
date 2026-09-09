@@ -31,6 +31,9 @@ jobs:
           persist-credentials: false
 
       - uses: tempoxyz/gh-actions/vendor/astral-sh/setup-uv@6f436eb3a168279692739e8c0c9fdb52b94bfae7
+        with:
+          # The vendored action omits its .github matcher files.
+          add-problem-matchers: false
 
       - name: Test registry and coverage checks
         run: uv run --with jinja2==3.1.6 --with pytest==9.1.1 python -m pytest scripts/test_problem_pages.py -v
