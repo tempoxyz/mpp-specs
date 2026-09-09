@@ -6,11 +6,14 @@ problem type, plus an index page.  Output goes to pages/problems/ using the
 directory-with-index.html convention so that GitHub Pages serves clean URLs
 (e.g. /problems/payment-required -> /problems/payment-required/index.html).
 
+Core problem definitions come from the core specification's Error Codes table.
 Jinja2 is already available via xml2rfc's dependencies.
 """
 
 import json
 import os
+import re
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -22,29 +25,35 @@ BASE_URI = "https://paymentauth.org/problems/"
 
 # ── Problem definitions ─────────────────────────────────────────────────────
 
-CORE_PROBLEMS = [
-    {"slug": "payment-required", "title": "Payment Required", "http_status": 402,
-     "description": "The requested resource requires payment. The server has included a WWW-Authenticate challenge describing acceptable payment methods.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "payment-insufficient", "title": "Payment Insufficient", "http_status": 402,
-     "description": "The payment amount provided is too low to satisfy the server's price for this resource.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "payment-expired", "title": "Payment Expired", "http_status": 402,
-     "description": "The challenge or authorization has expired. The client should request a fresh challenge and retry.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "verification-failed", "title": "Verification Failed", "http_status": 402,
-     "description": "The payment proof included in the credential could not be verified by the server.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "method-unsupported", "title": "Method Unsupported", "http_status": 400,
-     "description": "The payment method specified by the client is not accepted by this server.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "malformed-credential", "title": "Malformed Credential", "http_status": 402,
-     "description": "The credential format is invalid and could not be parsed by the server.",
-     "spec_label": "draft-httpauth-payment"},
-    {"slug": "invalid-challenge", "title": "Invalid Challenge", "http_status": 402,
-     "description": "The challenge ID is unknown, expired, or has already been used.",
-     "spec_label": "draft-httpauth-payment"},
-]
+def read_core_problems(spec_path):
+    """Read the core spec's Error Codes table as the page definitions."""
+    section = spec_path.read_text().split("## Error Codes\n", 1)[1]
+    section = re.split(r"\n#{1,2} ", section, maxsplit=1)[0]
+    problems = []
+    for line in section.splitlines():
+        if not line.startswith("| \x60"):
+            continue
+        row = re.fullmatch(r"\| \x60([a-z0-9-]+)\x60 \| ([45][0-9]{2}) \| (.+) \|", line)
+        if not row:
+            raise ValueError(f"Invalid core error row: {line}")
+        slug, status, description = row.groups()
+        if any(p["slug"] == slug for p in problems):
+            raise ValueError(f"Duplicate core error code: {slug}")
+        problems.append({
+            "slug": slug,
+            "title": slug.replace("-", " ").title(),
+            "http_status": int(status),
+            "description": description,
+            "spec_label": spec_path.stem.rsplit("-", 1)[0],
+            "spec_docname": spec_path.stem,
+        })
+    if not problems:
+        raise ValueError(f"No error codes found in {spec_path}")
+    return problems
+
+
+CORE_SPEC = sorted(Path(ROOT, "specs", "core").glob("draft-httpauth-payment-*.md"))[-1]
+CORE_PROBLEMS = read_core_problems(CORE_SPEC)
 
 SESSION_PROBLEMS = [
     {"slug": "session/invalid-signature", "title": "Invalid Signature", "http_status": 402,

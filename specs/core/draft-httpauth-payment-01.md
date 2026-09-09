@@ -756,8 +756,8 @@ challenge before authorizing payment.
 
 ## Error Response Format
 
-Servers SHOULD return Problem Details {{RFC9457}} error bodies with 402
-responses:
+Servers SHOULD return Problem Details {{RFC9457}} error bodies for
+payment-related errors, using the HTTP status defined below. For example:
 
 ~~~json
 {
@@ -783,6 +783,10 @@ below, and the canonical base URI for problem types is
 | `method-unsupported` | 400 | Method not accepted |
 | `malformed-credential` | 402 | Invalid credential format |
 | `invalid-challenge` | 402 | Challenge ID unknown or already used |
+| `bad-request` | 400 | Malformed request or invalid parameters |
+| `invalid-payload` | 402 | Credential payload does not match schema |
+| `internal-payment-error` | 500 | Unexpected payment processing error |
+| `payment-action-required` | 402 | Payment requires additional action |
 
 ## Retry Behavior
 
