@@ -17,6 +17,7 @@ on:
 # requests. id-token lets the job request the OIDC token the STS exchange
 # verifies.
 permissions:
+  actions: write
   contents: read
   id-token: write
   pull-requests: read
@@ -48,7 +49,16 @@ jobs:
           echo "days_left=$DAYS_LEFT" >> "$GITHUB_OUTPUT"
 
           if (( 10#$LOCAL_VER > 10#$REMOTE_VER )); then
-            echo "Repository revision -$LOCAL_VER is awaiting publication; IETF has -$REMOTE_VER"
+            SUBMISSIONS=$(curl --fail --silent --show-error --retry 3 \
+              "https://datatracker.ietf.org/api/v1/submit/submission/?name=$DRAFT&rev=$LOCAL_VER&limit=1&order_by=-id")
+            STATE=$(echo "$SUBMISSIONS" | jq -r \
+              '.objects[0].state // "" | split("/") | map(select(length > 0)) | last // ""')
+            if [[ -z "$STATE" || "$STATE" == "cancel" ]]; then
+              echo "Repository revision -$LOCAL_VER has no active submission — retrying"
+              gh workflow run submit-draft.yml --ref main
+            else
+              echo "Repository revision -$LOCAL_VER has submission state=$STATE; IETF has -$REMOTE_VER"
+            fi
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

@@ -4,6 +4,7 @@ name: Submit Draft to IETF
 # bump lands on main. One of the listed authors must still confirm via email.
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -26,7 +27,7 @@ jobs:
           DRAFT=draft-httpauth-payment
           SPEC=$(find specs/core -name 'draft-httpauth-payment-*.md' | head -1)
           DOCNAME=$(grep '^docname:' "$SPEC" | awk '{print $2}')
-          LOCAL_VER=$(grep '^version:' "$SPEC" | awk '{print $2}')
+          LOCAL_VER=$(basename "$SPEC" .md | grep -oE '[0-9]+$')
           REMOTE_VER=$(curl --fail --silent --show-error --retry 3 \
             "https://datatracker.ietf.org/api/v1/doc/document/$DRAFT/" | jq -er '.rev')
           EXPECTED_VER=$(printf '%02d' $((10#$REMOTE_VER + 1)))
