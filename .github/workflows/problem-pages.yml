@@ -1,0 +1,48 @@
+name: Problem Pages
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  problem-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Follow current SDK definitions so independent SDK changes are caught daily.
+      # Read this checkout only as data; never install or execute SDK code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: wevm/mppx
+          ref: main
+          path: .mppx
+          sparse-checkout: src/Errors.ts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+
+      - name: Test registry and coverage checks
+        run: uv run --with jinja2==3.1.6 --with pytest==9.1.1 python -m pytest scripts/test_problem_pages.py -v
+
+      - name: Check current SDK coverage
+        run: |
+          git -C .mppx rev-parse HEAD
+          uv run python scripts/check_problem_pages.py --mppx-errors .mppx/src/Errors.ts
+
+      - name: Generate problem pages
+        run: uv run --with jinja2==3.1.6 python scripts/gen_problems.py
+
+      - name: Check published pages
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: uv run python scripts/check_problem_pages.py --base-url https://paymentauth.org

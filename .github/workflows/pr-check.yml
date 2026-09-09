@@ -16,7 +16,7 @@ jobs:
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [build-and-check]
+    needs: [build-and-check, problem-pages]
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -24,6 +24,9 @@ jobs:
             echo "One or more required jobs failed or were cancelled"
             exit 1
           fi
+
+  problem-pages:
+    uses: ./.github/workflows/problem-pages.yml
 
   build-and-check:
     runs-on: ubuntu-latest

@@ -83,6 +83,7 @@ jobs:
           mkdir -p _site
           cp pages/index.html _site/
           cp -r pages/problems _site/problems
+          cp pages/problem-types.json _site/problem-types.json
           cp artifacts/*.html artifacts/*.txt artifacts/*.xml artifacts/*.pdf _site/
           echo "paymentauth.org" > _site/CNAME
 
@@ -92,3 +93,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+
+      - name: Check published problem pages
+        run: |
+          # Allow the Pages CDN a short propagation window after deployment.
+          for attempt in 1 2 3; do
+            if uv run python scripts/check_problem_pages.py --base-url https://paymentauth.org; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+          done
+          exit 1
