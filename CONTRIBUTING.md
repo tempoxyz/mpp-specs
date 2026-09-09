@@ -118,32 +118,6 @@ pip install -r requirements.txt  # Python: xml2rfc, rfclint
 ./scripts/gen.sh --verbose
 ```
 
-### Problem documentation
-
-`pages/problem-types.json` is the shared registry for problem URIs, titles, HTTP
-statuses, descriptions, and sources. `scripts/gen_problems.py` generates the
-problem pages and index from it. Deployment also publishes the registry at
-`https://paymentauth.org/problem-types.json` for SDK tooling. Consumers that need
-reproducible validation can pin the file to a repository commit.
-
-Add new SDK-defined errors to the `sdk` group with a link to their implementation;
-this does not register them in the core protocol. Human-readable SDK titles may
-differ from documentation titles; the coverage check compares URIs and statuses.
-
-The **Problem Pages** workflow checks the current `wevm/mppx` main branch on every
-PR, main push, and daily. It reads `src/Errors.ts` as data and fails on missing
-pages, status mismatches, or unsupported error declaration syntax. It also tests
-generation for every registry entry. The daily/manual runs and the deployment
-workflow check that published URLs return the expected page, including detecting
-soft 404s. These checks detect drift; they do not gate releases in the SDK repo.
-
-To validate against a local SDK checkout:
-
-```bash
-uv run python scripts/check_problem_pages.py --mppx-errors ../mppx/src/Errors.ts
-uv run --with jinja2==3.1.6 --with pytest==9.1.1 python -m pytest scripts/test_problem_pages.py
-```
-
 ### Generated Outputs
 
 All outputs are written to `artifacts/`:

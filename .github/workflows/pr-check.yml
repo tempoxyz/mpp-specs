@@ -16,7 +16,7 @@ jobs:
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [build-and-check, problem-pages]
+    needs: [build-and-check]
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -24,9 +24,6 @@ jobs:
             echo "One or more required jobs failed or were cancelled"
             exit 1
           fi
-
-  problem-pages:
-    uses: ./.github/workflows/problem-pages.yml
 
   build-and-check:
     runs-on: ubuntu-latest
@@ -53,6 +50,9 @@ jobs:
       - name: Lint external section references
         run: |
           docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_external_section_refs.py
+
+      - name: Check problem page generation
+        run: docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools:latest pytest test_gen_problems.py -v
 
       - name: Build and validate specs
         run: |

@@ -24,7 +24,7 @@ lint:
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_frontmatter.py
 
 test:
-	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest test_lint_frontmatter.py test_bump_and_rename.py test_serve.py test_problem_pages.py -v
+	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest test_lint_frontmatter.py test_bump_and_rename.py test_gen_problems.py -v
 
 site: build
 	@python3 scripts/gen_index.py
