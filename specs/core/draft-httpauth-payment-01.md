@@ -13,22 +13,27 @@ author:
     ins: B. Ryan
     email: brendan@tempo.xyz
     org: Tempo Labs
+    country: US
   - name: Jake Moxey
     ins: J. Moxey
     email: jake@tempo.xyz
     org: Tempo Labs
+    country: US
   - name: Tom Meagher
     ins: T. Meagher
     email: tom@tempo.xyz
     org: Tempo Labs
+    country: US
   - name: Jeff Weinstein
     ins: J. Weinstein
     email: jweinstein@stripe.com
     org: Stripe
+    country: US
   - name: Steve Kaliski
     ins: S. Kaliski
     email: stevekaliski@stripe.com
     org: Stripe
+    country: US
 
 normative:
   RFC2119:
