@@ -1,5 +1,5 @@
 ---
-title: Stripe charge Intent for HTTP Payment Authentication
+title: Stripe Charge Intent for HTTP Payment Authentication
 abbrev: Stripe Charge
 docname: draft-stripe-charge-00
 version: 00

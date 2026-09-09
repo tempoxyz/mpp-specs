@@ -1,5 +1,5 @@
 ---
-title: Tempo charge Intent for HTTP Payment Authentication
+title: Tempo Charge Intent for HTTP Payment Authentication
 abbrev: Tempo Charge
 docname: draft-tempo-charge-00
 version: 00
