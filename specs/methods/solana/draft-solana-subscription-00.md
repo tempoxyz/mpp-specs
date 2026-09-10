@@ -803,6 +803,10 @@ When granting access in a later billing period, servers MUST:
 - Verify the `SubscriptionDelegation` account exists, is owned by
   `methodDetails.subscriptionProgram`, has the expected discriminator and version,
   and still identifies the bound plan and payer.
+- Derive the payer's `SubscriptionAuthority` from the payer and mint, verify
+  that it exists and is owned by `methodDetails.subscriptionProgram`, and
+  require its current `init_id` to equal the delegation header's `init_id`.
+  A missing authority or mismatched incarnation invalidates the subscription.
 - Verify the subscription is still usable by reading
   `delegation.expires_at_ts` on-chain; a non-zero timestamp only blocks
   renewal once the current time is at or after that timestamp.
