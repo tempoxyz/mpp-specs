@@ -87,8 +87,9 @@ payment intent for use with the Payment HTTP Authentication Scheme.
 It specifies how clients grant servers permission to collect a fixed
 SPL token payment once per billing period using a subscription
 delegation held by an audited on-chain program. This profile
-intentionally models the recurring transfer authorization itself, not
-a richer billing object.
+also defines a reusable payer-signed bearer proof for access under an
+active subscription. It intentionally models the recurring transfer
+authorization itself, not a richer billing object.
 
 --- middle
 
@@ -223,7 +224,7 @@ only one transfer of exactly `amount` per billing period.
 |----------|-------|
 | **Intent Identifier** | `subscription` |
 | **Payment Timing** | Recurring (activation charge atomic with delegation creation, then once per period via server-driven pulls) |
-| **Idempotency** | Credential single-use; on-chain delegation reusable across billing periods |
+| **Idempotency** | Activation credential single-use; bearer proof reusable while the subscription remains usable; on-chain delegation reusable across billing periods |
 | **Reversibility** | Cancellable on-chain; effective at end of currently-paid billing period |
 
 ## Flow
@@ -241,8 +242,7 @@ The following diagram illustrates the Solana subscription flow:
       │<--------------------------  │                             │
       │                             │                             │
       │  (3) Sign activation tx     │                             │
-      │      (subscribe + first     │                             │
-      │       transfer)             │                             │
+      │      + bearer proof         │                             │
       │                             │                             │
       │  (4) Authorization: Payment │                             │
       │-------------------------->  │                             │
@@ -255,13 +255,17 @@ The following diagram illustrates the Solana subscription flow:
       │  (6) 200 OK + Receipt       │                             │
       │<--------------------------  │                             │
       │                             │                             │
+      │  (7) GET /api/resource      │                             │
+      │      + bearer proof         │                             │
+      │-------------------------->  │                             │
+      │                             │                             │
       │        ... later period ... │                             │
       │                             │                             │
-      │                             │  (7) transfer_subscription  │
+      │                             │  (8) transfer_subscription  │
       │                             │      (server-driven pull)   │
       │                             │-------------------------->  │
       │                             │                             │
-      │  (8) 200 OK + Receipt       │                             │
+      │  (9) 200 OK + Receipt       │                             │
       │<--------------------------  │                             │
       │                             │                             │
 ~~~
@@ -431,16 +435,16 @@ encoded JSON object per {{I-D.httpauth-payment}}.
 
 ## Payload
 
-The credential `payload` for a Solana "subscription" intent contains
-the activation grant. For this profile only one credential action is
-defined: activation. Renewals are server-driven on-chain transactions
-and do not produce HTTP credentials. Cancellations are out-of-band
-on-chain operations and use no credential.
+The credential `payload` for a Solana "subscription" intent either
+activates the subscription or authenticates later use of an active
+subscription. Renewals are server-driven on-chain transactions and do
+not produce HTTP credentials. Cancellations are out-of-band on-chain
+operations and use no credential.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `challenge` | object | REQUIRED | Echo of the challenge from the server |
-| `payload` | object | REQUIRED | Solana-specific activation payload |
+| `payload` | object | REQUIRED | Solana-specific activation or access payload |
 | `source` | string | OPTIONAL | Subscriber identifier (e.g., `did:pkh:solana:...`) |
 
 Subscriptions on Solana MUST use one of two activation-payload types.
@@ -455,11 +459,97 @@ transaction itself and submits the confirmed transaction signature.
 | `type` | string | REQUIRED | `"transaction"` or `"signature"` |
 | `transaction` | string | CONDITIONAL | Standard-base64 of the signed activation transaction. REQUIRED when `type="transaction"` |
 | `signature` | string | CONDITIONAL | Base58 of the on-chain transaction signature. REQUIRED when `type="signature"` |
+| `authentication` | object | REQUIRED | Reusable payer proof defined in {{subscription-bearer-proof}} |
 
 Servers MUST reject credentials where `type="signature"` is combined
 with `methodDetails.feePayer` set to `true`, because the server has
 no opportunity to co-sign a transaction the client has already
 broadcast.
+
+## Subscription Bearer Proof {#subscription-bearer-proof}
+
+The client signs one reusable proof when it constructs the activation
+credential. The proof authorizes access under the resulting
+subscription; it does not authorize activation, a renewal transfer, or
+any other movement of funds.
+
+The client derives the `SubscriptionDelegation` PDA from the plan and
+subscriber, then constructs this JCS {{RFC8785}} object:
+
+~~~json
+{
+  "domain": "mpp-subscription-auth-v1",
+  "payer": "<base58 subscriber public key>",
+  "subscriptionChallengeId": "<activation challenge id>",
+  "subscriptionDelegation": "<base58 delegation address>"
+}
+~~~
+
+The client signs the UTF-8 bytes of the JCS serialization with the
+Ed25519 private key corresponding to `payer`. The resulting
+`authentication` object has this shape:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | REQUIRED | The string `"proof"` |
+| `challengeId` | string | REQUIRED | Activation challenge ID signed as `subscriptionChallengeId` |
+| `payer` | string | REQUIRED | Base58 Ed25519 public key that produced the proof |
+| `signature` | string | REQUIRED | Base58 encoding of the 64-byte Ed25519 signature |
+
+During activation, the server MUST verify that:
+
+- `authentication.challengeId` equals the activation challenge ID;
+- the signed `subscriptionDelegation` equals the canonical PDA derived
+  from `methodDetails.planAddress`, the subscriber, and
+  `methodDetails.programId`;
+- `authentication.payer` equals the subscriber signer extracted from
+  the activation transaction; and
+- the Ed25519 signature verifies over the exact JCS object above.
+
+The server MUST bind the verified `authentication` object to the
+subscription only after the activation transaction confirms and the
+resulting delegation passes the post-settlement checks in
+{{activation}}. A signature over a derivable PDA whose account does not
+exist is not evidence of an active subscription.
+
+To use an active subscription on a later request, the client sends a
+credential whose outer `challenge` echoes the activation challenge and
+whose payload has this shape:
+
+~~~json
+{
+  "type": "proof",
+  "subscriptionDelegation": "<base58 delegation address>",
+  "authentication": {
+    "type": "proof",
+    "challengeId": "<activation challenge id>",
+    "payer": "<base58 subscriber public key>",
+    "signature": "<base58 Ed25519 signature>"
+  }
+}
+~~~
+
+The server MUST verify the proof against the delegation and the
+activation binding before granting access. It MUST require the same
+`authentication` field values that it bound at activation. The
+activation challenge's
+`expires` auth-param limits creation of the binding; it does not expire
+an already-bound proof. Repeated presentation is the expected bearer-
+proof behavior and MUST NOT be rejected merely because the proof was
+previously presented.
+
+The proof remains usable only while the identified subscription is
+usable under {{server-accounting-and-idempotency}}. It becomes invalid
+when cancellation takes effect, `subscriptionExpires` is reached, the
+delegation or its authority is invalidated, or the current billing
+period is not paid. Servers MAY provide application-layer early
+revocation or narrower audience and lifetime policies.
+
+The proof is a bearer credential after signing. Clients and servers
+MUST send it only over authenticated encrypted transports, MUST NOT log
+it, and MUST prevent it from appearing in URLs, analytics, or error
+reports. An `Idempotency-Key` prevents replay of an application request;
+it does not constrain use of a leaked bearer proof.
 
 The signed activation transaction MUST:
 
@@ -490,10 +580,15 @@ subscriber's tokens outside the per-period limit, and MUST NOT
 reference writable accounts that could redirect funds to a receiver
 not authorized by `plan.destinations`.
 
-## Single-Use
+## Activation Single-Use
 
 Each "subscription" activation credential MUST be usable only once
 per challenge. Servers MUST reject replayed credentials.
+
+This single-use requirement applies to `type="transaction"` and
+`type="signature"` activation credentials. It does not apply to a
+`type="proof"` access credential defined in
+{{subscription-bearer-proof}}.
 
 A successfully activated subscription may be reused for later billing
 periods until:
@@ -540,11 +635,14 @@ When the server receives a Solana "subscription" credential, it MUST:
    per-period amount as described in
    {{authorization-scope-verification}}.
 2. Verify the subscriber identity per {{source-verification}}.
-3. Co-sign the transaction as fee payer when `methodDetails.feePayer`
+3. Verify and retain the subscription bearer proof per
+   {{subscription-bearer-proof}}.
+4. Co-sign the transaction as fee payer when `methodDetails.feePayer`
    is `true`, then broadcast.
-4. Wait for confirmation and read the resulting on-chain state.
-5. Initialize durable subscription state for later renewals.
-6. Return `200 OK` with a `Payment-Receipt` for the first charge,
+5. Wait for confirmation and read the resulting on-chain state.
+6. Initialize durable subscription state, including the exact bound
+   proof, for later access and renewals.
+7. Return `200 OK` with a `Payment-Receipt` for the first charge,
    including a `subscriptionId` as defined in
    {{subscription-identifier}}.
 
@@ -662,10 +760,9 @@ referring to the active subscription in later interactions, but the
 `subscriptionId` is only a receipt identifier unless an application
 explicitly assigns it additional application-layer meaning.
 
-Servers MUST authenticate or otherwise authorize the client's use of
-the identified subscription before granting access or collecting a
-renewal charge. Possession or presentation of a `subscriptionId`
-alone is insufficient.
+Clients MUST use the bearer proof from
+{{subscription-bearer-proof}} to authenticate later access. Possession
+or presentation of a `subscriptionId` alone is insufficient.
 
 ## Server Accounting and Idempotency
 
@@ -689,6 +786,7 @@ requests. At minimum, servers MUST track:
 
 - server-issued subscription identifier
 - subscription delegation address
+- activation challenge and bound bearer proof
 - plan address
 - billing anchor
 - last successfully charged billing-period index
@@ -700,6 +798,11 @@ requests. At minimum, servers MUST track:
 
 When granting access in a later billing period, servers MUST:
 
+- Verify the payer signature, activation binding, and delegation
+  binding defined in {{subscription-bearer-proof}}.
+- Verify the `SubscriptionDelegation` account exists, is owned by
+  `methodDetails.programId`, has the expected discriminator and version,
+  and still identifies the bound plan and payer.
 - Verify the subscription is still usable by reading
   `delegation.expires_at_ts` on-chain; a non-zero timestamp only blocks
   renewal once the current time is at or after that timestamp.
@@ -844,7 +947,38 @@ Signatures: subscriber (partial), puller (server, added at co-sign)
   },
   "payload": {
     "type": "transaction",
-    "transaction": "AQAAAA...base64 of partially signed tx..."
+    "transaction": "AQAAAA...base64 of partially signed tx...",
+    "authentication": {
+      "type": "proof",
+      "challengeId": "qT8wErYuI3oPlKjH6gFdSa",
+      "payer": "7YWHMfk9JZe0LMQDBiTkBXK9LmJRxB6Kuf7nBzvuN7tP",
+      "signature": "4vJ9...base58 Ed25519 signature...Qd"
+    }
+  }
+}
+~~~
+
+**Later access credential:**
+
+~~~json
+{
+  "challenge": {
+    "id": "qT8wErYuI3oPlKjH6gFdSa",
+    "realm": "api.example.com",
+    "method": "solana",
+    "intent": "subscription",
+    "request": "eyJ...",
+    "expires": "2026-01-15T12:05:00Z"
+  },
+  "payload": {
+    "type": "proof",
+    "subscriptionDelegation": "BXQGmO5VwTrl5RfFr6Y8XQZ4nPj9QqMOiKkRn3pZ4ZE",
+    "authentication": {
+      "type": "proof",
+      "challengeId": "qT8wErYuI3oPlKjH6gFdSa",
+      "payer": "7YWHMfk9JZe0LMQDBiTkBXK9LmJRxB6Kuf7nBzvuN7tP",
+      "signature": "4vJ9...base58 Ed25519 signature...Qd"
+    }
   }
 }
 ~~~
@@ -995,6 +1129,21 @@ from being cached by intermediaries.
 Responses containing `Payment-Receipt` headers MUST include
 `Cache-Control: private` to prevent shared caches from storing
 payment receipts.
+
+## Bearer Proof Theft
+
+The subscription authentication proof is intentionally reusable. A
+party that obtains it can impersonate the subscriber within the
+server's protection space until the subscription or an additional
+application-layer authorization expires or is revoked. Domain
+separation and the activation challenge bind the proof to one
+subscription and server realm, but they do not make a copied proof
+non-transferable.
+
+Servers MUST re-check subscription usability for every presentation;
+signature verification alone is insufficient. Servers SHOULD support
+early application-layer proof revocation when immediate logout or
+credential rotation is required.
 
 ## Destination Scoping
 
