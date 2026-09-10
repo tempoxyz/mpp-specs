@@ -195,7 +195,7 @@ optional `subscriptionExpires` timestamp is reached.
 
 On Solana, the recurring authorization is held by an audited on-chain
 program {{SUBSCRIPTIONS-PROGRAM}}. Servers MUST pin its deployment
-address in `methodDetails.programId`, and clients MUST validate that
+address in `methodDetails.subscriptionProgram`, and clients MUST validate that
 address before signing. The program defines three on-chain accounts
 referenced by this specification:
 
@@ -360,7 +360,7 @@ All Solana-specific request parameters live in `methodDetails`:
 | `methodDetails.tokenProgram` | string | REQUIRED | Token program ID. The value MUST be the SPL Token program or the SPL Token-2022 program |
 | `methodDetails.puller` | string | REQUIRED | Base58 of the server's puller pubkey. MUST be `plan.owner` or appear in `plan.pullers` |
 | `methodDetails.planAddress` | string | REQUIRED | Base58 address of the on-chain `Plan` account |
-| `methodDetails.programId` | string | REQUIRED | Base58 address of the subscriptions program deployment |
+| `methodDetails.subscriptionProgram` | string | REQUIRED | Base58 address of the subscriptions program deployment |
 | `methodDetails.network` | string | OPTIONAL | `"mainnet"`, `"devnet"`, `"testnet"`, or `"localnet"`. If omitted, the default value is `"mainnet"` |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, the client constructs the activation transaction with the server as fee payer |
 | `methodDetails.feePayerKey` | string | OPTIONAL | Base58 of the server fee-payer pubkey. REQUIRED when `feePayer` is `true` |
@@ -368,7 +368,7 @@ All Solana-specific request parameters live in `methodDetails`:
 
 Servers MUST reject request objects where the on-chain `Plan` at
 `methodDetails.planAddress` does not exist, has been closed, is not
-owned by `methodDetails.programId`, or has terms that diverge from
+owned by `methodDetails.subscriptionProgram`, or has terms that diverge from
 `currency`, `amount`, or the mapped per-billing-period interval.
 Servers MUST also verify that the mint account is owned by
 `methodDetails.tokenProgram` and that `methodDetails.decimals` matches
@@ -415,7 +415,7 @@ on-chain subscription system could express. Implementations should:
   "description": "Monthly Pro plan",
   "externalId": "merchant-subscription-270",
   "methodDetails": {
-    "programId": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    "subscriptionProgram": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
     "planAddress": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
     "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
@@ -501,7 +501,7 @@ During activation, the server MUST verify that:
 - `authentication.challengeId` equals the activation challenge ID;
 - the signed `subscriptionDelegation` equals the canonical PDA derived
   from `methodDetails.planAddress`, the subscriber, and
-  `methodDetails.programId`;
+  `methodDetails.subscriptionProgram`;
 - `authentication.payer` equals the subscriber signer extracted from
   the activation transaction; and
 - the Ed25519 signature verifies over the exact JCS object above.
@@ -561,7 +561,7 @@ The signed activation transaction MUST:
   only when the `(subscriber, mint)` authority does not yet exist
   on-chain;
 - target the subscriptions program identified by
-  `methodDetails.programId`;
+  `methodDetails.subscriptionProgram`;
 - use the SPL Token or Token-2022 program identified by
   `methodDetails.tokenProgram` for all token-touching instructions;
 - pull funds from the subscriber's associated token account for
@@ -675,7 +675,7 @@ When validating a Solana subscription credential, servers MUST verify
 that the activation transaction:
 
 - invokes only the subscriptions program identified by
-  `methodDetails.programId` for subscription instructions, and only
+  `methodDetails.subscriptionProgram` for subscription instructions, and only
   the token program identified by `methodDetails.tokenProgram` for
   token instructions;
 - uses `methodDetails.planAddress` as the `Plan` account and uses
@@ -801,7 +801,7 @@ When granting access in a later billing period, servers MUST:
 - Verify the payer signature, activation binding, and delegation
   binding defined in {{subscription-bearer-proof}}.
 - Verify the `SubscriptionDelegation` account exists, is owned by
-  `methodDetails.programId`, has the expected discriminator and version,
+  `methodDetails.subscriptionProgram`, has the expected discriminator and version,
   and still identifies the bound plan and payer.
 - Verify the subscription is still usable by reading
   `delegation.expires_at_ts` on-chain; a non-zero timestamp only blocks
@@ -895,7 +895,7 @@ The `request` decodes to:
   "description": "Monthly Pro plan",
   "externalId": "merchant-subscription-270",
   "methodDetails": {
-    "programId": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
+    "subscriptionProgram": "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
     "planAddress": "8tWbqLkUJoYy7zXc5h2EvCRoaQEv2xnQjUuYhc3rzCgT",
     "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
