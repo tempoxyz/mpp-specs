@@ -1,5 +1,5 @@
 ---
-title: Picocash charge Intent for HTTP Payment Authentication
+title: Picocash Charge Intent for HTTP Payment Authentication
 abbrev: Picocash Charge
 docname: draft-picocash-charge-00
 version: 00
