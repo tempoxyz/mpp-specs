@@ -59,6 +59,9 @@ informative:
     author:
       - org: Solana Foundation
     date: 2026
+  SIMD-0385:
+    title: "SIMD-0385: Transaction V1 Format"
+    target: https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0385-transaction-v1.md
   BASE58:
     title: "Base58 Encoding Scheme"
     target: https://datatracker.ietf.org/doc/html/draft-msporny-base58-03
@@ -658,9 +661,13 @@ entries. Each MUST be the canonical ATA for
 `distribute` carrying enough recipient accounts to
 exceed the legacy transaction account-key budget — in
 practice at `MAX_DISTRIBUTION_RECIPIENTS` recipients
-(RECOMMENDED 32) — MUST be sent as a version-0
-transaction with an address lookup table indexing the
-recipient ATAs.
+(RECOMMENDED 32) — MUST be sent as a version-1
+transaction ({{SIMD-0385}}) or, on a cluster where
+version 1 is not yet active, as a version-0 transaction
+with an address lookup table indexing the recipient
+ATAs. This transaction is built and signed by the
+operator alone, so `transactionVersions` does not
+constrain it.
 
 Each beneficiary is paid a cumulative floor delta
 keyed to `payoutWatermark`:
@@ -1031,6 +1038,17 @@ feePayerKey
 : Conditionally REQUIRED. Base58-encoded public key
   of the server's fee payer account.
 
+transactionVersions
+: OPTIONAL. An array of the Solana transaction message
+  versions the server accepts for client-submitted `open` and `topUp` transactions. Each entry is the
+  integer `0` or `1`, the Wallet Standard
+  `supportedTransactionVersions` vocabulary without
+  `"legacy"`. Defaults to `[0]` when omitted. Servers MUST
+  accept every version they list, MUST reject any other
+  version, and MUST NOT list `1` unless the `enable_tx_v1`
+  feature gate (`txv1aq4pp281K9um3tnPgkfX8UqtFT6wcVW3hNezGLL`)
+  is active on `network`. See {{transaction-versions}}.
+
 voucherSigner
 : OPTIONAL. Party that signs cumulative vouchers. MUST be either
   `client` or `operator`. Defaults to `client`.
@@ -1105,6 +1123,49 @@ before a session begins:
 ~~~
 total = amount × units_consumed
 ~~~
+
+## Transaction Versions {#transaction-versions}
+
+Solana defines three transaction message formats: legacy,
+version 0 (adds address lookup tables), and version 1
+({{SIMD-0385}}: 4096-byte transactions that carry the
+compute budget in the message header). The
+`transactionVersions` field in `methodDetails` advertises
+the versions the server accepts for client-submitted `open` and `topUp`
+transactions. When the field
+is absent, the server accepts version `0` only. Legacy
+messages are not supported: servers MUST NOT advertise
+`"legacy"` and MUST reject a legacy message.
+
+Clients MUST build one of the advertised versions and
+SHOULD build the highest one their signer can produce.
+When the field is absent, clients SHOULD build version `0`.
+Clients MUST NOT use address lookup tables: a version-0
+transaction carries every account in its static account
+keys. Servers MUST reject a transaction whose version is
+not advertised, or which references an address lookup
+table, with the `malformed-credential` problem type, before
+inspecting any instruction.
+
+Size limits are per version. A version-0 transaction MUST
+NOT exceed 1232 serialized bytes; a version-1 transaction
+MUST NOT exceed 4096 serialized bytes.
+
+For version-1 transactions:
+
+- the compute budget is carried in the message
+  `TransactionConfig`, not in instructions. The
+  transaction MUST set `computeUnitLimit` and
+  `loadedAccountsDataSizeLimit`; a version-1 transaction
+  that omits either is budgeted zero and cannot execute;
+- the transaction MUST NOT contain Compute Budget program
+  instructions. They have no effect under version 1, and
+  servers MUST reject them;
+- `priorityFee` is a total in lamports. A server that caps
+  the compute-unit price MUST evaluate
+  `priorityFee * 1000000 <= maxPriceMicroLamports *
+  computeUnitLimit`;
+- every other rule in this document applies unchanged.
 
 # Credential Schema
 
@@ -1195,7 +1256,7 @@ Opens a new payment channel.
 | `distributionSplits` | array | OPTIONAL | Splits preimage (see the challenge's `methodDetails.distributionSplits`); MUST byte-match the splits proposed in the 402 challenge |
 | `authorizationPolicy` | object | OPTIONAL | Voucher signer policy. When present, MUST be consistent with `authorizedSigner` |
 | `authentication` | object | Conditionally REQUIRED | Reusable proof from {{session-bearer-proof}}; REQUIRED for `operator` and MUST be absent for `client` |
-| `transaction` | string | REQUIRED | Base64-encoded (standard alphabet, padded) signed or partially signed transaction |
+| `transaction` | string | REQUIRED | Base64-encoded (standard alphabet, padded) signed or partially signed transaction; its message version MUST be one the challenge advertises ({{transaction-versions}}) |
 | `capabilities` | object | OPTIONAL | Implementation-specific extensions |
 
 The `transaction` contains the open instruction(s).
@@ -1348,7 +1409,7 @@ Adds funds to an existing channel.
 | `action` | string | REQUIRED | `"topUp"` |
 | `channelId` | string | REQUIRED | Existing channel identifier |
 | `additionalAmount` | string | REQUIRED | Amount to add in base units |
-| `transaction` | string | REQUIRED | Base64-encoded signed topUp transaction |
+| `transaction` | string | REQUIRED | Base64-encoded signed topUp transaction; its message version MUST be one the challenge advertises ({{transaction-versions}}) |
 
 ## Action: "close"
 
@@ -1959,9 +2020,12 @@ bearer proof.
    existing operator / fee payer and carries no separate
    wire field; a single operator signature satisfies
    both the fee-payer and `rentPayer` signer roles.
-9. Validate the complete compiled message — resolving
-   any version-0 address-lookup-table entries — not just
-   the channel instruction. Verify the transaction does
+9. Verify the message version is one the challenge
+   advertised, the transaction references no address
+   lookup table, and its size and (for version 1)
+   compute configuration satisfy
+   {{transaction-versions}}. Then validate the complete
+   compiled message, not just the channel instruction. Verify the transaction does
    use the challenged `recentBlockhash` and does
    not include unrelated writable accounts or
    instructions that could redirect funds or mutate
@@ -2093,8 +2157,9 @@ is requested, the paths forward are
    `reclaim` sweep recovers the PDA rent after the
    window (see {{channel-closure}}). A bundle whose
    `distribute` carries many recipients may require a
-   version-0 transaction with an address lookup
-   table.
+   version-1 transaction or, where version 1 is not
+   active, a version-0 transaction with an address
+   lookup table.
 4. Mark the channel as `"closed"` in server-side
    state.
 5. Persist final `settledOnChain` and terminal
