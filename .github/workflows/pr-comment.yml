@@ -97,11 +97,13 @@ jobs:
       - name: Comment on PR
         if: steps.pr_state.outputs.state == 'OPEN'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const prNumber = parseInt('${{ steps.pr.outputs.number }}');
+            const prNumber = parseInt(process.env.PR_NUMBER);
             const previewTag = `pr-${prNumber}-spec-preview`;
             const releaseUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${previewTag}`;
             const artifactsRoot = '/tmp/pr-artifacts';
