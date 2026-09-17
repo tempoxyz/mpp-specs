@@ -71,10 +71,13 @@ jobs:
 
       - name: Submit to IETF datatracker
         if: steps.detect.outputs.submit == 'true'
+        env:
+          DOCNAME: ${{ steps.detect.outputs.docname }}
+          IETF_USER: ${{ secrets.IETF_USER }}
         run: |
           RESPONSE=$(curl --silent --show-error --retry 3 -w "\n%{http_code}" \
-            -F "user=${{ secrets.IETF_USER }}" \
-            -F "xml=@artifacts/${{ steps.detect.outputs.docname }}.xml" \
+            -F "user=$IETF_USER" \
+            -F "xml=@artifacts/$DOCNAME.xml" \
             https://datatracker.ietf.org/api/submission)
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
