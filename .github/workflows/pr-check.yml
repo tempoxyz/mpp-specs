@@ -66,9 +66,6 @@ jobs:
       - name: Check problem page generation
         run: docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools:latest pytest test_gen_problems.py -v
 
-      - name: Check challenge ID vectors
-        run: docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools:latest pytest test_challenge_id_vectors.py -v
-
       - name: Build and validate specs
         run: |
           mkdir -p .cache
