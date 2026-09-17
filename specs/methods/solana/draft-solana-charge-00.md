@@ -73,6 +73,9 @@ informative:
     author:
       - org: Anza
     date: 2026
+  SIMD-0385:
+    title: "SIMD-0385: Transaction V1 Format"
+    target: https://github.com/solana-foundation/solana-improvement-documents/blob/main/proposals/0385-transaction-v1.md
   BASE58:
     title: "Base58 Encoding Scheme"
     target: https://datatracker.ietf.org/doc/html/draft-msporny-base58-03
@@ -441,6 +444,17 @@ feePayerKey
   `false` or omitted. The client uses this key as the
   transaction fee payer when constructing the transaction.
 
+transactionVersions
+: OPTIONAL. An array of the Solana transaction message
+  versions the server accepts for pull-mode credentials. Each entry is the
+  integer `0` or `1`, the Wallet Standard
+  `supportedTransactionVersions` vocabulary without
+  `"legacy"`. Defaults to `[0]` when omitted. Servers MUST
+  accept every version they list, MUST reject any other
+  version, and MUST NOT list `1` unless the `enable_tx_v1`
+  feature gate (`txv1aq4pp281K9um3tnPgkfX8UqtFT6wcVW3hNezGLL`)
+  is active on `network`. See {{transaction-versions}}.
+
 splits
 : OPTIONAL. An array of at most 8 additional payment
   splits. Each entry is a JSON object with the following
@@ -580,7 +594,8 @@ This requests a transfer of 1 USDC (1,000,000 base units).
   "methodDetails": {
     "network": "mainnet",
     "feePayer": true,
-    "feePayerKey": "9aE3Fg7HjKLmNpQr5TuVwXyZ2AbCdEf8GhIjKlMnOp1R"
+    "feePayerKey": "9aE3Fg7HjKLmNpQr5TuVwXyZ2AbCdEf8GhIjKlMnOp1R",
+    "transactionVersions": [0, 1]
   }
 }
 ~~~
@@ -704,12 +719,13 @@ signed transaction.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | string | REQUIRED | `"transaction"` |
-| `transaction` | string | REQUIRED | Base64-encoded serialized signed transaction bytes (max 1232 bytes decoded) |
+| `transaction` | string | REQUIRED | Base64-encoded serialized signed transaction bytes; the decoded size MUST NOT exceed the limit for its message version ({{transaction-versions}}) |
 
-The transaction MUST be a valid Solana versioned transaction
-that does not exceed the 1232-byte transaction size limit.
-containing the transfer instruction(s) matching the challenge
-parameters. The client MUST sign the transaction with the
+The transaction MUST be a valid Solana transaction whose
+message version is accepted by the server and whose size
+does not exceed the limit for that version (see
+{{transaction-versions}}), containing the transfer
+instruction(s) matching the challenge parameters. The client MUST sign the transaction with the
 transfer authority key. When `feePayer` is `false` or absent,
 the client MUST also be the fee payer and the transaction MUST
 be fully signed. When `feePayer` is `true`, the transaction
@@ -736,6 +752,48 @@ Example (decoded):
   }
 }
 ~~~
+
+## Transaction Versions {#transaction-versions}
+
+Solana defines three transaction message formats: legacy,
+version 0 (adds address lookup tables), and version 1
+({{SIMD-0385}}: 4096-byte transactions that carry the
+compute budget in the message header). The
+`transactionVersions` field in `methodDetails` advertises
+the versions the server accepts for pull-mode credentials. When the field
+is absent, the server accepts version `0` only. Legacy
+messages are not supported: servers MUST NOT advertise
+`"legacy"` and MUST reject a legacy message.
+
+Clients MUST build one of the advertised versions and
+SHOULD build the highest one their signer can produce.
+When the field is absent, clients SHOULD build version `0`.
+Clients MUST NOT use address lookup tables: a version-0
+transaction carries every account in its static account
+keys. Servers MUST reject a transaction whose version is
+not advertised, or which references an address lookup
+table, with the `malformed-credential` problem type, before
+inspecting any instruction.
+
+Size limits are per version. A version-0 transaction MUST
+NOT exceed 1232 serialized bytes; a version-1 transaction
+MUST NOT exceed 4096 serialized bytes.
+
+For version-1 transactions:
+
+- the compute budget is carried in the message
+  `TransactionConfig`, not in instructions. The
+  transaction MUST set `computeUnitLimit` and
+  `loadedAccountsDataSizeLimit`; a version-1 transaction
+  that omits either is budgeted zero and cannot execute;
+- the transaction MUST NOT contain Compute Budget program
+  instructions. They have no effect under version 1, and
+  servers MUST reject them;
+- `priorityFee` is a total in lamports. A server that caps
+  the compute-unit price MUST evaluate
+  `priorityFee * 1000000 <= maxPriceMicroLamports *
+  computeUnitLimit`;
+- every other rule in this document applies unchanged.
 
 ## Signature Payload — Push Mode {#signature-payload}
 
@@ -1136,10 +1194,14 @@ For credentials with `type="transaction"`:
 
 2. Deserialize the transaction and verify that it
    structurally matches the challenge request:
+   - the message version, serialized size, and (for
+     version 1) compute configuration satisfy
+     {{transaction-versions}};
    - the fee payer matches the challenge policy;
    - the transfer authority is signed by the client;
    - the transaction contains only expected transfer,
-     ATA-creation, memo, and compute-budget instructions;
+     ATA-creation, memo, and (in version-0 transactions)
+     compute-budget instructions;
    - when `feePayer` is `true`, ATA-creation instructions
      funded by the server fee payer are limited to split
      recipients whose split entry sets `ataCreationRequired`
@@ -1588,7 +1650,10 @@ When `feePayer` is `false` or absent:
 - The client MUST fully sign the transaction.
 
 Clients SHOULD set a compute unit limit and priority
-fee appropriate for current network conditions.
+fee appropriate for current network conditions. In a
+version-1 transaction these live in the message
+`TransactionConfig`, and `computeUnitLimit` MUST be set
+(see {{transaction-versions}}).
 
 ## Confirmation Requirements
 
@@ -1842,9 +1907,9 @@ fee payer account rather than simply paying fees.
 Servers MUST verify that the transaction contains
 only the expected instructions: transfer instruction(s)
 matching the challenge parameters, ATA creation
-(idempotent), and optionally compute budget
-instructions. Any unexpected instructions MUST cause
-rejection.
+(idempotent), and, in version-0 transactions,
+optionally compute budget instructions. Any unexpected
+instructions MUST cause rejection.
 
 ## Blockhash Freshness
 
