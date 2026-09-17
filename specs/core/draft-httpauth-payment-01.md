@@ -380,8 +380,10 @@ the challenge `id` as follows:
 The HMAC input is constructed from seven fixed positional slots. Required
 fields supply their string value; optional fields use an empty string (`""`)
 when absent. When the `header` parameter is present, an eighth slot is
-appended with its value. This preserves the HMAC input for header-less
-challenges issued by earlier implementations. The slots are:
+inserted immediately before `opaque`, so `opaque` remains the final optional
+slot. This preserves the HMAC input for header-less challenges issued by
+earlier implementations and matches the layout used by shipping SDKs. The
+slots are:
 
 | Slot | Field | Value |
 |------|-------|-------|
@@ -391,19 +393,21 @@ challenges issued by earlier implementations. The slots are:
 | 3 | `request` | Required. JCS-serialized per {{RFC8785}}, then base64url-encoded. |
 | 4 | `expires` | Optional. String value if present; empty string if absent. |
 | 5 | `digest` | Optional. String value if present; empty string if absent. |
-| 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
-| 7 | `header` | Present only when the `header` parameter is present. The value `Payment-Authorization`. |
+| — | `header` | Inserted only when the `header` parameter is present, immediately before `opaque`. The value `Payment-Authorization`. |
+| last | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. Always the final slot. |
 
 The computation proceeds as follows:
 
-1. Populate all seven base slots as described above. If `header` is present,
-   append the eighth slot.
+1. Populate the required slots and the `expires` / `digest` optional slots
+   as described above. If `header` is present, insert it next. Always finish
+   with the `opaque` slot (empty string when absent).
 
 2. Join the populated slots with the pipe character (`|`) as delimiter.
-   Every base slot is always present in the joined string; absent optional
-   fields appear as empty segments (e.g., `...|expires||opaque_b64url`
-   when `digest` is absent). The header slot is omitted entirely when the
-   `header` parameter is absent.
+   Every base slot other than `header` is always present in the joined
+   string; absent optional fields appear as empty segments (e.g.,
+   `...|expires||opaque_b64url` when `digest` is absent and `header` is
+   omitted). The header slot is omitted entirely when the `header`
+   parameter is absent.
 
 3. Compute HMAC-SHA256 over the resulting string using a server secret.
 
@@ -411,26 +415,30 @@ The computation proceeds as follows:
    Section 5).
 
 ~~~
-input = "|".join([
+values = [
     realm,
     method,
     intent,
     request_b64url,
     expires or "",
     digest or "",
-    opaque_b64url or "",
-    # append header only when it is present
-])
+]
+# insert header immediately before opaque when it is present
 if header is present:
-    input = input + "|" + header
+    values.append(header)
+values.append(opaque_b64url or "")
+input = "|".join(values)
 id = base64url(HMAC-SHA256(server_secret, input))
 ~~~
 
 The base optional fields use fixed positional slots with empty strings when
 absent, rather than being omitted. This avoids ambiguity between
 combinations of optional fields — for example, `(expires set, no digest)`
-and `(no expires, digest set)` produce distinct inputs. The conditional
-header slot preserves compatibility with challenges that predate `header`.
+and `(no expires, digest set)` produce distinct inputs. Keeping `opaque` as
+the final slot, and inserting `header` immediately before it when
+advertised, matches the HMAC input already produced by mppx and mpp-rs.
+The conditional header slot also preserves compatibility with challenges
+that predate `header`.
 
 #### Example Challenge
 
