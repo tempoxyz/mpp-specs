@@ -11,20 +11,28 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: pip
     directory: /
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: bundler
     directory: /
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: github-actions
     directory: /
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: weekly-dependencies
 
   - package-ecosystem: docker
     directory: /
+    cooldown:
+      default-days: 7
     patterns: ["*"]
     multi-ecosystem-group: weekly-dependencies

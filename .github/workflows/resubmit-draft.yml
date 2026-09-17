@@ -26,6 +26,9 @@ jobs:
   bump-and-pr:
     runs-on: ubuntu-latest
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -88,11 +91,13 @@ jobs:
       - name: Bump revision
         if: steps.check.outputs.skip == 'false'
         id: bump
+        env:
+          EXPECTED_NEW_VER: ${{ steps.check.outputs.new_ver }}
         run: |
           chmod +x scripts/bump_and_rename.sh
           NEW_VER=$(scripts/bump_and_rename.sh)
-          if [[ "$NEW_VER" != "${{ steps.check.outputs.new_ver }}" ]]; then
-            echo "::error::Expected revision ${{ steps.check.outputs.new_ver }}, got $NEW_VER"
+          if [[ "$NEW_VER" != "$EXPECTED_NEW_VER" ]]; then
+            echo "::error::Expected revision $EXPECTED_NEW_VER, got $NEW_VER"
             exit 1
           fi
           echo "new_ver=$NEW_VER" >> "$GITHUB_OUTPUT"
@@ -108,8 +113,9 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ steps.sts.outputs.token }}
+          NEW_VER: ${{ steps.bump.outputs.new_ver }}
         run: |
-          BRANCH="ietf/resubmit-${{ steps.bump.outputs.new_ver }}"
+          BRANCH="ietf/resubmit-$NEW_VER"
           # Checkout runs with persist-credentials: false; authenticate the
           # push through the gh credential helper using GH_TOKEN instead.
           gh auth setup-git
@@ -117,10 +123,10 @@ jobs:
           git config user.email "312736176+tempo-github-sts[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "chore: bump draft revision to -${{ steps.bump.outputs.new_ver }}"
+          git commit -m "chore: bump draft revision to -$NEW_VER"
           git push origin "$BRANCH"
           gh pr create \
-            --title "chore: bump IETF draft to revision -${{ steps.bump.outputs.new_ver }}" \
+            --title "chore: bump IETF draft to revision -$NEW_VER" \
             --body "Automated revision bump to prevent the IETF Internet-Draft from expiring (185-day limit).
 
           Merging this PR will automatically submit the new revision to the IETF datatracker.

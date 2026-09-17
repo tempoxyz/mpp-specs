@@ -16,7 +16,13 @@ permissions:
 jobs:
   submit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -60,15 +66,18 @@ jobs:
         if: steps.detect.outputs.submit == 'true'
         run: |
           mkdir -p .cache
-          docker run --rm --user $(id -u):$(id -g) -e HOME=/data \
-            -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/data \
+            -v "${{ github.workspace }}:/data" ietf-spec-tools:latest /data/scripts/gen.sh
 
       - name: Submit to IETF datatracker
         if: steps.detect.outputs.submit == 'true'
+        env:
+          DOCNAME: ${{ steps.detect.outputs.docname }}
+          IETF_USER: ${{ secrets.IETF_USER }}
         run: |
           RESPONSE=$(curl --silent --show-error --retry 3 -w "\n%{http_code}" \
-            -F "user=${{ secrets.IETF_USER }}" \
-            -F "xml=@artifacts/${{ steps.detect.outputs.docname }}.xml" \
+            -F "user=$IETF_USER" \
+            -F "xml=@artifacts/$DOCNAME.xml" \
             https://datatracker.ietf.org/api/submission)
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -1)
