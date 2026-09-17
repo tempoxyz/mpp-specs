@@ -12,11 +12,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   submit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
@@ -64,8 +66,8 @@ jobs:
         if: steps.detect.outputs.submit == 'true'
         run: |
           mkdir -p .cache
-          docker run --rm --user $(id -u):$(id -g) -e HOME=/data \
-            -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/gen.sh
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/data \
+            -v "${{ github.workspace }}:/data" ietf-spec-tools:latest /data/scripts/gen.sh
 
       - name: Submit to IETF datatracker
         if: steps.detect.outputs.submit == 'true'

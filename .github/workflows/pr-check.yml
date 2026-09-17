@@ -11,7 +11,6 @@ concurrency:
 permissions:
   actions: read
   contents: read
-  id-token: write
 
 jobs:
   ci-gate:
@@ -19,6 +18,8 @@ jobs:
     if: always()
     needs: [build-and-check]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
@@ -31,6 +32,10 @@ jobs:
 
   build-and-check:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
@@ -64,7 +69,7 @@ jobs:
       - name: Build and validate specs
         run: |
           mkdir -p .cache
-          docker run --rm --user $(id -u):$(id -g) -e HOME=/data -v ${{ github.workspace }}:/data ietf-spec-tools:latest /data/scripts/check.sh
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/data -v "${{ github.workspace }}:/data" ietf-spec-tools:latest /data/scripts/check.sh
 
       # deploy.yml uploads the published specs as an ietf-specs-<sha> artifact on each
       # successful run on main. Resolve the newest such run, then fetch with the

@@ -1,7 +1,8 @@
 name: Dependabot
 
 on:
-  pull_request_target:
+  # The reusable workflow runs only for Dependabot and never executes pull request code.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions: {}

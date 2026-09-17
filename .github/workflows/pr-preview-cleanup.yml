@@ -1,17 +1,20 @@
 name: Cleanup PR Spec Preview
 
 on:
-  pull_request_target:
+  # This job never checks out or executes pull request code; it only removes derived release assets.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [closed]
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   cleanup:
     name: Delete preview release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Secure runner
         uses: tempoxyz/gh-actions/actions/secure-runner@05c669ce878b8719779a28fe7375ba85822403f8
