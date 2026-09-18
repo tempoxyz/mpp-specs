@@ -44,6 +44,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   I-D.lightning-charge:
@@ -87,8 +95,9 @@ unknown upfront.
 
 HTTP Payment Authentication {{I-D.httpauth-payment}}
 defines a challenge-response mechanism that gates access to HTTP resources
-behind micropayments. This document registers the "session" intent for the
-"lightning" payment method.
+behind micropayments. This document defines the "lightning" payment method
+implementation of the "session" intent registered by
+{{I-D.payment-intent-session}}.
 
 Unlike the "charge" intent, which requires a full per-request Lightning
 payment, the session intent allows clients to pre-deposit a lump sum and
@@ -1063,13 +1072,10 @@ register it again.
 
 ## Payment Intent Registration
 
-This document requests registration of the following entry in
-the "HTTP Payment Intents" registry established by
-{{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference | Contact |
-|--------|-------------------|-------------|-----------|---------|
-| `session` | `lightning` | Prepaid session with per-unit streaming billing and refund on close | This document | Lightspark (<contact@lightspark.com>) |
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `lightning` payment method implements
+the registered `session` intent.
 
 ## Problem Type Registrations
 
