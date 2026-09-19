@@ -578,8 +578,14 @@ method:
 5. Verify network acceptance: confirm `payload.network` is in the
     `acceptedNetworks` list from methodDetails.
 
-6. Reject replays: confirm this `challenge.id` has not been previously
-    fulfilled.  Mark it as consumed.
+6. Reject replays: if `challenge.id` has already been consumed by a
+    prior credential, compare the presented credential to the one
+    that consumed it (see "Idempotency and Replay Protection" below)
+    and branch accordingly instead of continuing verification.
+    Otherwise, mark `challenge.id` as consumed, recording enough of
+    the presented credential (e.g. a digest of the raw
+    `Authorization: Payment` header value) to perform that comparison
+    on a later replay.
 
 7. Verify payment amount: the Server Enabler MUST confirm the
     authorization amount matches the amount from the request
@@ -619,13 +625,32 @@ Servers MUST use `challenge.id` as an idempotency key when forwarding
 to the Server Enabler.  This prevents duplicate charges from
 retried requests.
 
+The cached-response behavior below exists to support idempotent
+retries -- a client resending the identical HTTP request after losing
+the original response (e.g. to a network failure) -- and MUST NOT be
+reachable by a credential that merely shares a `challenge.id` with one
+already consumed. `challengeId` is a required `Payment-Receipt` field
+(see below) and is therefore observable to intermediaries; without a
+same-credential check, an attacker who observes a fulfilled
+`challenge.id` could submit an arbitrary credential echoing it and
+receive the cached response without paying. Servers MUST compare the
+presented credential to the one that originally consumed the
+`challenge.id` -- for example, by comparing the raw
+`Authorization: Payment` header value byte-for-byte, or a digest of
+it -- before taking the cached-response branch.
+
 Replay behavior:
 
-- Same `challenge.id`, credential already successfully processed:
-  server MUST return the cached 200 response with `Payment-Receipt`.
+- Same `challenge.id`, this exact credential (per the comparison
+  above) already successfully processed: server MUST return the
+  cached 200 response with `Payment-Receipt`.
 
-- Same `challenge.id`, prior processing failed: server MUST return
-  HTTP 409 Conflict.
+- Same `challenge.id`, a *different* credential presented after this
+  `challenge.id` was already consumed: server MUST reject with HTTP
+  409 Conflict. This is not an idempotent retry.
+
+- Same `challenge.id`, this exact credential's prior processing
+  failed: server MUST return HTTP 409 Conflict.
 
 - Same `challenge.id`, challenge expired: server MUST return HTTP
   402 with a fresh challenge.
