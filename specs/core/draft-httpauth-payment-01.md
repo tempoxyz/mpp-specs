@@ -377,11 +377,19 @@ authenticated encryption) to validate the binding.
 Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
 the challenge `id` as follows:
 
-The HMAC input is constructed from seven fixed positional slots. Required
-fields supply their string value; optional fields use an empty string (`""`)
-when absent. When the `header` parameter is present, an eighth slot is
-appended with its value. This preserves the HMAC input for header-less
-challenges issued by earlier implementations. The slots are:
+The HMAC input consists of six fixed prefix slots, an optional `header`
+slot, and a final `opaque` slot. Required fields supply their string value;
+optional fields use an empty string (`""`) when absent. The `header` slot
+is omitted when `header` is absent. When `header` is present, its slot is
+inserted immediately before `opaque`. Thus the two layouts are:
+
+~~~
+realm|method|intent|request|expires|digest|opaque
+realm|method|intent|request|expires|digest|header|opaque
+~~~
+
+This preserves the HMAC input for challenges that predate `header`. The
+slots are:
 
 | Slot | Field | Value |
 |------|-------|-------|
@@ -391,19 +399,21 @@ challenges issued by earlier implementations. The slots are:
 | 3 | `request` | Required. JCS-serialized per {{RFC8785}}, then base64url-encoded. |
 | 4 | `expires` | Optional. String value if present; empty string if absent. |
 | 5 | `digest` | Optional. String value if present; empty string if absent. |
-| 6 | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
-| 7 | `header` | Present only when the `header` parameter is present. The value `Payment-Authorization`. |
+| 6 | `header` | Present only when the `header` parameter is present. The value `Payment-Authorization`. |
+| last | `opaque` | Optional. JCS-serialized per {{RFC8785}}, then base64url-encoded if present; empty string if absent. |
 
 The computation proceeds as follows:
 
-1. Populate all seven base slots as described above. If `header` is present,
-   append the eighth slot.
+1. Populate the six prefix slots as described above. If `header` is
+   present, append its value. Append the `opaque` value last, using an empty
+   string when it is absent.
 
 2. Join the populated slots with the pipe character (`|`) as delimiter.
-   Every base slot is always present in the joined string; absent optional
-   fields appear as empty segments (e.g., `...|expires||opaque_b64url`
-   when `digest` is absent). The header slot is omitted entirely when the
-   `header` parameter is absent.
+   Every slot other than `header` is always present in the joined string;
+   absent optional fields appear as empty segments (e.g.,
+   `...|expires||opaque_b64url` when `digest` is absent and `header` is
+   omitted). The `header` slot is omitted entirely when the parameter is
+   absent.
 
 3. Compute HMAC-SHA256 over the resulting string using a server secret.
 
@@ -411,26 +421,91 @@ The computation proceeds as follows:
    Section 5).
 
 ~~~
-input = "|".join([
+values = [
     realm,
     method,
     intent,
     request_b64url,
     expires or "",
     digest or "",
-    opaque_b64url or "",
-    # append header only when it is present
-])
+]
 if header is present:
-    input = input + "|" + header
+    values.append(header)
+values.append(opaque_b64url or "")
+input = "|".join(values)
 id = base64url(HMAC-SHA256(server_secret, input))
 ~~~
 
 The base optional fields use fixed positional slots with empty strings when
 absent, rather than being omitted. This avoids ambiguity between
 combinations of optional fields — for example, `(expires set, no digest)`
-and `(no expires, digest set)` produce distinct inputs. The conditional
-header slot preserves compatibility with challenges that predate `header`.
+and `(no expires, digest set)` produce distinct inputs. Clients echo the
+challenge `id` and bound fields; they do not know the server secret and do
+not recompute this HMAC. A deterministic construction nevertheless allows
+different server components and implementations to issue and verify the
+same challenge.
+
+###### HMAC-SHA256 Test Vectors
+
+The following vectors use the UTF-8 server secret `test-vector-secret` and
+this request object:
+
+~~~json
+{"amount":"1000000"}
+~~~
+
+Its JCS serialization has the base64url encoding
+`eyJhbW91bnQiOiIxMDAwMDAwIn0`. All vectors omit `expires` and `digest`.
+
+In the following inputs, adjacent quoted strings are concatenated without
+whitespace. The legacy layout, with neither `header` nor `opaque`, is:
+
+~~~
+input = "api.example.com|tempo|charge|"
+        "eyJhbW91bnQiOiIxMDAwMDAwIn0|||"
+~~~
+
+Its challenge `id` is:
+
+~~~
+X6v1eo7fJ76gAxqY0xN9Jd__4lUyDDYmriryOM-5FO4
+~~~
+
+With `header="Payment-Authorization"` and no `opaque`, the input is:
+
+~~~
+input = "api.example.com|tempo|charge|"
+        "eyJhbW91bnQiOiIxMDAwMDAwIn0|||"
+        "Payment-Authorization|"
+~~~
+
+Its challenge `id` is:
+
+~~~
+S91xi-OFGZPMs-j7GsX0FDpIkmCcZT1P9XyV58WNy_U
+~~~
+
+Finally, with `header="Payment-Authorization"` and the following `opaque`
+object:
+
+~~~json
+{"pi":"pi_123"}
+~~~
+
+the base64url-encoded `opaque` value is `eyJwaSI6InBpXzEyMyJ9`, and the
+input is:
+
+~~~
+input = "api.example.com|tempo|charge|"
+        "eyJhbW91bnQiOiIxMDAwMDAwIn0|||"
+        "Payment-Authorization|eyJwaSI6InBpXzEyMyJ9"
+~~~
+
+Its challenge `id` is:
+
+~~~
+CJ4X1O4aTDmS59hfdhnhBtxIQjWDOf0bcrhsswwMOW8
+~~~
 
 #### Example Challenge
 
