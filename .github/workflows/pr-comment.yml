@@ -24,7 +24,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Secure runner
-        uses: tempoxyz/gh-actions/actions/secure-runner@0a60d757d0f4725a34f22f7b9ebf7b91b4b00bcf
+        uses: tempoxyz/gh-actions/actions/secure-runner@bce53819ffa60fcdf8f0f349686d807e5a66a71b # 2026-09-21T21-56-41Z-bce53819
 
       - name: Download PR metadata
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
