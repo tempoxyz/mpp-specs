@@ -728,8 +728,7 @@ units). The `currency` is Circle USDC on Hedera mainnet
     "escrowContract":
       "0x8Aaf6690C2a6397d595F97E224fC19759De6fdaE",
     "channelId":
-      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b"
-      "1f6a9c1b3e2d4a5b6c7d8e9f",
+      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "chainId": 295
   }
 }
@@ -892,11 +891,9 @@ cumulative voucher sequence.
   "payload": {
     "action": "open",
     "channelId":
-      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-      "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "txHash":
-      "0x1a2b3c4d5e6f7890abcdef12345678"
-      "90abcdef1234567890abcdef12345678",
+      "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678",
     "cumulativeAmount": "2500",
     "signature": "0xabcdef1234567890..."
   }
@@ -950,11 +947,9 @@ challenge `id` with problem type `challenge-not-found`.
   "payload": {
     "action": "topUp",
     "channelId":
-      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-      "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "txHash":
-      "0x2b3c4d5e6f7890abcdef1234567890ab"
-      "cdef1234567890abcdef1234567890ab",
+      "0x2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890ab",
     "additionalDeposit": "5000000"
   }
 }
@@ -992,8 +987,7 @@ voucher during streaming.
   "payload": {
     "action": "voucher",
     "channelId":
-      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-      "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "250000",
     "signature": "0xabcdef1234567890..."
   }
@@ -1032,8 +1026,7 @@ via Hashio JSON-RPC.
   "payload": {
     "action": "close",
     "channelId":
-      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-      "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+      "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "cumulativeAmount": "500000",
     "signature": "0xabcdef1234567890..."
   }
@@ -1266,12 +1259,10 @@ Error responses use Problem Details format:
 ~~~json
 {
   "type":
-    "https://paymentauth.org/problems/"
-    "session/invalid-signature",
+    "https://paymentauth.org/problems/session/invalid-signature",
   "title": "Invalid Signature",
   "status": 402,
-  "detail": "Voucher signature could not "
-    "be verified",
+  "detail": "Voucher signature could not be verified",
   "channelId": "0x6d0f4fdf..."
 }
 ~~~
@@ -1573,11 +1564,9 @@ updates are off-chain.
   "timestamp": "2026-04-12T12:08:30Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId":
-    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-    "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "reference":
-    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-    "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "237500",
   "units": 500
@@ -1594,16 +1583,13 @@ updates are off-chain.
   "timestamp": "2026-04-12T12:10:00Z",
   "challengeId": "c_8d0e3b5a9f2c1d4e",
   "channelId":
-    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
-    "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
+    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "reference":
-    "0x1a2b3c4d5e6f7890abcdef12345678"
-    "90abcdef1234567890abcdef12345678",
+    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678",
   "acceptedCumulative": "250000",
   "spent": "250000",
   "txHash":
-    "0x1a2b3c4d5e6f7890abcdef12345678"
-    "90abcdef1234567890abcdef12345678"
+    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678"
 }
 ~~~
 
@@ -2214,8 +2200,7 @@ implementations:
   "$schema":
     "https://json-schema.org/draft/2020-12/schema",
   "$id":
-    "https://paymentauth.org/schemas/"
-    "hedera-session-request.json",
+    "https://paymentauth.org/schemas/hedera-session-request.json",
   "title": "Hedera Session Request",
   "type": "object",
   "required": [
@@ -2280,8 +2265,7 @@ implementations:
   "$schema":
     "https://json-schema.org/draft/2020-12/schema",
   "$id":
-    "https://paymentauth.org/schemas/"
-    "hedera-session-payload.json",
+    "https://paymentauth.org/schemas/hedera-session-payload.json",
   "title": "Hedera Session Payload",
   "type": "object",
   "required": ["action"],
@@ -2311,8 +2295,7 @@ implementations:
       "type": "string",
       "pattern": "^[0-9]+$",
       "description":
-        "Additional deposit amount in base units "
-        "(topUp action only)"
+        "Additional deposit amount in base units (topUp action only)"
     }
   }
 }
@@ -2328,8 +2311,7 @@ successful processing of a session action (2xx).
   "$schema":
     "https://json-schema.org/draft/2020-12/schema",
   "$id":
-    "https://paymentauth.org/schemas/"
-    "hedera-session-receipt.json",
+    "https://paymentauth.org/schemas/hedera-session-receipt.json",
   "title": "Hedera Session Receipt",
   "type": "object",
   "required": [
@@ -2354,8 +2336,7 @@ successful processing of a session action (2xx).
     "reference": {
       "type": "string",
       "description":
-        "txHash when a tx was broadcast "
-        "(open, close); channelId otherwise"
+        "txHash when a tx was broadcast (open, close); channelId otherwise"
     },
     "acceptedCumulative": {
       "type": "string",
