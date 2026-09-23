@@ -21,4 +21,4 @@ jobs:
       contents: read
       pull-requests: read
       id-token: write
-    uses: tempoxyz/mpp-tools/.github/workflows/dependabot.yml@77de41d7ae6e215290f31ac1f0782f545ee07e5d
+    uses: tempoxyz/mpp-tools/.github/workflows/dependabot.yml@77de41d7ae6e215290f31ac1f0782f545ee07e5d # 2026-08-25T01-04-47Z-77de41d7
