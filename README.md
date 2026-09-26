@@ -56,7 +56,7 @@ The specification is modular, separating stable protocol mechanics from evolving
 
 ## Related projects
 
-The [MPP repository](https://github.com/tempoxyz/mpp) contains the [mpp.dev](https://mpp.dev/) documentation and service directory. SDKs are available for [TypeScript](https://github.com/wevm/mppx), [Python](https://github.com/tempoxyz/pympp), [Rust](https://github.com/tempoxyz/mpp-rs), [Go](https://github.com/tempoxyz/mpp-go), and [Ruby](https://github.com/stripe/mpp-rb).
+The [MPP repository](https://github.com/tempoxyz/mpp) contains the [mpp.dev](https://mpp.dev/) documentation and service directory. SDKs are available for [TypeScript](https://github.com/wevm/mppx), [Python](https://github.com/tempoxyz/pympp), [Rust](https://github.com/tempoxyz/mpp-rs), [Go](https://github.com/tempoxyz/mpp-go), [Ruby](https://github.com/stripe/mpp-rb), and [PHP](https://github.com/michaelhairetis/mpp-php).
 
 ## Contributing
 
