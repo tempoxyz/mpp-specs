@@ -96,10 +96,11 @@
   <p>Problem type URIs used in <code>application/problem+json</code> error
   responses per <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>.</p>
 
-  <h2>Core</h2>
+  {% for group in groups %}
+  <h2>{{ group.title }}</h2>
   <table>
     <tr><th>Type</th><th>Status</th><th>Description</th></tr>
-    {% for p in core_problems %}
+    {% for p in group.problems %}
     <tr>
       <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
       <td><code>{{ p.http_status }}</code></td>
@@ -107,18 +108,7 @@
     </tr>
     {% endfor %}
   </table>
-
-  <h2>Session</h2>
-  <table>
-    <tr><th>Type</th><th>Status</th><th>Description</th></tr>
-    {% for p in session_problems %}
-    <tr>
-      <td><a href="/problems/{{ p.slug }}"><code>{{ p.slug }}</code></a></td>
-      <td><code>{{ p.http_status }}</code></td>
-      <td>{{ p.description }}</td>
-    </tr>
-    {% endfor %}
-  </table>
+  {% endfor %}
 
 </body>
 </html>

@@ -7,6 +7,10 @@ directory-with-index.html convention so that GitHub Pages serves clean URLs
 (e.g. /problems/payment-required -> /problems/payment-required/index.html).
 
 Core problem definitions come from the core specification's Error Codes table.
+Types outside the core namespace are listed below; every one a spec cites MUST
+appear here or the published URI 404s, which scripts/lint_problem_types.py
+enforces in CI.
+
 Jinja2 is already available via xml2rfc's dependencies.
 """
 
@@ -68,10 +72,10 @@ SESSION_PROBLEMS = [
     {"slug": "session/delta-too-small", "title": "Delta Too Small", "http_status": 402,
      "description": "The amount increase is below the server's minimum voucher delta.",
      "spec_label": "draft-tempo-session"},
-    {"slug": "session/channel-not-found", "title": "Channel Not Found", "http_status": 402,
+    {"slug": "session/channel-not-found", "title": "Channel Not Found", "http_status": 410,
      "description": "No payment channel with this ID exists.",
      "spec_label": "draft-tempo-session"},
-    {"slug": "session/channel-finalized", "title": "Channel Finalized", "http_status": 402,
+    {"slug": "session/channel-finalized", "title": "Channel Finalized", "http_status": 410,
      "description": "The payment channel has been closed and can no longer accept vouchers.",
      "spec_label": "draft-tempo-session"},
     {"slug": "session/challenge-not-found", "title": "Challenge Not Found", "http_status": 402,
@@ -80,9 +84,60 @@ SESSION_PROBLEMS = [
     {"slug": "session/insufficient-balance", "title": "Insufficient Balance", "http_status": 402,
      "description": "There is insufficient authorized balance in the channel for this request.",
      "spec_label": "draft-tempo-session"},
+    {"slug": "session/transaction-reverted", "title": "Transaction Reverted", "http_status": 409,
+     "description": "An on-chain open, top-up, settle, or close transaction reverted.",
+     "spec_label": "draft-evm-session"},
 ]
 
-ALL_PROBLEMS = CORE_PROBLEMS + SESSION_PROBLEMS
+# Defined by draft-stellar-charge and reused by draft-nearintents-charge.
+CHARGE_PROBLEMS = [
+    {"slug": "settlement-failed", "title": "Settlement Failed", "http_status": 402,
+     "description": "The credential was valid but settlement did not complete.",
+     "spec_label": "draft-stellar-charge"},
+]
+
+LIGHTNING_PROBLEMS = [
+    {"slug": "lightning/malformed-credential", "title": "Malformed Credential", "http_status": 402,
+     "description": "The credential could not be decoded, or a required field is absent or of the wrong type.",
+     "spec_label": "draft-lightning-charge"},
+    {"slug": "lightning/unknown-challenge", "title": "Unknown Challenge", "http_status": 402,
+     "description": "The challenge ID is not one this server issued, or it has already been consumed.",
+     "spec_label": "draft-lightning-charge"},
+    {"slug": "lightning/invalid-preimage", "title": "Invalid Preimage", "http_status": 402,
+     "description": "The SHA-256 hash of the preimage does not equal the payment hash stored for the challenge.",
+     "spec_label": "draft-lightning-charge"},
+    {"slug": "lightning/expired-invoice", "title": "Expired Invoice", "http_status": 402,
+     "description": "The BOLT11 invoice for this challenge, or the challenge itself, has passed its expiry time.",
+     "spec_label": "draft-lightning-charge"},
+    {"slug": "lightning/session-not-found", "title": "Session Not Found", "http_status": 402,
+     "description": "No session with this ID exists.",
+     "spec_label": "draft-lightning-session"},
+    {"slug": "lightning/session-closed", "title": "Session Closed", "http_status": 402,
+     "description": "The session is closed and accepts no further actions.",
+     "spec_label": "draft-lightning-session"},
+    {"slug": "lightning/insufficient-balance", "title": "Insufficient Balance", "http_status": 402,
+     "description": "The session balance is insufficient for the requested operation.",
+     "spec_label": "draft-lightning-session"},
+    {"slug": "lightning/challenge-expired", "title": "Challenge Expired", "http_status": 402,
+     "description": "The challenge has passed its expiry time; the client must obtain a fresh one.",
+     "spec_label": "draft-lightning-session"},
+    {"slug": "lightning/invalid-return-invoice", "title": "Invalid Return Invoice", "http_status": 402,
+     "description": "The return invoice is not a valid BOLT11 invoice, or it encodes a non-zero amount.",
+     "spec_label": "draft-lightning-session"},
+]
+
+
+def problem_groups():
+    """Sections of the index page, in display order."""
+    return [
+        {"title": "Core", "problems": CORE_PROBLEMS},
+        {"title": "Charge", "problems": CHARGE_PROBLEMS},
+        {"title": "Session", "problems": SESSION_PROBLEMS},
+        {"title": "Lightning", "problems": LIGHTNING_PROBLEMS},
+    ]
+
+
+ALL_PROBLEMS = [problem for group in problem_groups() for problem in group["problems"]]
 
 
 def make_example(slug, title, http_status):
@@ -127,10 +182,7 @@ def main():
 
     # Index page
     os.makedirs(PAGES_DIR, exist_ok=True)
-    html = index_tpl.render(
-        core_problems=CORE_PROBLEMS,
-        session_problems=SESSION_PROBLEMS,
-    )
+    html = index_tpl.render(groups=problem_groups())
     with open(os.path.join(PAGES_DIR, "index.html"), "w") as f:
         f.write(html)
     print(f"    index")
