@@ -1,8 +1,8 @@
 ---
 title: Tempo Subscription Intent for HTTP Payment Authentication
 abbrev: Tempo Subscription
-docname: draft-tempo-subscription-00
-version: 00
+docname: draft-tempo-subscription-01
+version: "01"
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -56,6 +56,11 @@ normative:
     target: https://docs.tempo.xyz/protocol/tips/tip-1020
     author:
       - org: Tempo Labs
+  TIP-1028:
+    title: "TIP-1028: Address-Level Receive Policies"
+    target: https://github.com/tempoxyz/tempo/blob/main/tips/tip-1028.md
+    author:
+      - org: Tempo Labs
 ---
 
 --- abstract
@@ -75,6 +80,11 @@ The `subscription` intent on Tempo represents a recurring fixed-amount
 TIP-20 payment. The client grants the server a recipient-scoped access
 key with a per-period spending limit. Activation registers the key and
 collects the first billing-period charge in the same transaction.
+
+A request MAY specify fixed allocations to additional recipients using
+`methodDetails.splits`. The server constructs the approved allocation
+on activation and renewal. Native access-key permissions restrict the
+recipient set and aggregate spending; they do not enforce each share.
 
 This specification inherits the shared `subscription` intent semantics
 from {{I-D.payment-intent-subscription}} and defines Tempo-specific
@@ -100,9 +110,9 @@ and `allowed_calls` restrictions described in this document. Servers
 MUST reject request objects on chains or deployments that cannot enforce
 those restrictions.
 
-The {{TIP-1011}} features required by this specification — periodic
+The {{TIP-1011}} features required by this specification, periodic
 spending limits, `allowed_calls` target and selector scoping, and
-recipient-bound selector rules — are introduced in the Tempo T3 network
+recipient-bound selector rules, are introduced in the Tempo T3 network
 upgrade. Servers MUST NOT issue `intent="subscription"` challenges on
 chains or deployments running a pre-T3 protocol version.
 
@@ -185,7 +195,7 @@ expire:
 | `periodUnit` | string | REQUIRED | Billing period unit. The value MUST be `day` or `week` |
 | `periodCount` | string | REQUIRED | Positive integer count of `periodUnit` values per billing period |
 | `subscriptionExpires` | string | REQUIRED | Subscription expiry timestamp in {{RFC3339}} format |
-| `recipient` | string | REQUIRED | Recipient address authorized for subscription charges |
+| `recipient` | string | REQUIRED | Primary recipient; receives the remainder when splits are present |
 | `description` | string | OPTIONAL | Human-readable subscription description |
 | `externalId` | string | OPTIONAL | Merchant's reference for the subscription |
 
@@ -213,6 +223,7 @@ raw string form.
 | `methodDetails.accessKey.accessKeyAddress` | string | REQUIRED | Address of the access key to authorize |
 | `methodDetails.accessKey.keyType` | string | REQUIRED | Access key type. The value MUST be `p256`, `secp256k1`, or `webAuthn` |
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID. If omitted, the default value is 42431 (Tempo mainnet). |
+| `methodDetails.splits` | array | OPTIONAL | Additional fixed allocations from the total `amount`; see {{subscription-splits}} |
 
 Servers issuing `intent="subscription"` challenges SHOULD include the
 `expires` auth-param in `WWW-Authenticate` per {{I-D.httpauth-payment}},
@@ -264,7 +275,7 @@ The client fulfills this by signing a key authorization with:
 - Access key = `methodDetails.accessKey`
 - Per-period spending limit = `amount`
 - Billing period = mapped period in seconds
-- Destination restriction = `recipient`
+- Destination restriction = the primary and split recipient set
 
 The signed key authorization MUST additionally configure:
 
@@ -278,11 +289,55 @@ The signed key authorization MUST additionally configure:
   (`0xa9059cbb`) and optionally
   `transferWithMemo(address,uint256,bytes32)` (`0x95777d59`)
 - a recipient allowlist for each permitted selector containing only the
-  challenge `recipient`
+  challenge `recipient` when no splits are present, or exactly the
+  primary and split recipient set when splits are present
 
 The signed key authorization MUST NOT use unrestricted target mode for
 the subscription token, and it MUST NOT authorize `approve` or any
 other non-transfer selector.
+
+## Fixed Split Allocations {#subscription-splits}
+
+The top-level `amount` remains the total payment per billing period.
+Each `methodDetails.splits` entry specifies an additional recipient and
+its fixed share in base units of `currency`. The primary `recipient`
+receives `amount - sum(splits[].amount)`. The same allocation applies to
+activation and every renewal.
+
+Each entry MUST be an object containing `amount` and `recipient`
+strings. Split amounts MUST use the positive integer syntax defined for
+`amount`.
+If present, the array MUST contain at least one entry. The sum of split
+amounts MUST be less than the total `amount`. Recipients MUST be unique
+by decoded address, including the primary recipient. All legs MUST use
+the same `currency`. Array order does not change the allocation.
+Clients and servers MUST reject split requests that violate these
+constraints.
+
+Servers SHOULD limit splits to ten entries and MAY reject requests
+exceeding their supported count.
+
+Clients MUST verify every recipient and share before granting the
+authorization. Servers MUST preserve the full allocation in the
+authenticated challenge and durably store it with the subscription.
+Reuse and renewal MUST match the approved allocation, comparing
+addresses by decoded value and amounts by integer value. Servers MUST
+NOT change a recipient or share under an existing subscription approval;
+changed terms require a fresh challenge and payer authorization.
+
+For split requests, the signed key authorization MUST bind the challenge
+by setting its `witness` to the base64url-decoded challenge `id`.
+Servers issuing these requests MUST use a challenge identifier that
+decodes to 32 bytes and MUST verify the signed witness against it.
+The challenge integrity check MUST cover the full split request. This
+binds consent to the approved terms; it does not add a native rule
+requiring each transaction to use the approved share amounts.
+
+Servers issuing split requests MUST verify the exact recipient set in
+the signed authorization. A grant containing only the primary recipient
+MUST NOT satisfy such a request. Servers MUST NOT silently fall back to
+collecting the total `amount` for the primary recipient. Requests
+without splits retain the existing single-recipient behavior.
 
 # Credential Schema
 
@@ -386,10 +441,22 @@ transaction succeeds.
 Servers MUST NOT treat activation as successful if the activation
 transaction settles at or after `subscriptionExpires`.
 
+When splits are present, the activation transaction MUST contain a
+transfer for the primary remainder and each split share. All legs MUST
+be in the same transaction. Servers MUST verify the confirmed token,
+recipient and amount for every leg before treating activation as
+successful. If a transfer memo is used to identify the payment, servers
+MUST also verify that memo. Transaction success alone is insufficient;
+the receive-policy behavior in {{split-settlement}} applies.
+
 ## Renewal
 
 For each later billing period, the server MAY submit one transaction
 using the registered access key to transfer `amount` to `recipient`.
+When splits are present, that transaction MUST instead contain the same
+approved allocation and satisfy the per-leg activation checks above.
+Fee sponsorship MUST NOT alter the approved token, recipients or
+amounts.
 
 Servers MUST NOT submit more than one successful renewal charge for the
 same billing period.
@@ -411,11 +478,18 @@ Servers MUST maintain durable local state for each subscription,
 including at least:
 
 - subscription identifier
+- approved currency, total amount, primary recipient and split
+  allocation
 - billing anchor
 - last charged billing-period index
 - any in-flight billing-period index and renewal transaction identifier
 - subscription expiry
 - revocation status
+
+For split requests, servers MUST validate stored allocations before
+submitting a renewal and MUST reject settlement results whose allocation
+differs from the approved terms. Reuse of an active subscription MUST
+also check those terms.
 
 When granting access in a later billing period, servers MUST:
 
@@ -439,6 +513,28 @@ billing periods elapse without a successful renewal charge, a later
 transaction authorizes at most one charge in the then-current billing
 period. Servers MUST NOT treat missed billing periods as additional
 on-chain spending capacity.
+
+## Split Settlement and Receive Policies {#split-settlement}
+
+On deployments implementing {{TIP-1028}}, a TIP-20 transfer can succeed
+while a recipient receive policy holds its funds in ReceivePolicyGuard.
+Other legs in the same transaction can still credit their recipients.
+Token-level policy failures continue to revert. This profile preserves
+that native behavior and does not provide
+all-recipient-credit-or-revert settlement.
+
+Servers MUST NOT mark a split charge as paid or issue a success receipt
+unless every approved recipient credit is verified. A held leg MUST NOT
+be mistaken for a reverted transaction or evidence that no funds moved.
+Receipt verification cannot reverse a successful transaction.
+
+Servers MUST preserve the transaction identifier and per-period attempt
+state needed to reconcile a confirmed but incomplete charge. Before
+retrying an attempt with a held leg, unknown outcome or failed
+persistence after submission, servers MUST reconcile its chain effects
+and MUST NOT blindly submit the full allocation again. Existing
+duplicate-charge and period-limit rules still apply. This document does
+not define automatic claim, refund or policy changes for held funds.
 
 ## Source Verification
 
@@ -478,7 +574,9 @@ scope:
 - does not allow `approve(address,uint256)` or any other non-transfer
   selector
 - restricts the first ABI `address` argument for each permitted
-  selector to the challenge `recipient`
+  selector to exactly the primary and split recipient set, with no
+  missing or additional recipients; without splits this set contains
+  only the challenge `recipient`
 
 Servers MUST reject authorizations that permit spending the subscription
 token through broader call scopes than those required above.
@@ -508,10 +606,10 @@ The receipt payload for Tempo subscription:
 
 ## Destination Scoping
 
-Tempo subscription access keys MUST be restricted to the `recipient`
-address in the request. Where {{TIP-1011}} recipient-bound selector
-rules are available, servers MUST reject credentials that do not
-enforce this restriction through `allowed_calls`.
+Tempo subscription access keys MUST be restricted to the primary and
+split recipient set in the request. Where {{TIP-1011}} recipient-bound
+selector rules are available, servers MUST reject credentials that do
+not enforce this restriction through `allowed_calls`.
 
 ## Amount and Period Verification
 
@@ -522,6 +620,21 @@ Clients MUST parse and verify the `request` payload before signing:
 3. Verify `periodUnit` and `periodCount` match expectations
 4. Verify `recipient` is controlled by the expected party
 5. Verify `subscriptionExpires` is acceptable
+
+For split requests, clients MUST additionally verify each recipient and
+share, including the primary remainder. Implementations SHOULD present
+the full allocation when requesting payer approval.
+
+## Split Authorization Boundary
+
+The signed witness and authenticated challenge bind the approved split
+terms for server verification. Native recipient scopes and the aggregate
+period limit do not enforce fixed per-recipient amounts or mandatory
+co-execution of every leg. A holder of the access key can construct a
+different allocation within those restrictions. Receipt checks detect
+such execution after inclusion but cannot roll it back. Applications
+requiring onchain enforcement of exact shares need a separately
+specified settlement mechanism; this profile does not define one.
 
 ## Revocation
 
@@ -543,7 +656,7 @@ requests.
 Subscription access keys SHOULD use the narrowest {{TIP-1011}} scope
 needed to support recurring charges. Implementations SHOULD avoid
 unrestricted target scopes and SHOULD limit the key to the subscription
-token, the permitted transfer selectors, and the configured recipient.
+token, the permitted transfer selectors, and the approved recipient set.
 
 ## Access Key Isolation
 
@@ -555,7 +668,7 @@ invalidate other active subscriptions between the same payer and server.
 
 If a server reuses a single access key across multiple subscriptions
 from the same payer, the key's permissions must be broad enough to cover
-all active subscriptions — potentially spanning multiple tokens,
+all active subscriptions, potentially spanning multiple tokens,
 recipients, or spending limits. This widens the blast radius if the key
 is compromised and forces revocation of all subscriptions at once. It
 also complicates spending-limit accounting, since {{TIP-1011}} enforces
@@ -591,6 +704,42 @@ again.
 # Examples
 
 This section is non-normative.
+
+## Fixed Creator and Platform Shares
+
+~~~json
+{
+  "amount": "10000000",
+  "currency": "0x20c0000000000000000000000000000000000001",
+  "periodUnit": "day",
+  "periodCount": "30",
+  "subscriptionExpires": "2026-07-14T12:00:00Z",
+  "recipient": "0x742d35cc6634c0532925a3b844bc9e7595f8fe00",
+  "methodDetails": {
+    "accessKey": {
+      "accessKeyAddress": "0x1111111111111111111111111111111111111111",
+      "keyType": "p256"
+    },
+    "chainId": 42431,
+    "splits": [
+      {
+        "amount": "2000000",
+        "recipient": "0x2222222222222222222222222222222222222222"
+      }
+    ]
+  }
+}
+~~~
+
+This requests a total of 10.00 tokens every 30 days: 8.00 for the
+primary creator and 2.00 for the platform. The access-key recipient
+scopes contain both addresses, while the period token limit remains
+10,000,000 base units. Each activation or renewal uses one transaction
+with an 8,000,000-unit transfer to the creator and a 2,000,000-unit
+transfer to the platform. If the platform's receive policy holds its
+share, native
+execution may credit the creator and hold the platform's funds. The
+server cannot report full split settlement in that case.
 
 ## Activation
 
