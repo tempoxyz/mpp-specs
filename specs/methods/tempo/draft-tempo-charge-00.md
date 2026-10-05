@@ -218,7 +218,8 @@ other account activity if the transaction is not immediately settled.
 If `methodDetails.feePayer` is `true`, the client signs with
 `fee_payer_signature` set to `0x00` and `fee_token` empty, allowing the
 server to sponsor fees. If `feePayer` is `false` or omitted, the client
-MUST set `fee_token` and pay fees themselves.
+MUST set `fee_token` and either pay the fees themselves or obtain a fee
+payer signature from a sponsor.
 
 ## Split Payments {#split-payments}
 
@@ -575,7 +576,8 @@ When acting as fee payer, servers:
 - When `feePayer: true`: Clients MUST sign with `fee_payer_signature` set
   to `0x00` and `fee_token` empty or `0x80` (RLP null)
 - When `feePayer: false` or omitted: Clients MUST set `fee_token` to a
-  valid USD TIP-20 token and have sufficient balance to pay fees
+  valid USD TIP-20 token. The client or sponsor paying the fee MUST have
+  sufficient balance of that token
 
 # Settlement Procedure
 

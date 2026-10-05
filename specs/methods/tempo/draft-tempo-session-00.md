@@ -783,7 +783,8 @@ When acting as fee payer for `open` or `topUp`:
 - When `feePayer: true`: Clients MUST sign with `fee_payer_signature`
   set to `0x00` and `fee_token` empty or `0x80` (RLP null)
 - When `feePayer: false` or omitted: Clients MUST set `fee_token` to a
-  valid USD TIP-20 token and have sufficient balance to pay fees
+  valid USD TIP-20 token. The client or sponsor paying the fee MUST have
+  sufficient balance of that token
 
 # Credential Schema
 
