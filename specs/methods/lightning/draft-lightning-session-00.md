@@ -910,6 +910,14 @@ refundStatus
   could not be routed), or "skipped" (refundSats was zero, no payment
   attempted). Omitted for non-close actions.
 
+On a close receipt, the top-level `status` field attests only to
+successful verification and settlement of the close action itself. It
+remains `"success"` per {{I-D.httpauth-payment}} even when `refundStatus`
+is `"failed"`. The outcome of the refund payment is conveyed solely by
+`refundStatus`; a consumer MUST inspect `refundStatus` to determine
+whether the unspent balance was returned and MUST NOT infer refund
+completion from the top-level `status`.
+
 ## Streaming Receipt Event
 
 For streaming responses, the Payment-Receipt header is attached at
@@ -1294,10 +1302,16 @@ Schema draft version is required or assumed.
   "type": "object",
   "required": ["method", "reference", "status", "timestamp"],
   "properties": {
-    "method":    { "type": "string", "const": "lightning" },
-    "reference": { "type": "string" },
-    "status":    { "type": "string", "const": "success" },
-    "timestamp": { "type": "string", "format": "date-time" }
+    "method":       { "type": "string", "const": "lightning" },
+    "reference":    { "type": "string" },
+    "status":       { "type": "string", "const": "success" },
+    "timestamp":    { "type": "string", "format": "date-time" },
+    "refundSats":   { "type": "integer", "minimum": 0 },
+    "refundStatus": { "type": "string", "enum": ["succeeded", "failed", "skipped"] }
+  },
+  "dependentRequired": {
+    "refundSats":   ["refundStatus"],
+    "refundStatus": ["refundSats"]
   }
 }
 ~~~
