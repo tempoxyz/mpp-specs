@@ -11,7 +11,7 @@ consensus: false
 author:
   - name: Duke
     ins: Duke
-    email: gloamfinance@gmail.com
+    email: hello@gloam.trade
     org: Gloam
 
 normative:
@@ -1039,7 +1039,7 @@ Payment Methods" registry established by {{I-D.httpauth-payment}}:
 |-------------------|-------------|-----------|
 | `gloam` | Private transfer through a Gloam shielded pool | This document |
 
-Contact: Duke (<gloamfinance@gmail.com>)
+Contact: Duke (<hello@gloam.trade>)
 
 ## Payment Intent Registration
 
