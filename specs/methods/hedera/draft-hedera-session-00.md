@@ -893,7 +893,7 @@ cumulative voucher sequence.
     "channelId":
       "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
     "txHash":
-      "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678",
+      "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
     "cumulativeAmount": "2500",
     "signature": "0xabcdef1234567890..."
   }
@@ -1585,11 +1585,11 @@ updates are off-chain.
   "channelId":
     "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "reference":
-    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678",
+    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
   "acceptedCumulative": "250000",
   "spent": "250000",
   "txHash":
-    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef12345678"
+    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890"
 }
 ~~~
 

@@ -33,6 +33,16 @@ class TestInvalid:
         assert lines_of(content) == [3]
 
 
+    def test_non_json_constants_fail(self):
+        assert lines_of('~~~json\n{\n  "a": NaN\n}\n~~~\n') != []
+        assert lines_of('~~~json\n{\n  "a": -Infinity\n}\n~~~\n') != []
+
+    def test_wrapped_string_with_an_ellipsis_still_fails(self):
+        # The wrapped text is inside a string, so it is not a placeholder.
+        content = '~~~json\n{\n  "detail": "See <https://example.com/...>\n    for more."\n}\n~~~\n'
+        assert lines_of(content) == [3]
+
+
 class TestIllustrative:
     def test_elided_object_is_skipped(self):
         assert lines_of('~~~json\n{\n  "_meta": { ... }\n}\n~~~\n') == []

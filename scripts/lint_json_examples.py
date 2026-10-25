@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPECS_DIR = ROOT / "specs"
 
 FENCE_RE = re.compile(r"\A(?P<indent>[ \t]*)(?P<fence>~~~|```)[ \t]*json[ \t]*\Z")
-STRING_RE = re.compile(r'"(?:[^"\\\n]|\\.)*"')
+# Strings may span lines here: a string wrapped with a literal newline is still
+# one string, so placeholder-like text inside it is not taken for a placeholder.
+STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"')
 # An elision (`...`) or an angle-bracket placeholder outside a string.
 PLACEHOLDER_RE = re.compile(r"\.\.\.|…|<[^<>\n]+>")
 
@@ -58,13 +60,18 @@ def is_illustrative(block: str) -> bool:
     return bool(PLACEHOLDER_RE.search(STRING_RE.sub('""', block)))
 
 
+def _reject_constant(name: str) -> None:
+    # json.loads accepts NaN and Infinity, which are not JSON (RFC 8259).
+    raise json.JSONDecodeError(f"{name} is not valid JSON", name, 0)
+
+
 def invalid_examples(content: str) -> list[InvalidExample]:
     invalid: list[InvalidExample] = []
     for start, block in json_blocks(content):
         if is_illustrative(block):
             continue
         try:
-            json.loads(block)
+            json.loads(block, parse_constant=_reject_constant)
         except json.JSONDecodeError as error:
             invalid.append(InvalidExample(start + error.lineno - 1, error.msg))
     return invalid
