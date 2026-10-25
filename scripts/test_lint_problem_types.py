@@ -77,6 +77,25 @@ class TestCitationsNotCounted:
         assert slugs_in_text(content) == set()
 
 
+class TestBareSlugsInMappingTables:
+    def test_registered_root_type_is_a_citation(self):
+        # draft-nearintents-charge-01 maps conditions to core types this way.
+        content = (
+            "| Condition | Problem type |\n"
+            "|---|---|\n"
+            "| bad challenge | `invalid-challenge` |\n"
+        )
+        assert slugs_in_text(content) == {"invalid-challenge"}
+
+    def test_misspelled_type_is_a_citation_and_fails(self):
+        content = (
+            "| Condition | Problem type |\n"
+            "|---|---|\n"
+            "| bad challenge | `invalid-challange` |\n"
+        )
+        assert slugs_in_text(content) - registered_slugs() == {"invalid-challange"}
+
+
 class TestCitedSlugs:
     def test_every_citing_spec_is_reported(self, tmp_path):
         for name in ("draft-a-00.md", "draft-b-00.md"):

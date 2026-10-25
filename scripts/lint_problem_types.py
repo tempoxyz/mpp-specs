@@ -62,6 +62,20 @@ def _is_separator(line: str) -> bool:
     return bool(re.fullmatch(r"\|[\s:|-]+\|", line.strip()))
 
 
+def _is_shorthand(slug: str) -> bool:
+    """Whether an unqualified slug abbreviates a registered namespaced type.
+
+    draft-evm-session-00 writes `channel-finalized` in a mapping table for the
+    `session/channel-finalized` it registers in full. A slug that is neither a
+    registered root type nor such an abbreviation is a citation, so a typo in
+    a `Condition | Problem type` table still fails the lint.
+    """
+    registered = registered_slugs()
+    if slug in registered:
+        return False
+    return any(other.endswith("/" + slug) for other in registered)
+
+
 def citations_in_text(content: str) -> list[tuple[str, int | None]]:
     """Problem types cited by a single markdown document, each with the HTTP
     status the citing table gives it, or None where no status is given."""
@@ -102,8 +116,8 @@ def citations_in_text(content: str) -> list[tuple[str, int | None]]:
                 bare_slugs_count = bool(code_columns)
                 columns += code_columns
             else:
-                # Elsewhere an unqualified slug is shorthand for a type the
-                # document registers in full, so only qualified ones count.
+                # Elsewhere an unqualified slug counts unless it is shorthand
+                # for a namespaced type (see _is_shorthand).
                 bare_slugs_count = False
             continue
         for column in columns:
@@ -113,7 +127,7 @@ def citations_in_text(content: str) -> list[tuple[str, int | None]]:
             if not match:
                 continue
             qualified = bool(match.group("relative")) or "/" in match.group("slug")
-            if qualified or bare_slugs_count:
+            if qualified or bare_slugs_count or not _is_shorthand(match.group("slug")):
                 status = None
                 if status_column is not None and status_column < len(cells):
                     digits = re.fullmatch(r"`?([1-5][0-9]{2})`?", cells[status_column])
