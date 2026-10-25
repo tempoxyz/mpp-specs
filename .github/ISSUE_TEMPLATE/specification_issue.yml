@@ -1,0 +1,24 @@
+name: Specification issue
+description: Report an error, ambiguity, or contradiction in a specification.
+labels: ['bug']
+body:
+  - type: input
+    attributes:
+      label: Specification
+      description: The draft and section, for example draft-httpauth-payment-00, Section 5.2.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Description
+      description: What the text says, and why it is wrong, unclear, or inconsistent.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Suggested change
+      description: Proposed wording or behavior. You can also open a pull request.
+    validations:
+      required: false
