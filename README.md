@@ -50,8 +50,8 @@ See [STYLE.md](STYLE.md) for the full design principles and RFC writing conventi
 The specification is modular, separating stable protocol mechanics from evolving payment ecosystems:
 
 * **[Core](specs/core/)**: HTTP 402 semantics, headers, IANA registries.
-* **[Intents](specs/intents/)**: Abstract payment patterns such as charge, authorize, and subscription. Define *what* kind of payment without specifying *how*.
-* **[Methods](specs/methods/)**: Concrete implementations for specific networks (Tempo, Stripe, ACH).
+* **[Intents](specs/intents/)**: Abstract payment patterns such as charge, session, and subscription. Define *what* kind of payment without specifying *how*.
+* **[Methods](specs/methods/)**: Concrete implementations for specific networks and rails (Tempo, Stripe, Lightning, Solana, and others).
 * **[Extensions](specs/extensions/)**: Optional protocol additions, such as discovery and identity.
 
 ## Related projects

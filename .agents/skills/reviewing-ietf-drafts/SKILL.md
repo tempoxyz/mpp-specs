@@ -1,8 +1,6 @@
 ---
 name: reviewing-ietf-drafts
 description: Reviews and critiques IETF Internet-Drafts and RFC submissions for style compliance, technical clarity, prior art gaps, and publication readiness. Use when analyzing existing drafts or providing editorial feedback.
-requires:
-  - writing-ietf-w3c-specs
 ---
 
 # IETF Draft Reviewer

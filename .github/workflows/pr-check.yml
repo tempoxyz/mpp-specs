@@ -63,8 +63,12 @@ jobs:
         run: |
           docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_external_section_refs.py
 
-      - name: Check problem page generation
-        run: docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools:latest pytest test_gen_problems.py -v
+      - name: Lint encoded examples
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_examples.py
+
+      - name: Test scripts
+        run: docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools:latest pytest -v
 
       - name: Build and validate specs
         run: |

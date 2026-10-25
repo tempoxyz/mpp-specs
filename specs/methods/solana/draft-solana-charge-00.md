@@ -1990,12 +1990,10 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   method="solana",
   intent="charge",
   request="eyJhbW91bnQiOiIxMDAwMDAwMCIsImN1cnJlbmN5Ij
-    oiU09MIiwiZGVzY3JpcHRpb24iOiJXZWF0aGVyIEFQSSBhY2
-    Nlc3MiLCJtZXRob2REZXRhaWxzIjp7Im5ldHdvcmsiOiJtYWl
-    ubmV0LWJldGEiLCJyZWZlcmVuY2UiOiJmNDdhYzEwYi01OGNj
-    LTQzNzItYTU2Ny0wZTAyYjJjM2Q0NzkifSwicmVjaXBpZW50I
-    joiN3hLWHRnMkNXODdkOTdUWEpTRHBiRDVqQmtoZVRxQTgzVF
-    pSdUpvc2dBc1UifQ",
+    oic29sIiwiZGVzY3JpcHRpb24iOiJXZWF0aGVyIEFQSSBhY2
+    Nlc3MiLCJtZXRob2REZXRhaWxzIjp7Im5ldHdvcmsiOiJtYW
+    lubmV0In0sInJlY2lwaWVudCI6Ijd4S1h0ZzJDVzg3ZDk3VF
+    hKU0RwYkQ1akJraGVUcUE4M1RaUnVKb3NnQXNVIn0",
   expires="2026-03-15T12:05:00Z"
 Cache-Control: no-store
 ~~~

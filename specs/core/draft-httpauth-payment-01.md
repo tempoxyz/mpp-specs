@@ -253,7 +253,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     method="example",
     intent="charge",
     header="Payment-Authorization",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
+    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
 ~~~
 
 The subsequent request can then carry both a Bearer credential and a
@@ -520,7 +520,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     method="example",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
+    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
 ~~~
 
 Decoded `request` example:
@@ -548,7 +548,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
     intent="charge",
     header="Payment-Authorization",
     expires="2025-01-15T12:05:00Z",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
+    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
 ~~~
 
 ### Request Body Digest Binding
@@ -643,7 +643,7 @@ is sent in the default `Authorization` field:
 ~~~http
 GET /api/data HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSlZVMFFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSjFjMlFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
 ~~~
 
 Decoded credential:
@@ -655,7 +655,7 @@ Decoded credential:
     "realm": "api.example.com",
     "method": "example",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
     "expires": "2025-01-15T12:05:00Z"
   },
   "payload": {
@@ -675,7 +675,7 @@ This credential corresponds to a challenge that included
 GET /api/data HTTP/1.1
 Host: api.example.com
 Authorization: Bearer mF_9.B5f-4.1JqM
-Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSlZVMFFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJoZWFkZXIiOiJQYXltZW50LUF1dGhvcml6YXRpb24iLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
+Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJ4N1RnMnBMcVI5bUt2TndZM2hCY1phIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJleGFtcGxlIiwiaW50ZW50IjoiY2hhcmdlIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSjFjMlFpTENKeVpXTnBjR2xsYm5RaU9pSmhZMk4wWHpFeU15SjkiLCJoZWFkZXIiOiJQYXltZW50LUF1dGhvcml6YXRpb24iLCJleHBpcmVzIjoiMjAyNS0wMS0xNVQxMjowNTowMFoifSwicGF5bG9hZCI6eyJwcm9vZiI6IjB4YWJjMTIzLi4uIn19
 ~~~
 
 Decoded credential:
@@ -687,7 +687,7 @@ Decoded credential:
     "realm": "api.example.com",
     "method": "example",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9",
     "header": "Payment-Authorization",
     "expires": "2025-01-15T12:05:00Z"
   },
@@ -1225,7 +1225,7 @@ WWW-Authenticate: Payment id="qB3wErTyU7iOpAsD9fGhJk",
     method="invoice",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
+    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0"
 
 {
   "type": "https://paymentauth.org/problems/payment-required",
@@ -1251,7 +1251,7 @@ Decoded `request`:
 ~~~http
 GET /resource HTTP/1.1
 Host: api.example.com
-Authorization: Payment eyJpZCI6InFCM3dFclR5VTdpT3BBc0Q5ZkdoSmsiLCJwYXlsb2FkIjp7InByZWltYWdlIjoiMHhhYmMxMjMuLi4ifX0
+Authorization: Payment eyJjaGFsbGVuZ2UiOnsiZXhwaXJlcyI6IjIwMjUtMDEtMTVUMTI6MDU6MDBaIiwiaWQiOiJxQjN3RXJUeVU3aU9wQXNEOWZHaEprIiwiaW50ZW50IjoiY2hhcmdlIiwibWV0aG9kIjoiaW52b2ljZSIsInJlYWxtIjoiYXBpLmV4YW1wbGUuY29tIiwicmVxdWVzdCI6ImV5SmhiVzkxYm5RaU9pSXhNREF3SWl3aVkzVnljbVZ1WTNraU9pSjFjMlFpTENKcGJuWnZhV05sSWpvaWFXNTJYekV5TXpRMUluMCJ9LCJwYXlsb2FkIjp7InByZWltYWdlIjoiMHhhYmMxMjMuLi4ifX0
 ~~~
 
 Decoded credential:
@@ -1263,7 +1263,7 @@ Decoded credential:
     "realm": "api.example.com",
     "method": "invoice",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJVU0QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0",
+    "request": "eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJpbnZvaWNlIjoiaW52XzEyMzQ1In0",
     "expires": "2025-01-15T12:05:00Z"
   },
   "payload": {
@@ -1383,7 +1383,7 @@ WWW-Authenticate: Payment id="zL4xCvBnM6kJhGfD8sAaWe",
     method="signed",
     intent="charge",
     expires="2025-01-15T12:05:00Z",
-    request="eyJhbW91bnQiOiI1MDAwIiwiYXNzZXQiOiJVU0QiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJub25jZSI6IjB4MTIzNDU2Nzg5MCJ9"
+    request="eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJtZXRob2REZXRhaWxzIjp7Im5vbmNlIjoiMHgxMjM0NTY3ODkwIn0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9"
 ~~~
 
 Decoded `request`:
@@ -1408,7 +1408,7 @@ Decoded `request`:
     "realm": "api.example.com",
     "method": "signed",
     "intent": "charge",
-    "request": "eyJhbW91bnQiOiI1MDAwIiwiYXNzZXQiOiJVU0QiLCJyZWNpcGllbnQiOiIweDc0MmQzNUNjNjYzNEMwNTMyOTI1YTNiODQ0QmM5ZTc1OTVmOGZFMDAiLCJub25jZSI6IjB4MTIzNDU2Nzg5MCJ9",
+    "request": "eyJhbW91bnQiOiI1MDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJtZXRob2REZXRhaWxzIjp7Im5vbmNlIjoiMHgxMjM0NTY3ODkwIn0sInJlY2lwaWVudCI6IjB4NzQyZDM1Q2M2NjM0QzA1MzI5MjVhM2I4NDRCYzllNzU5NWY4ZkUwMCJ9",
     "expires": "2025-01-15T12:05:00Z"
   },
   "source": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",

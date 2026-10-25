@@ -1103,7 +1103,7 @@ WWW-Authenticate: Payment id="nX7kPqWvT2mJrHsY4aDfEb",
   realm="api.example.com",
   method="lightning",
   intent="session",
-  request="eyJhbW91bnQiOiIyIiwiY3VycmVuY3kiOiJCVEMiLCJkZXBvc2l0SW52b2ljZSI6ImxuYmNydDFwNW16ZnNhLi4uIiwicGF5bWVudEhhc2giOiI3ZjNhLi4uIiwiZGVwb3NpdEFtb3VudCI6IjMwMCJ9",
+  request="eyJhbW91bnQiOiIyIiwiY3VycmVuY3kiOiJzYXQiLCJkZXBvc2l0QW1vdW50IjoiMzAwIiwiZGVwb3NpdEludm9pY2UiOiJsbmJjcnQxcDVtemZzYS4uLiIsImRlc2NyaXB0aW9uIjoiTExNIHRva2VuIHN0cmVhbSIsInBheW1lbnRIYXNoIjoiN2YzYTFiMmM0ZDVlNmYuLi4ifQ",
   expires="2026-03-15T12:05:00Z"
 Cache-Control: no-store
 ~~~

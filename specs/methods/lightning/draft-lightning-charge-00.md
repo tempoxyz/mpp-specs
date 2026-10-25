@@ -519,7 +519,7 @@ WWW-Authenticate: Payment id="kM9xPqWvT2nJrHsY4aDfEb",
   realm="api.example.com",
   method="lightning",
   intent="charge",
-  request="eyJhbW91bnQiOiIxMDAiLCJjdXJyZW5jeSI6IkJUQyIsImRlc2NyaXB0aW9uIjoiV2VhdGhlciByZXBvcnQgZm9yIDk0MTA3IiwibWV0aG9kRGV0YWlscyI6eyJpbnZvaWNlIjoibG5iYzF1MXAuLi4iLCJwYXltZW50SGFzaCI6ImJjMjMwODQ3Li4uIiwibmV0d29yayI6Im1haW5uZXQifX0",
+  request="eyJhbW91bnQiOiIxMDAiLCJjdXJyZW5jeSI6InNhdCIsImRlc2NyaXB0aW9uIjoiV2VhdGhlciByZXBvcnQgZm9yIDk0MTA3IiwibWV0aG9kRGV0YWlscyI6eyJpbnZvaWNlIjoibG5iYzF1MXAuLi4iLCJuZXR3b3JrIjoibWFpbm5ldCIsInBheW1lbnRIYXNoIjoiYmMyMzA4NDcuLi4ifX0",
   expires="2026-03-15T12:05:00Z"
 Cache-Control: no-store
 ~~~
@@ -547,7 +547,7 @@ Host: api.example.com
 Authorization: Payment eyJjaGFsbGVuZ2UiOnsiaWQiOiJrTTl4UHFXdlQybkpySHNZNGFEZkViIiwicmVhbG0iOiJhcGkuZXhhbXBsZS5jb20iLCJtZXRob2QiOiJsaWdodG5pbmciLCJpbnRlbnQiOiJjaGFyZ2UiLCJyZXF1ZXN0IjoiZXlKLi4uIiwiZXhwaXJlcyI6IjIwMjYtMDMtMTVUMTI6MDU6MDBaIn0sInBheWxvYWQiOnsicHJlaW1hZ2UiOiJhM2YxLi4uZTIwOSJ9fQ
 
 HTTP/1.1 200 OK
-Payment-Receipt: eyJtZXRob2QiOiJsaWdodG5pbmciLCJyZWZlcmVuY2UiOiJhM2YxLi4uZTIwOSIsInN0YXR1cyI6InN1Y2Nlc3MiLCJ0aW1lc3RhbXAiOiIyMDI2LTAzLTEwVDIxOjAwOjAwWiJ9
+Payment-Receipt: eyJjaGFsbGVuZ2VJZCI6ImtNOXhQcVd2VDJuSnJIc1k0YURmRWIiLCJtZXRob2QiOiJsaWdodG5pbmciLCJyZWZlcmVuY2UiOiJiYzIzMDg0Ny4uLiIsInN0YXR1cyI6InN1Y2Nlc3MiLCJ0aW1lc3RhbXAiOiIyMDI2LTAzLTEwVDIxOjAwOjAwWiJ9
 Content-Type: application/json
 
 {"temperature": 72, "condition": "sunny"}

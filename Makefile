@@ -22,9 +22,11 @@ clean:
 
 lint:
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_frontmatter.py
+	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_external_section_refs.py
+	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_examples.py
 
 test:
-	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest test_lint_frontmatter.py test_bump_and_rename.py test_gen_problems.py -v
+	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest -v
 
 site: build
 	@python3 scripts/gen_index.py

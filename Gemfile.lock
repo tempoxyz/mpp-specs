@@ -1,0 +1,61 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    connection_pool (3.0.2)
+    differ (0.1.2)
+    json_pure (2.8.1)
+    kramdown (2.4.0)
+      rexml
+    kramdown-parser-gfm (1.1.0)
+      kramdown (~> 2.0)
+    kramdown-rfc (1.7.39)
+      kramdown-rfc2629 (= 1.7.39)
+    kramdown-rfc2629 (1.7.39)
+      base64 (~> 0.2)
+      differ (~> 0.1)
+      json_pure (~> 2.0)
+      kramdown (~> 2.4.0)
+      kramdown-parser-gfm (~> 1.1)
+      net-http-persistent (~> 4.0)
+      ostruct (~> 0.6)
+      unicode-blocks (~> 1.0)
+      unicode-name (~> 1.0)
+      unicode-scripts (~> 1.0)
+    net-http-persistent (4.0.8)
+      connection_pool (>= 2.2.4, < 4)
+    ostruct (0.6.3)
+    rexml (3.4.4)
+    unicode-blocks (1.12.0)
+    unicode-name (1.15.1)
+      unicode-types (~> 1.12)
+    unicode-scripts (1.13.0)
+    unicode-types (1.12.0)
+
+PLATFORMS
+  aarch64-linux
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  kramdown-rfc (= 1.7.39)
+
+CHECKSUMS
+  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
+  connection_pool (3.0.2) sha256=33fff5ba71a12d2aa26cb72b1db8bba2a1a01823559fb01d29eb74c286e62e0a
+  differ (0.1.2) sha256=5ece6db723679a2a9861d252852ad614f1e921e32e0984b37aab70ecc3595e45
+  json_pure (2.8.1) sha256=6a877929ba9d4fa0808ccc38656d1b15d138b2aa0aa32037ee05abea13427ace
+  kramdown (2.4.0) sha256=b62e5bcbd6ea20c7a6730ebbb2a107237856e14f29cebf5b10c876cc1a2481c5
+  kramdown-parser-gfm (1.1.0) sha256=fb39745516427d2988543bf01fc4cf0ab1149476382393e0e9c48592f6581729
+  kramdown-rfc (1.7.39) sha256=58295d9ce91bd230d186777dfaffa39c65c61bdce72c13b0184bbae25dcd7804
+  kramdown-rfc2629 (1.7.39) sha256=93176180c73ff9b4d3406a71b4cc05e8169f9902cb287b6a6b38aea6137935e7
+  net-http-persistent (4.0.8) sha256=ef3de8319d691537b329053fae3a33195f8b070bbbfae8bf1a58c796081960e6
+  ostruct (0.6.3) sha256=95a2ed4a4bd1d190784e666b47b2d3f078e4a9efda2fccf18f84ddc6538ed912
+  rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142
+  unicode-blocks (1.12.0) sha256=d4bb459827c2acb3ff192275afbb70759bc114bb048b054f5cfe3cb735d0c702
+  unicode-name (1.15.1) sha256=b8f2e3ca14bc24799f84a4f74d43a3612d02a051700d88bc6ca8e3bd53cda3f6
+  unicode-scripts (1.13.0) sha256=43e03385a52a5c2d002b5e0571b8f5471f4e777427e4610a8d403e9ac1feb64a
+  unicode-types (1.12.0) sha256=7e26a4352cecc2a50325a3793df834b732581ca9f25c5e29f46f3378934363f6
+
+BUNDLED WITH
+  4.0.16
