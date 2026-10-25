@@ -21,6 +21,7 @@ clean:
 	rm -f artifacts/*.xml artifacts/*.html artifacts/*.txt artifacts/*.pdf
 
 lint:
+	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_json_examples.py
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_frontmatter.py
 
 test:
