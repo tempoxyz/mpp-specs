@@ -34,6 +34,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://paymentauth.org/draft-payment-intent-session-00.html
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   RFC8610:
@@ -74,10 +82,10 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the
-"hedera" payment method in the Payment HTTP Authentication
-Scheme. It specifies unidirectional streaming payment
-channels for incremental, voucher-based payments suitable
+This document defines the "hedera" payment method
+implementation of the "session" intent in the Payment HTTP
+Authentication Scheme. It specifies unidirectional streaming
+payment channels for incremental, voucher-based payments suitable
 for low-cost metered services on the Hedera network.
 
 --- middle
@@ -1807,15 +1815,10 @@ competing concerns:
 
 ## Payment Intent Registration
 
-This document registers the following payment intent in
-the "HTTP Payment Intents" registry established by
-{{I-D.httpauth-payment}}:
-
-| Intent | Methods | Description | Reference |
-|--------|---------|-------------|-----------|
-| `session` | `hedera` | Streaming payment channel | This document |
-
-Contact: Tom Rowbotham (<tom@xeno.money>)
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `hedera` payment method implements
+the registered `session` intent.
 
 ## Problem Type Registration
 
