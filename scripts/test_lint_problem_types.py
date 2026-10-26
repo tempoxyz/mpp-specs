@@ -148,6 +148,14 @@ class TestCitedStatuses:
             "session/channel-finalized": {410: {"methods/test/draft-test-00.md"}}
         }
 
+    def test_a_definition_list_status_is_read(self, tmp_path):
+        # draft-lightning-charge-00 defines its types this way.
+        write_spec(tmp_path, f"{BASE_URI}lightning/expired-invoice\n: HTTP 402. The invoice expired.\n")
+
+        assert cited_statuses(tmp_path / "specs") == {
+            "lightning/expired-invoice": {402: {"methods/test/draft-test-00.md"}}
+        }
+
     def test_a_citation_without_a_status_is_not_checked(self, tmp_path):
         write_spec(tmp_path, f'"type": "{BASE_URI}session/channel-finalized"\n')
 

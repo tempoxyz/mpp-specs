@@ -27,6 +27,11 @@ from gen_problems import ALL_PROBLEMS, BASE_URI  # noqa: E402
 
 # The full URI, as used in prose and in JSON examples.
 ABSOLUTE_RE = re.compile(re.escape(BASE_URI) + r"(?P<slug>[a-z0-9][a-z0-9/-]*)")
+DEFINITION_RE = re.compile(
+    r"^`?" + re.escape(BASE_URI) + r"(?P<slug>[a-z0-9][a-z0-9/-]*)`?[ \t]*\n"
+    r":[ \t]*HTTP[ \t]+(?P<status>[1-5][0-9]{2})\b",
+    re.MULTILINE,
+)
 # A type in a table cell: the full URI, or a slug on its own once the base URI
 # is given in prose. The leading `.../` is optional: all three spellings appear
 # across the session specs.
@@ -89,6 +94,11 @@ def citations_in_text(content: str) -> list[tuple[str, int | None]]:
 
     for match in ABSOLUTE_RE.finditer(content):
         record(match.group("slug"))
+
+    # A definition list entry gives the status on the line after the URI, as
+    # in draft-lightning-charge-00: the URI alone, then `: HTTP 402. ...`.
+    for match in DEFINITION_RE.finditer(content):
+        record(match.group("slug"), int(match.group("status")))
 
     # Tables are read column-wise: the header fixes which column holds types,
     # and whether a bare slug in it counts as a citation.
