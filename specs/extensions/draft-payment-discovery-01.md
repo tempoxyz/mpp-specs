@@ -624,8 +624,7 @@ capabilities may have changed.
           "amount": null,
           "currency":
             "0x20c00000000000000000000000000000000000",
-          "description": "Price varies by model
-            and token count."
+          "description": "Price varies by model and token count."
         },
         "requestBody": {
           "content": {

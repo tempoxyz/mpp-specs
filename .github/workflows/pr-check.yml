@@ -59,9 +59,17 @@ jobs:
         run: |
           docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_frontmatter.py
 
+      - name: Lint JSON examples
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_json_examples.py
+
       - name: Lint external section references
         run: |
           docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_external_section_refs.py
+
+      - name: Lint problem type coverage
+        run: |
+          docker run --rm -v "$(pwd)":/data ietf-spec-tools:latest python3 /data/scripts/lint_problem_types.py
 
       - name: Lint encoded examples
         run: |

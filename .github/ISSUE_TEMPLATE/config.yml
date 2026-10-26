@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://t.me/mpp_devs
+    about: Ask questions and get help in the MPP Developers Telegram group.
+  - name: Report an SDK issue
+    url: https://mpp.dev/sdk
+    about: Bugs and requests for an SDK belong in that SDK's repository.
+  - name: Report a security vulnerability
+    url: https://github.com/tempoxyz/mpp-specs/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.

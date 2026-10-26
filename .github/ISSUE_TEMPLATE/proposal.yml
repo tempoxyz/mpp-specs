@@ -1,0 +1,35 @@
+name: Proposal
+description: Propose a new payment method, intent, extension, or a change to the core protocol.
+labels: ['enhancement']
+body:
+  - type: dropdown
+    attributes:
+      label: Type
+      options:
+        - Payment method
+        - Intent
+        - Extension
+        - Core protocol change
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: The problem this solves and who needs it.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposal
+      description: How it works on the wire. Include example Challenges, Credentials, and Receipts where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Implementations
+      description: Existing or planned implementations, if any.
+    validations:
+      required: false

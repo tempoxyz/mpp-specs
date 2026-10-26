@@ -1,5 +1,17 @@
 # Contributing
 
+This repository accepts pull requests. Open an issue first for core protocol changes so they can be discussed before you write them up.
+
+## Where to contribute
+
+| Contribution | Where |
+|--------------|-------|
+| Specification changes | Pull request to this repository |
+| SDK bugs, feature requests, and inconsistencies | Issue in the SDK's repository: [mppx](https://github.com/wevm/mppx), [mpp-rs](https://github.com/tempoxyz/mpp-rs), [pympp](https://github.com/tempoxyz/pympp), [mpp-go](https://github.com/tempoxyz/mpp-go). The SDKs do not accept pull requests from external contributors. |
+| Documentation and the service directory | [tempoxyz/mpp](https://github.com/tempoxyz/mpp) |
+| Questions | [MPP Developers Telegram group](https://t.me/mpp_devs) |
+| Security vulnerabilities | [Report privately](https://github.com/tempoxyz/mpp-specs/security/advisories/new). Do not open a public issue. |
+
 ## Making Changes
 
 ### Branching
