@@ -3,14 +3,19 @@
 
 Each complete encoded value in a code block (request="...", opaque="...",
 "Authorization: Payment ..." and "Payment-Receipt: ...") must be unpadded
-base64url of JSON. A value cut short with "..." and an upper-case placeholder
-such as BASE64URL_JCS_RECEIPT are skipped. Values may wrap
-across lines; the whitespace between the pieces is removed.
+base64url of JSON, and request and opaque must be its JCS (RFC 8785)
+serialization. The whole field is checked, so characters outside the base64url
+alphabet and padding are errors. A value cut short with "...", an upper-case
+placeholder such as BASE64URL_JCS_RECEIPT and one in angle brackets are skipped.
+Values may wrap across lines; the whitespace between the pieces is removed.
 
 When a paragraph mentioning "decoded" sits between the code block and the next
 JSON block, that JSON must equal the value it names: request or opaque when the
 paragraph names them, the credential for "credential", the receipt for
-"receipt", and otherwise the block's last encoded value. In the JSON, a string
+"receipt", and otherwise the block's last encoded value. Each value is compared
+once, so a block with a credential and a receipt can be followed by a decoded
+JSON block for each. Values are forgotten at the next code block other than
+JSON and at the next heading; ABNF blocks are skipped. In the JSON, a string
 with "..." stands for any string with the same text around it, and one in angle
 brackets for any string; JSON that does not parse is skipped.
 """
@@ -29,14 +34,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SPECS_DIR = ROOT / "specs"
 
 FENCE = re.compile(r"^(~~~|\x60\x60\x60)\s*([\w+-]*)")
-B64 = r"[A-Za-z0-9_-]"
-QUOTED = re.compile(rf'\b(request|opaque)="({B64}[A-Za-z0-9_\-\s]*?)(\.\.\.|…)?"')
+QUOTED = re.compile(r'\b(request|opaque)="([^"]*)"')
+# A header value runs to the end of its line, plus any indented continuation
+# lines that hold a single token and no header name.
 HEADER = re.compile(
-    r"^\s*(Authorization: Payment|Payment-Authorization: Payment|Payment-Receipt:)"
-    rf"\s+({B64}+(?:\n[ \t]+{B64}+)*)(\.\.\.|…)?[ \t]*$",
+    r"^[ \t]*(Authorization: Payment|Payment-Authorization: Payment|Payment-Receipt:)"
+    r"[ \t]+(\S+(?:\n[ \t]+[^\s:]+(?=[ \t]*$))*)[ \t]*$",
     re.MULTILINE,
 )
-PLACEHOLDER = re.compile(r"^[A-Z0-9_]+$")  # such as BASE64URL_JCS_RECEIPT
+TRUNCATED = re.compile(r"(\.\.+|…)$")  # "eyJ...", or ".." in a diagram
+PLACEHOLDER = re.compile(r"^([A-Z0-9_]+|<[^>]*>)$")  # BASE64URL_JCS_RECEIPT, <base64url>
+JCS_KINDS = {"request", "opaque"}
+HEADING = re.compile(r"^#", re.MULTILINE)
 KIND = {
     "Authorization: Payment": "credential",
     "Payment-Authorization: Payment": "credential",
@@ -83,27 +92,51 @@ def blocks(text: str) -> list[Block]:
 def encoded_values(block: Block) -> list[Encoded]:
     found: list[tuple[int, Encoded]] = []
     for m in QUOTED.finditer(block.text):
-        if m.group(3):
-            continue
         line = block.start + block.text.count("\n", 0, m.start(2))
         found.append((m.start(), Encoded(m.group(1), line, re.sub(r"\s+", "", m.group(2)))))
     for m in HEADER.finditer(block.text):
-        if m.group(3):
-            continue
         line = block.start + block.text.count("\n", 0, m.start(2))
         found.append((m.start(), Encoded(KIND[m.group(1)], line, re.sub(r"\s+", "", m.group(2)))))
-    return [e for _, e in sorted(found, key=lambda p: p[0]) if not PLACEHOLDER.match(e.value)]
+    return [
+        e
+        for _, e in sorted(found, key=lambda p: p[0])
+        if not TRUNCATED.search(e.value) and not PLACEHOLDER.match(e.value)
+    ]
+
+
+BASE64URL = re.compile(r"^[A-Za-z0-9_-]*$")
+
+
+def jcs(obj: object) -> bytes:
+    """JCS (RFC 8785) serialization of the JSON values the specs use."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def decode_raw(value: str) -> bytes:
+    if "=" in value:
+        raise ValueError("base64url must not be padded")
+    if not BASE64URL.match(value):
+        bad = sorted({c for c in value if not BASE64URL.match(c)})
+        raise ValueError(f"not base64url: invalid characters {''.join(bad)!r}")
+    try:
+        return base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise ValueError(f"not base64url: {e}") from None
 
 
 def decode(value: str) -> object:
-    try:
-        raw = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
-    except (binascii.Error, ValueError) as e:
-        raise ValueError(f"not base64url: {e}") from None
+    raw = decode_raw(value)
     try:
         return json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise ValueError(f"does not decode to JSON: {e}") from None
+
+
+def check(value: Encoded) -> None:
+    """Raise ValueError when the value is not base64url JSON, or not JCS where required."""
+    obj = decode(value.value)
+    if value.kind in JCS_KINDS and decode_raw(value.value) != jcs(obj):
+        raise ValueError(f"not JCS-serialized; expected {jcs(obj).decode()}")
 
 
 ELLIPSIS = re.compile(r"\.\.\.|…")
@@ -145,10 +178,14 @@ def lint_text(text: str, name: str) -> list[str]:
     errors: list[str] = []
     previous: list[Encoded] = []
     for block in blocks(text):
+        if block.lang == "abnf":
+            continue
+        if HEADING.search(block.prose_before):
+            previous = []
         if block.lang == "json" and previous:
             target = decoded_target(block.prose_before, previous)
-            previous = []
             if target is not None:
+                previous.remove(target)
                 try:
                     shown = json.loads(block.text)
                     actual = decode(target.value)
@@ -164,10 +201,10 @@ def lint_text(text: str, name: str) -> list[str]:
         values = encoded_values(block)
         for value in values:
             try:
-                decode(value.value)
+                check(value)
             except ValueError as e:
                 errors.append(f"{name}:{value.line}: {value.kind}: {e}")
-        if values:
+        if block.lang != "json":
             previous = values
     return errors
 

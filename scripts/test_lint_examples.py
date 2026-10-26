@@ -7,7 +7,7 @@ from lint_examples import lint_text
 
 
 def encode(obj: object) -> str:
-    raw = json.dumps(obj, separators=(",", ":")).encode()
+    raw = json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
@@ -67,4 +67,45 @@ def test_ellipsis_and_angle_brackets_in_shown_json_match_any_text():
 
 def test_json_without_decoded_prose_is_not_compared():
     text = challenge(encode({"amount": "1"})) + "\nThe response body:\n\n~~~json\n{}\n~~~\n"
+    assert lint_text(text, "x.md") == []
+
+
+def test_characters_outside_base64url_fail():
+    errors = lint_text(challenge("eyJ@@@"), "x.md")
+    assert errors == ["x.md:3: request: not base64url: invalid characters '@'"]
+
+
+def test_padded_value_fails():
+    padded = encode({"a": "1"}) + "=="
+    assert lint_text(challenge(padded), "x.md") == ["x.md:3: request: base64url must not be padded"]
+
+
+def test_bad_header_value_fails():
+    text = "~~~http\nAuthorization: Payment @@@\n~~~\n"
+    assert lint_text(text, "x.md") == ["x.md:2: credential: not base64url: invalid characters '@'"]
+
+
+def test_request_must_be_jcs():
+    raw = json.dumps({"currency": "usd", "amount": "1"}, separators=(",", ":")).encode()
+    value = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+    errors = lint_text(challenge(value), "x.md")
+    assert errors == ['x.md:3: request: not JCS-serialized; expected {"amount":"1","currency":"usd"}']
+
+
+def test_each_value_gets_its_own_decoded_block():
+    credential = {"challenge": {"id": "abc"}, "payload": {"hash": "0x1"}}
+    receipt = {"status": "success"}
+    text = (
+        f"~~~http\nAuthorization: Payment {encode(credential)}\n\n"
+        f"HTTP/1.1 200 OK\nPayment-Receipt: {encode(receipt)}\n~~~\n"
+        + decoded(receipt, "Decoded receipt:")
+        + decoded({**credential, "source": "did:key:z6Mk"}, "Decoded credential:")
+    )
+    errors = lint_text(text, "x.md")
+    assert len(errors) == 1
+    assert errors[0].startswith("x.md:2: credential decodes to")
+
+
+def test_values_are_forgotten_after_a_heading():
+    text = challenge(encode(REQUEST)) + "\n## Next example\n" + decoded({"amount": "2"})
     assert lint_text(text, "x.md") == []

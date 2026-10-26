@@ -897,15 +897,15 @@ WWW-Authenticate: Payment
   method="card",
   intent="charge",
   expires="2026-02-19T12:10:00Z",
-  request="eyJhbW91bnQiOiI0OTk5IiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNp
-    cGllbnQiOiJtZXJjaF9hYmMxMjMiLCJkZXNjcmlwdGlvbiI6IlBybyBw
-    bGFuIOKAlCBtb250aGx5IHN1YnNjcmlwdGlvbiIsImV4dGVybmFsSWQi
-    OiJvcmRlcl8xMjM0NSIsIm1ldGhvZERldGFpbHMiOnsiYWNjZXB0ZWRO
-    ZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyY2FyZCIsImFtZXgiXSwibWVy
-    Y2hhbnROYW1lIjoiQWNtZSBDb3JwIiwiYmlsbGluZ1JlcXVpcmVkIjp0
-    cnVlLCJlbmNyeXB0aW9uSndrIjp7Imt0eSI6IlJTQSIsImtpZCI6ImVu
-    Yy0yMDI2LTAxIiwidXNlIjoiZW5jIiwiYWxnIjoiUlNBLU9BRVAtMjU2
-    IiwibiI6IjB2eDdhZ29lYkdjUVN1dS4uLiIsImUiOiJBUUFCIn19fQ"
+  request="eyJhbW91bnQiOiI0OTk5IiwiY3VycmVuY3kiOiJ1c2QiLCJkZXNj
+    cmlwdGlvbiI6IlBybyBwbGFuIOKAlCBtb250aGx5IHN1YnNjcmlwdGlv
+    biIsImV4dGVybmFsSWQiOiJvcmRlcl8xMjM0NSIsIm1ldGhvZERldGFp
+    bHMiOnsiYWNjZXB0ZWROZXR3b3JrcyI6WyJ2aXNhIiwibWFzdGVyY2Fy
+    ZCIsImFtZXgiXSwiYmlsbGluZ1JlcXVpcmVkIjp0cnVlLCJlbmNyeXB0
+    aW9uSndrIjp7ImFsZyI6IlJTQS1PQUVQLTI1NiIsImUiOiJBUUFCIiwi
+    a2lkIjoiZW5jLTIwMjYtMDEiLCJrdHkiOiJSU0EiLCJuIjoiMHZ4N2Fn
+    b2ViR2NRU3V1Li4uIiwidXNlIjoiZW5jIn0sIm1lcmNoYW50TmFtZSI6
+    IkFjbWUgQ29ycCJ9LCJyZWNpcGllbnQiOiJtZXJjaF9hYmMxMjMifQ"
 Cache-Control: no-store
 Content-Type: application/problem+json
 ~~~
