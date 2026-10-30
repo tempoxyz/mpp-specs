@@ -127,6 +127,22 @@ LIGHTNING_PROBLEMS = [
 ]
 
 
+ATTESTATION_PROBLEMS = [
+    {"slug": "attestation/required", "title": "Attestation Required", "http_status": 402,
+     "description": "The challenge requires attestations about the payer, and none, or not enough, were presented.",
+     "spec_label": "draft-payment-attestation"},
+    {"slug": "attestation/invalid", "title": "Attestation Invalid", "http_status": 402,
+     "description": "A presented attestation failed verification, or its claims do not satisfy the challenge's query.",
+     "spec_label": "draft-payment-attestation"},
+    {"slug": "attestation/issuer-untrusted", "title": "Issuer Untrusted", "http_status": 402,
+     "description": "A presented attestation comes from an issuer the challenge does not list as trusted.",
+     "spec_label": "draft-payment-attestation"},
+    {"slug": "attestation/binding-mismatch", "title": "Binding Mismatch", "http_status": 402,
+     "description": "A presented attestation is bound to another challenge, realm or payer.",
+     "spec_label": "draft-payment-attestation"},
+]
+
+
 def problem_groups():
     """Sections of the index page, in display order."""
     return [
@@ -134,6 +150,7 @@ def problem_groups():
         {"title": "Charge", "problems": CHARGE_PROBLEMS},
         {"title": "Session", "problems": SESSION_PROBLEMS},
         {"title": "Lightning", "problems": LIGHTNING_PROBLEMS},
+        {"title": "Attestation", "problems": ATTESTATION_PROBLEMS},
     ]
 
 
