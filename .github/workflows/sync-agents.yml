@@ -1,0 +1,23 @@
+name: Sync AGENTS.md
+
+# Keeps the shared ## MPP section of AGENTS.md in sync with
+# tempoxyz/mpp-tools agents/shared.md by opening an auto-merge pull request
+# when it changes. Edit that file, not the section here.
+on:
+  schedule:
+    - cron: "17 15 * * *" # daily, 07:17 PST
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-agents
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync AGENTS.md
+    uses: tempoxyz/mpp-tools/.github/workflows/agents-sync.yml@da10735474664ca2274432343d1faa048c5c8c54 # da10735 # zizmor: ignore[ref-version-mismatch] mpp-tools publishes no tags for this comment to match.
+    permissions:
+      contents: read
+      id-token: write

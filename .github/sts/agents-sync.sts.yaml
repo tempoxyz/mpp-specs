@@ -1,0 +1,9 @@
+# Allow the shared AGENTS.md sync (tempoxyz/mpp-tools agents-sync.yml,
+# called from this repository's sync-agents.yml on main) to open its update
+# pull request here. See https://github.com/tempoxyz/mpp-tools/tree/main/agents.
+subject: repo:tempoxyz@211589300/mpp-specs@1128606548:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: tempoxyz/mpp-tools/\.github/workflows/agents-sync\.yml@[0-9a-f]{40}
+permissions:
+  contents: write
+  pull_requests: write
