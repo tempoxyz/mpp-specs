@@ -96,16 +96,18 @@ CHARGE_PROBLEMS = [
      "spec_label": "draft-stellar-charge"},
 ]
 
+LIGHTNING_SESSION_SPEC = sorted(Path(ROOT, "specs", "methods", "lightning").glob("draft-lightning-session-*.md"))[-1]
+
 LIGHTNING_PROBLEMS = [
-    {"slug": "lightning/invalid-session-token", "title": "Invalid Session Token", "http_status": 402,
-     "description": "The session token does not match the immutable commitment stored when the session was opened.",
-     "spec_label": "draft-lightning-session"},
     {"slug": "lightning/malformed-credential", "title": "Malformed Credential", "http_status": 402,
      "description": "The credential could not be decoded, or a required field is absent or of the wrong type.",
      "spec_label": "draft-lightning-charge"},
     {"slug": "lightning/unknown-challenge", "title": "Unknown Challenge", "http_status": 402,
      "description": "The challenge ID is not one this server issued, or it has already been consumed.",
      "spec_label": "draft-lightning-charge"},
+    {"slug": "lightning/invalid-session-token", "title": "Invalid Session Token", "http_status": 402,
+     "description": "The session token or its open commitment is missing, malformed, unsafe, or does not match.",
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
     {"slug": "lightning/invalid-preimage", "title": "Invalid Preimage", "http_status": 402,
      "description": "The SHA-256 hash of the preimage does not equal the payment hash stored for the challenge.",
      "spec_label": "draft-lightning-charge"},
@@ -114,19 +116,19 @@ LIGHTNING_PROBLEMS = [
      "spec_label": "draft-lightning-charge"},
     {"slug": "lightning/session-not-found", "title": "Session Not Found", "http_status": 402,
      "description": "No session with this ID exists.",
-     "spec_label": "draft-lightning-session"},
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
     {"slug": "lightning/session-closed", "title": "Session Closed", "http_status": 402,
      "description": "The session is closed and accepts no further actions.",
-     "spec_label": "draft-lightning-session"},
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
     {"slug": "lightning/insufficient-balance", "title": "Insufficient Balance", "http_status": 402,
      "description": "The session balance is insufficient for the requested operation.",
-     "spec_label": "draft-lightning-session"},
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
     {"slug": "lightning/challenge-expired", "title": "Challenge Expired", "http_status": 402,
      "description": "The challenge has passed its expiry time; the client must obtain a fresh one.",
-     "spec_label": "draft-lightning-session"},
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
     {"slug": "lightning/invalid-return-invoice", "title": "Invalid Return Invoice", "http_status": 402,
      "description": "The return invoice is not a valid BOLT11 invoice, or it encodes a non-zero amount.",
-     "spec_label": "draft-lightning-session"},
+     "spec_label": "draft-lightning-session", "spec_docname": LIGHTNING_SESSION_SPEC.stem},
 ]
 
 

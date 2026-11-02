@@ -397,7 +397,12 @@ accept bearer or close credentials for a legacy session lacking a
 sessionTokenHash. It MUST close and refund such sessions through the
 server-initiated close procedure before enabling this revision. It MUST
 NOT accept a new token commitment authenticated only by an old preimage.
-Clients open a new version-2 session after migration.
+If a legacy refund fails, the server MUST retain the unpaid balance and
+refund status for reconciliation; failure MUST NOT forfeit the balance.
+Recovery requires independent authentication of the original refund
+recipient and MUST NOT rely on the exposed payment preimage. The server
+MUST document its recovery process before migration. Clients open a new
+version-2 session after migration.
 
 ## Open Action
 
@@ -683,6 +688,13 @@ is encoded in the BOLT11 invoice and cannot be changed by the client.
 
 ## Bearer Verification
 
+Before accepting a bearer action, the server MUST look up its stored
+challenge by `credential.challenge.id`, verify that the echoed fields
+match, and verify that both the stored and echoed request contain
+`methodDetails.version` equal to the JSON integer `2`. Missing or
+unsupported versions MUST be rejected. Consuming the deposit challenge
+at open does not remove the stored parameters needed for this check.
+
 1. Look up the session by payload.sessionId
 2. Verify session.status == "open"
 3. Decode payload.sessionToken from exactly 64 lowercase hexadecimal
@@ -708,6 +720,9 @@ billing is handled by the streaming layer (see
 8. Return a receipt
 
 ## Close Verification
+
+Before accepting a close action, the server MUST perform the same
+stored-challenge matching and version checks as for a bearer action.
 
 1. Look up the session by payload.sessionId
 2. Verify session.status == "open"
