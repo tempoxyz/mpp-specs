@@ -17,7 +17,7 @@ concurrency:
 jobs:
   sync:
     name: Sync AGENTS.md
-    uses: tempoxyz/mpp-tools/.github/workflows/agents-sync.yml@da10735474664ca2274432343d1faa048c5c8c54 # main
+    uses: tempoxyz/mpp-tools/.github/workflows/agents-sync.yml@da10735474664ca2274432343d1faa048c5c8c54 # da10735 # zizmor: ignore[ref-version-mismatch] mpp-tools publishes no tags for this comment to match.
     permissions:
       contents: read
       id-token: write
