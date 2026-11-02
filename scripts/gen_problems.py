@@ -97,6 +97,9 @@ CHARGE_PROBLEMS = [
 ]
 
 LIGHTNING_PROBLEMS = [
+    {"slug": "lightning/invalid-session-token", "title": "Invalid Session Token", "http_status": 402,
+     "description": "The session token does not match the immutable commitment stored when the session was opened.",
+     "spec_label": "draft-lightning-session"},
     {"slug": "lightning/malformed-credential", "title": "Malformed Credential", "http_status": 402,
      "description": "The credential could not be decoded, or a required field is absent or of the wrong type.",
      "spec_label": "draft-lightning-charge"},
