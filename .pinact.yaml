@@ -1,0 +1,9 @@
+version: 3
+rules:
+  # tempoxyz/mpp-tools publishes its reusable workflows without tags, and the
+  # shared AGENTS.md sync is first-party, so skip version-comment and min-age
+  # checks for it. Its SHA pin is still enforced.
+  - ignore: true
+    conditions:
+      - expr: |
+          ActionName == "tempoxyz/mpp-tools/.github/workflows/agents-sync.yml"
