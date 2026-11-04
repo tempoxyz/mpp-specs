@@ -10,6 +10,12 @@ This directory contains templates for each type of specification in the Payment 
 | [method-template.md](method-template.md) | Informational | Adding support for a payment network |
 | [extension-template.md](extension-template.md) | Informational | Adding optional protocol extensions |
 
+## Concrete Examples
+
+| Example | Use When |
+|---------|----------|
+| [spt-stripe-bridge.md](spt-stripe-bridge.md) | Showing how a Stripe Shared Payment Token can fulfill the generic `spt` method |
+
 ## Required Sections by Track
 
 ### Standards Track (Core, Intents)
