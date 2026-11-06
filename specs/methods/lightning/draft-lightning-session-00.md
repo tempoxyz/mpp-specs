@@ -601,13 +601,13 @@ MUST also include refundSats and refundStatus (see {{receipt}}).
 Example decoded receipt for close (success):
 
 ~~~json
-{"method":"lightning","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"succeeded"}
+{"method":"lightning","intent":"session","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"succeeded"}
 ~~~
 
 Close with refund failed:
 
 ~~~json
-{"method":"lightning","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"failed"}
+{"method":"lightning","intent":"session","reference":"7f3a1b2c4d5e6f...","status":"success","timestamp":"2026-03-10T21:00:00Z","refundSats":140,"refundStatus":"failed"}
 ~~~
 
 # Deposit Amount {#deposit-amount}
@@ -652,10 +652,12 @@ is encoded in the BOLT11 invoice and cannot be changed by the client.
 
 ## Bearer Verification
 
-1. Look up the session by payload.sessionId
-2. Verify session.status == "open"
-3. Compute SHA-256(payload.preimage) and verify it equals session.paymentHash
-4. Return a receipt
+1. Look up the stored challenge using `credential.challenge.id`. If not found or expired, reject.
+2. Verify the echoed `credential.challenge` exactly matches the stored challenge params, including `amount`, `currency`, and the resource it was issued for.
+3. Look up the session by payload.sessionId
+4. Verify session.status == "open"
+5. Compute SHA-256(payload.preimage) and verify it equals session.paymentHash
+6. Return a receipt
 
 Bearer verification does not deduct from the session balance. All
 billing is handled by the streaming layer (see
@@ -744,7 +746,8 @@ For streaming responses, the challenge request's `amount` field is the
 cost per emitted chunk in satoshis. Bearer verification does not deduct
 from the session balance; instead, the streaming layer deducts `amount`
 sats from the balance for each chunk delivered, reading the per-unit
-cost directly from the echoed challenge request.
+cost from the stored challenge that bearer verification validated, never
+from unvalidated fields of the echoed challenge.
 
 When a streaming response exhausts the available session balance
 mid-stream, the server MUST:
@@ -898,6 +901,9 @@ contains:
 method
 : REQUIRED. The string "lightning".
 
+intent
+: REQUIRED. The string "session".
+
 reference
 : REQUIRED. The session ID (paymentHash).
 
@@ -930,6 +936,9 @@ with the following JSON data:
 method
 : REQUIRED. The string "lightning".
 
+intent
+: REQUIRED. The string "session".
+
 reference
 : REQUIRED. The session ID (paymentHash).
 
@@ -951,7 +960,7 @@ Example:
 
 ~~~
 event: payment-receipt
-data: {"method":"lightning","reference":"7f3a...","status":"success",
+data: {"method":"lightning","intent":"session","reference":"7f3a...","status":"success",
        "timestamp":"2026-03-11T00:00:00Z","spent":202,"units":101}
 
 data: [DONE]
@@ -1298,9 +1307,10 @@ Schema draft version is required or assumed.
 ~~~json
 {
   "type": "object",
-  "required": ["method", "reference", "status", "timestamp"],
+  "required": ["method", "intent", "reference", "status", "timestamp"],
   "properties": {
     "method":    { "type": "string", "const": "lightning" },
+    "intent":    { "type": "string", "const": "session" },
     "reference": { "type": "string" },
     "status":    { "type": "string", "const": "success" },
     "timestamp": { "type": "string", "format": "date-time" }

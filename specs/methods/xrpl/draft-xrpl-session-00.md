@@ -268,7 +268,7 @@ Channel identifiers:
 | `amount` | string | yes | increment charged for this request, in drops |
 | `channelId` | string | yes | 64-hex channel ID, or `""` on an open |
 | `recipient` | string | yes | classic address the channel must pay |
-| `currency` | string | no | always `"XRP"` when present |
+| `currency` | string | yes | always `"XRP"` |
 | `description` | string | no | display only |
 
 `amount` is the increment for this request, and the cumulative total
@@ -673,10 +673,11 @@ redemption, which [](#redemption) permits. Its presence is therefore
 what tells a client whether settlement has happened, and a client
 MUST NOT infer settlement from the action alone.
 
-The base `reference` remains method-specific and MAY carry these
-values in a composite form. A server MUST NOT rely on a client
-parsing one: a composite cannot be read without method knowledge,
-which is what the named fields are for.
+The base `intent` field MUST be `"session"`, and the base
+`reference` MUST equal `channelId` on every receipt, so a client
+can correlate open, voucher and close receipts for one session. A
+server MUST NOT put `txHash` or a composite of these values in
+`reference`: transaction identifiers belong in `txHash`.
 
 # Error Responses {#errors}
 
@@ -814,6 +815,7 @@ Decoding `request`:
   "amount": "100000",
   "channelId":
     "2D398F9458B0CF96284E3602E57A83E787C1A01658512F972CEDDB1819607E89",
+  "currency": "XRP",
   "methodDetails": {
     "cumulativeAmount": "200000",
     "network": "testnet",

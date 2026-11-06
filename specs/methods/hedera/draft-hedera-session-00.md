@@ -1558,14 +1558,16 @@ tracking:
 | `channelId` | string | Channel identifier |
 | `acceptedCumulative` | string | Highest voucher accepted |
 | `spent` | string | Total charged so far |
-| `reference` | string | Transaction or channel ref |
+| `reference` | string | Channel identifier (session reference) |
 | `units` | number | OPTIONAL: Units consumed |
 | `txHash` | string | OPTIONAL: Transaction hash |
 
 The `reference` field satisfies the core MPP receipt
-`reference` requirement. It is set to `txHash` when a
-transaction was broadcast (open, close), otherwise
-set to `channelId` (voucher).
+`reference` requirement. It is always set to
+`channelId`, so receipts for open, voucher and close
+correlate to one session. When a transaction was
+broadcast (open, close), its hash is carried in
+`txHash`, never in `reference`.
 
 The `txHash` field is OPTIONAL because not every
 response involves an on-chain settlement -- voucher
@@ -1605,8 +1607,8 @@ updates are off-chain.
     "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
     "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "reference":
-    "0x1a2b3c4d5e6f7890abcdef12345678"
-    "90abcdef1234567890abcdef12345678",
+    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c"
+    "0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "250000",
   "txHash":
@@ -2357,8 +2359,7 @@ successful processing of a session action (2xx).
     "reference": {
       "type": "string",
       "description":
-        "txHash when a tx was broadcast "
-        "(open, close); channelId otherwise"
+        "channelId; transaction hashes go in txHash"
     },
     "acceptedCumulative": {
       "type": "string",

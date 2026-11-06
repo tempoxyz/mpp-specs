@@ -240,10 +240,15 @@ value, remaining value, settlement reference, expiry, and close status.
 This document does not require any of those fields to exist on the wire.
 
 For HTTP requests that can be retried, clients SHOULD send an
-`Idempotency-Key` request header.  Payment method specifications MUST
-define how retry keys are scoped, how long retry state is retained, and
-whether duplicate submissions return the original receipt, a no-op
-success, or an error.
+`Idempotency-Key` request header.  A server that supports the header
+MUST scope each key to the session and the requested resource, MUST
+retain retry state for at least the validity of the challenge the
+original request answered, and MUST answer a duplicate with the
+original response or receipt without charging or delivering paid
+service again.  Payment method specifications MUST define how a
+resubmitted credential is handled, such as returning the original
+receipt or rejecting it as a replay, and MAY define stricter retry
+semantics.
 
 ## Streaming
 
@@ -496,13 +501,18 @@ The server challenges for a prepaid session:
 
 ~~~ http
 HTTP/1.1 402 Payment Required
+Cache-Control: no-store
 WWW-Authenticate: Payment id="sess_chal_123",
   realm="api.example.com",
   method="example-prepaid",
   intent="session",
-  request="eyJhbW91bnQiOiIxMDAiLCJjdXJyZW5jeSI6InNhdCJ9"
+  request="eyJhbW91bnQiOiIxMDAiLCJjdXJyZW5jeSI6InNhdCIsIm1ldGhvZERl
+    dGFpbHMiOnsiZnVuZGluZ1JlZmVyZW5jZSI6Imludm9pY2VfMTIzIiwi
+    bWluaW11bUJhbGFuY2UiOiIxMDAwIn0sInVuaXRUeXBlIjoicmVxdWVz
+    dCJ9"
 ~~~
 
+The line breaks inside the `request` value are for presentation only.
 The decoded request is:
 
 ~~~ json
@@ -588,6 +598,7 @@ paid service.  It can return a fresh challenge:
 
 ~~~ http
 HTTP/1.1 402 Payment Required
+Cache-Control: no-store
 Content-Type: application/problem+json
 WWW-Authenticate: Payment id="sess_chal_789",
   realm="api.example.com",
@@ -635,7 +646,7 @@ that the session is terminal:
   "reference": "channel_abc",
   "authorized": "3500",
   "spent": "3100",
-  "remaining": "0",
+  "remaining": "400",
   "settlementRef": "settlement_123",
   "final": true
 }
