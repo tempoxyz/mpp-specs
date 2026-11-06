@@ -33,7 +33,7 @@ normative:
     date: 2026-01
   I-D.payment-intent-charge:
     title: "Charge Intent for HTTP Payment Authentication"
-    target: https://datatracker.ietf.org/doc/draft-payment-intent-charge/
+    target: https://paymentauth.org/draft-payment-intent-charge-00.html
     author:
       - name: Jake Moxey
     date: 2026-03

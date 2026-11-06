@@ -39,7 +39,7 @@ normative:
     date: 2026-01
   I-D.payment-intent-session:
     title: "Session Intent for HTTP Payment Authentication"
-    target: https://datatracker.ietf.org/doc/draft-payment-intent-session/
+    target: https://paymentauth.org/draft-payment-intent-session-00.html
     author:
       - name: Brendan Ryan
       - name: Jake Moxey

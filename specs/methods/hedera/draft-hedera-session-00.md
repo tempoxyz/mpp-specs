@@ -34,6 +34,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://paymentauth.org/draft-payment-intent-session-00.html
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   RFC8610:
@@ -74,10 +82,10 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the
-"hedera" payment method in the Payment HTTP Authentication
-Scheme. It specifies unidirectional streaming payment
-channels for incremental, voucher-based payments suitable
+This document defines the "hedera" payment method
+implementation of the "session" intent in the Payment HTTP
+Authentication Scheme. It specifies unidirectional streaming
+payment channels for incremental, voucher-based payments suitable
 for low-cost metered services on the Hedera network.
 
 --- middle
@@ -1541,14 +1549,16 @@ tracking:
 | `channelId` | string | Channel identifier |
 | `acceptedCumulative` | string | Highest voucher accepted |
 | `spent` | string | Total charged so far |
-| `reference` | string | Transaction or channel ref |
+| `reference` | string | Channel identifier (session reference) |
 | `units` | number | OPTIONAL: Units consumed |
 | `txHash` | string | OPTIONAL: Transaction hash |
 
 The `reference` field satisfies the core MPP receipt
-`reference` requirement. It is set to `txHash` when a
-transaction was broadcast (open, close), otherwise
-set to `channelId` (voucher).
+`reference` requirement. It is always set to
+`channelId`, so receipts for open, voucher and close
+correlate to one session. When a transaction was
+broadcast (open, close), its hash is carried in
+`txHash`, never in `reference`.
 
 The `txHash` field is OPTIONAL because not every
 response involves an on-chain settlement -- voucher
@@ -1585,7 +1595,7 @@ updates are off-chain.
   "channelId":
     "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "reference":
-    "0x1a2b3c4d5e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+    "0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f",
   "acceptedCumulative": "250000",
   "spent": "250000",
   "txHash":
@@ -1807,15 +1817,10 @@ competing concerns:
 
 ## Payment Intent Registration
 
-This document registers the following payment intent in
-the "HTTP Payment Intents" registry established by
-{{I-D.httpauth-payment}}:
-
-| Intent | Methods | Description | Reference |
-|--------|---------|-------------|-----------|
-| `session` | `hedera` | Streaming payment channel | This document |
-
-Contact: Tom Rowbotham (<tom@xeno.money>)
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `hedera` payment method implements
+the registered `session` intent.
 
 ## Problem Type Registration
 
@@ -2336,7 +2341,7 @@ successful processing of a session action (2xx).
     "reference": {
       "type": "string",
       "description":
-        "txHash when a tx was broadcast (open, close); channelId otherwise"
+        "channelId; transaction hashes go in txHash"
     },
     "acceptedCumulative": {
       "type": "string",
