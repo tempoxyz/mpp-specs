@@ -490,7 +490,8 @@ Payment methods MAY define additional proof types.
 # Illustrative Lifecycle Examples
 
 This section gives non-normative examples of complete session flows.
-The examples show decoded credentials and receipts for readability.  The
+The examples show decoded credentials and receipts for readability, and
+a `request` value ending in "..." is abbreviated.  The
 actual HTTP header values are encoded as defined by
 {{I-D.httpauth-payment}}, and payment methods define the exact payload
 fields.
@@ -532,7 +533,13 @@ retries with a method-specific open proof:
 
 ~~~ json
 {
-  "challenge": "sess_chal_123",
+  "challenge": {
+    "id": "sess_chal_123",
+    "realm": "api.example.com",
+    "method": "example-prepaid",
+    "intent": "session",
+    "request": "eyJhbW91bnQiOiIxMDAi..."
+  },
   "payload": {
     "operation": "open",
     "sessionReference": "sess_abc",
@@ -564,7 +571,13 @@ is method-specific:
 
 ~~~ json
 {
-  "challenge": "sess_chal_456",
+  "challenge": {
+    "id": "sess_chal_456",
+    "realm": "api.example.com",
+    "method": "example-channel",
+    "intent": "session",
+    "request": "eyJhbW91bnQiOiIxIiwiY3VycmVuY3kiOiJ0b2tlbiJ9"
+  },
   "payload": {
     "operation": "use",
     "sessionReference": "channel_abc",
@@ -622,7 +635,13 @@ increase:
 
 ~~~ json
 {
-  "challenge": "sess_chal_789",
+  "challenge": {
+    "id": "sess_chal_789",
+    "realm": "api.example.com",
+    "method": "example-channel",
+    "intent": "session",
+    "request": "eyJhbW91bnQiOiIxIiwiY3VycmVuY3kiOiJ0b2tlbiJ9"
+  },
   "payload": {
     "operation": "topUp",
     "sessionReference": "channel_abc",
