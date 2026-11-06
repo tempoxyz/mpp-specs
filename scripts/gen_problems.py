@@ -84,6 +84,9 @@ SESSION_PROBLEMS = [
     {"slug": "session/insufficient-balance", "title": "Insufficient Balance", "http_status": 402,
      "description": "There is insufficient authorized balance in the channel for this request.",
      "spec_label": "draft-tempo-session"},
+    {"slug": "session/insufficient-value", "title": "Insufficient Value", "http_status": 402,
+     "description": "The session lacks the value the requested service needs.",
+     "spec_label": "draft-payment-intent-session"},
     {"slug": "session/transaction-reverted", "title": "Transaction Reverted", "http_status": 409,
      "description": "An on-chain open, top-up, settle, or close transaction reverted.",
      "spec_label": "draft-evm-session"},
@@ -98,9 +101,6 @@ SESSION_PROBLEMS = [
      "spec_label": "draft-nearintents-session"},
     {"slug": "session/stale-update", "title": "Stale Update", "http_status": 402,
      "description": "The voucher's cumulative amount is below the highest accepted voucher.",
-     "spec_label": "draft-nearintents-session"},
-    {"slug": "session/insufficient-value", "title": "Insufficient Value", "http_status": 402,
-     "description": "The voucher exceeds the funded value or does not advance by the minimum delta, or the authorized value does not cover the requested service.",
      "spec_label": "draft-nearintents-session"},
 ]
 

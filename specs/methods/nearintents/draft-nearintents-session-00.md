@@ -1112,9 +1112,9 @@ signature and before any status check, stale-voucher rejection, or
 debit, as in step 4 of {{voucher-verification}}, atomically look up
 or create a record keyed by `(reference, Idempotency-Key)` holding the
 request method, the target URI, a digest of the request body, and the
-state `in progress`. The record is retained for at least 24 hours and
-is completed with the response, including its receipt, when the
-request finishes. A duplicate that finds a completed record receives
+state `in progress`. The record is retained for at least 24 hours, and
+no less than the validity of the echoed challenge, and is completed
+with the response, including its receipt, when the request finishes. A duplicate that finds a completed record receives
 the stored response without being charged again. A duplicate that
 finds an `in progress` record MUST NOT execute the request; the
 server either waits and returns the stored response or responds with
@@ -1424,7 +1424,7 @@ streaming responses MUST also emit the final `payment-receipt` event
 | `funded` | string | REQUIRED | Current `funded`. |
 | `authorized` | string | REQUIRED | Current `authorized`. |
 | `spent` | string | REQUIRED | Current `spent`. At close, the final charge. |
-| `remaining` | string | REQUIRED | `authorized - spent`. `"0"` at close, because the session is terminal. |
+| `remaining` | string | REQUIRED | `authorized - spent`, at close as well. |
 | `originTxHash` | string | CONDITIONAL | REQUIRED for `open` and `topUp`: the deposit transaction hash. |
 | `final` | boolean | CONDITIONAL | REQUIRED at close, with value `true`: usage of the session has ended. Financial recovery can continue through late refunds ({{late-refunds}}). |
 | `settlementRef` | string | CONDITIONAL | At close, when the refund status is `succeeded` or `submitted`: the refund reference of {{refunds}}. |
@@ -1469,7 +1469,7 @@ Example final receipt at close, after one top-up raised `funded` to
   "funded": "10000000",
   "authorized": "6260000",
   "spent": "6254870",
-  "remaining": "0",
+  "remaining": "5130",
   "final": true,
   "settlementRef": "7YkTGh2vN4qLm8RsE1dXfP5wZc9aJbKu3tHn6VgQ2eUo",
   "refund": {
