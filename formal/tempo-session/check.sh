@@ -12,6 +12,12 @@ expected=$(for file in TempoSession/*.lean; do
   module="TempoSession.$(basename "$file" .lean)"
   [ "$module" = TempoSession.Audit ] || echo "$module"
 done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')
+# Lake's globs could also pick up hidden or symlinked files that the list above skips or
+# follows differently, so allow only regular, visible files and no symlinks.
+if [ -n "$(find TempoSession.lean TempoSession \( -type l -o -name '.*' \) -print)" ]; then
+  echo "FAIL: no symlinks or hidden files under TempoSession/"
+  exit 1
+fi
 if [ -n "$(find TempoSession -mindepth 2 -name '*.lean')" ]; then
   echo "FAIL: keep modules directly under TempoSession/ (the import check reads only that level)"
   exit 1

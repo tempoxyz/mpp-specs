@@ -1,6 +1,6 @@
 # Spec gaps
 
-Each row is a rule the draft left out. With its guard off, `TempoSession/Counterexamples.lean` holds a `decide`-checked trace that breaks the named property; with the guard on, the same trace runs up to the guarded step and that step reverts (`rejectedAt`). Rows 8 and 12 have no trace: row 8 is a wording gap, and the model follows #399 for row 12.
+Each row is a rule the draft left out. With its guard off, `TempoSession/Counterexamples.lean` holds a `decide`-checked trace that breaks the named property; with the guard on, the same trace runs up to the guarded step and that step reverts (`rejectedAt`). Rows 8, 9 and 12 have no trace: row 8 is a wording gap, and the model follows #399 for rows 9 and 12.
 
 | # | Where | Gap | Guard (`Cfg`) | Breaks | Counterexample |
 |---|---|---|---|---|---|
@@ -12,7 +12,7 @@ Each row is a rule the draft left out. With its guard off, `TempoSession/Counter
 | 6 | §6.4.4, §13.2 | v1 close captures the whole voucher | none: the server's choice | P9 (v1) | `G6_violates_P9` |
 | 7 | §6.4.1 | a channel ID can be reopened | `guardExists` | P1 | `G3_violates_P1` |
 | 8 | core §11.3 | vouchers are idempotent, not single-use | — | wording | — |
-| 9 | §6.4.5, §13.3 | repeat requestClose and minimum grace unstated | modelled: a repeat keeps the first time; `Cfg.Guarded` records grace ≥ 900 s, which no proof needs | P4a | `closeReq_sticky`, `W_repeat_requestClose_keeps_timer` |
+| 9 | §6.4.5, §13.3 | repeat requestClose and minimum grace unstated | modelled: a repeat keeps the first time; `Cfg.Guarded` records grace ≥ 900 s, which no proof needs | none: P4a holds (`closeReq_sticky`) | — (witness: `W_repeat_requestClose_keeps_timer`) |
 | 10 | §6.4.2, §13.2 | settle redeems unconsumed vouchers | every guard on | intent of §13.2 | `Gap10_settle_then_close_unconsumed` |
 | 11 | §12.2 | delivery while a close is pending | `guardDelivery` | P8c | `G7_unpaid_delivery`, `G7_settle_too_late` |
 | 12 | §11.2 | topUp credits the deposit to the available balance | modelled: topUp leaves the accepted amount and `spent` unchanged | P8 | — |
