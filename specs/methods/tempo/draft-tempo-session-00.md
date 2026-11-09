@@ -1441,10 +1441,11 @@ Servers MUST NOT deliver metered service on a channel whose
 payee's `settle` lands first. To a request it does not serve for
 this reason, the server returns 402 with a fresh Challenge; the
 client can `topUp` to cancel the close request. Delivery MAY resume
-after a `topUp` cancels the close request. On observing a close request, servers
-SHOULD, within the grace period, settle or close with the lowest
-accepted voucher whose `cumulativeAmount` is at least `spent`
-(see {{cooperative-close}}).
+after a `topUp` cancels the close request. On observing a close
+request, servers SHOULD, within the grace period, close with the
+lowest accepted voucher whose `cumulativeAmount` is at least
+`max(spent, settledOnChain)` (see {{cooperative-close}}). A voucher
+below `settledOnChain` reverts on chain.
 
 ## Crash Safety
 
