@@ -1733,7 +1733,11 @@ never above the highest voucher they have already signed, so that the
 v1 capture is exact. When every voucher the client signed is settled,
 a v2 client signs its close voucher one base unit above
 `settledOnChain`, which adds nothing to the capture, and a v1 client
-calls `requestClose` instead (see {{forced-close}}).
+calls `requestClose` instead (see {{forced-close}}). A client cannot
+see a pending or failed `settle`, so when the server refuses its
+close voucher with 402, a v2 client signs a new one one base unit
+above the highest voucher it has signed, which is above every voucher
+the server can have broadcast, and a v1 client calls `requestClose`.
 
 The capture bound limits what `close` adds, not what the payee
 collects in total: `settle` redeems any signed voucher, consumed or
