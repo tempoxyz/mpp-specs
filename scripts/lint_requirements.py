@@ -495,6 +495,60 @@ def body_start(lines: list[str]) -> int:
     return 1
 
 
+def comment_spans(text: str) -> list[tuple[int, int]]:
+    """Start and end of each HTML comment (<!-- ... -->, shortest), found in linear time.
+
+    A regex scans from every unclosed opener to the end of the text, which is quadratic.
+    """
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    while (start := text.find("<!--", pos)) >= 0:
+        end = text.find("-->", start + 4)
+        if end < 0:
+            break
+        spans.append((start, end + 3))
+        pos = end + 3
+    return spans
+
+
+def ial_bodies(line: str) -> list[str]:
+    """What IAL_BODY.findall returns, in linear time (no rescans from unclosed openers)."""
+    bodies: list[str] = []
+    pos = 0
+    while (start := line.find("{:", pos)) >= 0:
+        if line.startswith(":", start + 2):
+            pos = start + 1
+            continue
+        end = line.find("}", start + 2)
+        if end < 0:
+            break
+        bodies.append(line[start + 2 : end])
+        pos = end + 1
+    return bodies
+
+
+def in_braces(line: str, text: str) -> bool:
+    """Whether text occurs after a { with no } in between, as an IAL or ALD writes it.
+
+    One pass over the line, so a run of unclosed braces stays linear.
+    """
+    last_open = last_close = -1
+    marks: list[tuple[int, int]] = []
+    for index, char in enumerate(line):
+        marks.append((last_open, last_close))
+        if char == "{":
+            last_open = index
+        elif char == "}":
+            last_close = index
+    pos = 0
+    while (found := line.find(text, pos)) >= 0:
+        opened, closed = marks[found]
+        if opened > closed:
+            return True
+        pos = found + 1
+    return False
+
+
 def strip_code_spans(line: str) -> str:
     """Replace each code span in a line with a space.
 
@@ -567,8 +621,8 @@ def lint_file(path: Path) -> Report:
     for el in root.iter():
         if el.tag in CODE or is_verbatim(el):
             quiet_ids.update(SOURCE_ID.findall("".join(el.itertext())))
-    for comment in re.findall(r"<!--(.*?)-->", xml, re.DOTALL):
-        quiet_ids.update(SOURCE_ID.findall(comment))
+    for begin, finish in comment_spans(xml):
+        quiet_ids.update(SOURCE_ID.findall(xml[begin + 4 : finish - 3]))
     rendered_ids = set(SOURCE_ID.findall(xml))
     # Where those quiet IDs are written as code or comment in the source, so only those
     # occurrences stay quiet: the same ID misused in a real IAL is still checked.
@@ -578,7 +632,15 @@ def lint_file(path: Path) -> Report:
             code_lines.update(range(item.start, item.end + 1))
     # The source with HTML comments blanked (newlines kept, so line numbers hold) and code
     # spans removed from each line: what is left is where an ID is written as an IAL.
-    blanked = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), "\n".join(lines), flags=re.DOTALL)
+    joined = "\n".join(lines)
+    parts: list[str] = []
+    pos = 0
+    for begin, finish in comment_spans(joined):
+        parts.append(joined[pos:begin])
+        parts.append(re.sub(r"[^\n]", " ", joined[begin:finish]))
+        pos = finish
+    parts.append(joined[pos:])
+    blanked = "".join(parts)
     loud = [strip_code_spans(line) for line in blanked.split("\n")]
 
     def quiet_at(req_id: str, number: int) -> bool:
@@ -598,7 +660,7 @@ def lint_file(path: Path) -> Report:
         found = [
             n
             for n in id_lines.get(req_id, [])
-            if n not in code_lines and re.search(r"\{[^}]*" + re.escape(req_id), loud[n - 1])
+            if n not in code_lines and in_braces(loud[n - 1], req_id)
         ]
         if not found or any(n >= item.start for n in found):
             return None
@@ -620,7 +682,7 @@ def lint_file(path: Path) -> Report:
         if number in commented:
             continue
         line = lines[number - 1]
-        bodies = [line[ALD_NAME.match(line).end() :].split("}", 1)[0]] if ALD_LINE.match(line) else IAL_BODY.findall(line)
+        bodies = [line[ALD_NAME.match(line).end() :].split("}", 1)[0]] if ALD_LINE.match(line) else ial_bodies(line)
         for body in bodies:
             ald_uses.update(t for t in body.split() if ALD_REF.fullmatch(t))
     lost: dict[int, list[str]] = defaultdict(list)
@@ -654,7 +716,7 @@ def lint_file(path: Path) -> Report:
                         f"{req_id} in ALD {ald.group(1)} is replaced by another ID on the block that uses it",
                     )
                 continue
-            if not re.search(r"\{[^}]*" + re.escape(req_id), line):
+            if not in_braces(line, req_id):
                 continue
             if not KRAMDOWN_ID.fullmatch(req_id):
                 report.error(number, f"malformed ID {req_id} (expected {prefix}NNN)")

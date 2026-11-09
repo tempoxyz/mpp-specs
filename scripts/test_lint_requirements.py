@@ -2,7 +2,18 @@
 
 from pathlib import Path
 
-from lint_requirements import ROOT, annotation, lint_file, main, short_name, strip_code_spans
+from lint_requirements import (
+    IAL_BODY,
+    ROOT,
+    annotation,
+    comment_spans,
+    ial_bodies,
+    in_braces,
+    lint_file,
+    main,
+    short_name,
+    strip_code_spans,
+)
 
 
 def write_spec(
@@ -999,4 +1010,25 @@ def test_strip_code_spans_is_linear_on_backtick_runs():
     start = time.monotonic()
     strip_code_spans("`" * 64000)
     strip_code_spans("` " * 32000)
+    assert time.monotonic() - start < 2
+
+
+def test_linear_scanners_match_the_regexes():
+    import re
+
+    for line in ["{: #a} {:: x} {:b c} {:d", "{:a {:b} }", "x {::y} {:z}", "{:", "}{:"]:
+        assert ial_bodies(line) == IAL_BODY.findall(line), line
+    for line, text in [("{ req-x", "req-x"), ("{a} req-x", "req-x"), ("{a}{ b req-x }", "req-x"), ("req-x {", "req-x")]:
+        assert in_braces(line, text) == bool(re.search(r"\{[^}]*" + re.escape(text), line)), line
+    text = "a <!-- b --> c <!-- d <!-- e --> f <!-- g"
+    assert [text[s:e] for s, e in comment_spans(text)] == re.findall(r"<!--.*?-->", text, re.DOTALL)
+
+
+def test_linear_scanners_on_unclosed_openers():
+    import time
+
+    start = time.monotonic()
+    comment_spans("<!--" * 50000)
+    ial_bodies("{:" * 50000)
+    in_braces("{" * 100000 + "req-x", "req-x")
     assert time.monotonic() - start < 2
