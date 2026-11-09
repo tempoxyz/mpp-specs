@@ -437,6 +437,8 @@ class Report:
     untagged: list[int] = field(default_factory=list)
     # (line, message); line is None for a problem with the whole draft.
     problems: list[tuple[int | None, str]] = field(default_factory=list)
+    # The problems already recorded, so a repeat is dropped in constant time.
+    _seen: set[tuple[int | None, str]] = field(default_factory=set, repr=False)
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -449,7 +451,8 @@ class Report:
 
     def error(self, line: int | None, message: str) -> None:
         # Two checks can find the same misplaced ID; report it once.
-        if (line, message) not in self.problems:
+        if (line, message) not in self._seen:
+            self._seen.add((line, message))
             self.problems.append((line, message))
 
 
