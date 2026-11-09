@@ -20,6 +20,10 @@ import Lean
     'sorry' and 'admit' (sorryAx) and native_decide (Lean.ofReduceBool) anywhere in the
     library, even in a definition no theorem uses;
   - every TempoSession module may import only Init and other TempoSession modules;
+  - every declaration of a TempoSession module is checked again by Lean's kernel, replayed
+    onto a fresh environment holding only Init (Lean.Kernel.Environment.replay, as
+    lean4checker does), so a declaration that skipped the kernel when it was built
+    (debug.skipKernelTC, or an unchecked environment API) fails here;
   - it prints how many theorems it audited, which check.sh reports.
   Private declarations are audited too (their _private prefix is looked through), and so are
   the equation lemmas Lean generates for pattern matches, which is why the theorem count is
@@ -66,6 +70,20 @@ def audit (env : Environment) : IO (Except String Nat) := do
         return .error s!"{mod} imports {imp.module}; library modules may import only Init and TempoSession"
   return .ok audited
 
+/-- Check every declaration of a TempoSession module again in the kernel, on top of Init alone
+  (library modules may import nothing else, which audit checks first). -/
+def replay (env : Environment) : IO (Except String Unit) := do
+  let mut consts : Std.HashMap Name ConstantInfo := {}
+  for (name, info) in env.constants.map₁.toList do
+    let mod := (env.getModuleIdxFor? name).bind fun idx => env.header.moduleNames[idx.toNat]?
+    if mod.any (`TempoSession).isPrefixOf then consts := consts.insert name info
+  let base ← importModules #[{ module := `Init }] {}
+  try
+    discard <| Kernel.Environment.replay consts base.toKernelEnv
+    return .ok ()
+  catch e =>
+    return .error s!"kernel replay failed: {e}"
+
 /-- Load the modules named on the command line and audit them; exit code 0 only on success. -/
 def main (args : List String) : IO UInt32 := do
   if args.isEmpty then
@@ -78,5 +96,10 @@ def main (args : List String) : IO UInt32 := do
     IO.eprintln s!"axiom audit: {msg}"
     return 1
   | .ok n =>
-    IO.println s!"axiom audit: {n} theorems use only standard axioms"
-    return 0
+    match ← replay env with
+    | .error msg =>
+      IO.eprintln s!"axiom audit: {msg}"
+      return 1
+    | .ok () =>
+      IO.println s!"axiom audit: {n} theorems use only standard axioms, kernel replay passed"
+      return 0
