@@ -40,9 +40,8 @@ THEMATIC_BREAK = re.compile(r"^([-*_])(?: *\1){2,}\s*$")
 # Not {::name} or {:/name}: those are extension tags (kramdown IAL_BLOCK).
 IAL_LINE = re.compile(r"^\s*\{:(?![:/])\s*([^}]*)\}\s*$")
 # An attribute-list definition ({:name: ...}) only names attributes for later use;
-# it attaches nothing to the block above it.
-ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
-# Its name and attributes, as kramdown reads them (ALD_START). An IAL naming it (a bare
+# it attaches nothing to the block above it. Its name and attributes, as kramdown reads
+# them (ALD_START). An IAL naming it (a bare
 # word, {: name}) gets its attributes, wherever in the draft it is defined.
 ALD_DEF = re.compile(r"^\s*\{:(\w[\w-]*):((?:\\\}|[^}])+)\}\s*$")
 # One attribute of an IAL, as kramdown scans them (ALD_TYPE_ANY): a quoted key-value pair
@@ -416,7 +415,7 @@ def segments(
             # paragraph to continue: kramdown renders it as a code block, not prose.
             code_lines.add(number)
             continue
-        ial = None if ALD_LINE.match(line) else IAL_LINE.match(line)
+        ial = None if ALD_DEF.match(line) else IAL_LINE.match(line)
         if ial and current is not None and column >= current.indent + 4:
             # Four or more columns past the block's text: kramdown only reads an IAL indented
             # up to three, so this line is more of the paragraph's text and tags nothing.
@@ -508,16 +507,17 @@ def segments(
                 # more of that item: only the items it is less indented than end.
                 close_items(list_stack, column)
             continue
-        if ALD_LINE.match(line) and current is not None and column >= current.indent + 4:
+        if ALD_DEF.match(line) and current is not None and column >= current.indent + 4:
             # Indented four or more past the open paragraph's text, a definition line is more
             # of that paragraph (kramdown's ALD_START allows three spaces): it defines nothing.
             current.rest.append(stripped)
             current.end = number
             continue
-        if ALD_LINE.match(line):
-            ald = ALD_DEF.match(line)
-            if ald:
-                alds.setdefault(ald.group(1), []).append(ald.group(2))
+        ald = ALD_DEF.match(line)
+        if ald:
+            # Only a whole definition line is one (kramdown's ALD_START). A line that starts
+            # like one but has text after its first } is paragraph text, keywords included.
+            alds.setdefault(ald.group(1), []).append(ald.group(2))
             current = None
             continue
         if BLOCK_END.match(stripped):
@@ -587,7 +587,10 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
         if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
-            cell = decode_refs(strip_code_spans(cell)).strip()
+            # Inline HTML and {::comment} spans render as nothing, so drop them before reading
+            # the marker: "REQUIRED: <!-- x -->if m" is the condition "REQUIRED: if m".
+            cell = EXT_COMMENT_SPAN.sub("", strip_code_spans(cell))
+            cell = decode_refs(re.sub(r"<!--.*?-->", "", cell)).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)

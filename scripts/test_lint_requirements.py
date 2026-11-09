@@ -677,3 +677,16 @@ def test_second_ial_left_of_item_text_does_not_tag_the_item():
     found, detached, _, _ = segments(["- Servers MUST verify.", "  {: .foo}", "{: #req-test-charge-044}"])
     assert [s.ids for s in found] == [[]]
     assert [i for _, i in detached] == ["req-test-charge-044"]
+
+
+def test_ald_looking_prose_line_is_paragraph_text():
+    # Text after the first } makes it no definition: kramdown renders the line as prose.
+    found, _, _, _ = segments(["{:ref: x} Servers MUST verify."])
+    assert [s.is_requirement for s in found] == [True]
+    found, _, _, _ = segments(["P a.", "{:ref: x} Servers MUST verify."])
+    assert len(found) == 1 and found[0].is_requirement
+
+
+def test_comment_inside_table_cell_does_not_hide_a_condition():
+    lines = ["| f | g |", "|---|---|", "| a | REQUIRED: <!--hidden-->if mode is payment |", "| b | REQUIRED |"]
+    assert table_keywords(lines) == [3]
