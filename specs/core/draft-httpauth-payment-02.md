@@ -988,11 +988,15 @@ and MUST process the remaining fields as if the unrecognized fields
 were absent.
 {: #req-core-056}
 
-Fields defined by this document or by a published intent, payment
-method or extension specification use unprefixed names. Any other
-field, such as one an SDK or vendor defines, MUST use a
-reverse-domain name prefix under a domain its definer controls (for
-example, `xyz.tempo.example`).
+Unprefixed field names are reserved for fields defined by this
+document, by the registered intent the challenge names in its
+`intent` parameter, and by the registered payment method it names in
+its `method` parameter. These registries ({{payment-method-registry}},
+{{payment-intent-registry}}) scope each such field to one
+specification. Any other field, including one an SDK, vendor or other
+extension specification defines, MUST use a reverse-domain name prefix
+under a domain its definer controls (for example,
+`xyz.tempo.example`).
 {: #req-core-057}
 
 An extension field MUST NOT change the meaning of a field defined by
