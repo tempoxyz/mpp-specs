@@ -733,8 +733,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     # In GitHub Actions, each warning also becomes an annotation on the PR diff. GitHub
-    # shows at most 10 warning annotations per step; the full list stays in the log.
+    # shows at most 10 warning annotations per step; the full list stays in the log. So
+    # annotations print after the report, drafts being tagged first: warnings on drafts
+    # nobody is tagging yet would otherwise use up the 10 on every pull request.
     annotate = bool(os.environ.get("GITHUB_ACTIONS"))
+    annotations: list[tuple[bool, str]] = []
 
     paths = [p.resolve() for p in args.paths] or sorted(SPECS_DIR.rglob("*.md"))
     # Rendering is most of the time and runs kramdown-rfc as a subprocess, so drafts render
@@ -760,10 +763,13 @@ def main(argv: list[str] | None = None) -> int:
             warnings.append((number, message))
         for note in report.notes:
             print(f"    note: {note}")
-        if annotate:
-            for number, message in warnings:
-                print(annotation(rel, number, message))
+        for number, message in warnings:
+            annotations.append((report.tagged == 0, annotation(rel, number, message)))
         problems += len(report.untagged) + len(report.problems)
+    if annotate:
+        # sorted is stable, so each group keeps path and line order.
+        for _, line in sorted(annotations, key=lambda item: item[0]):
+            print(line)
 
     if problems and args.strict:
         print(f"\n{problems} requirement ID problem(s). See STYLE.md (Requirement IDs).")

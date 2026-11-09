@@ -273,7 +273,7 @@
       "required": ["url", "method", "headers", "body", "payment", "mode"],
       "additionalProperties": false,
       "properties": {
-        "url": { "description": "Absolute http or https URL (RFC 3986 characters only). format: uri is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible).", "type": "string", "format": "uri", "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[A-Za-z0-9._~%!$&'()*+,;=:@\\[\\]-]+(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#\\[\\]-]*)?$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" } },
+        "url": { "description": "Absolute http or https URL: RFC 3986 authority (a non-empty host, an IP literal in brackets), then path, query and fragment, with every % starting a two-digit escape. format: uri is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible).", "type": "string", "format": "uri", "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://(?:(?:[A-Za-z0-9._~!$&'()*+,;=:-]|%[0-9A-Fa-f]{2})*@)?(?:\\[[0-9A-Fa-f:.]+\\]|(?:[A-Za-z0-9._~!$&'()*+,;=-]|%[0-9A-Fa-f]{2})+)(?::[0-9]*)?(?:/(?:[A-Za-z0-9._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2}|/)*)?(?:\\?(?:[A-Za-z0-9._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2}|[/?])*)?(?:#(?:[A-Za-z0-9._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2}|[/?])*)?$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" } },
         "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
         "headers": {
           "type": "object",

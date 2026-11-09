@@ -909,6 +909,17 @@ class TestAnnotations:
         # The plain output is unchanged.
         assert "    line 11: untagged requirement" in out
 
+    def test_drafts_being_tagged_are_annotated_first(self, tmp_path, monkeypatch, capsys):
+        # GitHub shows only the first 10 annotations, so an untagged draft that sorts first
+        # must not crowd out the draft a pull request is tagging.
+        untagged = write_spec(tmp_path, "C MUST d.\n", "draft-alpha-charge-00.md")
+        tagged = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\n\nC MUST d.\n")
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        main(["--strict", str(untagged), str(tagged)])
+        out = capsys.readouterr().out
+        files = [line.split(",")[0] for line in out.splitlines() if line.startswith("::warning")]
+        assert files == [f"::warning file={tagged.as_posix()}", f"::warning file={untagged.as_posix()}"]
+
     def test_no_annotations_outside_github_actions(self, tmp_path, monkeypatch, capsys):
         spec = write_spec(tmp_path, "C MUST d.\n")
         monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
