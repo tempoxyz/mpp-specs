@@ -472,7 +472,8 @@ pay out other channels' funds held by the same escrow.
 `settle` accepts any voucher within these bounds, whatever service
 was delivered, because the contract cannot observe consumption. A
 signed voucher is therefore a payment the payer cannot reclaim, and
-the payee MAY settle vouchers that service has not yet consumed (see
+the contract lets the payee settle vouchers that service has not yet
+consumed; {{settlement-timing}} limits when servers do (see also
 {{cooperative-close}} and {{escrow-guarantees}}).
 
 ~~~solidity
@@ -1350,15 +1351,20 @@ On `action="voucher"`, servers MUST:
    Servers MUST reject vouchers on channels with a pending forced close
    to prevent service delivery that cannot be settled (see
    {{per-request-processing}}).
-6. Verify monotonicity:
+6. Verify `cumulativeAmount > settledOnChain`, counting any `settle`
+   the server has broadcast that has not failed. Every settled voucher
+   is public, so a voucher at or below that amount proves nothing about
+   who presents it (see {{voucher-disclosure}}). On failure, return 402
+   with a fresh challenge, so that the client signs a new voucher.
+7. Verify monotonicity:
    - `cumulativeAmount >= highestVoucherAmount`
    - if `cumulativeAmount == highestVoucherAmount`, treat the request as
      an idempotent retry and do not change voucher state
    - if `cumulativeAmount > highestVoucherAmount`,
      `(cumulativeAmount - highestVoucherAmount) >= minVoucherDelta`
-7. Verify `cumulativeAmount <= channel.deposit`
-8. Persist voucher to durable storage before providing service
-9. Update `highestVoucherAmount = cumulativeAmount`
+8. Verify `cumulativeAmount <= channel.deposit`
+9. Persist voucher to durable storage before providing service
+10. Update `highestVoucherAmount = cumulativeAmount`
 
 Servers MUST derive the expected signer from on-chain channel state by
 querying the escrow contract. The expected signer is `channel.authorizedSigner`
@@ -1374,7 +1380,9 @@ unrecoverable fund loss if the server crashes after service delivery.
 Servers MUST treat voucher submissions idempotently:
 
 - Resubmitting a voucher with the same `cumulativeAmount` as the highest
-  accepted MUST return 200 OK with the current `acceptedCumulative`
+  accepted MUST return 200 OK with the current `acceptedCumulative`,
+  unless that amount is at or below `settledOnChain`, which step 6 of
+  {{voucher-verification}} rejects
 - Submitting a voucher with lower `cumulativeAmount` than highest accepted
   MUST be rejected
 - Clients MAY safely retry voucher submissions after network failures
@@ -1384,11 +1392,12 @@ presenting the same voucher again, in the same or a later session,
 changes no state and adds no authorization: such a request is served
 only from the channel's existing `available` balance, which any
 request that presents a valid voucher for the channel can spend.
-Servers MUST NOT serve a request whose voucher's `cumulativeAmount`
-is at or below `settledOnChain`, since settled vouchers are public
-(see {{voucher-disclosure}}); the client signs a new voucher instead.
-What
-is single-use is each increment of authorization. The amount by which
+Servers refuse a voucher at or below `settledOnChain` (step 6 of
+{{voucher-verification}}), since settled vouchers are public. Because
+servers settle no more than `spent` while the channel is open (see
+{{settlement-timing}}), no unspent balance is left behind such a
+voucher. What is single-use is each increment of authorization. The
+amount by which
 a voucher raises `acceptedCumulative` pays for service at most once,
 because `spent` never exceeds `acceptedCumulative` on the channel (see
 {{server-accounting}}), and the escrow pays each base unit at most
@@ -1628,9 +1637,18 @@ any circumstances. See {{dos-mitigation}} for rate limiting requirements.
 
 # Settlement Procedure
 
-## Settlement Timing
+## Settlement Timing {#settlement-timing}
 
-Servers MAY settle at any time using their own criteria:
+While the channel is open and no close request is pending, servers
+MUST NOT settle a voucher whose `cumulativeAmount` exceeds `spent`.
+Every settled voucher becomes public, and servers refuse it afterwards
+(see {{voucher-disclosure}}), so settling authorization that service
+has not consumed would strand the payer's remaining balance. A server
+holding only vouchers above `spent` waits, or settles when it closes.
+While a close request is pending, and when closing, servers MAY settle
+any accepted voucher, since no further service is delivered.
+
+Within this limit, servers MAY settle using their own criteria:
 
 - Periodically (e.g., every N seconds or M base units accrued)
 - When `action="close"` is received
@@ -1850,10 +1868,14 @@ The escrow contract enforces:
 
 A voucher signs only `channelId` and `cumulativeAmount`, so whoever
 holds it can present it. Every voucher the payee settles becomes
-public in `settle` calldata. Servers therefore MUST NOT accept a
-voucher whose `cumulativeAmount` is at or below `settledOnChain`,
-either to serve a request (see {{voucher-verification}}) or to close
-the channel (see {{cooperative-close}}). A voucher above
+public in `settle` calldata, and in the mempool once broadcast.
+Servers therefore MUST NOT accept a voucher whose `cumulativeAmount`
+is at or below `settledOnChain`, counting any `settle` they have
+broadcast that has not failed, either to serve a request (see
+{{voucher-verification}}) or to close the channel (see
+{{cooperative-close}}). Servers settle only consumed amounts while the
+channel is open (see {{settlement-timing}}), so this refusal never
+strands a payer's unspent balance. A voucher above
 `settledOnChain` has been sent only to the payee; clients MUST send
 vouchers to the payee only over TLS. A disclosed voucher never moves
 funds the payer did not sign for, because the escrow pays each base
