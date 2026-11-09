@@ -435,10 +435,18 @@ def segments(
             detached_ials.append((number, ial.group(1)))
             current = None
             continue
-        if ial and ial_target is not None and ial_line == number - 1:
+        if (
+            ial
+            and ial_target is not None
+            and ial_line == number - 1
+            and column >= ial_target.indent
+            and quote_depth(raw) == ial_target.quote
+        ):
             # The next IAL line right after one that tagged a block applies to that same
             # block, as kramdown does: '{: #req-x-001}' then '{: #note}' leaves it two IDs,
-            # which the ID check reports, since kramdown keeps only the last.
+            # which the ID check reports, since kramdown keeps only the last. Only at the
+            # block's own indent and quote depth: a line left of a list item's text or at
+            # another depth goes on the list or quote, and is reported as detached below.
             ial_target.ials.append(ial.group(1))
             ial_line = number
             lazy_indent = ial_target.indent

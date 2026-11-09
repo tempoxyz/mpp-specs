@@ -671,3 +671,9 @@ def test_escaped_backslash_before_backticks_opens_a_code_span():
     assert not segments(["Code \\\\`MUST` here."])[0][0].is_requirement
     # '\\`' is a literal backtick, so MUST stays prose.
     assert segments(["Tick \\`MUST here."])[0][0].is_requirement
+
+
+def test_second_ial_left_of_item_text_does_not_tag_the_item():
+    found, detached, _, _ = segments(["- Servers MUST verify.", "  {: .foo}", "{: #req-test-charge-044}"])
+    assert [s.ids for s in found] == [[]]
+    assert [i for _, i in detached] == ["req-test-charge-044"]
