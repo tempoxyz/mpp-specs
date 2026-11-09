@@ -78,6 +78,11 @@
       "type": "string",
       "pattern": "^[^\u0000-\u0008\u000A-\u001F\u007F]*$", "not": { "pattern": "[\r\n]" }
     },
+    "FieldValue": {
+      "description": "An HTTP field value (RFC 9110 Section 5.5): no control characters but HTAB, so no CR or LF can start another field. Names differing only in case name one field in HTTP, which JSON Schema cannot check.",
+      "type": "string",
+      "pattern": "^[^\u0000-\u0008\u000A-\u001F\u007F]*$", "not": { "pattern": "[\r\n]" }
+    },
     "Challenge": {
       "type": "object",
       "propertyNames": { "description": "RFC 9110 token, lowercase (core draft auth-param syntax and lowercase parameter names)", "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" } },
@@ -277,7 +282,8 @@
         "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
         "headers": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "propertyNames": { "description": "RFC 9110 field-name: a token, in any case", "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" } },
+          "additionalProperties": { "$ref": "#/$defs/FieldValue" }
         },
         "body": {
           "anyOf": [

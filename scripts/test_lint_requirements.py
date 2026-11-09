@@ -8,6 +8,7 @@ from lint_requirements import (
     annotation,
     comment_spans,
     ial_bodies,
+    ial_ids,
     in_braces,
     lint_file,
     main,
@@ -1074,3 +1075,72 @@ def test_mixed_indent_matches_tab_after_space_and_stays_linear():
     assert not mixed_indent("x  \t") and not mixed_indent("")
     # A long whitespace line with no tab after a space: the old regex took quadratic time.
     assert not mixed_indent(" " * 1_000_000 + "x") and not mixed_indent("\t" * 1_000_000)
+
+
+def test_self_closing_or_indented_kramdown_comment_hides_no_dropped_id(tmp_path):
+    # {::comment /} opens nothing and an indented {::comment} after a blank line is code, so
+    # the later {:/comment} closes nothing and the dropped IDs between are reported.
+    for opener in ("{::comment /}", "    {::comment}"):
+        report = lint_body(
+            tmp_path, "Intro.", "", opener, "", "B MUST x.", "{: #req-test-charge-001}", "{: #req-test-charge-002}", "", "{:/comment}"
+        )
+        assert any("req-test-charge-001" in e for e in report.errors), (opener, report.errors)
+    # A real comment block still hides its IDs.
+    report = lint_body(tmp_path, "Intro.", "", "> {::comment}", "> {: #req-test-charge-001}", "> {:/comment}", "", "B MUST x.", "{: #req-test-charge-002}")
+    assert report.errors == [] and report.tagged == 1
+
+
+def test_ids_set_through_an_ald_ignore_later_blocks_ials(tmp_path):
+    # The ALD defined at the end sets P's ID; Q's own ID sits between, but isn't P's.
+    report = lint_body(tmp_path, "P MUST x.", "{: tag}", "", "Q is a note.", "{: #other}", "", "{:tag: #req-test-charge-001}")
+    assert report.tagged == 1 and report.errors == []
+
+
+def test_quoted_ial_values_are_read_as_kramdown_reads_them(tmp_path):
+    report = lint_body(tmp_path, 'A MUST b.', '{: id="intro" #req-test-charge-001}')
+    assert any("shares its block" in e and "intro" in e for e in report.errors), report.errors
+    report = lint_body(tmp_path, 'A MUST b.', '{: title="see #x" #req-test-charge-001}')
+    assert report.tagged == 1 and report.errors == []
+
+
+def test_heading_id_is_reported_on_the_heading_not_an_earlier_mention(tmp_path):
+    report = lint_body(tmp_path, "See req-test-charge-001 below.", "", "# Heading {#req-test-charge-001}", "", "A rule MUST hold.", "{: #req-test-charge-002}")
+    assert report.errors == [f"line {at(3)[0]}: requirement ID req-test-charge-001 on a heading; put it on the normative paragraph only"]
+
+
+def test_comment_opener_in_a_code_span_hides_no_dropped_id(tmp_path):
+    # The <!-- is code, so it pairs with no later -->, and the ID shown as code stays checked
+    # where an IAL misuses it.
+    report = lint_body(
+        tmp_path,
+        "Write `<!--` or `{: #req-test-charge-001}`.",
+        "",
+        "A MUST b.",
+        "{: #req-test-charge-001}",
+        "{: #req-test-charge-002}",
+        "",
+        "End -->.",
+    )
+    assert any("req-test-charge-001" in e for e in report.errors), report.errors
+
+
+def test_ial_ids_reads_quoted_values_linearly():
+    import time
+
+    assert ial_ids('#a title="see #x" id="intro" .c id=bare #b') == ["a", "intro", "b"]
+    assert ial_ids("k='open #d") == ["d"]
+    start = time.monotonic()
+    ial_ids('a="' * 100000)
+    assert time.monotonic() - start < 2
+
+
+def test_in_braces_checks_many_distinct_ids_on_a_line_in_one_scan():
+    import time
+
+    line = "{: " + " ".join(f"req-x-{i}" for i in range(20000)) + " }"
+    ids = [f"req-x-{i}" for i in range(20000)]
+    start = time.monotonic()
+    assert all(in_braces(line, i) for i in ids)
+    assert time.monotonic() - start < 2
+    # The whole ID must match: a prefix of a longer ID isn't that ID.
+    assert not in_braces("{: #req-x-0012}", "req-x-001") and in_braces("{: #req-x-001}", "req-x-001")

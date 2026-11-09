@@ -33,6 +33,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -500,19 +501,39 @@ def mixed_indent(raw: str) -> bool:
     return False
 
 
-def kramdown_comment_lines(lines: list[str]) -> set[int]:
+def container(line: str) -> tuple[int, int, str]:
+    """A line's blockquote depth, its indentation after the quote markers, and the rest."""
+    depth = pos = 0
+    while True:
+        marker = pos + len(line[pos : pos + 3]) - len(line[pos : pos + 3].lstrip(" "))
+        if not line.startswith(">", marker):
+            break
+        depth, pos = depth + 1, marker + 1
+        if line.startswith(" ", pos):
+            pos += 1
+    rest = line[pos:].lstrip(" ")
+    return depth, len(line) - pos - len(rest), rest.rstrip()
+
+
+def kramdown_comment_lines(lines: list[str], code: Collection[int] = ()) -> set[int]:
     """Return the lines inside {::comment} ... {:/comment} blocks, roughly.
 
     Only used to stay quiet about requirement IDs in them, which kramdown drops without
-    leaving anything in the XML to recognise them by. An opener in a code fence is code,
-    and a block that never closes hides nothing: kramdown renders an unclosed opener as
-    text, so the IDs after it are still checked.
+    leaving anything in the XML to recognise them by. Anything taken for a comment that
+    kramdown renders would hide the IDs it drops, so only what kramdown reads as a comment
+    counts: an opener in code (a fence, or the indented code block code lists) is code, a
+    self-closing {::comment /} opens nothing, a stop tag closes only at the opener's quote
+    depth and within three columns of its indentation (its container, roughly), and a
+    block that never closes hides nothing: kramdown renders an unclosed opener as text, so
+    the IDs after it are still checked.
     """
     inside: set[int] = set()
     opened: int | None = None
+    opener = (0, 0)
     fence = ""
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
+        depth, indent, rest = container(line)
         if opened is None:
             marker = FENCE.match(stripped)
             if fence:
@@ -523,9 +544,13 @@ def kramdown_comment_lines(lines: list[str]) -> set[int]:
             if marker:
                 fence = marker.group(1)
                 continue
-            if stripped.startswith("{::comment") and "{:/" not in stripped:
-                opened = number
-        elif "{:/comment}" in stripped or stripped.startswith("{:/}"):
+            if number in code or not rest.startswith("{::comment") or "{:/" in rest:
+                continue
+            if not rest[: rest.find("}") + 1].endswith("/}"):
+                opened, opener = number, (depth, indent)
+        elif ("{:/comment}" in rest or rest.startswith("{:/}")) and (
+            depth == opener[0] and abs(indent - opener[1]) <= 3
+        ):
             inside.update(range(opened + 1, number))
             opened = None
     return inside
@@ -576,6 +601,40 @@ def ial_bodies(line: str) -> list[str]:
     return bodies
 
 
+IAL_ATTRIBUTE = re.compile(r"""\w[\w-]*=(["'])""")
+
+
+def ial_ids(body: str) -> list[str]:
+    """The IDs an IAL body sets, in order: each #id, and each id="..." or id='...' value.
+
+    A quoted value is one token, as kramdown reads it, so a # word inside one (title="see
+    #x") sets no ID. A quote with no closer is remembered, so the scan stays linear.
+    """
+    ids: list[str] = []
+    unclosed: set[str] = set()
+    pos = 0
+    while pos < len(body):
+        if body[pos].isspace():
+            pos += 1
+            continue
+        attribute = IAL_ATTRIBUTE.match(body, pos)
+        if attribute and attribute.group(1) not in unclosed:
+            close = body.find(attribute.group(1), attribute.end())
+            if close >= 0:
+                if body.startswith("id=", pos):
+                    ids.append(body[attribute.end() : close])
+                pos = close + 1
+                continue
+            unclosed.add(attribute.group(1))
+        end = pos
+        while end < len(body) and not body[end].isspace():
+            end += 1
+        if body.startswith("#", pos):
+            ids.append(body[pos + 1 : end])
+        pos = end
+    return ids
+
+
 @functools.lru_cache(maxsize=64)
 def brace_positions(line: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """The positions of every { and every } in a line, in order.
@@ -588,14 +647,35 @@ def brace_positions(line: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return opens, closes
 
 
+@functools.lru_cache(maxsize=64)
+def braced_ids(line: str) -> frozenset[str]:
+    """The requirement IDs written somewhere in a line after a { with no } in between.
+
+    One pass over the line's IDs, cached, so checking every distinct ID on a long line
+    costs one scan of it rather than one per ID.
+    """
+    opens, closes = brace_positions(line)
+    found: set[str] = set()
+    for match in SOURCE_ID.finditer(line):
+        at = match.start()
+        opened = bisect.bisect_left(opens, at)
+        closed = bisect.bisect_left(closes, at)
+        if opened and (not closed or opens[opened - 1] > closes[closed - 1]):
+            found.add(match.group(1))
+    return frozenset(found)
+
+
 def in_braces(line: str, text: str) -> bool:
     """Whether text occurs after a { with no } in between, as an IAL or ALD writes it.
 
-    Each mention looks up the last { and } before it by binary search, so a run of
-    unclosed braces or many ID mentions on one line stays near linear.
+    A requirement ID is looked up in braced_ids, so the whole ID must match, not a prefix
+    of a longer one. Other text is found mention by mention, each looking up the last {
+    and } before it by binary search, so a run of unclosed braces stays near linear.
     """
     if "{" not in line:
         return False
+    if SOURCE_ID.fullmatch(text):
+        return text in braced_ids(line)
     opens, closes = brace_positions(line)
     pos = 0
     while (found := line.find(text, pos)) >= 0:
@@ -690,9 +770,11 @@ def lint_file(path: Path) -> Report:
     for item in items:
         if item.kind == "code" and item.start:
             code_lines.update(range(item.start, item.end + 1))
-    # The source with HTML comments blanked (newlines kept, so line numbers hold) and code
-    # spans removed from each line: what is left is where an ID is written as an IAL.
-    joined = "\n".join(lines)
+    # The source with code spans removed from each line and HTML comments blanked (newlines
+    # kept, so line numbers hold): what is left is where an ID is written as an IAL. Code
+    # spans go first, as kramdown reads a line left to right: a <!-- in a code span is code,
+    # and pairing it with a later --> would hide the IALs in between.
+    joined = "\n".join(strip_code_spans(line) for line in lines)
     parts: list[str] = []
     pos = 0
     for begin, finish in comment_spans(joined):
@@ -700,8 +782,7 @@ def lint_file(path: Path) -> Report:
         parts.append(re.sub(r"[^\n]", " ", joined[begin:finish]))
         pos = finish
     parts.append(joined[pos:])
-    blanked = "".join(parts)
-    loud = [strip_code_spans(line) for line in blanked.split("\n")]
+    loud = "".join(parts).split("\n")
 
     def quiet_at(req_id: str, number: int) -> bool:
         """Whether this occurrence of a quiet ID is in code or a comment, not an IAL."""
@@ -746,26 +827,32 @@ def lint_file(path: Path) -> Report:
         found = [n for n in id_lines.get(anchor, []) if n >= item.start and n not in code_lines]
         if not found:
             return []
-        last_line = found[0]
+        # The block's IAL lines end before the next rendered item: an ID set through an ALD
+        # is found on the ALD's line, which can be anywhere, and other blocks' IALs before
+        # it aren't this block's.
+        following = bisect.bisect_right(located, item.end)
+        last_line = min(found[0], located[following] - 1 if following < len(located) else len(loud))
         others: list[str] = []
         for number in range(item.end + 1, last_line + 1):
             if not IAL_LINE.match(loud[number - 1]) or ALD_LINE.match(loud[number - 1]):
                 continue
             for body in ial_bodies(loud[number - 1]):
-                tokens = body.split()
-                if number == last_line and f"#{anchor}" in tokens:
-                    tokens = tokens[: tokens.index(f"#{anchor}")]
-                others.extend(t[1:] for t in tokens if t.startswith("#") and not t.startswith("#req-"))
+                ids = ial_ids(body)
+                if number == found[0] and anchor in ids:
+                    ids = ids[: ids.index(anchor)]
+                others.extend(i for i in ids if not i.startswith("req-"))
         return others
 
     texts = [item for item in items if item.kind == "text"]
     starts = [item.start for item in texts]
+    # Where every rendered item starts, in order (an unmatched one where the match last was).
+    located = sorted(item.start for item in items if item.kind not in ("anchor", "line"))
     # IDs written in an IAL that are no anchor in the XML. kramdown keeps only the last ID of
     # a block's IALs, so an earlier one is dropped; a stray IAL is dropped or rendered as
     # text. Not reported: IDs only on ALD lines (unused definitions), mentioned in prose
     # rather than an IAL, or inside a {::comment} block (kramdown drops it without a trace,
     # so the lint looks for its tags in the source: kramdown_comment_lines).
-    commented = kramdown_comment_lines(lines)
+    commented = kramdown_comment_lines(lines, code_lines)
     # ALD names that some IAL or ALD references (a bare word in {: ...}), outside {::comment}.
     ald_uses: set[str] = set()
     # The IAL lines (not ALD lines) that reference each ALD name, in order.
@@ -811,7 +898,12 @@ def lint_file(path: Path) -> Report:
             if ald:
                 # An ALD only defines attributes; it tags a block when an IAL names it. If
                 # some IAL names it and its ID still isn't an anchor, the block also set an
-                # ID of its own, and kramdown kept only that one. Unused ALDs stay quiet.
+                # ID of its own, and kramdown kept only that one. Unused ALDs stay quiet, and
+                # so does one whose ID anchors every block whose IAL names it: where the ALD
+                # is defined says nothing about which block uses it.
+                users = [bisect.bisect_left(starts, n) - 1 for n in ald_refs.get(ald.group(1), [])]
+                if users and all(u >= 0 and texts[u].anchor == req_id for u in users):
+                    continue
                 if ald.group(1) in ald_uses:
                     report.error(
                         number,
@@ -854,7 +946,12 @@ def lint_file(path: Path) -> Report:
         found = id_lines.get(item.anchor, [])
         if not found:
             continue
-        number = found[0]
+        # Report the occurrence that sets the anchor ({#id} or an IAL), not an earlier
+        # mention in prose or code; for a heading, the one on its own line.
+        written = [n for n in found if n not in code_lines and in_braces(loud[n - 1], item.anchor)] or found
+        if item.kind == "heading":
+            written = [n for n in written if item.start <= n <= item.end] or written
+        number = written[0]
         if item.kind == "heading" and "{#" in lines[number - 1]:
             report.error(number, f"requirement ID {item.anchor} on a heading; put it on the normative paragraph only")
         elif item.where == "list":
