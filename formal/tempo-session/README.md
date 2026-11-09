@@ -4,8 +4,9 @@ A Lean 4 model of [draft-tempo-session-00](../../specs/methods/tempo/draft-tempo
 
 ## Run
 
+Install elan from a release, checking its SHA-256 as `.github/workflows/formal.yml` does (it pins the version and checksum), then:
+
 ```bash
-curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
 bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 ```
 
@@ -18,7 +19,7 @@ bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 - `lakefile.toml` sets `warningAsError`, so a `sorry`, a deprecated name or an unused hypothesis fails the build.
 - `Audit.lean` fails when any declaration is an axiom or depends on one beyond Lean's three standard axioms. That rules out `sorry`, `admit` and `native_decide`.
 - `check.sh` runs `Audit.lean` after the build as its own program, over every module under `TempoSession/` and the root. It imports only `Lean` and loads the built modules at run time, so no model module can redefine its syntax or print its result for it.
-- `check.sh` fails when any file uses `set_option` (which could raise `maxHeartbeats` or turn warnings back off), imports `Lean`, runs metaprograms or names `skipKernelTC`: the audit doesn't re-check declarations in the kernel, so code that skipped the kernel check would pass it.
+- `check.sh` fails when any file uses `set_option` (which could raise `maxHeartbeats` or turn warnings back off), imports `Lean`, runs metaprograms or names `skipKernelTC`. `Audit.lean` also replays every declaration through Lean's kernel, so one that skipped the kernel check when it was built fails.
 
 ## Files
 
