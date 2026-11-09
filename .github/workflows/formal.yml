@@ -1,0 +1,51 @@
+name: Formal model
+
+on:
+  pull_request:
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  push:
+    branches: [main]
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: formal-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    name: Lean proofs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Secure runner
+        uses: tempoxyz/gh-actions/actions/secure-runner@35019557465e3c38ee3468be171771fd73577584 # 2026-10-20T06-22-38Z-35019557
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # elan, pinned by version and checksum; it installs the Lean version in lean-toolchain.
+      - name: Install elan
+        env:
+          ELAN_VERSION: v4.2.4
+          ELAN_SHA256: 42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63
+        run: |
+          curl -sSfL -o elan.tar.gz "https://github.com/leanprover/elan/releases/download/${ELAN_VERSION}/elan-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ELAN_SHA256}  elan.tar.gz" | sha256sum -c -
+          tar -xzf elan.tar.gz
+          ./elan-init -y --default-toolchain none
+          rm -f elan.tar.gz elan-init
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Check proofs
+        run: bash formal/tempo-session/check.sh
