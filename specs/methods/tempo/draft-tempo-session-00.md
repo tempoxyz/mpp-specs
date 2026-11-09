@@ -1374,7 +1374,11 @@ A voucher is a cumulative authorization, not a single-use proof:
 presenting the same voucher again, in the same or a later session,
 changes no state and adds no authorization: such a request is served
 only from the channel's existing `available` balance, which any
-request that presents a valid voucher for the channel can spend. What
+request that presents a valid voucher for the channel can spend.
+Servers MUST NOT serve a request whose voucher's `cumulativeAmount`
+is at or below `settledOnChain`, since settled vouchers are public
+(see {{voucher-disclosure}}); the client signs a new voucher instead.
+What
 is single-use is each increment of authorization. The amount by which
 a voucher raises `acceptedCumulative` pays for service at most once,
 because `spent` never exceeds `acceptedCumulative` on the channel (see
@@ -1678,22 +1682,24 @@ monotonicity check and the pending close request check in
 {{voucher-verification}}, since a close is what the payee does during
 a forced close: it MAY be lower than `highestVoucherAmount`, and
 servers MUST accept it when it is at least
-`max(spent, settledOnChain)` and at most the deposit. Unless it equals
-`highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
-`settledOnChain`: every settled voucher is public in `settle`
-calldata, so without this check anyone could replay one to close the
-channel. When the `spent` amount in the latest receipt exceeds the
-on-chain `settled` amount, clients SHOULD sign the close voucher for
-it, but never above the highest voucher they have already signed, so
-that the v1 capture is exact; otherwise the voucher the server settled
-is the lowest one that qualifies.
+`max(spent, settledOnChain)` and at most the deposit. Its
+`cumulativeAmount` MUST also exceed `settledOnChain`: every settled
+voucher is public in `settle` calldata, so without this check anyone
+could replay one to close the channel (see {{voucher-disclosure}}).
+When the `spent` amount in the latest receipt exceeds the on-chain
+`settled` amount, clients SHOULD sign the close voucher for it, but
+never above the highest voucher they have already signed, so that the
+v1 capture is exact. When every voucher the client signed is settled,
+a v2 client signs its close voucher one base unit above
+`settledOnChain`, which adds nothing to the capture, and a v1 client
+calls `requestClose` instead (see {{forced-close}}).
 
 The capture bound limits what `close` adds, not what the payee
 collects in total: `settle` redeems any signed voucher, consumed or
 not, so `settledOnChain` can exceed `spent`. A signed voucher is a
 payment the payer cannot reclaim (see {{escrow-guarantees}}).
 
-## Forced Close
+## Forced Close {#forced-close}
 
 If the server does not respond to close requests:
 
@@ -1828,6 +1834,19 @@ The escrow contract enforces:
 - `cumulativeAmount <= channel.deposit` for both (cap)
 - No function runs on a finalized channel, and `open` never reuses a
   `channelId`
+
+## Voucher Disclosure {#voucher-disclosure}
+
+A voucher signs only `channelId` and `cumulativeAmount`, so whoever
+holds it can present it. Every voucher the payee settles becomes
+public in `settle` calldata. Servers therefore MUST NOT accept a
+voucher whose `cumulativeAmount` is at or below `settledOnChain`,
+either to serve a request (see {{voucher-verification}}) or to close
+the channel (see {{cooperative-close}}). A voucher above
+`settledOnChain` has been sent only to the payee; clients MUST send
+vouchers to the payee only over TLS. A disclosed voucher never moves
+funds the payer did not sign for, because the escrow pays each base
+unit at most once.
 
 ## No Voucher Expiry
 
