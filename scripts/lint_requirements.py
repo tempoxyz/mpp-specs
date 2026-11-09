@@ -495,6 +495,35 @@ def body_start(lines: list[str]) -> int:
     return 1
 
 
+def strip_code_spans(line: str) -> str:
+    """Replace each code span in a line with a space.
+
+    A span closes at the next backtick run of the same length, as in kramdown. Runs are
+    matched through per-length position lists, so a long run of backticks stays linear
+    (a backreferencing regex backtracks in cubic time on one).
+    """
+    runs = [(m.start(), m.end()) for m in re.finditer(r"`+", line)]
+    by_length: dict[int, list[int]] = defaultdict(list)
+    for index, (start, end) in enumerate(runs):
+        by_length[end - start].append(index)
+    out: list[str] = []
+    pos = index = 0
+    while index < len(runs):
+        start, end = runs[index]
+        same = by_length[end - start]
+        later = bisect.bisect_right(same, index)
+        if later == len(same):
+            index += 1
+            continue
+        close = same[later]
+        out.append(line[pos:start])
+        out.append(" ")
+        pos = runs[close][1]
+        index = close + 1
+    out.append(line[pos:])
+    return "".join(out)
+
+
 def lint_file(path: Path) -> Report:
     """Lint one draft."""
     report = Report(path)
@@ -550,7 +579,7 @@ def lint_file(path: Path) -> Report:
     # The source with HTML comments blanked (newlines kept, so line numbers hold) and code
     # spans removed from each line: what is left is where an ID is written as an IAL.
     blanked = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), "\n".join(lines), flags=re.DOTALL)
-    loud = [re.sub(r"(`+).*?\1", " ", line) for line in blanked.split("\n")]
+    loud = [strip_code_spans(line) for line in blanked.split("\n")]
 
     def quiet_at(req_id: str, number: int) -> bool:
         """Whether this occurrence of a quiet ID is in code or a comment, not an IAL."""

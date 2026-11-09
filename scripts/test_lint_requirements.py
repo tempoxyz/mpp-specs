@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from lint_requirements import ROOT, annotation, lint_file, main, short_name
+from lint_requirements import ROOT, annotation, lint_file, main, short_name, strip_code_spans
 
 
 def write_spec(
@@ -984,3 +984,19 @@ def test_ial_before_its_block_is_reported_despite_later_mentions(tmp_path):
         report = lint_body(tmp_path, "Intro.", "", "{: #req-test-charge-001}", "P MUST x.", "", mention)
         assert report.errors == [f"line {at(3)[0]}: req-test-charge-001 is not directly after a paragraph or list item"]
         assert report.untagged == at(4)
+
+
+def test_strip_code_spans():
+    assert strip_code_spans("a `x` b ``y`z`` c") == "a   b   c"
+    # An unmatched run stays literal, and a span closes only at a run of its own length.
+    assert strip_code_spans("a ``x` b") == "a ``x` b"
+    assert strip_code_spans("`a``b`") == " "
+
+
+def test_strip_code_spans_is_linear_on_backtick_runs():
+    import time
+
+    start = time.monotonic()
+    strip_code_spans("`" * 64000)
+    strip_code_spans("` " * 32000)
+    assert time.monotonic() - start < 2
