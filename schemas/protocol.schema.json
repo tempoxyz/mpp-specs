@@ -3,6 +3,11 @@
   "$id": "https://paymentauth.org/schemas/protocol.schema.json",
   "title": "MPP Conformance Protocol Values",
   "$defs": {
+    "PaymentMethodId": {
+      "description": "core payment-method-id = 1*LOWERALPHA",
+      "type": "string",
+      "pattern": "^[a-z]+$"
+    },
     "Operation": {
       "type": "string",
       "enum": [
@@ -49,7 +54,7 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" },
-        "method": { "type": "string", "minLength": 1 },
+        "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "type": "string", "minLength": 1 },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string", "format": "date-time" },
@@ -75,7 +80,7 @@
       "additionalProperties": true,
       "properties": {
         "status": { "type": "string", "const": "success" },
-        "method": { "type": "string" },
+        "method": { "$ref": "#/$defs/PaymentMethodId" },
         "timestamp": { "type": "string", "format": "date-time" },
         "reference": { "type": "string", "minLength": 1 },
         "externalId": { "type": "string" },
@@ -114,7 +119,7 @@
       "properties": {
         "secretKey": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" },
-        "method": { "type": "string" },
+        "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "type": "string" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string" },
@@ -276,7 +281,7 @@
       "required": ["method", "intent", "request"],
       "additionalProperties": false,
       "properties": {
-        "method": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "const": "charge" },
         "request": {
           "type": "object",
@@ -344,7 +349,7 @@
       "properties": {
         "realm": { "type": "string" },
         "secretKey": { "type": "string", "minLength": 1 },
-        "method": { "type": "string", "minLength": 1 },
+        "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "type": "string", "minLength": 1 },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string" },
