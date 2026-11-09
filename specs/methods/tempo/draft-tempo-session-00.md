@@ -1255,15 +1255,16 @@ On `action="open"`, servers MUST:
      service, and `settle` rejects it)
 4. Initialize server-side channel state for the `channelId`.
 
-A repeated `open` for a `channelId` that the server already tracks,
-or that already exists on chain, MUST NOT be co-signed, broadcast or
-accepted. Its `open()` reverts, and the signed transaction is public,
-so anyone could replay it. The server returns 402 with a fresh
-Challenge and MUST keep the channel's existing `acceptedCumulative`
-and `spent` (see {{server-accounting}}); the client continues with
-`action="voucher"`. Servers MUST check this after decoding the
-transaction in step 1 and before adding a fee payer signature or
-broadcasting.
+A repeated `open` MUST NOT be co-signed, broadcast or accepted. When
+step 1 decodes the transaction, and before it adds a fee payer
+signature or broadcasts, the server MUST atomically reserve the
+`channelId`, and MUST reject an `open` whose `channelId` is already
+reserved, tracked or on chain. A pending `open` is public, so without
+the reservation two copies of it could both pass steps 1-3 before it
+is mined. The server returns 402 with a fresh Challenge and MUST keep
+the channel's existing `acceptedCumulative` and `spent` (see
+{{server-accounting}}); the client continues with
+`action="voucher"`, which also covers a retry after a crash.
 
 ## TopUp Verification
 
