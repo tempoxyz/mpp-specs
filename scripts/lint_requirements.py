@@ -573,13 +573,25 @@ def lint_file(path: Path) -> Report:
         for body in bodies:
             ald_uses.update(t for t in body.split() if ALD_REF.fullmatch(t))
     lost: dict[int, list[str]] = defaultdict(list)
+    # IDs that anchor a text block. Such an ID written again on another block, which then
+    # set an ID of its own, is still an anchor (of the first block) but is lost on the second.
+    anchored_by = {item.anchor for item in texts if item.anchor}
     for req_id, found in id_lines.items():
-        if req_id in anchors or req_id in quiet_ids:
+        if req_id in quiet_ids:
+            continue
+        # An anchor kept by a heading, list or span is checked with those items below.
+        if req_id in anchors and req_id not in anchored_by:
             continue
         for number in found:
             line = lines[number - 1]
             if number in commented:
                 continue
+            if req_id in anchors:
+                here = bisect.bisect_left(starts, number) - 1
+                if here < 0 or texts[here].anchor == req_id:
+                    # This occurrence anchors its block (a second block it anchors is
+                    # reported as a duplicate below).
+                    continue
             ald = ALD_NAME.match(line)
             if ald:
                 # An ALD only defines attributes; it tags a block when an IAL names it. If
@@ -596,7 +608,8 @@ def lint_file(path: Path) -> Report:
             if not KRAMDOWN_ID.fullmatch(req_id):
                 report.error(number, f"malformed ID {req_id} (expected {prefix}NNN)")
                 continue
-            if req_id in rendered_ids:
+            # An anchor appears in the XML as an attribute, not as rendered text.
+            if req_id in rendered_ids and req_id not in anchors:
                 report.error(number, f"{req_id} is not directly after a paragraph or list item, so it renders as text")
                 continue
             # The block it was meant for: the last one starting above it, if it has an

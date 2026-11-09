@@ -121,6 +121,17 @@ class TestIdProblems:
         report = lint_file(spec)
         assert any("duplicate ID" in e for e in report.errors)
 
+    def test_reused_id_replaced_by_another_id(self, tmp_path):
+        # The second block repeats 001 and then sets 002; kramdown keeps 002, so the repeat
+        # of 001 must still be reported even though 001 anchors the first block.
+        spec = write_spec(
+            tmp_path,
+            "A MUST b.\n{: #req-test-charge-001}\n\n"
+            "C MUST d.\n{: #req-test-charge-001}\n{: #req-test-charge-002}\n",
+        )
+        report = lint_file(spec)
+        assert any("req-test-charge-001" in e and "req-test-charge-002" in e for e in report.errors), report.errors
+
     def test_malformed_ids(self, tmp_path):
         spec = write_spec(
             tmp_path,
