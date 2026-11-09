@@ -4,8 +4,9 @@
 Each draft under specs/ is owned by the GitHub user who submitted it: the
 author of the pull request that first added the file (following renames
 from revision bumps), or the commit author when no pull request is found.
-DEFAULT_OWNERS own every file and are added to every entry, so each entry
-keeps an owner with write access.
+DEFAULT_OWNERS are added to every entry, so each spec keeps an owner with
+write access. Files outside specs/ have no owner, so Dependabot and
+AGENTS.md sync pull requests don't need a code owner review.
 
 Run from the repository root with full git history (not a shallow clone):
 
@@ -15,6 +16,8 @@ Run from the repository root with full git history (not a shallow clone):
 GITHUB_TOKEN or GH_TOKEN, when set, raises the GitHub API rate limit.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -23,6 +26,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 REPOSITORY = "tempoxyz/mpp-specs"
 DEFAULT_OWNERS = ["@brendanjryan"]
@@ -51,10 +55,13 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
-def first_commit(path: str) -> tuple[str, str]:
-    """Return (sha, author email) of the commit that first added path."""
+def first_commit(path: str) -> tuple[str, str] | None:
+    """Return (sha, author email) of the commit that first added path, or None."""
     log = git("log", "--follow", "--diff-filter=A", "--format=%H %ae", "--", path).split("\n")
-    sha, email = [line for line in log if line][-1].split(" ", 1)
+    lines = [line for line in log if line]
+    if not lines:
+        return None
+    sha, email = lines[-1].split(" ", 1)
     return sha, email
 
 
@@ -68,21 +75,54 @@ def github(url: str) -> object:
         return json.load(response)
 
 
+def try_github(url: str) -> object | None:
+    """Call the GitHub API, printing a note and returning None on failure."""
+    try:
+        return github(url)
+    except HTTPError as error:
+        if error.code in (403, 429):
+            reason = "rate limited: set GITHUB_TOKEN"
+        elif error.code in (404, 422):
+            reason = "commit not on GitHub yet"
+        else:
+            reason = f"HTTP {error.code}"
+        print(f"note: GitHub API {url}: {reason}; falling back", file=sys.stderr)
+    except URLError as error:
+        print(f"note: GitHub API {url}: {error.reason}; falling back", file=sys.stderr)
+    return None
+
+
 def submitter(sha: str, email: str) -> str | None:
-    """Return the login of whoever submitted the commit sha."""
-    pulls = github(f"repos/{REPOSITORY}/commits/{sha}/pulls")
-    merged = [pull for pull in pulls if pull.get("merged_at")] or pulls
-    if merged and merged[0].get("user"):
-        return merged[0]["user"]["login"]
+    """Return the login of whoever submitted the commit sha.
+
+    Tries the pull request that merged it, then a noreply author email, then
+    the commit's GitHub author. Returns None when none of them work, which
+    leaves the entry to DEFAULT_OWNERS.
+    """
+    pulls = try_github(f"repos/{REPOSITORY}/commits/{sha}/pulls")
+    if isinstance(pulls, list):
+        merged = [pull for pull in pulls if pull.get("merged_at")] or pulls
+        if merged and merged[0].get("user"):
+            return merged[0]["user"]["login"]
     if login := login_from_email(email):
         return login
-    author = github(f"repos/{REPOSITORY}/commits/{sha}").get("author")
+    commit = try_github(f"repos/{REPOSITORY}/commits/{sha}")
+    author = commit.get("author") if isinstance(commit, dict) else None
     return author["login"] if author else None
+
+
+def owner(path: str) -> str | None:
+    """Return the submitter of path, or None for a file with no commit yet."""
+    added = first_commit(path)
+    if added is None:
+        print(f"note: {path} has no commit yet; using default owners", file=sys.stderr)
+        return None
+    return submitter(*added)
 
 
 def render(owners: dict[str, str | None], defaults: list[str]) -> str:
     """Render CODEOWNERS for {path: submitter login}."""
-    lines = [HEADER, f"* {' '.join(defaults)}", ""]
+    lines = [HEADER]
     for path in sorted(owners):
         login = owners[path]
         entry = [f"@{login}"] if login and f"@{login}" not in defaults else []
@@ -100,7 +140,7 @@ def main() -> int:
         return 1
 
     paths = [p for p in git("ls-files", "specs/**.md").split("\n") if p]
-    owners = {path: submitter(*first_commit(path)) for path in paths}
+    owners = {path: owner(path) for path in paths}
     content = render(owners, DEFAULT_OWNERS)
 
     if args.check:

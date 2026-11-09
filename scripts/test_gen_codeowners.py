@@ -1,6 +1,16 @@
 """Tests for gen_codeowners.py."""
 
-from gen_codeowners import HEADER, login_from_email, owner_pattern, render
+from urllib.error import HTTPError
+
+import gen_codeowners
+from gen_codeowners import (
+    HEADER,
+    login_from_email,
+    owner,
+    owner_pattern,
+    render,
+    submitter,
+)
 
 
 def test_owner_pattern_survives_revision_bumps():
@@ -27,7 +37,21 @@ def test_render_adds_defaults_without_duplicates():
     )
     assert content.startswith(HEADER)
     lines = content.splitlines()
-    assert "* @brendanjryan" in lines
+    assert not any(line.startswith("*") for line in lines)
     assert "/specs/core/draft-httpauth-payment-*.md @brendanjryan" in lines
     assert "/specs/methods/solana/draft-solana-charge-*.md @lgalabru @brendanjryan" in lines
     assert "/specs/methods/x/draft-x-charge-*.md @brendanjryan" in lines
+
+
+def test_submitter_falls_back_when_github_fails(monkeypatch):
+    def fail(url):
+        raise HTTPError(url, 403, "rate limited", None, None)
+
+    monkeypatch.setattr(gen_codeowners, "github", fail)
+    assert submitter("abc123", "1572504+brendanjryan@users.noreply.github.com") == "brendanjryan"
+    assert submitter("abc123", "ludo@example.org") is None
+
+
+def test_owner_of_uncommitted_spec_is_none(monkeypatch):
+    monkeypatch.setattr(gen_codeowners, "first_commit", lambda path: None)
+    assert owner("specs/methods/x/draft-x-charge-00.md") is None
