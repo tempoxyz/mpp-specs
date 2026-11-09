@@ -1273,19 +1273,29 @@ the reserved `open` does not create the channel (it reverts, is
 dropped, or expires before it is mined), the server MUST release the
 reservation, so that the payer can submit a new `open`.
 
-Servers MUST persist the reservation, with the decoded `open` and any
-initial voucher, to durable storage before broadcasting. A reservation
-can miss step 4 without a restart: the handler can time out while the
+Servers MUST persist the reservation, with the decoded `open`, any
+initial voucher, and the Challenge's `amount` and `currency` that step
+2 checks, to durable storage before broadcasting. A reservation can
+miss step 4 without a restart: the handler can time out while the
 `open` is slow to mine, or the instance that held it can fail while
 others run. Servers MUST resolve every reservation that has not
 reached step 4 whenever an `open` or `action="voucher"` names its
 `channelId`, after a restart, and in a periodic sweep. When the
 channel is on chain and matches the reserved `open`, the server
 completes steps 2-4 from the stored `open` and chain state, without
-broadcasting again. Otherwise it keeps the reservation while the
-stored `open` can still be mined, and releases it only as above, once
-that `open` reverts, is dropped, or expires. A client retrying with
-`action="voucher"` on an opened channel then finds its state.
+broadcasting again. If step 2 or 3 fails on a channel that the
+reserved `open` created (for example, the stored initial voucher is
+invalid, or the payer has requested a close), the server MUST still
+track the channel, with no accepted voucher and with
+`acceptedCumulative`, `spent` and `settledOnChain` equal to
+`channel.settled`, and MUST NOT accept the stored voucher or deliver
+service for that `open`. The client then continues with
+`action="voucher"`, `action="topUp"` or a close, each under its own
+verification. While the channel is not on chain, the server keeps the
+reservation as long as the stored `open` can still be mined, and
+releases it only as above, once that `open` reverts, is dropped, or
+expires. A client retrying with `action="voucher"` on an opened
+channel then finds its state.
 
 ## TopUp Verification
 
