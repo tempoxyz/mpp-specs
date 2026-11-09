@@ -32,7 +32,9 @@ ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
 QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
 # Bullets, numbered items and definition-list definitions (": text"); each is its own block.
 LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
-FENCE = re.compile(r"^\s*(~{3,}|`{3,})(.*)$")
+# kramdown (and kramdown-rfc) fence code with ~~~ only. A ``` line is ordinary text: a ```
+# pair renders as inline verbatim, which INLINE_CODE already strips from the prose.
+FENCE = re.compile(r"^( *)(~{3,})(.*)$")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
 BOILERPLATE = re.compile(r'The key words "MUST"')
 # A table cell that only marks a field present or absent: the marker alone or
@@ -44,25 +46,30 @@ PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 CONDITION = re.compile(r"^\W*(?:if|when|unless|for|only|except|where|while)\b", re.IGNORECASE)
 
 
-def fence_step(line: str, fence: str | None, max_indent: int = 3) -> tuple[str | None, bool]:
-    """Track fenced code blocks as CommonMark does.
+Fence = tuple[str, int]
 
-    fence is the delimiter that opened the current block, or None outside one.
-    Returns the new state and whether this line is a fence line. Only a run of
-    the same character, at least as long and with nothing after it, closes a
-    block, so a literal ``` inside a ~~~ block (or the reverse) stays code. A fence
-    opens only when indented at most max_indent columns (3, plus the open list item's
-    text column): indented further, the line is part of an indented code block.
+
+def fence_step(line: str, fence: Fence | None, base: int = 0) -> tuple[Fence | None, bool]:
+    """Track ~~~ code blocks as kramdown does.
+
+    line has tabs expanded and any blockquote marker removed. fence is the open
+    block's delimiter and its base column (the open list item's text column, or 0),
+    or None outside one. Returns the new state and whether this line is a fence
+    line. A fence opens or closes only when indented at most 3 columns past its
+    base: indented further, the line is code (an indented code block, or text
+    inside the open block). Only a run at least as long as the opener, with
+    nothing after it, closes the block.
     """
     match = FENCE.match(line)
     if not match:
         return fence, False
-    run, rest = match.group(1), match.group(2)
+    indent, run, rest = len(match.group(1)), match.group(2), match.group(3)
     if fence is None:
-        if len(line) - len(line.lstrip()) > max_indent:
+        if indent > base + 3:
             return None, False
-        return run, True
-    if run[0] == fence[0] and len(run) >= len(fence) and not rest.strip():
+        return (run, base), True
+    opener, opener_base = fence
+    if indent <= opener_base + 3 and len(run) >= len(opener) and not rest.strip():
         return None, True
     return fence, False
 
@@ -131,7 +138,10 @@ def segments(
     # so a later paragraph indented to one (a loose-list continuation) still belongs
     # to that item, even after a nested item has closed.
     list_stack: list[int] = []
-    fence: str | None = None
+    fence: Fence | None = None
+    # Text column of a list item whose ID line just closed it. kramdown still reads the next
+    # line as that item's text (a lazy continuation) unless a blank line comes first.
+    lazy_indent = 0
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
     for number, raw in enumerate(lines, start=1):
@@ -139,16 +149,22 @@ def segments(
             if number > 1 and raw.strip() == "---":
                 in_frontmatter = False
             continue
-        fence, is_fence = fence_step(raw, fence, (list_stack[-1] if list_stack else 0) + 3)
+        # Tabs stop every 4 columns, as kramdown counts them; then drop a blockquote marker,
+        # so a quoted fence or list is read like an unquoted one.
+        line = re.sub(r"^ {0,3}> ?", "", raw.expandtabs(4))
+        stripped = line.strip()
+        column = len(line) - len(line.lstrip())
+        if fence is None and FENCE.match(line):
+            # A fence less indented than an open item's text ends that item's list.
+            while list_stack and list_stack[-1] > column:
+                list_stack.pop()
+        fence, is_fence = fence_step(line, fence, list_stack[-1] if list_stack else 0)
         if is_fence:
             current = None
+            lazy_indent = 0
             continue
         if fence:
             continue
-
-        line = re.sub(r"^\s*>\s?", "", raw)
-        stripped = line.strip()
-        column = len(line) - len(line.lstrip())
         if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
             # Indented four or more past the open item's text (or the margin) with no
             # paragraph to continue: kramdown renders it as a code block, not prose.
@@ -164,8 +180,10 @@ def segments(
             else:
                 detached.extend((number, i) for i in ids if i.startswith("req-"))
             # kramdown ends the block at the IAL: the next line starts a new one.
+            lazy_indent = current.indent if current is not None and current.indent else 0
             current = None
             continue
+        lazy, lazy_indent = lazy_indent, 0
         if not stripped:
             current = None
             continue
@@ -177,6 +195,11 @@ def segments(
             current = None
             continue
         marker = LIST_MARKER.match(line)
+        if not marker and current is None and lazy and column < lazy:
+            # Lazy continuation: still the item's text, so its ID must be indented to it.
+            current = Segment(number, stripped, number, indent=lazy)
+            result.append(current)
+            continue
         if marker:
             # Close items whose text starts right of this marker: it is their sibling or
             # belongs to an outer list.
@@ -205,10 +228,11 @@ def table_keywords(lines: list[str]) -> list[int]:
     A table cell can't carry an ID, so such a rule has to move to prose.
     """
     found: list[int] = []
-    fence: str | None = None
+    fence: Fence | None = None
     for number, raw in enumerate(lines, start=1):
-        fence, is_fence = fence_step(raw, fence)
-        stripped = raw.strip()
+        line = re.sub(r"^ {0,3}> ?", "", raw.expandtabs(4))
+        fence, is_fence = fence_step(line, fence)
+        stripped = line.strip()
         if is_fence or fence or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):

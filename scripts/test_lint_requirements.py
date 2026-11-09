@@ -213,6 +213,44 @@ class TestIdProblems:
         report = lint_file(spec)
         assert len(report.untagged) == 1
 
+    # Each case below was checked against kramdown-rfc's own output (RFC2629Kramdown input).
+    def test_fence_after_list_is_not_reopened_by_indented_tildes(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- a MUST x.\n  {: #req-test-charge-001}\n\n~~~\ncode\n~~~\n\n    ~~~\n\nP MUST y.\n",
+        )
+        report = lint_file(spec)
+        assert len(report.untagged) == 1
+
+    def test_closing_fence_indented_four_does_not_close(self, tmp_path):
+        spec = write_spec(tmp_path, "~~~\ncode\n    ~~~\nmore MUST\n~~~\n\nP MUST y.\n")
+        report = lint_file(spec)
+        assert report.total == 1
+
+    def test_tab_indented_tildes_are_code(self, tmp_path):
+        spec = write_spec(tmp_path, "Intro.\n\n\t~~~\n\nP MUST y.\n")
+        report = lint_file(spec)
+        assert len(report.untagged) == 1
+
+    def test_blockquoted_fence_is_code(self, tmp_path):
+        spec = write_spec(tmp_path, "> ~~~\n> C MUST z.\n> {: #req-test-charge-009}\n> ~~~\n")
+        report = lint_file(spec)
+        assert report.total == 0
+        assert report.errors == []
+
+    def test_lazy_continuation_id_goes_on_the_list(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- Item MUST a.\n  {: #req-test-charge-001}\nlazy MUST b.\n{: #req-test-charge-002}\n",
+        )
+        report = lint_file(spec)
+        assert any("req-test-charge-002 is not indented" in e for e in report.errors)
+
+    def test_backtick_pair_is_inline_verbatim_not_a_fence(self, tmp_path):
+        spec = write_spec(tmp_path, "Intro.\n\n```\ncode MUST\n```\n\nP MUST y.\n")
+        report = lint_file(spec)
+        assert report.total == 1
+
 class TestMain:
     def test_warn_mode_exits_zero(self, tmp_path):
         spec = write_spec(tmp_path, "Clients MUST NOT reuse it.\n")
