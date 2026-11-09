@@ -1019,8 +1019,9 @@ challenge `id` with problem type `challenge-not-found`.
 }
 ~~~
 
-Upon successful verification, the server updates the channel's available
-balance. The new deposit is immediately available for voucher authorization.
+Upon successful verification, the server records the new deposit, which
+raises the cap on future vouchers at once. A top-up adds no spendable
+balance: the client sends a higher voucher to use the new funds.
 
 ### Voucher Payload {#voucher-payload}
 
@@ -1513,7 +1514,8 @@ delivery. For streaming responses (SSE, chunked), servers SHOULD:
 
 1. Reserve an estimated cost before starting delivery
 2. Adjust `spent` as actual consumption is measured
-3. Pause delivery if `available` is exhausted (client must top-up)
+3. Pause delivery if `available` is exhausted (client sends a higher
+   voucher, topping up first when the deposit is exhausted)
 
 ## Insufficient Balance During Streaming
 
