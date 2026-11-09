@@ -1470,6 +1470,14 @@ lowest accepted voucher whose `cumulativeAmount` is at least
 `max(spent, settledOnChain)` (see {{cooperative-close}}). A voucher
 below `settledOnChain` reverts on chain.
 
+The guard reads the server's `closeRequestedAt`, so servers MUST keep
+it current: they MUST follow the escrow's `CloseRequested` events, or
+read `closeRequestedAt` from the contract, as each block arrives, and
+MUST stop delivery when either source shows a close request. A
+server that cannot read chain state for longer than the grace period
+less the time it needs to close MUST stop delivering metered service
+until it reads it again.
+
 ## Crash Safety
 
 To prevent fund loss from server crashes:
