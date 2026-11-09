@@ -1265,12 +1265,22 @@ the reservation two copies of it could both pass steps 1-3 before it
 is mined. The server returns 402 with a fresh Challenge and MUST keep
 the channel's existing `acceptedCumulative` and `spent` (see
 {{server-accounting}}); the client continues with
-`action="voucher"`, which also covers a retry after a crash.
+`action="voucher"`, which also covers a retry after a crash (see
+below).
 
 The reservation becomes the channel's tracked state at step 4. If
 the reserved `open` does not create the channel (it reverts, is
 dropped, or expires before it is mined), the server MUST release the
 reservation, so that the payer can submit a new `open`.
+
+Servers MUST persist the reservation, with the decoded `open` and any
+initial voucher, to durable storage before broadcasting. A server
+that restarts with a reservation that never reached step 4 MUST
+resolve it before serving the channel: when the channel is on chain
+and matches the reserved `open`, the server completes steps 2-4
+from the stored `open` and chain state, without broadcasting again;
+otherwise it releases the reservation as above. A client retrying
+with `action="voucher"` on an opened channel then finds its state.
 
 ## TopUp Verification
 
