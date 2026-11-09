@@ -174,10 +174,19 @@ def strip_literal_spans(text: str) -> str:
     """
     pieces: list[str] = []
     position = 0
+    # Each kind's next match, searched again only once position passes its start (and never
+    # again once a search finds none), so every pattern scans the text about once instead of
+    # once per code span: linear, not quadratic.
+    tick = BACKTICKS.search(text)
+    math = MATH_SPAN.search(text)
+    comment = COMMENT_SPAN.search(text)
     while True:
-        tick = BACKTICKS.search(text, position)
-        math = MATH_SPAN.search(text, position)
-        comment = COMMENT_SPAN.search(text, position)
+        if tick and tick.start() < position:
+            tick = BACKTICKS.search(text, position)
+        if math and math.start() < position:
+            math = MATH_SPAN.search(text, position)
+        if comment and comment.start() < position:
+            comment = COMMENT_SPAN.search(text, position)
         # Where each construct's own marker starts, after any escaping backslashes.
         starts = {
             "tick": tick.start(2) if tick else None,
