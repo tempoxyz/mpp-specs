@@ -1545,8 +1545,9 @@ After the grace period the payer can `withdraw` at once, and service
 delivered then is paid only if the payee's `settle` lands first. To a
 request it does not serve for this reason, the server returns 402 with
 a fresh Challenge; the client can `topUp` to cancel the close request.
-Delivery MAY resume after a `topUp` cancels the close request,
-unless the server has already started a close (see
+Delivery MAY resume after a `topUp` cancels the close request, once
+the block holding the cancellation is final, unless the server has
+already started a close (see
 {{cooperative-close}}). On
 observing a close request, servers SHOULD, within the grace period,
 close with the lowest accepted voucher whose `cumulativeAmount` is at
@@ -1596,7 +1597,10 @@ To prevent double-charging on retries and network failures:
 - Servers SHOULD track `(channelId, idempotencyKey)` pairs and return
   the cached response (including receipt) for duplicate requests. The
   key is per channel, not per challenge, since `spent` is per channel
-  and a retry can arrive under a fresh challenge.
+  and a retry can arrive under a fresh challenge. Servers MUST return
+  a cached response only to a request for the same method, target URI
+  and body as the one that produced it, since several services or
+  principals can share a channel.
 - Servers MUST NOT increment `spent` for duplicate idempotent requests
 
 If idempotency is not implemented, servers MUST document this limitation
