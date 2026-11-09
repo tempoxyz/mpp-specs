@@ -1534,8 +1534,9 @@ unless the server has already started a close (see
 {{cooperative-close}}). On
 observing a close request, servers SHOULD, within the grace period,
 close with the lowest accepted voucher whose `cumulativeAmount` is at
-least `max(spent, settledOnChain)` (see {{cooperative-close}}). A
-voucher below `settledOnChain` reverts on chain.
+least `max(spent, settledOnChain)`, or the highest when none is (see
+{{cooperative-close}}). A voucher below `settledOnChain` reverts on
+chain.
 
 The guard reads the server's `closeRequestedAt`, so servers MUST keep
 it current: they MUST follow the escrow's `CloseRequested` and
@@ -1723,7 +1724,8 @@ A v1 `close()` has no capture amount and captures the full
 `cumulativeAmount` of the voucher it is given. For v1, the bound holds
 only through the choice of voucher: servers MUST close with the lowest
 accepted voucher, the client's close voucher included, whose
-`cumulativeAmount` is at least `max(spent, settledOnChain)`. A
+`cumulativeAmount` is at least `max(spent, settledOnChain)`, or with
+the highest accepted voucher when none is that high. A
 `settle` the server has broadcast that is not yet final counts toward
 `settledOnChain` here: servers MUST wait for it to execute or fail
 before choosing the close voucher, since a close below a settled
