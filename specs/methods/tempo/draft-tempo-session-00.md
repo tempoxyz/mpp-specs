@@ -1251,7 +1251,9 @@ On `action="open"`, servers MUST:
    transaction, infer `authorizedSigner` from the calldata, and compute
    `channelId` deterministically (see {{channel-state}}). If `feePayer: true`,
    add fee payer signature using domain `0x78` (see {{fee-payment}}) and
-   broadcast. Otherwise, broadcast as-is.
+   broadcast. Otherwise, broadcast as-is. Servers MUST refuse an
+   `open` transaction, v1 or v2, without an expiring nonce, so that
+   its `validBefore` bounds how long its reservation (see below) lasts.
    For v2, servers MUST also verify the payload `descriptor`, the computed
    `channelId`, the descriptor `expiringNonceHash`, and the emitted channel
    open receipt before accepting the credential.
