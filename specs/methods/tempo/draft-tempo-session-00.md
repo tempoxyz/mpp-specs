@@ -1253,7 +1253,11 @@ On `action="open"`, servers MUST:
    - `voucher.cumulativeAmount >= channel.settled` (at or above current
      settlement; a voucher equal to `channel.settled` authorizes no new
      service, and `settle` rejects it)
-4. Initialize server-side channel state
+4. Initialize server-side channel state only if the server holds none
+   for this `channelId`. If it already holds state, it MUST keep the
+   existing `acceptedCumulative` and `spent` (see
+   {{server-accounting}}) and MUST NOT reset them: a repeated `open`
+   for an existing channel reverts on-chain but passes steps 1-3.
 
 ## TopUp Verification
 
