@@ -1280,8 +1280,9 @@ On `action="open"`, servers MUST:
      deposit cannot be settled or closed)
 4. Initialize server-side channel state for the `channelId`: `spent`
    and `settledOnChain` equal to `channel.settled`, and
-   `acceptedCumulative` equal to the initial voucher's
-   `cumulativeAmount`, or to `channel.settled` without one.
+   `acceptedCumulative` and `highestVoucherAmount` equal to the
+   initial voucher's `cumulativeAmount`, or to `channel.settled`
+   without one. Persist the initial voucher as the highest accepted.
 
 A repeated `open` MUST NOT be co-signed, broadcast or accepted. When
 step 1 decodes the transaction, and before it adds a fee payer
