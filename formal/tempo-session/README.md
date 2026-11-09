@@ -50,11 +50,11 @@ Every theorem holds for all reachable states with the guards on (`Cfg.Guarded`: 
 | P5 | A voucher only pays its own channel, escrow and chain | `P5_*` |
 | P6 | A channel finalizes at most once and is frozen after | `P6_finalize_at_most_once`, `P6_finalized_frozen` |
 | P7 | topUp preserves the invariant, and a finalized channel holds no residual funds | `P7_*` |
-| P8 | Service delivered ≤ accepted amount | `P8_delivered_le_accepted` |
+| P8 | Service charged (`spent`, which bounds delivered service) ≤ accepted amount | `P8_delivered_le_accepted` |
 | P8a | The accepted amount is within the deposit and backed by a valid voucher | `P8a_accepted_backed` |
 | P8b | withdraw needs a close request at least a grace period old; the payee can always settle the accepted voucher | `P8b_*` |
 | P8c | No delivery while a close is pending (with `guardDelivery`) | `P8c_no_delivery_while_closing` |
-| P9 | A close whose capture follows the §13.2 server rule captures ≤ max(settled, delivered) | `P9_capture_le_consumed` |
+| P9 | A close whose capture follows the §13.2 server rule captures ≤ max(settled, spent) | `P9_capture_le_consumed` |
 
 The one-step theorems that only read a guard back (`P3_*_rejected`, `P3_server_*`, `P5_*`, `P8b_withdraw_needs_request`, `P8c`) are sanity checks that `step` encodes the rule as the spec states it.
 
@@ -65,6 +65,9 @@ The one-step theorems that only read a guard back (`P3_*_rejected`, `P3_server_*
 - uint256 subtraction is checked, so an underflow reverts.
 - close follows TIP-1034: settled ≤ capture ≤ cumulativeAmount and capture ≤ deposit, with a signature only when capture > settled. The §13.2 capture bound is the server's rule, not a contract check (P9).
 - A repeat requestClose keeps the first request's time, as TIP-1034 does and [#399](https://github.com/tempoxyz/mpp-specs/pull/399) adds to §6.4.5. The draft without #399 resets the time on every call, which only lets the payer delay its own withdraw; `closeReq_sticky` holds for the amended draft.
+- topUp only raises the deposit and leaves the accepted amount and `spent` unchanged, as [#399](https://github.com/tempoxyz/mpp-specs/pull/399) amends §11.2. The draft without #399 tells the server to credit the top-up to the available balance, which would let service exceed signed vouchers.
+- `charge` persists `spent` and delivers in one step, so `delivered = spent` in every reachable state. The draft lets a server persist `spent` and crash before delivering; then service delivered can fall short of `spent` by that request's cost, and P8 and P9 bound `spent`, not delivered service.
+- There is one server, and it is every channel's payee: the payee and token checks of §11.1 Open Verification step 2 are assumed, not modelled. P8b shows `k.payee` can settle what the server accepted.
 - The server reads chain state with no lag; reorgs aren't modelled.
 - Token transfers are ghost counters (`paid`, `refunded`, `deposited`) per channel.
 - The payee's operator isn't modelled.
