@@ -383,3 +383,69 @@ def test_requirement_id_on_heading_is_an_error(tmp_path):
     draft.write_text("# Heading {#req-hd-001}\n\nA rule MUST hold.\n{: #req-hd-001}\n")
     report = lint_file(draft)
     assert any("on a heading" in e for e in report.errors)
+
+def test_quoted_html_comment_closes_inside_its_quote():
+    # A --> on a following line of the same quote closes it: only the quote is hidden.
+    lines = ["> <!--", "> hidden MUST x.", "> -->", "", "A rule MUST hold.", "{: #req-x-001}"]
+    found, _, _, code = segments(lines)
+    assert [s.ids for s in found] == [["req-x-001"]]
+    assert {1, 2, 3} <= code and 5 not in code
+
+
+def test_quoted_id_attribute_sets_the_id(tmp_path):
+    # kramdown reads id="..." and id='...' (not unquoted id=x) and anchors the block with
+    # the last id, so id="wrong" after a requirement ID replaces its anchor.
+    spec = write_spec(
+        tmp_path,
+        'A MUST b.\n{: #req-test-charge-001 id="wrong"}\n\n'
+        "C MUST d.\n{: id='req-test-charge-002'}\n\n"
+        "E MUST f.\n{: id=wrong #req-test-charge-003}\n\n"
+        "G MUST h.\n{: id=\"req-test-charge-002\"}\n",
+    )
+    report = lint_file(spec)
+    assert report.tagged == 4
+    assert any("req-test-charge-001 shares its block" in e for e in report.errors)
+    assert any("duplicate ID req-test-charge-002" in e for e in report.errors)
+    assert len(report.errors) == 2
+
+
+def test_block_kramdown_comment_hides_keywords_and_ids():
+    lines = ["Intro.", "", "{::comment}", "Hidden MUST x.", "{: #req-x-001}", "{:/comment}", "", "Visible SHOULD y."]
+    found, detached, _, code = segments(lines)
+    assert [s.first for s in found] == ["Intro.", "Visible SHOULD y."]
+    assert detached == [] and {3, 4, 5, 6} <= code
+
+
+def test_kramdown_comment_in_a_paragraph_is_a_span():
+    # Right after a paragraph line kramdown reads {::comment} as a span: the paragraph goes
+    # on, the comment drops out, and the IAL after its stop tag tags the paragraph.
+    lines = ["P MUST one.", "{::comment}", "x MUST", "{:/comment}", "{: #req-x-001}", "", "A {::comment}MAY{:/comment} b."]
+    found, detached, _, _ = segments(lines)
+    assert [s.ids for s in found] == [["req-x-001"], []]
+    assert detached == [] and not found[1].is_requirement
+
+
+def test_kramdown_comment_tag_with_text_after_it_is_a_paragraph():
+    lines = ["{::comment}x{:/comment} The client MUST go.", "{: #req-x-001}", "", "{::comment}y MUST{:/comment}"]
+    found, detached, _, _ = segments(lines)
+    assert found[0].ids == ["req-x-001"] and detached == []
+    assert not found[1].is_requirement
+
+
+def test_unclosed_or_cross_quote_kramdown_comment_hides_nothing():
+    # Without a {:/comment} line (in the same quote) kramdown renders the tag as text.
+    lines = ["> {::comment}", "> hidden MUST", "", "{:/comment}", "", "{::comment}", "Rule MUST hold.", "{: #req-x-001}"]
+    found, _, _, code = segments(lines)
+    assert found[0].is_requirement and found[-1].ids == ["req-x-001"]
+    assert not {1, 2, 6, 7} & code
+
+
+def test_tab_after_space_in_indentation_is_an_error(tmp_path):
+    # kramdown expands "  \t" after stripping the item's two columns, making this a code
+    # block; expandtabs(4) would read it as the item's tagged paragraph.
+    spec = write_spec(tmp_path, "* a\n\n  \tpara MUST x.\n  \t{: #req-test-charge-001}\n")
+    report = lint_file(spec)
+    assert sum("tab after a space" in e for e in report.errors) == 2
+    # Leading tabs alone expand the same way in both.
+    spec = write_spec(tmp_path, "* a\n\n\tpara MUST x.\n\t{: #req-test-charge-001}\n")
+    assert lint_file(spec).errors == []

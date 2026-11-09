@@ -36,17 +36,29 @@ BLOCK_END = re.compile(
 # A thematic break (***, - - -, ___). Only outside a paragraph: right after a paragraph
 # line kramdown keeps it as that paragraph's text.
 THEMATIC_BREAK = re.compile(r"^([-*_])(?: *\1){2,}\s*$")
-IAL_LINE = re.compile(r"^\s*\{:\s*([^}]*)\}\s*$")
+# Not {::name} or {:/name}: those are extension tags (kramdown IAL_BLOCK).
+IAL_LINE = re.compile(r"^\s*\{:(?![:/])\s*([^}]*)\}\s*$")
 # An attribute-list definition ({:name: ...}) only names attributes for later use;
 # it attaches nothing to the block above it.
 ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
-# Quoted attribute values, removed before looking for IDs: {: title="#req-x"} sets no id.
-QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+# One attribute of an IAL, as kramdown scans them (ALD_TYPE_ANY): a quoted key-value pair
+# (only id= sets an id, and title="#req-x" none), a run of #id and .class names, or any
+# other whitespace-separated token. kramdown ignores unquoted values such as id=x.
+IAL_ATTR = re.compile(
+    r"""(?:^|(?<=\s))(?:(\w[\w-]*)=(?:"([^"]*)"|'([^']*)')|((?:#[A-Za-z][\w:-]*|\.[^\s.#]+)+)(?=\s|$)|\S+)"""
+)
 # Bullets, numbered items and definition-list definitions (": text"); each is its own block.
 LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
 # kramdown (and kramdown-rfc) fence code with ~~~ only. A ``` line is ordinary text: a ```
 # pair renders as inline verbatim, which INLINE_CODE already strips from the prose.
 FENCE = re.compile(r"^( *)(~{3,})(.*)$")
+# A line that is only a kramdown block extension tag ({::name attrs}, {::name /}, {:/name} or
+# {:/}). Anything after the tag makes the line paragraph text instead.
+EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\w-]*)?\}\s*$")
+# The line closing a block {::comment}: kramdown drops everything up to it.
+EXT_COMMENT_STOP = re.compile(r"^\s*\{:/(?:comment)?\} *$")
+# A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
+EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
 # A keyword in double quotes is named, not used: the BCP 14 boilerplate ('The key words
 # "MUST", "MUST NOT", ...') and prose about a keyword. Removing just the quoted names keeps a
@@ -108,7 +120,7 @@ class Segment:
 
     @property
     def is_requirement(self) -> bool:
-        text = INLINE_CODE.sub("", self.text)
+        text = EXT_COMMENT_SPAN.sub("", INLINE_CODE.sub("", self.text))
         return bool(KEYWORD.search(QUOTED_KEYWORDS.sub("", text)))
 
 
@@ -128,8 +140,18 @@ class Report:
 
 
 def ial_ids(attrs: str) -> list[str]:
-    """Return the IDs a block IAL sets: whitespace-separated tokens that start with #."""
-    return [t[1:] for t in QUOTED.sub(" ", attrs).split() if t.startswith("#") and len(t) > 1]
+    """Return the IDs a block IAL sets, in order: #id names and quoted id="..." values.
+
+    kramdown keeps only the last one as the block's anchor.
+    """
+    ids: list[str] = []
+    for match in IAL_ATTR.finditer(attrs):
+        key, double, single, names = match.groups()
+        if key == "id":
+            ids.append(double if double is not None else single)
+        elif names:
+            ids.extend(re.findall(r"#([A-Za-z][\w:-]*)", names))
+    return ids
 
 
 def quote_depth(raw: str) -> int:
@@ -156,9 +178,27 @@ def comment_closes(lines: list[str], number: int, last_close: int) -> bool:
     return False
 
 
+def ext_comment_closes(lines: list[str], number: int) -> bool:
+    """Whether the block {::comment} on line number has a {:/comment} line after it.
+
+    Scoped like comment_closes: a quoted tag only closes within the same quote. Without
+    one, kramdown renders the tag line as paragraph text.
+    """
+    depth = quote_depth(lines[number - 1])
+    for text in lines[number:]:
+        if depth and quote_depth(text) != depth:
+            return False
+        if EXT_COMMENT_STOP.match(re.sub(r"^ {0,3}(?:> ?)*", "", text.expandtabs(4))):
+            return True
+    return False
+
+
 # A kramdown header ID ({#id} at the end of a heading line). A requirement ID there would be a
 # second anchor for the same ID, or an ID on text that states no rule.
 HEADING_ID = re.compile(r"^ {0,3}(?:> ?)*#{1,6}\s.*\{#(req-[^}\s]+)\}\s*$")
+# A tab after a space in a line's indentation. kramdown strips a list item's indentation
+# first and then expands such a tab from there, so expandtabs(4) can misplace the line.
+MIXED_INDENT = re.compile(r"^[ \t]*(?:> ?)*[ \t]* \t")
 
 
 def short_name(path: Path) -> str:
@@ -197,6 +237,8 @@ def segments(
     # Inside a block HTML comment (a line opening with <!-- and no --> after it). kramdown
     # drops everything up to the line holding -->, so its keywords and IDs don't count.
     in_comment = False
+    # Inside a block {::comment} extension, up to its {:/comment} line; dropped the same way.
+    in_ext_comment = False
     # The last line holding -->. A <!-- with no --> after it opens nothing: kramdown renders
     # it as paragraph text and goes on reading the rest of the draft as usual.
     last_close = max((i for i, text in enumerate(lines, start=1) if "-->" in text), default=0)
@@ -217,6 +259,10 @@ def segments(
             # as a fence would leave the rest of the draft "in code" past the -->.
             code_lines.add(number)
             in_comment = "-->" not in line
+            continue
+        if in_ext_comment:
+            code_lines.add(number)
+            in_ext_comment = not EXT_COMMENT_STOP.match(line)
             continue
         if fence is None and FENCE.match(line):
             # A fence less indented than an open item's text ends that item's list.
@@ -260,7 +306,24 @@ def segments(
         if not stripped:
             current = None
             continue
-        if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
+        ext = EXT_BLOCK.match(stripped)
+        if ext and ext.group(1) in ("comment", None) and current is not None:
+            # Inside a paragraph kramdown reads {::comment} and its stop tag as a span: the
+            # paragraph goes on and EXT_COMMENT_SPAN drops the comment from its text.
+            current.rest.append(stripped)
+            current.end = number
+            continue
+        if ext and ext.group(1) == "comment" and not ext.group(2) and ext_comment_closes(lines, number):
+            code_lines.add(number)
+            in_ext_comment = True
+            current = None
+            list_stack.clear()
+            continue
+        if (
+            stripped.startswith(("#", "|", "<!--"))
+            or (ext and not (ext.group(1) == "comment" and not ext.group(2)))
+            or re.match(r"^---\s*\w*$", stripped)
+        ):
             if stripped.startswith("<!--") and "-->" not in stripped[4:] and comment_closes(lines, number, last_close):
                 code_lines.add(number)
                 in_comment = True
@@ -345,6 +408,10 @@ def lint_file(path: Path) -> Report:
                 "put it on the normative paragraph only"
             )
 
+    for number, raw in enumerate(lines, start=1):
+        if number not in code_lines and MIXED_INDENT.match(raw):
+            report.errors.append(f"line {number}: tab after a space in the indentation; indent with spaces")
+
     for number in table_keywords(lines, code_lines):
         report.errors.append(
             f"line {number}: keyword in a table cell; state the rule in a tagged paragraph"
@@ -378,6 +445,12 @@ def lint_file(path: Path) -> Report:
         if len(req_ids) > 1:
             report.errors.append(
                 f"line {segment.line}: more than one requirement ID ({', '.join(req_ids)})"
+            )
+        elif req_ids and len(segment.ids) > 1:
+            # kramdown anchors the block with the last id only, so another id can replace it.
+            report.errors.append(
+                f"line {segment.line}: {req_ids[0]} shares its block with another ID "
+                f"({', '.join(segment.ids)}); kramdown keeps only the last"
             )
         for req_id in req_ids:
             match = id_pattern.match(req_id)
