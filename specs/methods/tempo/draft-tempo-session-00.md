@@ -1892,9 +1892,11 @@ The disclosed amount is the highest `cumulativeAmount` of any voucher
 the server has broadcast in a `settle` or `close` transaction,
 whether that transaction is pending, executed or failed, and at least
 `settledOnChain`: a transaction that fails after broadcast has still
-published its voucher. Servers therefore MUST NOT accept a voucher
-whose `cumulativeAmount` is at or below the disclosed amount, either
-to serve a request (see
+published its voucher. Servers MUST persist the disclosed amount to
+durable storage before broadcasting a `settle` or `close` that raises
+it, so that it survives a crash. Servers therefore MUST NOT accept a
+voucher whose `cumulativeAmount` is at or below the disclosed amount,
+either to serve a request (see
 {{voucher-verification}}) or to close the channel (see
 {{cooperative-close}}). Servers settle only consumed amounts while the
 channel is open (see {{settlement-timing}}), so this refusal never
