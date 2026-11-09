@@ -49,7 +49,8 @@ if grep -n 'skipKernelTC' TempoSession.lean TempoSession/*.lean; then
 fi
 for file in TempoSession.lean TempoSession/*.lean; do
   if grep -nE '^[[:space:]]*import[[:space:]]+Lean([.[:space:]]|$)' "$file" \
-    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix|binder_predicate|run_cmd|run_elab|run_meta|#eval|#exit|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file" \
+    || grep -nE '#(eval|exit)' "$file" \
+    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix|binder_predicate|run_cmd|run_elab|run_meta|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file" \
     || grep -nE '(@\[|attribute[[:space:]]*\[)[^]]*\b(init|builtin_init)\b' "$file"; then
     echo "FAIL: $file may not import Lean or use metaprogramming"
     exit 1
