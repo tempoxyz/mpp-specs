@@ -34,7 +34,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # elan, pinned by version and checksum; it installs the Lean version in lean-toolchain.
+      # elan, pinned by version and checksum.
       - name: Install elan
         env:
           ELAN_VERSION: v4.2.4
@@ -46,6 +46,21 @@ jobs:
           ./elan-init -y --default-toolchain none
           rm -f elan.tar.gz elan-init
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # The Lean release lean-toolchain names, pinned by checksum and unpacked where elan
+      # looks for it, so elan never downloads an unchecked toolchain.
+      - name: Install Lean
+        env:
+          LEAN_VERSION: 4.35.0
+          LEAN_SHA256: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+        run: |
+          test "$(cat formal/tempo-session/lean-toolchain)" = "leanprover/lean4:v${LEAN_VERSION}"
+          curl -sSfL -o lean.tar.zst "https://github.com/leanprover/lean4/releases/download/v${LEAN_VERSION}/lean-${LEAN_VERSION}-linux.tar.zst"
+          echo "${LEAN_SHA256}  lean.tar.zst" | sha256sum -c -
+          dir="$HOME/.elan/toolchains/leanprover--lean4---v${LEAN_VERSION}"
+          mkdir -p "$dir"
+          tar --zstd -xf lean.tar.zst -C "$dir" --strip-components=1
+          rm -f lean.tar.zst
 
       - name: Check proofs
         run: bash formal/tempo-session/check.sh
