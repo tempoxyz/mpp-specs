@@ -1750,7 +1750,11 @@ the highest accepted voucher when none is that high. A
 `settle` the server has broadcast that is not yet final counts toward
 `settledOnChain` here: servers MUST wait for it to execute or fail
 before choosing the close voucher, since a close below a settled
-amount reverts. The chosen voucher can exceed the consumed amount only
+amount reverts. So that this wait ends before a forced close can
+finalize the channel, servers SHOULD sign every v1 `settle` with an
+expiring nonce, as clients do for `open`, and SHOULD close rather
+than settle while a close request is pending. The chosen voucher can
+exceed the consumed amount only
 when no signed voucher equals it; the excess is the gap between two
 amounts the client signed. The close voucher is exempt from the
 monotonicity check and the pending close request check in
@@ -1763,7 +1767,9 @@ servers MUST accept it when it is at least
 public, so without this check anyone could replay one to close the
 channel. Servers MUST refuse such a close voucher, even when they
 hold a voucher of their own that could close the channel, since the
-request is not authenticated.
+request is not authenticated. This check applies to a close voucher
+the client sends: a voucher the server chooses from those it has
+accepted MAY equal `settledOnChain`.
 When the `spent` amount in the latest receipt exceeds the on-chain
 `settled` amount, clients SHOULD sign the close voucher for it, but
 never above the highest voucher they have already signed, so that the
