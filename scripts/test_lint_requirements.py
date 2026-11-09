@@ -85,6 +85,19 @@ class TestTagging:
         assert len(report.untagged) == 2
         assert sum("not indented" in e for e in report.errors) == 2
 
+    def test_loose_list_continuation_id_must_be_indented(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- First paragraph.\n\n  Second MUST b.\n{: #req-test-charge-001}\n\n"
+            "- Item.\n\n  Third MUST c.\n  {: #req-test-charge-002}\n\n"
+            "After the list, D MUST e.\n{: #req-test-charge-003}\n",
+        )
+        report = lint_file(spec)
+        # The column-0 ID after a continuation paragraph lands on the list, not the item.
+        assert sum("not indented" in e for e in report.errors) == 1
+        assert report.tagged == 2
+        assert len(report.untagged) == 1
+
     def test_line_after_ial_is_a_new_block(self, tmp_path):
         spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")
         report = lint_file(spec)

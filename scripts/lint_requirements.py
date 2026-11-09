@@ -92,6 +92,9 @@ def segments(
     detached: list[tuple[int, str]] = []
     misindented: list[tuple[int, str]] = []
     current: Segment | None = None
+    # Text column of the open list's latest item. It survives blank lines, so a later
+    # paragraph indented to it (a loose-list continuation) still belongs to that item.
+    list_indent = 0
     in_fence = False
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
@@ -123,16 +126,25 @@ def segments(
             # kramdown ends the block at the IAL: the next line starts a new one.
             current = None
             continue
-        if (
-            not stripped
-            or stripped.startswith(("#", "|", "{::", "<!--"))
-            or re.match(r"^---\s*\w*$", stripped)
-        ):
+        if not stripped:
             current = None
             continue
+        if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
+            current = None
+            list_indent = 0
+            continue
         marker = LIST_MARKER.match(line)
-        if marker or current is None:
-            current = Segment(number, stripped, number, indent=marker.end() if marker else 0)
+        column = len(line) - len(line.lstrip())
+        if marker:
+            list_indent = marker.end()
+            current = Segment(number, stripped, number, indent=list_indent)
+            result.append(current)
+        elif current is None:
+            # A paragraph indented to the open list's text continues its item; one indented
+            # less ends the list.
+            if column < list_indent:
+                list_indent = 0
+            current = Segment(number, stripped, number, indent=list_indent)
             result.append(current)
         else:
             current.text += " " + stripped
