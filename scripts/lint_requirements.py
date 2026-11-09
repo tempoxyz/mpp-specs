@@ -68,6 +68,10 @@ EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\
 EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
+# An inline HTML comment or {::comment} span that kramdown drops: its opener is not escaped
+# (an even number of backslashes, group 1, before it). An escaped opener (\<!-- or \{::)
+# renders literally, so its text stays visible. Substitute group 1 to keep those backslashes.
+COMMENT_SPAN = re.compile(r"(?<!\\)((?:\\\\)*)(?:<!--.*?-->|" + EXT_COMMENT_SPAN.pattern + ")")
 # A run of backticks a code span may open at (group 2), after an even number of backslashes
 # (group 1): a doubled backslash is a literal one, so two backslashes and a backtick open a
 # span while one backslash and a backtick is an escaped backtick, which kramdown prints;
@@ -178,7 +182,8 @@ class Segment:
 
     @property
     def is_requirement(self) -> bool:
-        text = EXT_COMMENT_SPAN.sub("", strip_code_spans(self.text))
+        # Comments render as nothing, so their keywords don't count (escaped openers do).
+        text = COMMENT_SPAN.sub(r"\1", strip_code_spans(self.text))
         # Decoded after code spans go: inside one, &#77; is shown literally.
         text = decode_refs(text)
         # The source and the text with inline markup removed: a keyword in either counts, so
@@ -230,8 +235,9 @@ def ial_ids(
         elif ref and alds and ref in alds and ref not in seen:
             if ref not in memo:
                 expanded = [i for d in alds[ref] for i in ial_ids(d, alds, seen | {ref}, memo)]
-                # Keep each ID's last occurrence only.
-                memo[ref] = [i for n, i in enumerate(expanded) if i not in expanded[n + 1 :]]
+                # Keep each ID's last occurrence only, in linear time (an ALD naming another
+                # many times makes expanded long).
+                memo[ref] = list(dict.fromkeys(reversed(expanded)))[::-1]
             referenced.extend(memo[ref])
     return referenced + ids
 
@@ -576,11 +582,14 @@ def segments(
             current.rest.append(stripped)
             current.end = number
 
+    # One memo for every IAL in the draft, so each ALD is resolved once.
+    memo: dict[str, list[str]] = {}
+
     def req_ids(found: list[tuple[int, str]]) -> list[tuple[int, str]]:
-        return [(n, i) for n, attrs in found for i in ial_ids(attrs, alds) if i.startswith("req-")]
+        return [(n, i) for n, attrs in found for i in ial_ids(attrs, alds, memo=memo) if i.startswith("req-")]
 
     for segment in result:
-        segment.ids = [i for attrs in segment.ials for i in ial_ids(attrs, alds)]
+        segment.ids = [i for attrs in segment.ials for i in ial_ids(attrs, alds, memo=memo)]
     return result, req_ids(detached_ials), req_ids(misindented_ials), code_lines
 
 
@@ -599,21 +608,12 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
         if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
-            cell = strip_code_spans(cell)
-            raw_cell = decode_refs(cell).strip()
-            # Inline HTML and {::comment} spans render as nothing, so drop them before reading
-            # the marker: "REQUIRED: <!-- x -->if m" is the condition "REQUIRED: if m".
-            cell = EXT_COMMENT_SPAN.sub("", cell)
-            cell = decode_refs(re.sub(r"<!--.*?-->", "", cell)).strip()
+            # Comments render as nothing, so drop them before reading the marker ("REQUIRED:
+            # <!-- x -->if m" is the condition "REQUIRED: if m") and the keywords: a keyword in a
+            # comment is hidden, one after an escaped opener (\<!-- MUST -->) is visible.
+            cell = decode_refs(COMMENT_SPAN.sub(r"\1", strip_code_spans(cell))).strip()
             text = PRESENCE_MARKER.sub("", cell)
-            # A keyword counts in the raw cell too, as Segment.is_requirement does for prose:
-            # an escaped opener (\<!-- MUST -->) renders literally, so stripping it would hide
-            # a visible rule. Stripping only ever adds a match here, never removes one.
-            if (
-                KEYWORD.search(text)
-                or KEYWORD.search(PRESENCE_MARKER.sub("", raw_cell))
-                or (text != cell and CONDITION.match(text))
-            ):
+            if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
                 break
     return found

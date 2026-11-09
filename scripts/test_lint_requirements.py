@@ -706,3 +706,22 @@ def test_repeated_ald_references_resolve_quickly():
     start = time.monotonic()
     assert ial_ids("a39", alds) == ["req-test-charge-001"]
     assert time.monotonic() - start < 1
+
+
+def test_keywords_inside_comments_are_hidden():
+    assert not segments(["Note <!-- Servers MUST verify. -->"])[0][0].is_requirement
+    assert not segments(["Note {::comment}Servers MUST verify.{:/comment}"])[0][0].is_requirement
+    # An escaped opener renders literally, keyword included.
+    assert segments(["Note BB<!-- MUST -->".replace("BB", chr(92))])[0][0].is_requirement
+    lines = ["| f | g |", "|---|---|", "| a | <!-- Servers MUST verify. --> |", "| b | {::comment}MUST{:/comment} |"]
+    assert table_keywords(lines) == []
+
+
+def test_wide_ald_references_resolve_quickly():
+    import time
+    from lint_requirements import ial_ids
+    alds = {"a": [" ".join(f"#req-test-charge-{n:03d}" for n in range(1, 201))], "b": [" ".join(["a"] * 200)]}
+    start = time.monotonic()
+    ids = ial_ids("b", alds)
+    assert len(ids) == 200 and ids[-1] == "req-test-charge-200"
+    assert time.monotonic() - start < 1
