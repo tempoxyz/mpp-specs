@@ -46,7 +46,7 @@ Every theorem holds for all reachable states with the guards on (`Cfg.Guarded`: 
 | P1 | The payee never gets more than a signed voucher | `P1_payee_le_signed` |
 | P2 | Funds are conserved | `P2_conservation` |
 | P3 | Settled and accepted amounts only grow; lower vouchers and replays are rejected | `P3_*` |
-| P4a | The payer can always force-close: requestClose, wait the grace period, withdraw. Only the payer's own topUp cancels a pending request, so this holds whatever others do meanwhile | `P4_withdraw_enabled`, `P4_forced_close_path`, `closeReq_sticky` |
+| P4a | The payer can always force-close: requestClose, wait the grace period, withdraw. Only a topUp the payer signed cancels a pending request, so this holds whatever others do meanwhile. The model counts a topUp as the payer's action; a payee that broadcasts one the payer signed earlier can cancel the request, which #399 rules out by requiring servers to broadcast a top-up at once | `P4_withdraw_enabled`, `P4_forced_close_path`, `closeReq_sticky` |
 | P4b | A finalized channel refunds exactly deposit − settled | `P4_refund_is_deposit_minus_settled` |
 | P5 | A voucher only pays its own channel, escrow and chain | `P5_*` |
 | P6 | A channel finalizes at most once and is frozen after | `P6_finalize_at_most_once`, `P6_finalized_frozen` |
