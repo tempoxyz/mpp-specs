@@ -73,6 +73,18 @@ class TestTagging:
         # A marker that opens a condition is a rule, not a presence marker.
         assert report.errors[1].startswith("line 12:")
 
+    def test_list_item_id_must_be_indented_to_item_text(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- A MUST b.\n  {: #req-test-charge-001}\n"
+            "- C MUST d.\n{: #req-test-charge-002}\n"
+            "1. E MUST f.\n {: #req-test-charge-003}\n",
+        )
+        report = lint_file(spec)
+        assert report.tagged == 1
+        assert len(report.untagged) == 2
+        assert sum("not indented" in e for e in report.errors) == 2
+
     def test_line_after_ial_is_a_new_block(self, tmp_path):
         spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")
         report = lint_file(spec)

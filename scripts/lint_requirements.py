@@ -45,6 +45,8 @@ class Segment:
     text: str
     end: int = 0
     ids: list[str] = field(default_factory=list)
+    # Column of a list item's text; an IAL indented less applies to the whole list.
+    indent: int = 0
 
     @property
     def is_requirement(self) -> bool:
@@ -76,14 +78,19 @@ def short_name(path: Path) -> str:
     return name.removeprefix("payment-")
 
 
-def segments(lines: list[str]) -> tuple[list[Segment], list[tuple[int, str]]]:
+def segments(
+    lines: list[str],
+) -> tuple[list[Segment], list[tuple[int, str]], list[tuple[int, str]]]:
     """Split a draft into paragraphs and list items.
 
-    Returns the segments and any requirement IDs that are not attached to
-    a segment (an IAL after a blank line applies to the next block).
+    Returns the segments, any requirement IDs that are not attached to a
+    segment (an IAL after a blank line applies to the next block), and IDs
+    after a list item but indented less than its text (kramdown applies
+    those to the whole list).
     """
     result: list[Segment] = []
     detached: list[tuple[int, str]] = []
+    misindented: list[tuple[int, str]] = []
     current: Segment | None = None
     in_fence = False
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
@@ -105,7 +112,11 @@ def segments(lines: list[str]) -> tuple[list[Segment], list[tuple[int, str]]]:
         ial = IAL_LINE.match(line)
         if ial:
             ids = IAL_ID.findall(ial.group(1))
-            if current is not None:
+            column = len(line) - len(line.lstrip())
+            if current is not None and column < current.indent:
+                # kramdown ends the list here and puts the IAL on the list, not the item.
+                misindented.extend((number, i) for i in ids if i.startswith("req-"))
+            elif current is not None:
                 current.ids.extend(ids)
             else:
                 detached.extend((number, i) for i in ids if i.startswith("req-"))
@@ -119,13 +130,14 @@ def segments(lines: list[str]) -> tuple[list[Segment], list[tuple[int, str]]]:
         ):
             current = None
             continue
-        if LIST_MARKER.match(line) or current is None:
-            current = Segment(number, stripped, number)
+        marker = LIST_MARKER.match(line)
+        if marker or current is None:
+            current = Segment(number, stripped, number, indent=marker.end() if marker else 0)
             result.append(current)
         else:
             current.text += " " + stripped
             current.end = number
-    return result, detached
+    return result, detached, misindented
 
 
 def table_keywords(lines: list[str]) -> list[int]:
@@ -156,11 +168,17 @@ def lint_file(path: Path) -> Report:
     prefix = f"req-{short_name(path)}-"
     id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
     lines = path.read_text(encoding="utf-8").splitlines()
-    found, detached = segments(lines)
+    found, detached, misindented = segments(lines)
 
     for number in table_keywords(lines):
         report.errors.append(
             f"line {number}: keyword in a table cell; state the rule in a tagged paragraph"
+        )
+
+    for number, req_id in misindented:
+        report.errors.append(
+            f"line {number}: {req_id} is not indented to its list item's text, so kramdown "
+            "puts it on the whole list"
         )
 
     for number, req_id in detached:
