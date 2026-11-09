@@ -1032,3 +1032,26 @@ def test_linear_scanners_on_unclosed_openers():
     ial_bodies("{:" * 50000)
     in_braces("{" * 100000 + "req-x", "req-x")
     assert time.monotonic() - start < 2
+
+def test_conditions_beyond_if_and_when_are_flagged(tmp_path):
+    for word in ("whenever", "after", "before", "once", "until", "during", "provided", "otherwise"):
+        spec = write_spec(tmp_path, f"| f | REQUIRED {word} d is set |\n| g | OPTIONAL |\n")
+        report = lint_file(spec)
+        assert sum("table cell" in e for e in report.errors) == 1, word
+
+
+def test_ordinary_id_replaced_by_a_requirement_id_is_reported(tmp_path):
+    spec = write_spec(tmp_path, "A MUST b.\n{: #intro}\n{: #req-test-charge-001}\n")
+    report = lint_file(spec)
+    assert any("shares its block" in e and "intro" in e for e in report.errors), report.errors
+    spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\n")
+    assert lint_file(spec).errors == []
+
+
+def test_kramdown_comment_opener_in_a_fence_or_unclosed_hides_nothing(tmp_path):
+    spec = write_spec(
+        tmp_path,
+        "~~~\n{::comment}\n~~~\n\nA MUST b.\n{: #req-test-charge-001}\n{: #req-test-charge-002}\n\n~~~\n{:/comment}\n~~~\n",
+    )
+    report = lint_file(spec)
+    assert any("req-test-charge-001" in e for e in report.errors), report.errors

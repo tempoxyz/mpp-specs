@@ -63,7 +63,10 @@ QUOTED_KEYWORDS = re.compile(
 # "REQUIRED for v2") is a rule and stays.
 PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 # What follows a marker and makes it a condition after all ("REQUIRED: if d is absent").
-CONDITION = re.compile(r"^\W*(?:if|when|unless|for|only|except|where|while)\b", re.IGNORECASE)
+CONDITION = re.compile(
+    r"^\W*(?:if|when|whenever|unless|for|only|except|where|while|after|before|once|until|during|provided|otherwise)\b",
+    re.IGNORECASE,
+)
 
 # Words as SourceMap compares them: runs of letters and digits. Punctuation and markup
 # differ between Markdown and XML; the words in between don't.
@@ -459,6 +462,10 @@ def short_name(path: Path) -> str:
     return name.removeprefix("payment-")
 
 
+# A fenced code block's opening or closing line (kramdown: three or more ~ or `).
+FENCE = re.compile(r"^(~{3,}|`{3,})")
+# A line holding only an IAL, which applies to the block above it.
+IAL_LINE = re.compile(r"^\s*\{:[^}]*\}\s*$")
 # A tab after a space in a line's indentation (see lint_file).
 MIXED_INDENT = re.compile(r"^[ \t]*(?:> ?)*[ \t]* \t")
 
@@ -467,18 +474,30 @@ def kramdown_comment_lines(lines: list[str]) -> set[int]:
     """Return the lines inside {::comment} ... {:/comment} blocks, roughly.
 
     Only used to stay quiet about requirement IDs in them, which kramdown drops without
-    leaving anything in the XML to recognise them by.
+    leaving anything in the XML to recognise them by. An opener in a code fence is code,
+    and a block that never closes hides nothing: kramdown renders an unclosed opener as
+    text, so the IDs after it are still checked.
     """
     inside: set[int] = set()
-    opened = False
+    opened: int | None = None
+    fence = ""
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if not opened and stripped.startswith("{::comment") and "{:/" not in stripped:
-            opened = True
-        elif opened and ("{:/comment}" in stripped or stripped.startswith("{:/}")):
-            opened = False
-        elif opened:
-            inside.add(number)
+        if opened is None:
+            marker = FENCE.match(stripped)
+            if fence:
+                if marker and marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence):
+                    if not stripped[len(marker.group(1)) :].strip():
+                        fence = ""
+                continue
+            if marker:
+                fence = marker.group(1)
+                continue
+            if stripped.startswith("{::comment") and "{:/" not in stripped:
+                opened = number
+        elif "{:/comment}" in stripped or stripped.startswith("{:/}"):
+            inside.update(range(opened + 1, number))
+            opened = None
     return inside
 
 
@@ -667,6 +686,30 @@ def lint_file(path: Path) -> Report:
         before = [n for n in found if not ALD_LINE.match(lines[n - 1])]
         return before[-1] if before else None
 
+    def replaced_ids(item: Item) -> list[str]:
+        """Other IDs written in the IAL lines between a block and its requirement ID.
+
+        kramdown keeps only the last, so each of these is lost; a requirement ID among
+        them is already in lost.
+        """
+        anchor = item.anchor or ""
+        if not anchor.startswith("req-"):
+            return []
+        found = [n for n in id_lines.get(anchor, []) if n >= item.start and n not in code_lines]
+        if not found:
+            return []
+        last_line = found[0]
+        others: list[str] = []
+        for number in range(item.end + 1, last_line + 1):
+            if not IAL_LINE.match(loud[number - 1]) or ALD_LINE.match(loud[number - 1]):
+                continue
+            for body in ial_bodies(loud[number - 1]):
+                tokens = body.split()
+                if number == last_line and f"#{anchor}" in tokens:
+                    tokens = tokens[: tokens.index(f"#{anchor}")]
+                others.extend(t[1:] for t in tokens if t.startswith("#") and not t.startswith("#req-"))
+        return others
+
     texts = [item for item in items if item.kind == "text"]
     starts = [item.start for item in texts]
     # IDs written in an IAL that are no anchor in the XML. kramdown keeps only the last ID of
@@ -783,6 +826,7 @@ def lint_file(path: Path) -> Report:
             if detached is not None:
                 report.error(detached, f"{item.anchor} is not directly after a paragraph or list item")
             else:
+                ids.extend(replaced_ids(item))
                 ids.append(item.anchor)
         req_ids = [i for i in ids if i.startswith("req-")]
         if item.is_requirement:
