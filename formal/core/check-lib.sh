@@ -65,7 +65,8 @@ for i in "${!libs[@]}"; do
   for file in "${sources[@]}"; do
     if grep -nE '^[[:space:]]*import[[:space:]]+Lean([.[:space:]]|$)' "$file" \
       || grep -nE '#(eval|exit)' "$file" \
-      || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix|binder_predicate|run_cmd|run_elab|run_meta|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file" \
+      || grep -nE 'decide[[:space:]]*[+]native' "$file" \
+      || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat|notation|infix|infixl|infixr|prefix|postfix|binder_predicate|run_cmd|run_elab|run_meta|native_decide|ofReduceBool|ofReduceNat|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file" \
       || grep -nE '(@\[|attribute[[:space:]]*\[)[^]]*\b(init|builtin_init)\b' "$file"; then
       echo "FAIL: $file may not import Lean or use metaprogramming"
       exit 1
