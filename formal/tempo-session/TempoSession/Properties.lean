@@ -110,8 +110,8 @@ theorem P3_accepted_monotone {a : Act} (h : step cfg s a = some s') (k : Key) :
 /-- P4: from a reachable state where k has a pending close request whose grace period has
   elapsed, the payer's withdraw succeeds, refunds deposit - settled and finalizes k.
   * Why it matters: liveness for the payer: an unresponsive payee cannot lock funds (§13.3).
-    With closeReq_sticky, nobody but the payer can cancel the request in the meantime, so
-    this holds whatever else happens on the channel during the grace period.
+    With closeReq_sticky, only a topUp signed by the payer cancels the request in the
+    meantime, so this holds whatever else happens on the channel during the grace period.
   * Proof: the only withdraw guard not among the hypotheses is settled ≤ deposit
     (OpenInv.settled_le). -/
 theorem P4_withdraw_enabled (hg : cfg.Guarded) (hr : Reachable cfg s) {k : Key} {c : Chan} {r : Nat}
@@ -126,10 +126,12 @@ theorem P4_withdraw_enabled (hg : cfg.Guarded) (hr : Reachable cfg s) {k : Key} 
 /-- P4: a pending close request stays pending: after any step other than the payer's own
   topUp of k, channel k still exists with the same closeReq = some r (a finalized record keeps
   it too).
-  * Why it matters: the payee (or anyone else) cannot cancel or restart the payer's forced
+  * Why it matters: no action but a payer-signed topUp cancels or restarts the payer's forced
     close: a repeat requestClose keeps the first time (#399, TIP-1034), settle, close,
-    accept and charge don't touch it, and G3 stops open from replacing the record. So P4a
-    holds under any interleaving of other parties' actions.
+    accept and charge don't touch it, and G3 stops open from replacing the record. The model
+    counts a topUp as the payer's whoever broadcasts it, so a payee holding a payer-signed
+    topUp could cancel the request; #399 bounds that with the topUp's expiring nonce
+    (validBefore) and requires servers to broadcast a topUp at once.
   * Proof: case split as in inv_step; only topUp writes closeReq := none. -/
 theorem closeReq_sticky (hg : cfg.Guarded) {a : Act} (h : step cfg s a = some s') {k : Key}
     {c : Chan} {r : Nat} (hc : s.chans k = some c) (hr : c.closeReq = some r)

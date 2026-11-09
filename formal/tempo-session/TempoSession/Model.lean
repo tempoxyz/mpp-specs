@@ -27,7 +27,7 @@
   Spec guards that the contract-function sections (§6.4.x) do NOT state, but that other sections
   imply, are Cfg flags. Theorems hold for every Cfg with all flags on (Cfg.Guarded); see
   Counterexamples.lean for a machine-checked violation with each flag off, and Witnesses.lean
-  for proof that the guarded model still lets every action succeed.
+  for fixed traces on which the guarded model lets every action succeed.
 
   File map
   * Key / Voucher / Sig / Chan: the data the contract and the server see.
@@ -319,7 +319,8 @@ def step (cfg : Cfg) (st : St) : Act → Option St
                        finals := upd st.finals k (st.finals k + 1) }
       else none
   -- §11.3 server voucher verification (steps 2-9), §11.4 idempotent retry
-  -- guards (always on, server side): channel exists, not finalized, no close pending,
+  -- guards (always on, server side): channel exists, not finalized (§11.3 doesn't say so;
+  --   #399's Cooperative Close stops delivery once a close starts, GAPS.md row 13), no close pending,
   --   valid signature, accepted <= cum <= deposit
   -- then: equal amount = idempotent retry (state unchanged, step 6); a raise must be >= minDelta
   --   and persists the voucher with the new amount (steps 8-9)
@@ -336,7 +337,7 @@ def step (cfg : Cfg) (st : St) : Act → Option St
         else none
       else none
   -- §12.2 balance check + charge-and-deliver: available = accepted - spent >= cost
-  -- Delivery needs an open, non-finalized channel; (G7) also no close pending, as accept
+  -- Delivery needs an open, non-finalized channel (GAPS.md row 13); (G7) also no close pending, as accept
   --   requires (§11.3 step 5). Without G7 the server can deliver after requestClose, even past
   --   the grace window, when the payer can withdraw at once and the payee has no settle window
   --   for that service; §12.2 does not say this (GAPS.md row 11).

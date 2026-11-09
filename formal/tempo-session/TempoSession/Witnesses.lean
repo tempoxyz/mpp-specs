@@ -4,8 +4,9 @@ import TempoSession.Counterexamples
   Witnesses: the guarded model is not vacuous. Every theorem in Properties.lean assumes
   Cfg.Guarded; a guard written too strictly (one that rejects a call the spec allows) would
   make those theorems easier to prove and less meaningful, without breaking any of them. Each
-  theorem here runs the guarded model on a concrete trace and checks, by 'decide', that a
-  legitimate call succeeds, so an over-strict guard breaks the build instead.
+  theorem here runs the guarded model on one fixed trace and checks, by 'decide', that its
+  legitimate calls succeed, so a guard that rejects one of these calls breaks the build. They
+  cover only these traces: a guard that rejects an allowed call outside them goes unnoticed.
   Also checked: the guarded configurations satisfy Cfg.Guarded, and the boundary calls just
   outside the rules (withdraw one second early, a raise below minDelta) are rejected.
 -/
@@ -31,6 +32,19 @@ def trAll : List Act :=
 
 /-- Every action in trAll succeeds under the guarded model. -/
 theorem W_every_action : (run strict St.init trAll).isSome = true := by decide
+
+/-- A channel whose vouchers a delegated key signs (authorizedSigner = 9, §6.6). -/
+def kd : Key := { k with salt := 8, authSigner := 9 }
+/-- A voucher for kd signed by the delegated key. -/
+def vd (amt : Nat) : Sig :=
+  { signer := 9, v := { chainId := CHAIN, escrow := ESCROW, chan := kd, amount := amt } }
+
+/-- A delegated-signer channel works end to end: open, the delegated key signs, accept, charge,
+  settle and a cooperative close that captures spent = 30. -/
+theorem W_delegated_signer :
+    check strict [.openCh PAYER kd 100, .sign (vd 40), .accept kd (vd 40), .charge kd 30,
+      .settle PAYEE kd (vd 40), .close PAYEE kd (vd 40) 40]
+      (fun st => st.paid kd == 40 && st.refunded kd == 60) = some true := by decide
 
 /-- A replayed voucher (the same 60) is accepted as an idempotent retry (§11.4). -/
 theorem W_accept_replay : (run strict St.init (trAll ++ [.accept k (v 60)])).isSome = true := by
