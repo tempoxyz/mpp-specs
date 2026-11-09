@@ -208,6 +208,11 @@ class TestIdProblems:
         report = lint_file(spec)
         assert sum("table cell" in e for e in report.errors) == 1
 
+    def test_backticks_in_indented_code_do_not_open_a_fence(self, tmp_path):
+        spec = write_spec(tmp_path, "Intro.\n\n    ```\n    code\n\nClients MUST x.\n")
+        report = lint_file(spec)
+        assert len(report.untagged) == 1
+
 class TestMain:
     def test_warn_mode_exits_zero(self, tmp_path):
         spec = write_spec(tmp_path, "Clients MUST NOT reuse it.\n")

@@ -44,19 +44,23 @@ PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 CONDITION = re.compile(r"^\W*(?:if|when|unless|for|only|except|where|while)\b", re.IGNORECASE)
 
 
-def fence_step(line: str, fence: str | None) -> tuple[str | None, bool]:
+def fence_step(line: str, fence: str | None, max_indent: int = 3) -> tuple[str | None, bool]:
     """Track fenced code blocks as CommonMark does.
 
     fence is the delimiter that opened the current block, or None outside one.
     Returns the new state and whether this line is a fence line. Only a run of
     the same character, at least as long and with nothing after it, closes a
-    block, so a literal ``` inside a ~~~ block (or the reverse) stays code.
+    block, so a literal ``` inside a ~~~ block (or the reverse) stays code. A fence
+    opens only when indented at most max_indent columns (3, plus the open list item's
+    text column): indented further, the line is part of an indented code block.
     """
     match = FENCE.match(line)
     if not match:
         return fence, False
     run, rest = match.group(1), match.group(2)
     if fence is None:
+        if len(line) - len(line.lstrip()) > max_indent:
+            return None, False
         return run, True
     if run[0] == fence[0] and len(run) >= len(fence) and not rest.strip():
         return None, True
@@ -135,7 +139,7 @@ def segments(
             if number > 1 and raw.strip() == "---":
                 in_frontmatter = False
             continue
-        fence, is_fence = fence_step(raw, fence)
+        fence, is_fence = fence_step(raw, fence, (list_stack[-1] if list_stack else 0) + 3)
         if is_fence:
             current = None
             continue
