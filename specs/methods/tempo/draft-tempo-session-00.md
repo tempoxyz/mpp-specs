@@ -1657,19 +1657,23 @@ and `captureAmount` MUST be less than or equal to both the close voucher
 `cumulativeAmount` and the on-chain `deposit`.
 
 A v1 `close()` has no capture amount and captures the full
-`cumulativeAmount` of the voucher it is given. For v1, the bound
-holds only through the choice of voucher: servers MUST close with the
-lowest accepted voucher, the client's close voucher included, whose
-`cumulativeAmount` is at least `max(spent, settledOnChain)`.
-That voucher can exceed the consumed amount only when no signed
-voucher equals it; the excess is the gap between two amounts the
-client signed. The close voucher is exempt from the monotonicity
-check in {{voucher-verification}}: it MAY be lower than
-`highestVoucherAmount`, and servers MUST accept it when it is at
-least `max(spent, settledOnChain)` and at most the deposit.
-Clients SHOULD sign the close voucher for the greater
-of the `spent` amount in the latest receipt and the on-chain
-`settled` amount, so that the v1 capture is exact.
+`cumulativeAmount` of the voucher it is given. For v1, the bound holds
+only through the choice of voucher: servers MUST close with the lowest
+accepted voucher, the client's close voucher included, whose
+`cumulativeAmount` is at least `max(spent, settledOnChain)`. That
+voucher can exceed the consumed amount only when no signed voucher
+equals it; the excess is the gap between two amounts the client
+signed. The close voucher is exempt from the monotonicity check in
+{{voucher-verification}}: it MAY be lower than `highestVoucherAmount`,
+and servers MUST accept it when it is at least
+`max(spent, settledOnChain)` and at most the deposit. Unless it equals
+`highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
+`settledOnChain`: every settled voucher is public in `settle`
+calldata, so without this check anyone could replay one to close the
+channel. When the `spent` amount in the latest receipt exceeds the
+on-chain `settled` amount, clients SHOULD sign the close voucher for
+it, so that the v1 capture is exact; otherwise the voucher the server
+settled is the lowest one that qualifies.
 
 The capture bound limits what `close` adds, not what the payee
 collects in total: `settle` redeems any signed voucher, consumed or
