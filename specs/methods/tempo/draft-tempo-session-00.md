@@ -808,8 +808,8 @@ regardless of the `feePayer` setting:
 - **Voucher updates** (`action="voucher"`) are off-chain and incur no
   transaction fees.
 - **Settlement** (`settle()`) and channel **close** (`close` invocation) are initiated by
-  the server using the highest valid voucher. The server covers the fees for
-  these transactions.
+  the server, with the voucher {{cooperative-close}} requires for a close.
+  The server covers the fees for these transactions.
 - Servers MAY recover settlement costs through pricing or other business
   logic.
 
