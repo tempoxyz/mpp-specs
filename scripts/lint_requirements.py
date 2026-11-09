@@ -68,6 +68,9 @@ EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\
 EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
+# Inline math ($$...$$): kramdown reads its content literally, so a <!-- inside it opens no
+# comment. It is removed (a formula states no rule) before comments are.
+MATH_SPAN = re.compile(r"\$\$.*?\$\$")
 # An inline HTML comment or {::comment} span that kramdown drops: its opener is not escaped
 # (an even number of backslashes, group 1, before it). An escaped opener (\<!-- or \{::)
 # renders literally, so its text stays visible. Substitute group 1 to keep those backslashes.
@@ -183,7 +186,7 @@ class Segment:
     @property
     def is_requirement(self) -> bool:
         # Comments render as nothing, so their keywords don't count (escaped openers do).
-        text = COMMENT_SPAN.sub(r"\1", strip_code_spans(self.text))
+        text = COMMENT_SPAN.sub(r"\1", MATH_SPAN.sub(" ", strip_code_spans(self.text)))
         # Decoded after code spans go: inside one, &#77; is shown literally.
         text = decode_refs(text)
         # The source and the text with inline markup removed: a keyword in either counts, so
@@ -206,6 +209,14 @@ class Report:
         return self.tagged + len(self.untagged)
 
 
+class AldCycleError(ValueError):
+    """An attribute list definition refers back to itself, directly or through others.
+
+    kramdown 2.4 recurses through such a cycle until the stack overflows, so no draft that
+    uses one builds; the lint reports it instead of guessing which IDs it would set.
+    """
+
+
 def ial_ids(
     attrs: str,
     alds: dict[str, list[str]] | None = None,
@@ -216,7 +227,8 @@ def ial_ids(
 
     kramdown keeps only the last one as the block's anchor. A name of an ALD in alds (its
     definitions' attribute strings) brings in that ALD's IDs first, as kramdown applies
-    referenced ALDs before the IAL's own attributes. seen stops a reference cycle.
+    referenced ALDs before the IAL's own attributes. seen holds the ALDs being expanded: naming
+    one of them again is a cycle (AldCycleError).
 
     memo holds each ALD's IDs once resolved, without repeats (keeping each ID's last place,
     so the last ID, the anchor, is unchanged). An ALD that names another several times would
@@ -232,7 +244,9 @@ def ial_ids(
             ids.append(double if double is not None else single)
         elif names:
             ids.extend(re.findall(r"#([A-Za-z][\w:-]*)", names))
-        elif ref and alds and ref in alds and ref not in seen:
+        elif ref and alds and ref in alds:
+            if ref in seen:
+                raise AldCycleError(f"attribute list definition {ref} refers back to itself")
             if ref not in memo:
                 expanded = [i for d in alds[ref] for i in ial_ids(d, alds, seen | {ref}, memo)]
                 # Keep each ID's last occurrence only, in linear time (an ALD naming another
@@ -611,7 +625,7 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
             # Comments render as nothing, so drop them before reading the marker ("REQUIRED:
             # <!-- x -->if m" is the condition "REQUIRED: if m") and the keywords: a keyword in a
             # comment is hidden, one after an escaped opener (\<!-- MUST -->) is visible.
-            cell = decode_refs(COMMENT_SPAN.sub(r"\1", strip_code_spans(cell))).strip()
+            cell = decode_refs(COMMENT_SPAN.sub(r"\1", MATH_SPAN.sub(" ", strip_code_spans(cell)))).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
@@ -625,7 +639,11 @@ def lint_file(path: Path) -> Report:
     prefix = f"req-{short_name(path)}-"
     id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
     lines = path.read_text(encoding="utf-8").splitlines()
-    found, detached, misindented, code_lines = segments(lines)
+    try:
+        found, detached, misindented, code_lines = segments(lines)
+    except AldCycleError as error:
+        report.errors.append(f"{error}; kramdown cannot build a draft with an ALD cycle")
+        return report
 
     for number, raw in enumerate(lines, start=1):
         heading = None if number in code_lines else HEADING_ID.match(raw.expandtabs(4))

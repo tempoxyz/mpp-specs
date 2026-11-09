@@ -633,9 +633,9 @@ def test_ids_from_attribute_list_definitions(tmp_path):
     # A literal ID next to a referenced one is a second requirement ID.
     spec = write_spec(tmp_path, "Servers MUST x.\n{: tag #req-test-charge-002}\n\n{:tag: #req-test-charge-001}\n")
     assert any("more than one requirement ID" in e for e in lint_file(spec).errors)
-    # A reference cycle doesn't loop.
-    found, _, _, _ = segments(["{:a: b}", "{:b: a #req-x-001}", "", "P MUST x.", "{: a}"])
-    assert found[0].ids == ["req-x-001"]
+    # kramdown overflows its stack on a reference cycle, so the lint reports one.
+    spec = write_spec(tmp_path, "{:a: b}\n{:b: a #req-test-charge-001}\n\nP MUST x.\n{: a}\n")
+    assert any("refers back to itself" in e for e in lint_file(spec).errors)
 
 
 def test_unmatched_longer_backtick_run_shows_keyword():
@@ -725,3 +725,10 @@ def test_wide_ald_references_resolve_quickly():
     ids = ial_ids("b", alds)
     assert len(ids) == 200 and ids[-1] == "req-test-charge-200"
     assert time.monotonic() - start < 1
+
+
+def test_comment_markers_inside_math_hide_nothing():
+    # kramdown-rfc renders "Servers <!-- MUST verify -->." here: the markers are math.
+    assert segments(["Servers $$<!--$$ MUST verify $$-->$$."])[0][0].is_requirement
+    lines = ["| a | b |", "|---|---|", "| x | $$<!--$$ MUST $$-->$$ |"]
+    assert table_keywords(lines) == [3]
