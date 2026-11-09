@@ -983,7 +983,8 @@ broadcast a `topUp` transaction when they verify it and MUST NOT keep
 it to broadcast later. So that a withheld transaction expires rather
 than relying on that rule alone, clients MUST sign `topUp`
 transactions with an expiring nonce, as for `open`, whose
-`validBefore` bounds how long anyone can hold them, and servers MUST
+`validBefore` (which Tempo caps at a short window past the block
+time) bounds how long anyone can hold them, and servers MUST
 refuse a `topUp` transaction without one. A `topUp` sent while a
 close request is pending cancels it, so a client that intends its
 close request to complete MUST NOT send a `topUp` action while it is
@@ -1277,7 +1278,10 @@ On `action="open"`, servers MUST:
      service, and `settle` rejects it)
    - `voucher.cumulativeAmount <= channel.deposit` (a voucher above the
      deposit cannot be settled or closed)
-4. Initialize server-side channel state for the `channelId`.
+4. Initialize server-side channel state for the `channelId`: `spent`
+   and `settledOnChain` equal to `channel.settled`, and
+   `acceptedCumulative` equal to the initial voucher's
+   `cumulativeAmount`, or to `channel.settled` without one.
 
 A repeated `open` MUST NOT be co-signed, broadcast or accepted. When
 step 1 decodes the transaction, and before it adds a fee payer
@@ -1734,7 +1738,7 @@ if a later `topUp` cancels a forced close. Servers MUST persist that
 the channel is closing before they choose the close voucher, so that
 delivery stays stopped after a restart. A request whose `spent`
 increment persisted before the close started is not further service:
-servers SHOULD still deliver it, since the capture includes it.
+servers MUST still deliver it, since the capture includes it.
 Servers MUST choose the
 close voucher and capture amount only after charging stops and every
 charge already in progress has persisted `spent`, so that the capture
