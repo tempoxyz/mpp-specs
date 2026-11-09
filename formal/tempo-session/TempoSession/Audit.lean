@@ -59,6 +59,15 @@ elab "#audit_tempo_session" : command => do
       unless standardAxioms.contains ax do
         throwError m!"axiom audit: {name} depends on non-standard axiom {ax}"
     if let .thmInfo _ := info then audited := audited + 1
+  -- Only this file may import beyond the library and Init. Read from Lean's own header data,
+  -- so no spelling of an import (guillemets, comments, line breaks) gets past it. Without
+  -- Lean, Lake or Std a module cannot reach the elaborator API (addDecl, kernel-check options), so
+  -- every declaration in it goes through the kernel.
+  for mod in env.header.moduleNames, data in env.header.moduleData do
+    unless (`TempoSession).isPrefixOf mod && mod != `TempoSession.Audit do continue
+    for imp in data.imports do
+      unless imp.module == `Init || (`TempoSession).isPrefixOf imp.module do
+        throwError m!"axiom audit: {mod} imports {imp.module}; only Audit.lean may import outside TempoSession"
   logInfo m!"axiom audit: {audited} theorems use only standard axioms"
   -- The modules this audit saw, read from the environment rather than from Audit.lean's text
   -- (where a commented-out import would look real). check.sh compares this list with the

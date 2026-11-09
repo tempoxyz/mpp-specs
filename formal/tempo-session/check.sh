@@ -33,7 +33,8 @@ fi
 # The audit reads declarations already in the environment and doesn't re-check them in the
 # kernel, so code that skips the kernel check (debug.skipKernelTC, set through Lean's API
 # rather than set_option) would pass it. Only Audit.lean may import Lean or run
-# metaprograms; the model and proofs are plain Lean.
+# metaprograms; the model and proofs are plain Lean. The audit enforces the imports from
+# Lean's own header data; the greps below are a quick first pass.
 if grep -n 'skipKernelTC' TempoSession.lean TempoSession/*.lean; then
   echo "FAIL: skipKernelTC is not allowed"
   exit 1
