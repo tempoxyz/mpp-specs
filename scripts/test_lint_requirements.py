@@ -387,6 +387,15 @@ def test_escaped_or_commented_dollars_open_no_math():
     assert table_keywords(["| a | b |", "|---|---|", "| x | <!-- $$ --> MUST $$ |"]) == [3]
 
 
+def test_dollars_in_link_destination_open_no_math():
+    # kramdown reads a link destination literally (checked with kramdown-rfc), so its $$
+    # pairs with nothing after the link and the keyword between stays visible.
+    for line in ["A [x](https://e.x/$$a) MUST $$ b.", "B [y]($$) SHOULD $$."]:
+        found, _, _, _ = segments(["Intro.", "", line])
+        assert [s.line for s in found if s.is_requirement] == [3], line
+    assert table_keywords(["| a | b |", "|---|---|", "| x | [y]($$) MUST $$ |"]) == [3]
+
+
 def test_unclosed_html_comment_opener_line_is_prose():
     # kramdown renders the unclosed <!-- line itself as paragraph text (checked with
     # kramdown-rfc), so its keyword is a requirement that needs an ID, quoted or not.

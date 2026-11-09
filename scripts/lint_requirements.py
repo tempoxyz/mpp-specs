@@ -71,6 +71,9 @@ EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:commen
 # Inline math ($$...$$): kramdown reads its content literally, so a <!-- inside it opens no
 # comment, and a formula states no rule. An escaped opener (\$$, after an even number of
 # backslashes, group 1) is a literal dollar; the closer is formula text, escaped or not.
+# An inline link's destination (](url "title")): kramdown reads it literally, so a $$, backtick
+# or <!-- in a URL opens nothing. It is kept as text; INLINE_MARKUP drops it later.
+LINK_DEST = re.compile(r"\]\([^)]*\)")
 MATH_SPAN = re.compile(r"(?<!\\)((?:\\\\)*)\$\$.*?\$\$")
 # An inline HTML comment or {::comment} span that kramdown drops: its opener is not escaped
 # (an even number of backslashes, group 1, before it). An escaped opener (\<!-- or \{::)
@@ -166,8 +169,8 @@ def strip_literal_spans(text: str) -> str:
     """Drop code spans, inline math and comments the way kramdown reads them.
 
     kramdown takes whichever span starts first, so a backtick or <!-- inside $$...$$ is
-    formula text, a $$ or <!-- inside a code span is code, and a $$ or backtick inside a
-    comment is comment text. Removing one kind before another would pair markers kramdown
+    formula text, a $$ or <!-- inside a code span is code, a $$ or backtick inside a comment
+    is comment text, and none of them opens anything in a link destination. Removing one kind before another would pair markers kramdown
     never pairs and hide a keyword it shows. Code spans and formulas become a space (they
     state no rule); a comment becomes nothing, so a keyword it splits (M<!-- -->UST) reads
     whole, keeping any escaping backslashes before it (COMMENT_SPAN group 1).
@@ -180,6 +183,7 @@ def strip_literal_spans(text: str) -> str:
     tick = BACKTICKS.search(text)
     math = MATH_SPAN.search(text)
     comment = COMMENT_SPAN.search(text)
+    link = LINK_DEST.search(text)
     while True:
         if tick and tick.start() < position:
             tick = BACKTICKS.search(text, position)
@@ -187,11 +191,14 @@ def strip_literal_spans(text: str) -> str:
             math = MATH_SPAN.search(text, position)
         if comment and comment.start() < position:
             comment = COMMENT_SPAN.search(text, position)
+        if link and link.start() < position:
+            link = LINK_DEST.search(text, position)
         # Where each construct's own marker starts, after any escaping backslashes.
         starts = {
             "tick": tick.start(2) if tick else None,
             "math": math.end(1) if math else None,
             "comment": comment.end(1) if comment else None,
+            "link": link.start() if link else None,
         }
         found = {k: v for k, v in starts.items() if v is not None}
         if not found:
@@ -201,6 +208,10 @@ def strip_literal_spans(text: str) -> str:
             pieces.append(text[position : math.end(1)])
             pieces.append(" ")
             position = math.end()
+            continue
+        if kind == "link" and link:
+            pieces.append(text[position : link.end()])
+            position = link.end()
             continue
         if kind == "comment" and comment:
             pieces.append(text[position : comment.end(1)])
