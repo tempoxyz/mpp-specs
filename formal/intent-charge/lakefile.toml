@@ -4,6 +4,11 @@ defaultTargets = ["IntentCharge"]
 
 # Every warning is a build error: a sorry, a deprecated name, an unused variable or simp
 # argument fails 'lake build' itself, not only the axiom audit.
+# The shared definitions in ../core (run, Reachable, upd), audited with this model.
+[[require]]
+name = "MppCore"
+path = "../core"
+
 [leanOptions]
 warningAsError = true
 

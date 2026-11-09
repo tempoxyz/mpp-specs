@@ -1,3 +1,4 @@
+import MppCore
 /-
   Tempo charge payment method (draft-tempo-charge-00): one server, its challenges and
   credentials, and the Tempo chain the payments land on. Section names (§) refer to
@@ -29,6 +30,8 @@
   a property with each one off, Witnesses.lean shows legitimate flows succeed with all on.
 -/
 namespace TempoCharge
+
+export MppCore (upd upd_same upd_other upd_apply)
 
 /-- One TIP-20 transfer call, or the Transfer / TransferWithMemo event it emits.
   The sender is the transaction's sender. memo = none is transfer, some m transferWithMemo. -/
@@ -246,14 +249,6 @@ structure St where
 def St.init : St :=
   ⟨1, fun _ _ => 0, [], [], [], fun _ => none, fun _ => false, [], [], fun _ => none, []⟩
 
-/-- Point update of a map keyed by challenge id. -/
-def upd {β : Type} (f : Nat → β) (k : Nat) (b : β) : Nat → β :=
-  fun k' => if k' = k then b else f k'
-
-/-- Reading an updated map, as one case split (the form grind uses). -/
-theorem upd_apply {β} (f : Nat → β) (k k' : Nat) (b : β) :
-    upd f k b k' = if k' = k then b else f k' := rfl
-
 /-- No included transaction used t's (sender, nonce) (2D nonce consumption). -/
 def nonceFree (st : St) (t : Tx) : Bool :=
   !st.included.any fun i => i.tx.sender == t.sender && i.tx.nonce == t.nonce
@@ -371,16 +366,10 @@ def step (cfg : Cfg) (st : St) : Act → Option St
       else some { st with pending := upd st.pending cid none }
 
 /-- Run a list of actions; none if any step fails. -/
-def run (cfg : Cfg) : St → List Act → Option St
-  | st, [] => some st
-  | st, a :: as => match step cfg st a with
-    | none => none
-    | some st' => run cfg st' as
+abbrev run (cfg : Cfg) : St → List Act → Option St := MppCore.run (step cfg)
 
 /-- States reachable from St.init. -/
-inductive Reachable (cfg : Cfg) : St → Prop where
-  | init : Reachable cfg St.init
-  | step {s s' : St} (a : Act) : Reachable cfg s → step cfg s a = some s' → Reachable cfg s'
+abbrev Reachable (cfg : Cfg) : St → Prop := MppCore.Reachable (step cfg) St.init
 
 end TempoCharge
 

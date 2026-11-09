@@ -16,8 +16,7 @@ bash formal/intent-charge/check.sh   # clean build plus axiom audit; prints OK
 ## What it checks
 
 - `lakefile.toml` sets `warningAsError`: a `sorry` or an unused hypothesis fails the build.
-- `Audit.lean` fails on any axiom beyond Lean's three standard ones, which rules out `sorry`, `admit` and `native_decide`.
-- `check.sh` builds from clean, runs the audit as its own program over every module, and refuses `set_option`, `import Lean`, metaprogramming and `skipKernelTC`. Same rules as `formal/tempo-session`.
+- `check.sh` runs the shared gate in [`../core`](../core): a clean build, then an axiom audit with kernel replay over every module of the model and `MppCore`, which rules out `sorry`, `admit` and `native_decide`. It refuses `set_option`, `import Lean`, metaprogramming and `skipKernelTC`.
 
 ## Files
 
@@ -28,7 +27,7 @@ bash formal/intent-charge/check.sh   # clean build plus axiom audit; prints OK
 | `Properties.lean` | P1–P8, below |
 | `Counterexamples.lean` | One trace per gap with its guard off, checked by `decide` ([GAPS.md](./GAPS.md)) |
 | `Witnesses.lean` | Legitimate flows that succeed with every guard on, and boundary cases that fail |
-| `Audit.lean` | Axiom audit, run by `check.sh` (not part of the library) |
+| `../core` | Shared `run`, `Reachable`, `upd`, and the gate `check.sh` runs |
 
 ## What is modelled
 

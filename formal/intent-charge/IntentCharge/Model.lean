@@ -1,3 +1,4 @@
+import MppCore
 /-
   Charge intent over the Payment HTTP authentication scheme, method-agnostic.
   § references: "core §X" is specs/core/draft-httpauth-payment-01.md, "charge §X" is
@@ -250,16 +251,10 @@ def step (cfg : Cfg) (st : St) : Act → Option St
     else none
 
 /-- Run a list of actions; none if any step cannot happen. -/
-def run (cfg : Cfg) : St → List Act → Option St
-  | st, [] => some st
-  | st, a :: as => match step cfg st a with
-    | none => none
-    | some st' => run cfg st' as
+abbrev run (cfg : Cfg) : St → List Act → Option St := MppCore.run (step cfg)
 
 /-- States reachable from St.init. -/
-inductive Reachable (cfg : Cfg) : St → Prop where
-  | init : Reachable cfg St.init
-  | step {s s' : St} (a : Act) : Reachable cfg s → step cfg s a = some s' → Reachable cfg s'
+abbrev Reachable (cfg : Cfg) : St → Prop := MppCore.Reachable (step cfg) St.init
 
 end IntentCharge
 

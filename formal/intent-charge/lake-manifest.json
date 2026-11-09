@@ -1,6 +1,14 @@
 {"version": "1.3.0",
  "packagesDir": ".lake/packages",
- "packages": [],
+ "packages":
+ [{"type": "path",
+   "scope": "",
+   "name": "MppCore",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../core",
+   "copy": false,
+   "configFile": "lakefile.toml"}],
  "name": "IntentCharge",
  "lakeDir": ".lake",
  "fixedToolchain": false}

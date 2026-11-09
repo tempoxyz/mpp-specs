@@ -11,7 +11,7 @@ bash formal/tempo-charge/check.sh   # clean build plus axiom audit; prints OK
 ~~~
 
 - `lean-toolchain` pins Lean (same as `../tempo-session`). No dependencies (no Mathlib).
-- `check.sh` and `Audit.lean` are `../tempo-session`'s with the library renamed: `warningAsError`, no `set_option`, no metaprogramming or `import Lean` in the library, and an axiom audit that rules out `sorry`, `admit`, `native_decide` and declared axioms.
+- `check.sh` runs the shared gate in [`../core`](../core): `warningAsError`, no `set_option`, no metaprogramming or `import Lean`, and an axiom audit with kernel replay that rules out `sorry`, `admit`, `native_decide` and declared axioms.
 
 ## Files
 
@@ -22,7 +22,7 @@ bash formal/tempo-charge/check.sh   # clean build plus axiom audit; prints OK
 | `Properties.lean` | P1–P9, below, and the split arithmetic (`matchOne_amount`) |
 | `Counterexamples.lean` | One `decide`-checked trace per gap ([GAPS.md](./GAPS.md)) |
 | `Witnesses.lean` | Legitimate flows that succeed with every guard on, and boundary calls that fail |
-| `Audit.lean` | Axiom audit, run by `check.sh` |
+| `../core` | Shared `run`, `Reachable`, `upd`, and the gate `check.sh` runs |
 
 ## What is modelled
 
