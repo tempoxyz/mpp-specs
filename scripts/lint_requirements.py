@@ -319,7 +319,8 @@ def ial_ids(
         if key == "id":
             ids.append(double if double is not None else single)
         elif names:
-            ids.extend(re.findall(r"#([A-Za-z][\w:-]*)", names))
+            # kramdown's ID pattern is ASCII-only; Python's \w also matches other scripts.
+            ids.extend(re.findall(r"#([A-Za-z][A-Za-z0-9_:-]*)", names))
         elif ref and alds and ref in alds:
             if ref in seen:
                 raise AldCycleError(f"attribute list definition {ref} refers back to itself")
@@ -722,7 +723,9 @@ def lint_file(path: Path) -> Report:
     """Lint one draft."""
     report = Report(path)
     prefix = f"req-{short_name(path)}-"
-    id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
+    # [0-9], not \d: Python's \d matches any Unicode digit (such as fullwidth or Arabic-Indic),
+    # which kramdown's ASCII-only ID pattern never anchors.
+    id_pattern = re.compile(rf"^{re.escape(prefix)}([0-9]{{3}})\Z")
     lines = path.read_text(encoding="utf-8").splitlines()
     try:
         found, detached, misindented, code_lines = segments(lines)

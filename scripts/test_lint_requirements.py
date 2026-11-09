@@ -129,6 +129,13 @@ class TestIdProblems:
         report = lint_file(spec)
         assert sum("malformed ID" in e for e in report.errors) == 2
 
+    def test_non_ascii_digit_ids_are_malformed(self, tmp_path):
+        # kramdown anchors only ASCII IDs; Python's \d and \w match other scripts' digits.
+        for digits in ("\u0660\u0660\u0661", "\uff10\uff10\uff11"):
+            spec = write_spec(tmp_path, f"A MUST b.\n{{: #req-test-charge-{digits}}}\n")
+            report = lint_file(spec)
+            assert any("malformed ID" in e for e in report.errors), digits
+
     def test_backwards_is_a_note(self, tmp_path):
         spec = write_spec(
             tmp_path,
