@@ -1487,7 +1487,10 @@ lowercase `channelId`. Channel state updates MUST be linearizable per
 channel across concurrent requests. Every service and instance that
 accepts vouchers on the same channel, for example several services
 sharing one payee address, MUST share that channel's accounting
-state, since the escrow pays each increment once.
+state, since the escrow pays each increment once. The shared state
+includes the disclosed amount (see {{voucher-disclosure}}), whether
+the channel is closing (see {{cooperative-close}}), and for v1 the
+retained vouchers (see {{crash-safety}}).
 
 Accounting is per channel, not per session: `acceptedCumulative` and
 `spent` span every session and challenge on the channel, so a voucher
@@ -1568,7 +1571,7 @@ the grace period
 less the time it needs to close MUST stop delivering metered service
 until it reads it again.
 
-## Crash Safety
+## Crash Safety {#crash-safety}
 
 To prevent fund loss from server crashes:
 
@@ -2021,7 +2024,9 @@ Payer protection covers only what the payer signed. The escrow cannot
 see service delivery, so a signed voucher is a payment the payer
 cannot reclaim: the payee can settle it whether or not service
 consumed it, until the channel is finalized. A forced close refunds
-only what the payee has not settled by the end of the grace period. Clients SHOULD keep `acceptedCumulative` close to the
+only what the payee has not settled when the payer's `withdraw`
+executes, which can be after the grace period ends. Clients SHOULD
+keep `acceptedCumulative` close to the
 `spent` amount that receipts report, signing ahead of consumption
 only what they accept losing if the server stops serving.
 
