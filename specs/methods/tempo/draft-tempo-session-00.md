@@ -1253,11 +1253,17 @@ On `action="open"`, servers MUST:
    - `voucher.cumulativeAmount >= channel.settled` (at or above current
      settlement; a voucher equal to `channel.settled` authorizes no new
      service, and `settle` rejects it)
-4. Initialize server-side channel state only if the server holds none
-   for this `channelId`. If it already holds state, it MUST keep the
-   existing `acceptedCumulative` and `spent` (see
-   {{server-accounting}}) and MUST NOT reset them: a repeated `open`
-   for an existing channel reverts on-chain but passes steps 1-3.
+4. Initialize server-side channel state for the `channelId`.
+
+A repeated `open` for a `channelId` that the server already tracks,
+or that already exists on chain, MUST NOT be co-signed, broadcast or
+accepted. Its `open()` reverts, and the signed transaction is public,
+so anyone could replay it. The server returns 402 with a fresh
+Challenge and MUST keep the channel's existing `acceptedCumulative`
+and `spent` (see {{server-accounting}}); the client continues with
+`action="voucher"`. Servers MUST check this after decoding the
+transaction in step 1 and before adding a fee payer signature or
+broadcasting.
 
 ## TopUp Verification
 
