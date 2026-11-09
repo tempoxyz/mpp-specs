@@ -20,8 +20,10 @@ if [ -n "$(find TempoSession -mindepth 2 -name '*.lean')" ]; then
   exit 1
 fi
 # The root module imports Audit, so it is elaborated after the audit runs: anything declared
-# there would be built but never audited. Allow only imports and comments.
-if grep -vE '^[[:space:]]*(import[[:space:]]|--|$)' TempoSession.lean; then
+# there would be built but never audited. Allow only whole lines holding one import, a
+# -- comment, or both: Lean's header ends at the first token that isn't an import, so text
+# after an import on the same line would be an ordinary, unaudited command.
+if grep -vE '^[[:space:]]*(import[[:space:]]+[A-Za-z0-9_.]+[[:space:]]*)?(--.*)?$' TempoSession.lean; then
   echo "FAIL: TempoSession.lean may contain only import lines and -- comments (it is not audited)"
   exit 1
 fi
