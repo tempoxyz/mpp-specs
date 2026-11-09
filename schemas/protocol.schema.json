@@ -63,10 +63,10 @@
       "contentSchema": { "type": "object", "additionalProperties": { "type": "string" } }
     },
     "DateTime": {
-      "description": "RFC 3339 date-time, as the core draft requires for Challenge expires and Receipt timestamp. format: date-time is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible; T and Z are case-insensitive per RFC 3339 section 5.6).",
+      "description": "RFC 3339 date-time, as the core draft requires for Challenge expires and Receipt timestamp. format: date-time is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible; T and Z are case-insensitive per RFC 3339 section 5.6). The date branch checks each month's length and allows February 29 only in Gregorian leap years (RFC 3339 section 5.7). Second 60 is accepted at any time, since only a leap second table says when one occurred.",
       "type": "string",
       "format": "date-time",
-      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])[Tt](?:[01][0-9]|2[0-3]):[0-5][0-9]:(?:[0-5][0-9]|60)(?:\\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]$" }
+      "pattern": "^(?:[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)[Tt](?:[01][0-9]|2[0-3]):[0-5][0-9]:(?:[0-5][0-9]|60)(?:\\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]$" }
     },
     "ParamValue": {
       "description": "An auth-param value after token or quoted-string decoding (RFC 9110): no control characters but HTAB, since neither grammar can carry CR, LF or another one.",
