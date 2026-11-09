@@ -11,6 +11,7 @@ from lint_requirements import (
     in_braces,
     lint_file,
     main,
+    mixed_indent,
     short_name,
     strip_code_spans,
 )
@@ -1055,3 +1056,21 @@ def test_kramdown_comment_opener_in_a_fence_or_unclosed_hides_nothing(tmp_path):
     )
     report = lint_file(spec)
     assert any("req-test-charge-001" in e for e in report.errors), report.errors
+
+
+def test_ald_reference_before_its_block_is_reported_like_a_literal_id(tmp_path):
+    # An IAL written before the block's text is reported, whether it holds the ID itself or
+    # names an ALD that does.
+    literal = lint_file(write_spec(tmp_path, "{: #req-test-charge-001}\nServers MUST x.\n")).errors
+    spec = write_spec(tmp_path, "{:tag: #req-test-charge-001}\n\n{: tag}\nServers MUST x.\n")
+    referenced = lint_file(spec).errors
+    assert literal == ["line 8: req-test-charge-001 is not directly after a paragraph or list item"]
+    assert referenced == ["line 10: req-test-charge-001 is not directly after a paragraph or list item"]
+
+
+def test_mixed_indent_matches_tab_after_space_and_stays_linear():
+    assert mixed_indent("  \tx") and mixed_indent("> > \tx") and mixed_indent(">  \tx")
+    assert not mixed_indent("\t x") and not mixed_indent(">\t> \tx".replace("> \t", ">x"))
+    assert not mixed_indent("x  \t") and not mixed_indent("")
+    # A long whitespace line with no tab after a space: the old regex took quadratic time.
+    assert not mixed_indent(" " * 1_000_000 + "x") and not mixed_indent("\t" * 1_000_000)

@@ -150,13 +150,13 @@
       "additionalProperties": false,
       "properties": {
         "secretKey": { "type": "string", "minLength": 1 },
-        "realm": { "type": "string" },
+        "realm": { "$ref": "#/$defs/ParamValue" },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
-        "expires": { "type": "string" },
-        "description": { "type": "string" },
-        "digest": { "type": "string" },
+        "expires": { "allOf": [{ "$ref": "#/$defs/ParamValue" }, { "$ref": "#/$defs/DateTime" }] },
+        "description": { "$ref": "#/$defs/ParamValue" },
+        "digest": { "allOf": [{ "$ref": "#/$defs/ParamValue" }, { "$ref": "#/$defs/ContentDigest" }] },
         "header": { "const": "Payment-Authorization" },
         "opaque": { "$ref": "#/$defs/Opaque" }
       }

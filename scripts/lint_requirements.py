@@ -470,8 +470,34 @@ def short_name(path: Path) -> str:
 FENCE = re.compile(r"^(~{3,}|`{3,})")
 # A line holding only an IAL, which applies to the block above it.
 IAL_LINE = re.compile(r"^\s*\{:[^}]*\}\s*$")
-# A tab after a space in a line's indentation (see lint_file).
-MIXED_INDENT = re.compile(r"^[ \t]*(?:> ?)*[ \t]* \t")
+
+
+def mixed_indent(raw: str) -> bool:
+    """Whether a tab follows a space in a line's indentation, blockquote markers included.
+
+    Matches what ^[ \\t]*(?:> ?)*[ \\t]* \\t would, in one pass: that regex backtracks
+    quadratically on long whitespace lines.
+    """
+    # States while reading the indentation: 0 before any '>', 1 just after a '>',
+    # 2 after "> ", 3 in the whitespace after the markers. Every state is a valid prefix.
+    states = {0}
+    for i, char in enumerate(raw):
+        if char == " " and raw[i + 1 : i + 2] == "\t":
+            return True
+        following: set[int] = set()
+        for state in states:
+            if char in " \t":
+                if state == 0:
+                    following.add(0)
+                elif state == 1 and char == " ":
+                    following.add(2)
+                following.add(3)
+            elif char == ">" and state in (0, 1, 2):
+                following.add(1)
+        if not following:
+            return False
+        states = following
+    return False
 
 
 def kramdown_comment_lines(lines: list[str]) -> set[int]:
@@ -641,10 +667,12 @@ def lint_file(path: Path) -> Report:
             # Unmatched, an item is reported where the match last was: close to its place.
             item.start, item.end = found or (source.last_line, source.last_line)
 
-    # Every line each requirement ID is written on, outside the YAML header.
+    # Every line each requirement ID is written on, outside the YAML header, in order.
     id_lines: dict[str, list[int]] = defaultdict(list)
     for number in range(start, len(lines) + 1):
-        for found_id in SOURCE_ID.findall(lines[number - 1]):
+        # Once per line, however often the line mentions the ID: each entry is checked by
+        # rescanning its line.
+        for found_id in dict.fromkeys(SOURCE_ID.findall(lines[number - 1])):
             id_lines[found_id].append(number)
     anchors = {el.get("anchor") for el in root.iter() if el.get("anchor")}
     # IDs shown as code (examples of the syntax) or kept in an XML comment were never meant
@@ -697,7 +725,14 @@ def lint_file(path: Path) -> Report:
         if not found or any(n >= item.start for n in found):
             return None
         before = [n for n in found if not ALD_LINE.match(lines[n - 1])]
-        return before[-1] if before else None
+        if before:
+            return before[-1]
+        # Only in ALDs: the IALs that reference them place the ID, so check those instead.
+        names = {ALD_NAME.match(lines[n - 1]).group(1) for n in found}
+        refs = sorted(n for name in names for n in ald_refs.get(name, []))
+        if not refs or any(n >= item.start for n in refs):
+            return None
+        return refs[-1]
 
     def replaced_ids(item: Item) -> list[str]:
         """Other IDs written in the IAL lines between a block and its requirement ID.
@@ -733,6 +768,8 @@ def lint_file(path: Path) -> Report:
     commented = kramdown_comment_lines(lines)
     # ALD names that some IAL or ALD references (a bare word in {: ...}), outside {::comment}.
     ald_uses: set[str] = set()
+    # The IAL lines (not ALD lines) that reference each ALD name, in order.
+    ald_refs: dict[str, list[int]] = defaultdict(list)
     # An ALD can name other ALDs too, so its references count.
     for number in range(start, len(lines) + 1):
         if number in commented:
@@ -740,8 +777,17 @@ def lint_file(path: Path) -> Report:
         line = lines[number - 1]
         bodies = [line[ALD_NAME.match(line).end() :].split("}", 1)[0]] if ALD_LINE.match(line) else ial_bodies(line)
         for body in bodies:
-            ald_uses.update(t for t in body.split() if ALD_REF.fullmatch(t))
+            names = [t for t in body.split() if ALD_REF.fullmatch(t)]
+            ald_uses.update(names)
+            if not ALD_LINE.match(line):
+                for name in dict.fromkeys(names):
+                    ald_refs[name].append(number)
     lost: dict[int, list[str]] = defaultdict(list)
+    # blank_before[k]: blank lines among lines 1..k, so a range is checked for blank lines in
+    # constant time rather than by rescanning it for each ID.
+    blank_before = [0]
+    for line in lines:
+        blank_before.append(blank_before[-1] + (not line.strip()))
     # IDs that anchor a text block. Such an ID written again on another block, which then
     # set an ID of its own, is still an anchor (of the first block) but is lost on the second.
     anchored_by = {item.anchor for item in texts if item.anchor}
@@ -788,14 +834,14 @@ def lint_file(path: Path) -> Report:
             if (
                 owner >= 0
                 and texts[owner].anchor
-                and all(lines[k - 1].strip() for k in range(texts[owner].end + 1, number))
+                and blank_before[max(number - 1, texts[owner].end)] == blank_before[texts[owner].end]
             ):
                 lost[owner].append(req_id)
             else:
                 report.error(number, f"{req_id} is not directly after a paragraph or list item")
 
     for number, raw in enumerate(lines, start=1):
-        if number >= start and MIXED_INDENT.match(raw):
+        if number >= start and mixed_indent(raw):
             # kramdown-rfc expands tabs before kramdown reads the draft and warns that
             # "undefined behavior will ensue": a tab after spaces lands on a column the
             # author rarely meant, even in a code block.

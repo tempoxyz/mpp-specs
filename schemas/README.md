@@ -18,6 +18,10 @@ JSON Schemas for MPP protocol values.
   - Receipt requires `method`, as the core draft's Receipt fields do.
   - Challenge and ChallengeIdInput `header` are
     `const: "Payment-Authorization"`.
+  - ChallengeIdInput `expires` and `digest` use the Challenge formats
+    (`DateTime`, `ContentDigest`), so neither can hold the `|` that
+    separates HMAC input slots. mpp-tools' challenge-id vectors use
+    digests without the RFC 9530 colons and should add them.
   - Credential `source` is a string.
   - http.payment_request `payment.source` is a string or null, matching Credential `source`.
   - `TempoProofTypedData` pins domain `name` "MPP", `version` "3", `primaryType`
