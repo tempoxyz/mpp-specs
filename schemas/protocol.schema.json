@@ -3,6 +3,11 @@
   "$id": "https://paymentauth.org/schemas/protocol.schema.json",
   "title": "MPP Conformance Protocol Values",
   "$defs": {
+    "IntentId": {
+      "description": "core intent = 1*( ALPHA / DIGIT / \"-\" )",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]+$"
+    },
     "PaymentMethodId": {
       "description": "core payment-method-id = 1*LOWERALPHA",
       "type": "string",
@@ -55,7 +60,7 @@
         "id": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
-        "intent": { "type": "string", "minLength": 1 },
+        "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string", "format": "date-time" },
         "description": { "type": "string" },
@@ -76,7 +81,7 @@
     },
     "Receipt": {
       "type": "object",
-      "required": ["status", "timestamp", "reference"],
+      "required": ["status", "method", "timestamp", "reference"],
       "additionalProperties": true,
       "properties": {
         "status": { "type": "string", "const": "success" },
@@ -120,7 +125,7 @@
         "secretKey": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
-        "intent": { "type": "string" },
+        "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string" },
         "description": { "type": "string" },
@@ -350,7 +355,7 @@
         "realm": { "type": "string" },
         "secretKey": { "type": "string", "minLength": 1 },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
-        "intent": { "type": "string", "minLength": 1 },
+        "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string" },
         "verificationError": { "type": "string" },
