@@ -5,7 +5,8 @@ keyword in capitals. Each one carries a kramdown block IAL on the line
 right after it, such as {: #req-tempo-charge-001} (see STYLE.md).
 
 The lint reports untagged requirements, duplicate IDs, malformed IDs and
-IDs whose number goes backwards. It only warns by default; --strict
+IDs whose number goes backwards, and keywords in table cells beyond a
+field's REQUIRED/OPTIONAL marker. It only warns by default; --strict
 exits 1 on untagged requirements and duplicate or malformed IDs. IDs that
 go backwards stay notes, since a rule added later takes the next free
 number wherever it goes.
@@ -29,6 +30,8 @@ LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 FENCE = re.compile(r"^\s*(~~~|```)")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
 BOILERPLATE = re.compile(r'The key words "MUST"')
+# A table cell that only marks a field present or absent ("REQUIRED", "OPTIONAL. ...").
+PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)\b\.?")
 
 
 @dataclass
@@ -122,6 +125,28 @@ def segments(lines: list[str]) -> tuple[list[Segment], list[tuple[int, str]]]:
     return result, detached
 
 
+def table_keywords(lines: list[str]) -> list[int]:
+    """Return lines of table rows with a keyword beyond a field's presence marker.
+
+    A table cell can't carry an ID, so such a rule has to move to prose.
+    """
+    found: list[int] = []
+    in_fence = False
+    for number, raw in enumerate(lines, start=1):
+        if FENCE.match(raw):
+            in_fence = not in_fence
+            continue
+        stripped = raw.strip()
+        if in_fence or not stripped.startswith("|"):
+            continue
+        for cell in stripped.strip("|").split("|"):
+            text = PRESENCE_MARKER.sub("", INLINE_CODE.sub("", cell).strip())
+            if KEYWORD.search(text):
+                found.append(number)
+                break
+    return found
+
+
 def lint_file(path: Path) -> Report:
     """Lint one draft."""
     report = Report(path)
@@ -129,6 +154,11 @@ def lint_file(path: Path) -> Report:
     id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
     lines = path.read_text(encoding="utf-8").splitlines()
     found, detached = segments(lines)
+
+    for number in table_keywords(lines):
+        report.errors.append(
+            f"line {number}: keyword in a table cell; state the rule in a tagged paragraph"
+        )
 
     for number, req_id in detached:
         report.errors.append(
@@ -167,7 +197,7 @@ def lint_file(path: Path) -> Report:
                 report.notes.append(
                     f"line {segment.line}: {req_id} goes backwards (after {prefix}{last:03d})"
                 )
-            last = max(last, value)
+            last = value
     return report
 
 

@@ -55,7 +55,7 @@
         "expires": { "type": "string", "format": "date-time" },
         "description": { "type": "string" },
         "digest": { "type": "string" },
-        "header": { "type": "string", "minLength": 1 },
+        "header": { "const": "Payment-Authorization" },
         "opaque": { "type": "string" }
       }
     },
@@ -126,7 +126,7 @@
         "expires": { "type": "string" },
         "description": { "type": "string" },
         "digest": { "type": "string" },
-        "header": { "type": "string", "minLength": 1 },
+        "header": { "const": "Payment-Authorization" },
         "opaque": { "type": "string" }
       }
     },

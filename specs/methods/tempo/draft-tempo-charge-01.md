@@ -167,9 +167,13 @@ Challenge expiry is conveyed by the `expires` auth-param in
 |-------|------|----------|-------------|
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
-| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
+| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value for `transferWithMemo` (see below) |
 | `methodDetails.splits` | array | OPTIONAL | Additional recipients that receive a portion of `amount`. See {{split-payments}}. |
 | `methodDetails.supportedModes` | array | OPTIONAL | Supported non-zero submission modes. Values are `"pull"` and/or `"push"`. |
+
+When `methodDetails.memo` is present, the client MUST use
+`transferWithMemo` instead of `transfer`.
+{: #req-tempo-charge-044}
 
 ## Submission Modes
 

@@ -57,6 +57,18 @@ class TestTagging:
         )
         report = lint_file(spec)
         assert report.total == 0
+        assert report.errors == []
+
+    def test_keyword_in_table_cell_is_an_error(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "| Field | Required | Description |\n|---|---|---|\n"
+            "| a | OPTIONAL | OPTIONAL. Echoed back. |\n"
+            "| b | OPTIONAL | When present, clients MUST use it. |\n",
+        )
+        report = lint_file(spec)
+        assert len(report.errors) == 1
+        assert report.errors[0].startswith("line 11:")
 
     def test_line_after_ial_is_a_new_block(self, tmp_path):
         spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")
