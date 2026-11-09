@@ -66,13 +66,7 @@
       "properties": {
         "challenge": { "$ref": "#/$defs/Challenge" },
         "payload": { "$ref": "#/$defs/JsonObject" },
-        "source": {
-          "anyOf": [
-            { "$ref": "#/$defs/JsonObject" },
-            { "type": "string" },
-            { "type": "null" }
-          ]
-        }
+        "source": { "type": "string" }
       }
     },
     "Receipt": {
