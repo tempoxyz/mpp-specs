@@ -1790,8 +1790,11 @@ see a pending or failed `settle`, so when the server refuses its
 close voucher with 402, a v2 client signs a new one one base unit
 above the highest voucher it has signed, which is above every voucher
 the server can have broadcast, and a v1 client calls `requestClose`.
-When the amount a v2 client would sign under this paragraph exceeds
-the deposit, it calls `requestClose` instead.
+A v2 client makes this retry at most once per close: if the server
+refuses the retried voucher too, the client calls `requestClose`
+rather than sign a higher one. When the amount a v2 client would sign
+under this paragraph exceeds the deposit, it calls `requestClose`
+instead.
 
 The capture bound limits what `close` adds, not what the payee
 collects in total. Servers settle no more than `spent` (see
