@@ -7,7 +7,6 @@ from urllib.error import HTTPError
 import gen_codeowners
 from gen_codeowners import (
     HEADER,
-    login_from_email,
     owner,
     owner_pattern,
     render,
@@ -20,12 +19,6 @@ def test_owner_pattern_survives_revision_bumps():
         "/specs/methods/tempo/draft-tempo-charge-??.md"
     )
     assert owner_pattern("specs/core/draft-httpauth-payment-01.md") == ("/specs/core/draft-httpauth-payment-??.md")
-
-
-def test_login_from_noreply_email():
-    assert login_from_email("1572504+brendanjryan@users.noreply.github.com") == "brendanjryan"
-    assert login_from_email("brendanjryan@users.noreply.github.com") == "brendanjryan"
-    assert login_from_email("ludo@example.org") is None
 
 
 def test_render_adds_defaults_without_duplicates():
@@ -57,33 +50,44 @@ def test_submitter_falls_back_when_github_fails(monkeypatch):
 
     monkeypatch.setattr(gen_codeowners, "github", fail)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
-    assert submitter("abc123", "1572504+brendanjryan@users.noreply.github.com") == "brendanjryan"
-    assert submitter("abc123", "ludo@example.org") is None
+    assert submitter("abc123") is None
     # A rate limit is recorded, so main() refuses to write a partial CODEOWNERS.
     assert gen_codeowners.LOOKUP_FAILURES
 
 
-def test_submitter_prefers_current_login_over_noreply_email(monkeypatch):
+def test_submitter_uses_verified_author_without_pull_request(monkeypatch):
     def lookup(url):
         if url.endswith("/pulls"):
             return []
-        return {"author": {"login": "renamed"}}
+        return {"author": {"login": "renamed"}, "commit": {"verification": {"verified": True}}}
 
     monkeypatch.setattr(gen_codeowners, "github", lookup)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
-    # The noreply email still names the old login; the API's current one wins.
-    assert submitter("abc123", "1572504+oldname@users.noreply.github.com") == "renamed"
+    # The API gives the account's current login.
+    assert submitter("abc123") == "renamed"
+
+
+def test_submitter_ignores_unverified_author(monkeypatch):
+    def lookup(url):
+        if url.endswith("/pulls"):
+            return []
+        # GitHub matched this author by email alone, which anyone can set.
+        return {"author": {"login": "brendanjryan"}, "commit": {"verification": {"verified": False}}}
+
+    monkeypatch.setattr(gen_codeowners, "github", lookup)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
+    assert submitter("abc123") is None
 
 
 def test_submitter_ignores_unmerged_pull_requests(monkeypatch):
     def lookup(url):
         if url.endswith("/pulls"):
             return [{"merged_at": None, "user": {"login": "someone-else"}}]
-        return {"author": {"login": "brendanjryan"}}
+        return {"author": {"login": "brendanjryan"}, "commit": {"verification": {"verified": True}}}
 
     monkeypatch.setattr(gen_codeowners, "github", lookup)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
-    assert submitter("abc123", "ludo@example.org") == "brendanjryan"
+    assert submitter("abc123") == "brendanjryan"
 
 
 def test_revisions_glob_is_exact_for_non_drafts():
@@ -96,7 +100,7 @@ def test_unpushed_commit_is_not_a_lookup_failure(monkeypatch):
 
     monkeypatch.setattr(gen_codeowners, "github", missing)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
-    assert submitter("abc123", "ludo@example.org") is None
+    assert submitter("abc123") is None
     assert gen_codeowners.LOOKUP_FAILURES == []
 
 

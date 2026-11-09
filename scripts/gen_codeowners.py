@@ -42,7 +42,6 @@ HEADER = (
     "# Do not edit by hand: run 'make codeowners' and commit the result.\n"
 )
 
-NOREPLY = re.compile(r"^(?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$")
 REVISION = re.compile(r"-\d{2}\.md$")
 # Paths written into CODEOWNERS unescaped: no spaces, '#', '*' or other pattern syntax.
 SAFE_PATH = re.compile(r"^specs/[A-Za-z0-9._/-]+\.md$")
@@ -58,12 +57,6 @@ def owner_pattern(path: str) -> str:
     '*' would. CODEOWNERS doesn't support [0-9] character classes.
     """
     return "/" + REVISION.sub("-??.md", path)
-
-
-def login_from_email(email: str) -> str | None:
-    """Return the GitHub login in a noreply address, or None."""
-    match = NOREPLY.match(email)
-    return match.group(1) if match else None
 
 
 def git(*args: str) -> str:
@@ -132,14 +125,18 @@ def try_github(url: str) -> object | None:
     return None
 
 
-def submitter(sha: str, email: str) -> str | None:
-    """Return the login of whoever submitted the commit sha.
+def submitter(sha: str) -> str | None:
+    """Return the login of whoever submitted the commit sha, or None.
 
-    Tries the pull request that merged it, then the commit's GitHub author,
-    then a noreply author email. The API returns the account's current login;
-    a noreply email keeps the login from when the commit was made, so it is
-    only a last resort (an account rename would leave a stale owner). Returns
-    None when none of them work, which leaves the entry to DEFAULT_OWNERS.
+    Only GitHub's own records count, never the commit's author fields, which
+    anyone can set:
+    - the merged pull request that brought the commit in (its opener);
+    - else, for a commit pushed without a pull request, its GitHub author, but
+      only when GitHub verified the commit's signature against that account.
+      An unsigned commit is matched to an account by author email alone, which
+      is forgeable.
+    The API returns each account's current login, so a rename can't leave a
+    stale owner. None leaves the entry to DEFAULT_OWNERS.
     """
     pulls = try_github(f"repos/{REPOSITORY}/commits/{sha}/pulls")
     if isinstance(pulls, list):
@@ -149,10 +146,13 @@ def submitter(sha: str, email: str) -> str | None:
         if merged and merged[0].get("user"):
             return merged[0]["user"]["login"]
     commit = try_github(f"repos/{REPOSITORY}/commits/{sha}")
-    author = commit.get("author") if isinstance(commit, dict) else None
-    if author and author.get("login"):
+    if not isinstance(commit, dict):
+        return None
+    author = commit.get("author") or {}
+    verification = (commit.get("commit") or {}).get("verification") or {}
+    if author.get("login") and verification.get("verified") is True:
         return author["login"]
-    return login_from_email(email)
+    return None
 
 
 def owner(path: str) -> str | None:
@@ -161,7 +161,7 @@ def owner(path: str) -> str | None:
     if added is None:
         print(f"note: {path} has no commit yet; using default owners", file=sys.stderr)
         return None
-    return submitter(*added)
+    return submitter(added[0])
 
 
 def render(owners: dict[str, str | None], defaults: list[str]) -> str:
