@@ -69,13 +69,23 @@ and gap reports cite.
 - Never renumber or reuse an ID. A new rule takes the next free
   number wherever it goes; a removed rule's number stays retired.
 - A keyword in a table cell can't carry an ID: state the rule in
-  prose next to the table.
+  prose next to the table. A cell may still mark a field present or
+  absent with a bare REQUIRED, OPTIONAL or RECOMMENDED (alone, or
+  ending its clause: "OPTIONAL. Defaults to 0"); a marker that opens
+  a condition ("REQUIRED if ...", "REQUIRED: if ...") is a rule.
+- An ID only goes on text with a keyword. Reworded a rule so it has
+  none? Drop the ID and retire its number.
 - IDs become `anchor` attributes in the XML and don't show in the
   TXT or HTML output.
-- `scripts/lint_requirements.py` (in `make lint`) reports untagged
-  requirements and duplicate, malformed or out-of-order IDs. It
-  warns by default; `--strict <draft>` fails on untagged, duplicate
-  or malformed IDs.
+- `scripts/lint_requirements.py` (in `make lint`) warns by default.
+  `--strict <draft>` fails on:
+  - untagged requirements;
+  - duplicate or malformed IDs, or more than one ID on a block;
+  - IDs on text with no keyword;
+  - IDs not directly after their block, or not indented to their
+    list item's text;
+  - keywords in table cells beyond a presence marker.
+  IDs that go backwards are notes only.
 
 ### 3. Structure
 

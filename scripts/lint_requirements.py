@@ -30,8 +30,9 @@ IAL_LINE = re.compile(r"^\s*\{:\s*([^}]*)\}\s*$")
 ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
 # Quoted attribute values, removed before looking for IDs: {: title="#req-x"} sets no id.
 QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
-LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
-FENCE = re.compile(r"^\s*(~~~|```)")
+# Bullets, numbered items and definition-list definitions (": text"); each is its own block.
+LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
+FENCE = re.compile(r"^\s*(~{3,}|`{3,})(.*)$")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
 BOILERPLATE = re.compile(r'The key words "MUST"')
 # A table cell that only marks a field present or absent: the marker alone or
@@ -39,6 +40,27 @@ BOILERPLATE = re.compile(r'The key words "MUST"')
 # consumed"). A marker that opens a condition ("REQUIRED if jwksUri is absent",
 # "REQUIRED for v2") is a rule and stays.
 PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
+# What follows a marker and makes it a condition after all ("REQUIRED: if d is absent").
+CONDITION = re.compile(r"^\W*(?:if|when|unless|for|only|except|where|while)\b", re.IGNORECASE)
+
+
+def fence_step(line: str, fence: str | None) -> tuple[str | None, bool]:
+    """Track fenced code blocks as CommonMark does.
+
+    fence is the delimiter that opened the current block, or None outside one.
+    Returns the new state and whether this line is a fence line. Only a run of
+    the same character, at least as long and with nothing after it, closes a
+    block, so a literal ``` inside a ~~~ block (or the reverse) stays code.
+    """
+    match = FENCE.match(line)
+    if not match:
+        return fence, False
+    run, rest = match.group(1), match.group(2)
+    if fence is None:
+        return run, True
+    if run[0] == fence[0] and len(run) >= len(fence) and not rest.strip():
+        return None, True
+    return fence, False
 
 
 @dataclass
@@ -105,7 +127,7 @@ def segments(
     # so a later paragraph indented to one (a loose-list continuation) still belongs
     # to that item, even after a nested item has closed.
     list_stack: list[int] = []
-    in_fence = False
+    fence: str | None = None
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
     for number, raw in enumerate(lines, start=1):
@@ -113,11 +135,11 @@ def segments(
             if number > 1 and raw.strip() == "---":
                 in_frontmatter = False
             continue
-        if FENCE.match(raw):
-            in_fence = not in_fence
+        fence, is_fence = fence_step(raw, fence)
+        if is_fence:
             current = None
             continue
-        if in_fence:
+        if fence:
             continue
 
         line = re.sub(r"^\s*>\s?", "", raw)
@@ -179,17 +201,16 @@ def table_keywords(lines: list[str]) -> list[int]:
     A table cell can't carry an ID, so such a rule has to move to prose.
     """
     found: list[int] = []
-    in_fence = False
+    fence: str | None = None
     for number, raw in enumerate(lines, start=1):
-        if FENCE.match(raw):
-            in_fence = not in_fence
-            continue
+        fence, is_fence = fence_step(raw, fence)
         stripped = raw.strip()
-        if in_fence or not stripped.startswith("|"):
+        if is_fence or fence or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
-            text = PRESENCE_MARKER.sub("", INLINE_CODE.sub("", cell).strip())
-            if KEYWORD.search(text):
+            cell = INLINE_CODE.sub("", cell).strip()
+            text = PRESENCE_MARKER.sub("", cell)
+            if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
                 break
     return found
@@ -228,6 +249,11 @@ def lint_file(path: Path) -> Report:
                 report.tagged += 1
             else:
                 report.untagged.append(segment.line)
+        elif req_ids:
+            report.errors.append(
+                f"line {segment.line}: {req_ids[0]} is on text with no BCP 14 keyword; "
+                "drop the ID or restore the keyword"
+            )
         if len(req_ids) > 1:
             report.errors.append(
                 f"line {segment.line}: more than one requirement ID ({', '.join(req_ids)})"

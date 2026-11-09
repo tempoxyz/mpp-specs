@@ -180,6 +180,34 @@ class TestIdProblems:
         report = lint_file(spec)
         assert report.total == 0
 
+    def test_mixed_fence_delimiters_stay_code(self, tmp_path):
+        # A literal ``` inside a ~~~ block must not close it, and the real closer must.
+        spec = write_spec(tmp_path, "~~~\n```\nNot MUST prose.\n~~~\n\nClients MUST x.\n")
+        report = lint_file(spec)
+        assert len(report.untagged) == 1
+
+    def test_each_definition_is_its_own_block(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "Term\n: Clients MUST a.\n: Servers MUST b.\n  {: #req-test-charge-001}\n",
+        )
+        report = lint_file(spec)
+        assert report.tagged == 1
+        assert len(report.untagged) == 1
+
+    def test_id_on_non_normative_text_is_an_error(self, tmp_path):
+        spec = write_spec(tmp_path, "Plain text.\n{: #req-test-charge-001}\n")
+        report = lint_file(spec)
+        assert any("no BCP 14 keyword" in e for e in report.errors)
+
+    def test_conditional_marker_with_punctuation_is_flagged(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "| f | REQUIRED: if d is absent |\n| g | OPTIONAL: Units consumed |\n",
+        )
+        report = lint_file(spec)
+        assert sum("table cell" in e for e in report.errors) == 1
+
 class TestMain:
     def test_warn_mode_exits_zero(self, tmp_path):
         spec = write_spec(tmp_path, "Clients MUST NOT reuse it.\n")
