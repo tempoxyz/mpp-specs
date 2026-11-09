@@ -1144,3 +1144,15 @@ def test_in_braces_checks_many_distinct_ids_on_a_line_in_one_scan():
     assert time.monotonic() - start < 2
     # The whole ID must match: a prefix of a longer ID isn't that ID.
     assert not in_braces("{: #req-x-0012}", "req-x-001") and in_braces("{: #req-x-001}", "req-x-001")
+
+
+def test_in_braces_stays_linear_when_many_lines_share_ids():
+    import time
+
+    ids = [f"req-x-{i}" for i in range(200)]
+    lines = ["{: " + " ".join(ids) + f" }} line {n}" for n in range(200)]
+    start = time.monotonic()
+    for i in ids:
+        for line in lines:
+            assert in_braces(line, i)
+    assert time.monotonic() - start < 2

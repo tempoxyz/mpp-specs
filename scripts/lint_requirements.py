@@ -635,19 +635,21 @@ def ial_ids(body: str) -> list[str]:
     return ids
 
 
-@functools.lru_cache(maxsize=64)
+@functools.lru_cache(maxsize=None)
 def brace_positions(line: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """The positions of every { and every } in a line, in order.
 
-    Cached, so a line with many ID mentions is scanned once rather than once per mention.
-    Only brace positions are kept, so memory grows with the braces, not the line length.
+    Cached without a bound, so a line with many ID mentions is scanned once rather than
+    once per mention, however many lines lint_file visits in between (a bounded cache
+    thrashes when more lines share IDs than it holds); the cache holds no more than the
+    drafts' own lines.
     """
     opens = tuple(i for i, char in enumerate(line) if char == "{")
     closes = tuple(i for i, char in enumerate(line) if char == "}")
     return opens, closes
 
 
-@functools.lru_cache(maxsize=64)
+@functools.lru_cache(maxsize=None)
 def braced_ids(line: str) -> frozenset[str]:
     """The requirement IDs written somewhere in a line after a { with no } in between.
 
