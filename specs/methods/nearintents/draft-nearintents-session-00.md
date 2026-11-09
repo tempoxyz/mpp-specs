@@ -470,6 +470,7 @@ quote, from any origin chain or asset, is swapped into that token.
 | `methodDetails.settlementBackend` | string | OPTIONAL | Discloses the settlement backend. Value `"near-intents"` for this method. |
 | `methodDetails.funding` | object | REQUIRED | Funding object (see {{funding-object}}). |
 | `methodDetails.idleTimeout` | integer | REQUIRED | Idle timeout in seconds. The server closes the session after this long without session activity (see {{server-initiated-close}}). |
+| `methodDetails.maxSessionLifetime` | integer | OPTIONAL | Maximum session lifetime in seconds, measured from the creation of the session. When present, the server closes the session once it has elapsed, whatever the session's activity (see {{server-initiated-close}}). |
 | `methodDetails.minVoucherDelta` | string | REQUIRED | Smallest allowed increase between accepted vouchers, in base units of `currency`. MUST be at least `"1"`. |
 | `methodDetails.refundTypes` | array | REQUIRED | Refund destination types the server supports (see {{refund-destination}}). MUST contain `"intents"`; MAY contain `"origin"`. |
 | `methodDetails.minOriginRefund` | string | CONDITIONAL | REQUIRED when `refundTypes` contains `"origin"`. Refunds below this amount, in base units of `currency`, fall back to an `intents` refund (see {{origin-refunds}}). |
@@ -505,6 +506,21 @@ deposit type `ORIGIN_CHAIN`, refund address `funding.refundTo` with
 refund type `ORIGIN_CHAIN`, and a deadline no earlier than the
 challenge `expires`.
 
+## Funding Preferences {#funding-preferences}
+
+Minting the funding quote requires inputs that only the payer knows:
+the origin chain and asset to deposit from, an origin-chain refund
+address under the payer's control, and the deposit size the payer is
+prepared to make. This document does not define how a server learns
+them. A server MAY take them from authenticated request context, from
+application-level parameters of the request that triggered the
+challenge, or from an earlier request in the same realm, and otherwise
+applies its documented defaults, including the recovery policy of
+{{I-D.nearintents-charge}} for `funding.refundTo`. The session key is
+not among these inputs; it is bound at open. Whatever the source, the
+challenge is authoritative, and the client verification of the funding
+object before depositing ({{amount-verification}}) is unchanged.
+
 ## Challenge Expiry and Reuse {#expiry}
 
 The challenge `expires` auth-param MUST be set to the 1Click quote
@@ -519,8 +535,13 @@ accommodates origin-chain confirmation plus `funding.timeEstimate`.
 when a successful deposit may be claimed: a deposit whose swap reached
 `SUCCESS` remains claimable by an `open` or `topUp` presenting its
 challenge for at least 30 days from the time the backend reported
-`SUCCESS`, and the funds it delivered are held for the payer until
-claimed.
+`SUCCESS`, and the funds it delivered are held for the payer while it
+remains claimable. Servers MUST document how they dispose of a deposit
+that is still unclaimed when that period ends. The RECOMMENDED policy
+is to return its value, net of swap fees, to `funding.refundTo` through
+a swap into `funding.asset`; when `funding.refundTo` is a merchant
+recovery address, the recovery policy disclosed under
+{{I-D.nearintents-charge}} applies.
 
 Servers MUST NOT advertise the same `funding.depositAddress` to two
 different clients. A server that cannot associate a challenge with a
@@ -731,6 +752,12 @@ deposit address. The challenge's `currency` and `recipient` MUST equal
 those of the session; its `amount` is ignored for the top-up, since
 the session keeps its opening unit price; and its funding object MAY
 name a different origin chain or asset than the opening challenge.
+
+Clients SHOULD submit the `topUp` credential as soon as the 1Click
+backend reports the deposit as detected, rather than waiting for
+origin-chain confirmation themselves. The server records the deposit as
+pending while the swap settles, which defers an idle close of the
+session ({{server-initiated-close}}).
 
 A `topUp` credential is a control request. It MAY be sent to any
 protected resource URI in the realm. The server MUST NOT serve paid
@@ -1058,6 +1085,13 @@ depends on it.
    deposits and reject as in step 11 of {{open-verification}}. The
    session's `funded` is unchanged.
 
+Resolution of a pending deposit does not depend on the client
+re-sending the credential. When the server recorded a pending deposit
+in step 6 but returned no terminal outcome to the client, for example
+after a backend error or a lost connection, it SHOULD continue to drive
+the swap to a terminal status on its own and apply step 7 or step 8
+when that status is known, without sending a response.
+
 ## Close Verification {#close-verification}
 
 1. Look up the session by `payload.reference`. If not found, reject
@@ -1143,9 +1177,17 @@ atomically with the state change or delivery that constitutes activity.
 When no session activity has occurred for `methodDetails.idleTimeout`
 seconds, the server SHOULD close the session promptly. It MUST NOT
 close a session solely for inactivity before that interval has elapsed.
-A server MAY close a session earlier for operational reasons, such as
-planned shutdown; clients therefore MUST NOT treat the idle timeout as
-a guarantee that the session remains available.
+While the session has a pending top-up deposit ({{session-state}}),
+the server MUST NOT close it solely for inactivity or for an elapsed
+lifetime: the close is deferred until no deposit of the session is
+pending, so that a top-up from a slow origin chain is credited rather
+than refunded. When the challenge advertised
+`methodDetails.maxSessionLifetime`, the server SHOULD close the session
+once that many seconds have elapsed since its creation, whatever its
+activity. A server MAY close a session earlier for operational reasons,
+such as planned shutdown; clients therefore MUST NOT treat the idle
+timeout or the lifetime as a guarantee that the session remains
+available.
 
 A server-initiated close runs steps 4 through 6 of
 {{close-verification}} and stores the close result as in step 7; no
@@ -1564,7 +1606,7 @@ All communication MUST use TLS 1.2 or higher per
 {{I-D.httpauth-payment}}. Challenges, credentials, and receipts MUST
 only be transmitted over HTTPS connections.
 
-## Amount and Asset Verification
+## Amount and Asset Verification {#amount-verification}
 
 Before broadcasting a deposit, clients MUST decode and verify the
 challenge `request` per {{I-D.httpauth-payment}}: that `amount`,
@@ -1594,6 +1636,19 @@ enforces the refund at close, and the payer has no independent exit if
 the merchant disappears. The payer's exposure is bounded by `funded`.
 The merchant bears no financial risk: it is paid before it serves and
 only ever serves up to `authorized`.
+
+Funds that back open sessions MUST remain in `recipient`: refunds are
+Verifier transfers from that account, and every server supports
+`intents` refunds. How the merchant pays itself out is out of scope. A
+merchant MAY move value out of `recipient` at any time, including while
+sessions are open, to any destination the Verifier or the 1Click API
+can reach, provided the account keeps at least the sum of
+`funded - spent` over its `open` and `closing` sessions, of refunds not
+yet executed, and of the value delivered by deposits that remain
+claimable ({{expiry}}). Because refunds are signed automatically, the
+key the server holds can move the whole balance of `recipient`;
+merchants SHOULD dedicate an Intents account to sessions and sweep the
+surplus to an account that key does not control.
 
 A compliant merchant charges at most the highest voucher the payer
 signed and refunds the rest; nothing enforces this, and a malicious
@@ -2186,6 +2241,7 @@ draft version is required or assumed.
           }
         },
         "idleTimeout":     { "type": "integer", "minimum": 1 },
+        "maxSessionLifetime": { "type": "integer", "minimum": 1 },
         "minVoucherDelta": { "type": "string", "pattern": "^[1-9][0-9]*$" },
         "refundTypes": {
           "type": "array",
