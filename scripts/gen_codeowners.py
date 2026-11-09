@@ -2,8 +2,8 @@
 """Generate .github/CODEOWNERS from who submitted each spec.
 
 Each draft under specs/ is owned by the GitHub user who submitted it: the
-author of the pull request that first added the file (following renames
-from revision bumps), or the commit author when no pull request is found.
+author of the pull request that first added any revision of the draft
+(matched by draft name, not content similarity), or the commit author when no pull request is found.
 DEFAULT_OWNERS are added to every entry, so each spec keeps an owner with
 write access. Files outside specs/ have no owner, so Dependabot and
 AGENTS.md sync pull requests don't need a code owner review.
@@ -55,9 +55,20 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def revisions_glob(path: str) -> str:
+    """Return a pathspec matching every revision of the draft at path, in any directory.
+
+    Matching by draft name rather than with 'git log --follow' keeps ownership exact:
+    --follow pairs files by content similarity, so a new spec copied from another, or a
+    revision that rewrites most of its draft, would get the wrong submitter.
+    """
+    name = REVISION.sub("-[0-9][0-9].md", Path(path).name)
+    return f":(glob)specs/**/{name}"
+
+
 def first_commit(path: str) -> tuple[str, str] | None:
-    """Return (sha, author email) of the commit that first added path, or None."""
-    log = git("log", "--follow", "--diff-filter=A", "--format=%H %ae", "--", path).split("\n")
+    """Return (sha, author email) of the commit that first added any revision of path."""
+    log = git("log", "--diff-filter=A", "--format=%H %ae", "--", revisions_glob(path)).split("\n")
     lines = [line for line in log if line]
     if not lines:
         return None

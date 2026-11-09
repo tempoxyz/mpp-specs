@@ -55,3 +55,10 @@ def test_submitter_falls_back_when_github_fails(monkeypatch):
 def test_owner_of_uncommitted_spec_is_none(monkeypatch):
     monkeypatch.setattr(gen_codeowners, "first_commit", lambda path: None)
     assert owner("specs/methods/x/draft-x-charge-00.md") is None
+
+
+def test_revisions_glob_matches_by_draft_name():
+    assert (
+        gen_codeowners.revisions_glob("specs/methods/tempo/draft-tempo-charge-01.md")
+        == ":(glob)specs/**/draft-tempo-charge-[0-9][0-9].md"
+    )
