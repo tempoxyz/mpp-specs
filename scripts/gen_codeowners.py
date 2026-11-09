@@ -3,9 +3,10 @@
 
 Each draft under specs/ is owned by the GitHub user who submitted it: the
 author of the pull request that first added any revision of the draft
-(matched by draft name, not content similarity), or the commit author when no pull request is found.
-DEFAULT_OWNERS are added to every entry, so each spec keeps an owner with
-write access. Files outside specs/ have no owner, so Dependabot and
+(matched by draft name, not content similarity), or the commit author when
+no pull request is found. DEFAULT_OWNERS are added to every entry, and own
+/specs/ as a whole so a new draft has an owner before CODEOWNERS is
+regenerated. Files outside specs/ have no owner, so Dependabot and
 AGENTS.md sync pull requests don't need a code owner review.
 
 Run from the repository root with full git history (not a shallow clone):
@@ -133,7 +134,9 @@ def owner(path: str) -> str | None:
 
 def render(owners: dict[str, str | None], defaults: list[str]) -> str:
     """Render CODEOWNERS for {path: submitter login}."""
-    lines = [HEADER]
+    # A default for drafts added after this file was generated; the per-draft rules
+    # below come later, so they take precedence (CODEOWNERS uses the last match).
+    lines = [HEADER, f"/specs/ {' '.join(defaults)}"]
     for path in sorted(owners):
         login = owners[path]
         entry = [f"@{login}"] if login and f"@{login}" not in defaults else []

@@ -38,6 +38,9 @@ def test_render_adds_defaults_without_duplicates():
     assert content.startswith(HEADER)
     lines = content.splitlines()
     assert not any(line.startswith("*") for line in lines)
+    assert lines.index("/specs/ @brendanjryan") < lines.index(
+        "/specs/core/draft-httpauth-payment-*.md @brendanjryan"
+    )
     assert "/specs/core/draft-httpauth-payment-*.md @brendanjryan" in lines
     assert "/specs/methods/solana/draft-solana-charge-*.md @lgalabru @brendanjryan" in lines
     assert "/specs/methods/x/draft-x-charge-*.md @brendanjryan" in lines
