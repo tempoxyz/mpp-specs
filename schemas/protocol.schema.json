@@ -62,6 +62,12 @@
       "contentMediaType": "application/json",
       "contentSchema": { "type": "object", "additionalProperties": { "type": "string" } }
     },
+    "DateTime": {
+      "description": "RFC 3339 date-time, as the core draft requires for Challenge expires and Receipt timestamp. format: date-time is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible; T and Z are case-insensitive per RFC 3339 section 5.6).",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])[Tt](?:[01][0-9]|2[0-3]):[0-5][0-9]:(?:[0-5][0-9]|60)(?:\\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$", "not": { "pattern": "\\n$" }
+    },
     "ParamValue": {
       "description": "An auth-param value after token or quoted-string decoding (RFC 9110): no control characters but HTAB, since neither grammar can carry CR, LF or another one.",
       "type": "string",
@@ -78,7 +84,7 @@
         "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
-        "expires": { "$ref": "#/$defs/ParamValue", "format": "date-time" },
+        "expires": { "allOf": [{ "$ref": "#/$defs/ParamValue" }, { "$ref": "#/$defs/DateTime" }] },
         "description": { "$ref": "#/$defs/ParamValue" },
         "digest": { "$ref": "#/$defs/ParamValue" },
         "header": { "const": "Payment-Authorization" },
@@ -102,7 +108,7 @@
       "properties": {
         "status": { "type": "string", "const": "success" },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
-        "timestamp": { "type": "string", "format": "date-time" },
+        "timestamp": { "$ref": "#/$defs/DateTime" },
         "reference": { "type": "string", "minLength": 1 },
         "externalId": { "type": "string" },
         "subscriptionId": { "type": "string", "minLength": 1 },
@@ -317,7 +323,7 @@
             "recipient": { "type": "string", "minLength": 1 }
           }
         },
-        "expires": { "type": "string", "format": "date-time" },
+        "expires": { "$ref": "#/$defs/DateTime" },
         "meta": {
           "type": "object",
           "additionalProperties": { "type": "string" }

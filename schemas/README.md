@@ -31,6 +31,10 @@ JSON Schemas for MPP protocol values.
   - Challenge allows extra members as strings
     (`additionalProperties: {type: string}`): custom parameters are
     auth-params (token or quoted-string), and receivers ignore unknown ones.
+  - Challenge `expires`, Receipt `timestamp` and HttpServerOffer
+    `expires` use `DateTime`: `format: date-time` plus an RFC 3339
+    pattern, since 2020-12 validators treat `format` as an annotation
+    by default.
   - Credential allows extra members of any type
     (`additionalProperties: true`), since receivers ignore unknown fields.
 - The drafts are normative. Where a schema and a draft disagree, the
