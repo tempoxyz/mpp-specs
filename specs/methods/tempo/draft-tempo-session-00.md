@@ -1278,8 +1278,10 @@ initial voucher, to durable storage before broadcasting. A server
 that restarts with a reservation that never reached step 4 MUST
 resolve it before serving the channel: when the channel is on chain
 and matches the reserved `open`, the server completes steps 2-4
-from the stored `open` and chain state, without broadcasting again;
-otherwise it releases the reservation as above. A client retrying
+from the stored `open` and chain state, without broadcasting again.
+Otherwise it keeps the reservation while the stored `open` can still be
+mined, and releases it only as above, once that `open` reverts, is
+dropped, or expires. A client retrying
 with `action="voucher"` on an opened channel then finds its state.
 
 ## TopUp Verification
