@@ -64,11 +64,14 @@ class TestTagging:
             tmp_path,
             "| Field | Required | Description |\n|---|---|---|\n"
             "| a | OPTIONAL | OPTIONAL. Echoed back. |\n"
-            "| b | OPTIONAL | When present, clients MUST use it. |\n",
+            "| b | OPTIONAL | When present, clients MUST use it. |\n"
+            "| c | REQUIRED if `d` is absent | Key URL. |\n",
         )
         report = lint_file(spec)
-        assert len(report.errors) == 1
+        assert len(report.errors) == 2
         assert report.errors[0].startswith("line 11:")
+        # A marker that opens a condition is a rule, not a presence marker.
+        assert report.errors[1].startswith("line 12:")
 
     def test_line_after_ial_is_a_new_block(self, tmp_path):
         spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")

@@ -12,6 +12,11 @@ JSON Schemas for MPP protocol values.
 - Intentional differences from mpp-tools, which should follow:
   - Receipt `status` is `const: "success"`, as the core draft's
     Receipt Status Semantics require.
+  - Receipt requires `method`, as the core draft's Receipt fields do.
+  - Challenge `header` is `const: "Payment-Authorization"`.
+  - Credential `source` is a string.
+  - `PaymentMethodId` has pattern `^[a-z]+$` and `IntentId` has
+    `^[A-Za-z0-9-]+$`, per the core draft's method and intent grammar.
   - Challenge and Credential allow extra members
     (`additionalProperties: true`), since the core draft allows custom
     parameters and requires receivers to ignore unknown fields.

@@ -30,8 +30,11 @@ LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 FENCE = re.compile(r"^\s*(~~~|```)")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
 BOILERPLATE = re.compile(r'The key words "MUST"')
-# A table cell that only marks a field present or absent ("REQUIRED", "OPTIONAL. ...").
-PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)\b\.?")
+# A table cell that only marks a field present or absent: the marker alone or
+# ending its own clause ("REQUIRED", "OPTIONAL. Defaults to 0", "OPTIONAL: Units
+# consumed"). A marker that opens a condition ("REQUIRED if jwksUri is absent",
+# "REQUIRED for v2") is a rule and stays.
+PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 
 
 @dataclass
