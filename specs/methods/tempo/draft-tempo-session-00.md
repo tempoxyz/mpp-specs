@@ -1314,6 +1314,8 @@ On `action="topUp"`, servers MUST:
    - Channel is not finalized
 3. Update server-side accounting:
    - Record the new `deposit`, which raises the cap on future vouchers
+   - Record `channel.closeRequestedAt` as read in step 2, which is
+     zero when this top-up cancelled a pending close request
    - Leave `acceptedCumulative` and `spent` unchanged: a top-up adds
      no spendable balance until the client sends a higher voucher
 
@@ -1486,9 +1488,11 @@ lowest accepted voucher whose `cumulativeAmount` is at least
 below `settledOnChain` reverts on chain.
 
 The guard reads the server's `closeRequestedAt`, so servers MUST keep
-it current: they MUST follow the escrow's `CloseRequested` events, or
-read `closeRequestedAt` from the contract, as each block arrives, and
-MUST stop delivery when either source shows a close request. A
+it current: they MUST follow the escrow's `CloseRequested` and
+`CloseRequestCancelled` events, or read `closeRequestedAt` from the
+contract, as each block arrives, and MUST stop delivery when either
+source shows a close request. A `CloseRequestCancelled` event resets
+the stored `closeRequestedAt` to zero. A
 server that cannot read chain state for longer than the grace period
 less the time it needs to close MUST stop delivering metered service
 until it reads it again.
