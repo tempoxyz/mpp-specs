@@ -48,7 +48,8 @@ fi
 for file in TempoSession/*.lean; do
   [ "$file" = TempoSession/Audit.lean ] && continue
   if grep -nE '^[[:space:]]*import[[:space:]]+Lean([.[:space:]]|$)' "$file" \
-    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|notation|infix|infixl|infixr|prefix|postfix|run_cmd|run_elab|run_meta|#eval|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file"; then
+    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|notation|infix|infixl|infixr|prefix|postfix|run_cmd|run_elab|run_meta|#eval|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file" \
+    || grep -nE '(@\[|attribute[[:space:]]*\[)[^]]*\b(init|builtin_init)\b' "$file"; then
     echo "FAIL: $file may not import Lean or use metaprogramming (only Audit.lean may)"
     exit 1
   fi
