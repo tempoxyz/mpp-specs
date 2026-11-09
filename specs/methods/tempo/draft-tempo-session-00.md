@@ -1520,7 +1520,9 @@ After the grace period the payer can `withdraw` at once, and service
 delivered then is paid only if the payee's `settle` lands first. To a
 request it does not serve for this reason, the server returns 402 with
 a fresh Challenge; the client can `topUp` to cancel the close request.
-Delivery MAY resume after a `topUp` cancels the close request. On
+Delivery MAY resume after a `topUp` cancels the close request,
+unless the server has already started a close (see
+{{cooperative-close}}). On
 observing a close request, servers SHOULD, within the grace period,
 close with the lowest accepted voucher whose `cumulativeAmount` is at
 least `max(spent, settledOnChain)` (see {{cooperative-close}}). A
@@ -1681,11 +1683,14 @@ When the client sends `action="close"`:
 Servers SHOULD close promptly when clients request—the economic
 incentive is to claim earned funds immediately.
 
-After accepting a close request, servers MUST NOT deliver further
-metered service on the channel. Servers MUST choose the close voucher
-and capture amount only after charging stops and every charge already
-in progress has persisted `spent`, so that no service is delivered
-after the capture amount is fixed.
+After accepting a close request, or starting a close of their own,
+servers MUST NOT deliver further metered service on the channel, even
+if a later `topUp` cancels a forced close. Servers MUST persist that
+the channel is closing before they choose the close voucher, so that
+delivery stays stopped after a restart. Servers MUST choose the
+close voucher and capture amount only after charging stops and every
+charge already in progress has persisted `spent`, so that no service
+is delivered after the capture amount is fixed.
 
 Servers MUST NOT capture more than the amount actually consumed by
 delivered service (for v1, within the limit below). A client can pre-authorize more funds than were spent;
