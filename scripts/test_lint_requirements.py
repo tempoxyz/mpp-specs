@@ -678,10 +678,12 @@ def test_ids_from_attribute_list_definitions(tmp_path):
     assert report.tagged == 1 and report.errors == []
     spec = write_spec(tmp_path, "~~~\n{:tag: #req-test-charge-001}\n~~~\n\nServers MUST x.\n{: tag}\n")
     assert lint_file(spec).untagged == [12]
-    # A literal ID after a referenced one wins: kramdown keeps the last ID.
+    # A literal ID after a referenced one wins: kramdown keeps the last ID, so the ALD's ID
+    # is dropped and reported on its definition.
     spec = write_spec(tmp_path, "Servers MUST x.\n{: tag #req-test-charge-002}\n\n{:tag: #req-test-charge-001}\n")
     report = lint_file(spec)
-    assert report.tagged == 1 and report.errors == []
+    assert report.tagged == 1
+    assert report.errors == ["line 11: req-test-charge-001 in ALD tag is replaced by another ID on the block that uses it"]
 
 
 def test_ald_cycle_is_a_render_error(tmp_path):
@@ -779,8 +781,10 @@ def test_wide_ald_references_resolve_quickly(tmp_path):
     start = time.monotonic()
     report = lint_file(spec)
     assert time.monotonic() - start < 10
-    # kramdown keeps the last ID.
-    assert report.tagged == 1 and report.errors == [] and report.notes == []
+    # kramdown keeps the last ID; the other 199 are dropped, each reported on the ALD line.
+    assert report.tagged == 1 and report.notes == []
+    assert len(report.errors) == 199
+    assert all(e.startswith("line 8: ") and "is replaced by another ID" in e for e in report.errors)
 
 
 def test_comment_markers_inside_math_hide_nothing(tmp_path):
@@ -792,6 +796,16 @@ def test_comment_markers_inside_math_hide_nothing(tmp_path):
 
 class TestRenderedConstructs:
     """Constructs the hand-written Markdown parser got wrong; kramdown-rfc decides them now."""
+
+    def test_ald_id_replaced_by_a_literal_id_is_reported(self, tmp_path):
+        # kramdown keeps only the block's last ID, so the ALD's ID never becomes an anchor.
+        report = lint_body(tmp_path, "{:tag: #req-test-charge-001}", "", "A rule MUST hold.", "{: tag #req-test-charge-002}")
+        assert report.tagged == 1
+        assert report.errors == [f"line {at(1)[0]}: req-test-charge-001 in ALD tag is replaced by another ID on the block that uses it"]
+
+    def test_unused_ald_id_stays_quiet(self, tmp_path):
+        report = lint_body(tmp_path, "{:tag: #req-test-charge-001}", "", "A rule MUST hold.", "{: #req-test-charge-002}")
+        assert report.tagged == 1 and report.errors == []
 
     def test_span_ial_id_is_reported(self, tmp_path):
         # A span IAL anchors the span, not the paragraph.

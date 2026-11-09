@@ -77,6 +77,12 @@ KRAMDOWN_ID = re.compile(r"[A-Za-z][A-Za-z0-9_:-]*")
 # An attribute list definition line ({:name: ...}): it names attributes for IALs that refer
 # to it, and sets nothing where it stands.
 ALD_LINE = re.compile(r"^ {0,3}\{:\w[\w-]*:")
+# The name an ALD line defines.
+ALD_NAME = re.compile(r"^ {0,3}\{:(\w[\w-]*):")
+# The body of an IAL ({: ...} or {:...}, not an extension {::...}), and a bare ALD reference
+# inside it: a word that isn't #id, .class or key=value.
+IAL_BODY = re.compile(r"\{:(?!:)([^}]*)\}")
+ALD_REF = re.compile(r"\w[\w-]*")
 # kramdown-rfc's line marker processing instruction. <?line N?> starts each part of the file
 # (--- abstract, --- middle, --- back) and N is the line of its --- line, counted in the
 # input after {::boilerplate} expansion. Each expansion is followed by <?line -K?>: it added
@@ -556,13 +562,36 @@ def lint_file(path: Path) -> Report:
     # rather than an IAL, or inside a {::comment} block (kramdown drops it without a trace,
     # so the lint looks for its tags in the source: kramdown_comment_lines).
     commented = kramdown_comment_lines(lines)
+    # ALD names that some IAL or ALD references (a bare word in {: ...}), outside {::comment}.
+    ald_uses: set[str] = set()
+    # An ALD can name other ALDs too, so its references count.
+    for number in range(start, len(lines) + 1):
+        if number in commented:
+            continue
+        line = lines[number - 1]
+        bodies = [line[ALD_NAME.match(line).end() :].split("}", 1)[0]] if ALD_LINE.match(line) else IAL_BODY.findall(line)
+        for body in bodies:
+            ald_uses.update(t for t in body.split() if ALD_REF.fullmatch(t))
     lost: dict[int, list[str]] = defaultdict(list)
     for req_id, found in id_lines.items():
         if req_id in anchors or req_id in quiet_ids:
             continue
         for number in found:
             line = lines[number - 1]
-            if ALD_LINE.match(line) or number in commented or not re.search(r"\{[^}]*" + re.escape(req_id), line):
+            if number in commented:
+                continue
+            ald = ALD_NAME.match(line)
+            if ald:
+                # An ALD only defines attributes; it tags a block when an IAL names it. If
+                # some IAL names it and its ID still isn't an anchor, the block also set an
+                # ID of its own, and kramdown kept only that one. Unused ALDs stay quiet.
+                if ald.group(1) in ald_uses:
+                    report.error(
+                        number,
+                        f"{req_id} in ALD {ald.group(1)} is replaced by another ID on the block that uses it",
+                    )
+                continue
+            if not re.search(r"\{[^}]*" + re.escape(req_id), line):
                 continue
             if not KRAMDOWN_ID.fullmatch(req_id):
                 report.error(number, f"malformed ID {req_id} (expected {prefix}NNN)")
