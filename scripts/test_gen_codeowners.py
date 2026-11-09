@@ -73,6 +73,21 @@ def test_submitter_prefers_current_login_over_noreply_email(monkeypatch):
     assert submitter("abc123", "1572504+oldname@users.noreply.github.com") == "renamed"
 
 
+def test_submitter_ignores_unmerged_pull_requests(monkeypatch):
+    def lookup(url):
+        if url.endswith("/pulls"):
+            return [{"merged_at": None, "user": {"login": "someone-else"}}]
+        return {"author": {"login": "brendanjryan"}}
+
+    monkeypatch.setattr(gen_codeowners, "github", lookup)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
+    assert submitter("abc123", "ludo@example.org") == "brendanjryan"
+
+
+def test_revisions_glob_is_exact_for_non_drafts():
+    assert gen_codeowners.revisions_glob("specs/methods/bar/README.md") == ":(literal)specs/methods/bar/README.md"
+
+
 def test_unpushed_commit_is_not_a_lookup_failure(monkeypatch):
     def missing(url):
         raise HTTPError(url, 404, "not found", None, None)

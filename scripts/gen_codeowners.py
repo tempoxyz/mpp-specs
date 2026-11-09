@@ -77,6 +77,9 @@ def revisions_glob(path: str) -> str:
     --follow pairs files by content similarity, so a new spec copied from another, or a
     revision that rewrites most of its draft, would get the wrong submitter.
     """
+    if not REVISION.search(path):
+        # Not a revisioned draft (a README, say): only this exact file is its history.
+        return f":(literal){path}"
     name = REVISION.sub("-[0-9][0-9].md", Path(path).name)
     return f":(glob)specs/**/{name}"
 
@@ -133,7 +136,9 @@ def submitter(sha: str, email: str) -> str | None:
     """
     pulls = try_github(f"repos/{REPOSITORY}/commits/{sha}/pulls")
     if isinstance(pulls, list):
-        merged = [pull for pull in pulls if pull.get("merged_at")] or pulls
+        # Only a merged pull request shows who submitted the commit; an open or
+        # closed one may come from someone else who built on it.
+        merged = [pull for pull in pulls if pull.get("merged_at")]
         if merged and merged[0].get("user"):
             return merged[0]["user"]["login"]
     commit = try_github(f"repos/{REPOSITORY}/commits/{sha}")
