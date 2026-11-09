@@ -9,6 +9,12 @@ JSON Schemas for MPP protocol values.
   (`conformance/schemas/`) with its `$id` moved to
   `https://paymentauth.org/schemas/`. Change it there first, then
   copy it here.
+- Intentional differences from mpp-tools, which should follow:
+  - Receipt `status` is `const: "success"`, as the core draft's
+    Receipt Status Semantics require.
+  - Challenge and Credential allow extra members
+    (`additionalProperties: true`), since the core draft allows custom
+    parameters and requires receivers to ignore unknown fields.
 - The drafts are normative. Where a schema and a draft disagree, the
   draft wins and the schema is the bug.
 - JSON Schema draft 2020-12. Nothing in CI validates the drafts'

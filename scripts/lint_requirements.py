@@ -103,6 +103,8 @@ def segments(lines: list[str]) -> tuple[list[Segment], list[tuple[int, str]]]:
                 current.ids.extend(ids)
             else:
                 detached.extend((number, i) for i in ids if i.startswith("req-"))
+            # kramdown ends the block at the IAL: the next line starts a new one.
+            current = None
             continue
         if (
             not stripped

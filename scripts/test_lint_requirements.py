@@ -58,6 +58,12 @@ class TestTagging:
         report = lint_file(spec)
         assert report.total == 0
 
+    def test_line_after_ial_is_a_new_block(self, tmp_path):
+        spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")
+        report = lint_file(spec)
+        assert report.tagged == 1
+        assert report.untagged == [10]
+
     def test_detached_id(self, tmp_path):
         spec = write_spec(
             tmp_path, "Servers MUST do it.\n\n{: #req-test-charge-001}\nNext.\n"

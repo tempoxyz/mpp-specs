@@ -45,7 +45,7 @@
     "Challenge": {
       "type": "object",
       "required": ["id", "realm", "method", "intent", "request"],
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "realm": { "type": "string" },
@@ -62,7 +62,7 @@
     "Credential": {
       "type": "object",
       "required": ["challenge", "payload"],
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "challenge": { "$ref": "#/$defs/Challenge" },
         "payload": { "$ref": "#/$defs/JsonObject" },
@@ -80,7 +80,7 @@
       "required": ["status", "timestamp", "reference"],
       "additionalProperties": true,
       "properties": {
-        "status": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "const": "success" },
         "method": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "reference": { "type": "string", "minLength": 1 },
