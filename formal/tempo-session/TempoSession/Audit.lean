@@ -3,6 +3,7 @@ import TempoSession.Model
 import TempoSession.Invariant
 import TempoSession.Properties
 import TempoSession.Counterexamples
+import TempoSession.Witnesses
 /-
   Axiom audit, run as part of 'lake build' (see check.sh). It is the only gate on proofs: a
   text grep for sorry/axiom would have to re-implement Lean's lexer (nested comments, raw

@@ -1,34 +1,46 @@
 /-
   Tempo session payment method (draft-tempo-session-00), on-chain escrow + server accounting.
-  Section numbers (§) refer to specs/methods/tempo/draft-tempo-session-00.md.
+  Section numbers (§) refer to specs/methods/tempo/draft-tempo-session-00.md. The contract
+  steps follow the deployed reference, TIP-1034 (tempoxyz/tempo tips/tip-1034.md and
+  tips/verify/src/TIP20ChannelReserve.sol), where the draft's §6.4.x text is silent.
 
   Abstractions
-  * keccak256 is injective: a v1 channelId (§6.1) *is* its preimage tuple (Key); the escrow
+  * keccak256 is injective: a channelId (§6.1) *is* its preimage tuple (Key); the escrow
     address and chainId of the preimage are the model instance's Cfg.escrow / Cfg.chainId.
+    Key includes the v2 expiringNonceHash (Key.nonce), so every open transaction names a new
+    channel; a Key can be opened only once ever (G3), as TIP-1034's ChannelAlreadyExists and
+    nonce consumption make a channelId single-use.
   * Signatures are unforgeable: St.sigs is exactly the set of (signer, voucher) pairs that key
     holders have signed (only Act.sign adds to it). EIP-712 domain = (chainId, verifyingContract) (§10.3).
   * Token transfers are ghost counters: paid (to payee), refunded (to payer), deposited (in).
     The escrow's total token balance is not tracked, so the model alone does not revert a
     transfer the escrow could not cover; counterexamples that overpay a channel fund a second
     channel first and check the escrow stays solvent (Counterexamples.escrowSolvent).
+  * A finalized channel keeps its record with finalized = true (TIP-1034 deletes the slot and
+    remembers the id); either way nothing can act on it again.
   * One escrow deployment per model instance; vouchers for other escrows/chains may exist in sigs.
   * Server accounting (§12) is keyed per channel and reads chain state with no lag (§14.12 ignored).
+  * The payee's operator (TIP-1034 descriptor.operator) is not modelled: only the payee settles
+    and closes.
 
   Spec guards that the contract-function sections (§6.4.x) do NOT state, but that other sections
   imply, are Cfg flags. Theorems hold for every Cfg with all flags on (Cfg.Guarded); see
-  Counterexamples.lean for a machine-checked violation with each flag off.
+  Counterexamples.lean for a machine-checked violation with each flag off, and Witnesses.lean
+  for proof that the guarded model still lets every action succeed.
 
   File map
   * Key / Voucher / Sig / Chan: the data the contract and the server see.
-  * Cfg: one escrow deployment plus seven guard flags: G1-G6 (all on in Cfg.Guarded) and
-    guardDelivery (G7, assumed only by P8c).
+  * Cfg: one escrow deployment plus six guard flags: G1-G5 (all on in Cfg.Guarded, which also
+    asks for a grace period of at least 15 minutes) and guardDelivery (G7, assumed only by
+    P8c). The close capture bound of §13.2 is a server rule, not a contract guard: see P9.
   * St: chain state, signed vouchers, ghost money counters and server accounting.
   * step: one transition; none means the call reverts (contract) or is rejected (server).
   * run / Reachable: traces and the set of states reachable from the empty escrow.
 -/
 namespace TempoSession
 
-/-- v1 channelId preimage (§6.1): payer, payee, token, salt, authorizedSigner (0 = payer).
+/-- channelId preimage (§6.1, v2 descriptor): payer, payee, token, salt, authorizedSigner
+  (0 = payer) and the open transaction's expiringNonceHash.
   Because keccak256 is modelled as injective, two channels are equal iff their Keys are. -/
 structure Key where
   payer : Nat
@@ -36,6 +48,8 @@ structure Key where
   token : Nat
   salt : Nat
   authSigner : Nat
+  /-- v2 expiringNonceHash of the open transaction; 0 in the traces, which open each Key once. -/
+  nonce : Nat := 0
 deriving DecidableEq, Repr
 
 /-- Expected voucher signer (§6.6 step 2, §11.3).
@@ -63,7 +77,7 @@ deriving DecidableEq, Repr
 /-- On-chain channel record (§6.1). closeRequestedAt = 0 is modelled as none.
   * deposit: total locked by open + topUp;
   * settled: cumulative amount already paid to the payee;
-  * closeReq: block time of a pending requestClose, if any;
+  * closeReq: block time of the first pending requestClose, if any;
   * finalized: set by close or withdraw; the channel is then terminal. -/
 structure Chan where
   deposit : Nat
@@ -80,7 +94,8 @@ structure Cfg where
   escrow : Nat
   /-- chainId of the deployment (§10.3). -/
   chainId : Nat
-  /-- CLOSE_GRACE_PERIOD, "at least 15 minutes" (§6.4.5, §13.3, §14.13). -/
+  /-- CLOSE_GRACE_PERIOD, "at least 15 minutes" (§6.4.5, §13.3, §14.13); Cfg.Guarded asks for
+      at least 900 s. -/
   grace : Nat
   /-- methodDetails.minVoucherDelta (§7.2, §11.3 step 6). -/
   minDelta : Nat
@@ -96,21 +111,29 @@ structure Cfg where
   withdrawNeedsRequest : Bool := true
   /-- server 'spent' is per channel, not reset per session (G5). -/
   spentPerChannel : Bool := true
-  /-- close captures at most max(settled, spent): §13.2 "MUST NOT capture more than the amount
-      actually consumed", captureAmount = max(spent, settledOnChain) (G6; off = v1 close). -/
-  guardCapture : Bool := true
   /-- charge refuses to deliver while a close request is pending, as accept does (§11.3 step 5);
       §12.2 as written has no such check (G7, GAPS.md row 11). Not part of Guarded: P1-P9
       hold without it; P8c_no_delivery_while_closing states what it adds. -/
   guardDelivery : Bool := true
 deriving Repr
 
-/-- All six guards on, in order G2, G3, G4, G1, G5, G6.
-  Every safety theorem in Invariant.lean / Properties.lean assumes this; proofs destructure it
-  as ⟨g1, g2, g3, g4, g5, g6⟩ (so g1 = guardFinalized, ..., g6 = guardCapture). -/
-def Cfg.Guarded (cfg : Cfg) : Prop :=
-  cfg.guardFinalized = true ∧ cfg.guardExists = true ∧ cfg.guardBounds = true ∧
-  cfg.withdrawNeedsRequest = true ∧ cfg.spentPerChannel = true ∧ cfg.guardCapture = true
+/-- The guarded reading of the draft: five guard flags on and a grace period of at least
+  15 minutes (§6.4.5). Every safety theorem in Invariant.lean / Properties.lean assumes it;
+  proofs name the fields they use (for example grind [step, hg.bounds]), so each proof shows
+  which guard it rests on. -/
+structure Cfg.Guarded (cfg : Cfg) : Prop where
+  /-- G2: nothing acts on a finalized channel. -/
+  finalized : cfg.guardFinalized = true
+  /-- G3: a channelId is opened at most once. -/
+  fresh : cfg.guardExists = true
+  /-- G4: settle needs settled < cum <= deposit. -/
+  bounds : cfg.guardBounds = true
+  /-- G1: withdraw needs a pending close request. -/
+  request : cfg.withdrawNeedsRequest = true
+  /-- G5: spent is per channel. -/
+  perChannel : cfg.spentPerChannel = true
+  /-- CLOSE_GRACE_PERIOD is at least 15 minutes (§6.4.5, §13.3). -/
+  grace : 900 ≤ cfg.grace
 
 /-- Global state: chain, signatures, ghost counters and server accounting.
   All per-channel fields are functions of the channel Key. -/
@@ -152,11 +175,15 @@ def St.init : St :=
 def upd {β : Type} (f : Key → β) (k : Key) (b : β) : Key → β :=
   fun k' => if k' = k then b else f k'
 
-/-- Reading the updated key returns the new value (used by simp throughout the proofs). -/
+/-- Reading the updated key returns the new value. -/
 @[simp] theorem upd_same {β} (f : Key → β) (k : Key) (b : β) : upd f k b k = b := by simp [upd]
 /-- Reading any other key returns the old value: the frame rule that keeps the proofs per-channel. -/
 @[simp] theorem upd_other {β} (f : Key → β) (k k' : Key) (b : β) (h : k' ≠ k) :
     upd f k b k' = f k' := by simp [upd, h]
+/-- Reading an updated map at any key, as one case split: the form the proofs give grind
+  (grind [upd_apply]), which then splits on k' = k, so upd_same and upd_other are its two cases. -/
+theorem upd_apply {β} (f : Key → β) (k k' : Key) (b : β) :
+    upd f k b k' = if k' = k then b else f k' := rfl
 
 /-- Every action of the model. caller is the msg.sender of a contract call. -/
 inductive Act where
@@ -170,7 +197,7 @@ inductive Act where
   | topUp (caller : Nat) (k : Key) (amt : Nat)
   /-- contract settle (§6.4.2) -/
   | settle (caller : Nat) (k : Key) (s : Sig)
-  /-- contract close with a captureAmount (§6.4.4, §13.2) -/
+  /-- contract close with a captureAmount (§6.4.4, §13.2, TIP-1034 close) -/
   | close (caller : Nat) (k : Key) (s : Sig) (capture : Nat)
   /-- contract requestClose (§6.4.5) -/
   | requestClose (caller : Nat) (k : Key)
@@ -238,25 +265,27 @@ def step (cfg : Cfg) (st : St) : Act → Option St
         some { st with chans := upd st.chans k (some { c with settled := s.v.amount }),
                        paid := upd st.paid k (st.paid k + (s.v.amount - c.settled)) }
       else none
-  -- §6.4.4 close (v1: capture = cum) generalised by §13.2 v2 captureAmount <= cum.
-  -- capture - settled and deposit - capture are checked uint subtractions: both always revert
-  -- on underflow. §13.2 capture <= max(spent, settled) is the guardCapture flag.
-  -- guards: channel exists; caller is the payee; (G2) not finalized; valid signature;
-  --   cap <= cum; settled <= cap <= deposit; (G6) cap <= max(settled, spent)
+  -- §6.4.4 close (v1: capture = cum) generalised to TIP-1034's close(cum, captureAmount).
+  -- guards: channel exists; caller is the payee; (G2) not finalized; settled <= cap <= cum;
+  --   cap <= deposit; a valid signature only when cap > settled (capturing nothing new needs
+  --   no voucher, as in TIP-1034). The contract does not bound cap by consumption: the §13.2
+  --   rule cap = max(spent, settled) is the server's choice of cap (P9).
   -- effect: payee gets cap - settled, payer gets deposit - cap, channel finalized
   | .close caller k s cap =>
     match st.chans k with
     | none => none
     | some c =>
-      if caller = k.payee ∧ (cfg.guardFinalized = true → c.finalized = false) ∧ ValidSig cfg st.sigs k s ∧
-         cap ≤ s.v.amount ∧ c.settled ≤ cap ∧ cap ≤ c.deposit ∧
-         (cfg.guardCapture = true → cap ≤ max c.settled (st.spent k)) then
+      if caller = k.payee ∧ (cfg.guardFinalized = true → c.finalized = false) ∧
+         c.settled ≤ cap ∧ cap ≤ s.v.amount ∧ cap ≤ c.deposit ∧
+         (c.settled < cap → ValidSig cfg st.sigs k s) then
         some { st with chans := upd st.chans k (some { c with settled := cap, finalized := true }),
                        paid := upd st.paid k (st.paid k + (cap - c.settled)),
                        refunded := upd st.refunded k (st.refunded k + (c.deposit - cap)),
                        finals := upd st.finals k (st.finals k + 1) }
       else none
-  -- §6.4.5 requestClose: payer only, closeRequestedAt := now
+  -- §6.4.5 requestClose: payer only. A first request stores now; a repeat request while one is
+  -- pending succeeds and leaves the stored time unchanged (§6.4.5 as amended by #399, TIP-1034),
+  -- so repeating it cannot restart the grace period.
   -- guards: channel exists; caller is the payer; (G2) not finalized
   -- effect: only closeReq changes; no money moves
   | .requestClose caller k =>
@@ -264,7 +293,11 @@ def step (cfg : Cfg) (st : St) : Act → Option St
     | none => none
     | some c =>
       if caller = k.payer ∧ (cfg.guardFinalized = true → c.finalized = false) then
-        some { st with chans := upd st.chans k (some { c with closeReq := some st.now }) }
+        match c.closeReq with
+        -- a request is already pending: success, state unchanged (as TIP-1034's
+        -- "if (closeRequestedAt == 0)")
+        | some _ => some st
+        | none => some { st with chans := upd st.chans k (some { c with closeReq := some st.now }) }
       else none
   -- §6.4.6 withdraw: payer only, now >= closeRequestedAt + grace, refund deposit - settled
   -- (checked uint: reverts if settled > deposit)

@@ -2,7 +2,8 @@ import TempoSession.Model
 /-
   Spec gaps as machine-checked counterexamples. Each trace runs on the executable model with
   ONE guard switched off (the literal reading of the §6.4.x function text), shows the property
-  violated, and shows the same trace is rejected when the guard is on. All checked by 'decide'
+  violated, and shows the guarded model rejects that trace at the step the guard blocks: every
+  action before it succeeds and that step reverts (rejectedAt). All checked by 'decide'
   (kernel evaluation, no native code, no extra axioms). GAPS.md maps each flag to its spec gap.
 -/
 namespace TempoSession.Examples
@@ -55,6 +56,13 @@ def escrowSolvent (st : St) : Bool :=
 def check (cfg : Cfg) (tr : List Act) (prop : St → Bool) : Option Bool :=
   (run cfg St.init tr).map prop
 
+/-- cfg rejects tr exactly at action n: the first n actions succeed and action n reverts. This
+  pins the rejection on the guard that blocks the gap, not on an earlier failure. -/
+def rejectedAt (cfg : Cfg) (tr : List Act) (n : Nat) : Bool :=
+  match run cfg St.init (tr.take n), tr[n]? with
+  | some st, some a => (step cfg st a).isNone
+  | _, _ => false
+
 /-- P6 "frozen" broken (Bool form of P6_finalized_frozen): after tr, channel k is finalized,
   the step a succeeds, and it changes k's record, one of its money counters or its finals
   count, the five things P6_finalized_frozen keeps fixed. -/
@@ -78,8 +86,8 @@ def cfgG1 : Cfg := { guarded with withdrawNeedsRequest := false }
 /-- G1: with the guard off, the whole trace (withdraw with no close request) succeeds.
   * Proof: decide evaluates run in the kernel. -/
 theorem G1_withdraw_without_request : (run cfgG1 St.init trG1).isSome = true := by decide
-/-- G1: with every guard on, the same trace reverts (the final withdraw fails). -/
-theorem G1_guard_rejects : (run guarded St.init trG1).isNone = true := by decide
+/-- G1: with every guard on, the trace runs up to the withdraw, and the withdraw reverts. -/
+theorem G1_guard_rejects : rejectedAt guarded trG1 5 = true := by decide
 /-- G1 alone gives no double withdraw: G2 is still on, so a second withdraw on the finalized
   channel reverts. GAPS.md row 1 breaks P8b only; the double refund (P2, P6) is G2's
   (G2c_violates_P2). -/
@@ -104,8 +112,8 @@ theorem G2_violates_P2 : check cfgG2 trG2 (fun st => p2 st k) = some false := by
 theorem G2_escrow_solvent : check cfgG2 trG2 escrowSolvent = some true := by decide
 /-- G2: the late settle moves money out of a finalized channel (P6 frozen broken). -/
 theorem G2_violates_P6 : movesAfterFinal cfgG2 trG2pre lateSettle = true := by decide
-/-- G2: with every guard on, the late settle reverts, so the trace is rejected. -/
-theorem G2_guard_rejects : (run guarded St.init trG2).isNone = true := by decide
+/-- G2: with every guard on, the trace runs up to the late settle, and it reverts. -/
+theorem G2_guard_rejects : rejectedAt guarded trG2 6 = true := by decide
 /-- G2b (GAPS.md row 4): topUp into a finalized channel strands funds. -/
 def trG2bpre : List Act :=
   [.openCh PAYER k 100, .requestClose PAYER k, .tick 900, .withdraw PAYER k]
@@ -119,8 +127,9 @@ theorem G2b_violates_P7 : check cfgG2 trG2b (fun st => p7 st k) = some false := 
 theorem G2b_violates_P4b : check cfgG2 trG2b (fun st => p4b st k) = some false := by decide
 /-- G2b: the top-up changes a finalized channel's record (P6 frozen broken). -/
 theorem G2b_violates_P6 : movesAfterFinal cfgG2 trG2bpre lateTopUp = true := by decide
-/-- G2b: with every guard on, the topUp of a finalized channel reverts. -/
-theorem G2b_guard_rejects : (run guarded St.init trG2b).isNone = true := by decide
+/-- G2b: with every guard on, the trace runs up to the topUp of the finalized channel, and
+  it reverts. -/
+theorem G2b_guard_rejects : rejectedAt guarded trG2b 4 = true := by decide
 /-- G2c: a second withdraw after a proper close request refunds the deposit twice. With G1 on
   (a close was requested), this is the finalized gap alone. kFund funds the escrow, as in trG2. -/
 def trG2c : List Act :=
@@ -130,12 +139,14 @@ def trG2c : List Act :=
 theorem G2c_violates_P2 : check cfgG2 trG2c (fun st => p2 st k) = some false := by decide
 /-- G2c: the escrow stays solvent (200 out of 200 in): the second 100 is kFund's. -/
 theorem G2c_escrow_solvent : check cfgG2 trG2c escrowSolvent = some true := by decide
-/-- G2c: with every guard on, the second withdraw reverts. -/
-theorem G2c_guard_rejects : (run guarded St.init trG2c).isNone = true := by decide
+/-- G2c: with every guard on, the first withdraw succeeds and the second reverts. -/
+theorem G2c_guard_rejects : rejectedAt guarded trG2c 5 = true := by decide
 
 /-! ### G3 — §6.4.1 open does not forbid re-opening an existing (e.g. finalized) channelId; the
   v1 channelId (§6.1) has no nonce, so payer+salt reuse gives the same id with settled = 0 and
-  old vouchers replay. ChannelAlreadyExists appears only in informative Appendix B. -/
+  old vouchers replay. ChannelAlreadyExists appears only in informative Appendix B. (The v2
+  expiringNonceHash, Key.nonce, makes every open transaction a new id; the trace reuses one
+  Key, which TIP-1034 also rejects.) -/
 def trG3 : List Act :=
   [.openCh PAYER k 100, .sign (v 60), .settle PAYEE k (v 60), .close PAYEE k (v 60) 60,
    .openCh PAYER k 100, .settle PAYEE k (v 60)]
@@ -143,8 +154,9 @@ def cfgG3 : Cfg := { guarded with guardExists := false }
 /-- G3: with the guard off, the re-opened channel pays 60 + 60 = 120 on a single 60 voucher,
   so paid exceeds every signed amount (P1 broken). -/
 theorem G3_violates_P1 : check cfgG3 trG3 (fun st => p1 cfgG3 st k) = some false := by decide
-/-- G3: with every guard on, the second open reverts. -/
-theorem G3_guard_rejects : (run guarded St.init trG3).isNone = true := by decide
+/-- G3: with every guard on, the first channel's life runs to its close, and the second open
+  of the same Key reverts. -/
+theorem G3_guard_rejects : rejectedAt guarded trG3 4 = true := by decide
 
 /-! ### G4 — §6.4.2 settle states no bounds; they live only in §14.1 ("cum > settled",
   "cum <= deposit"), and §14.1 strict '>' conflicts with §13.1 (close at the same amount) and §11.1
@@ -162,8 +174,9 @@ def cfgG4 : Cfg := { guarded with guardBounds := false }
 theorem G4a_violates_P2 : check cfgG4 trG4a (fun st => p2 st k) = some false := by decide
 /-- G4: and the escrow as a whole stays solvent (150 out of 200 in): the extra 50 is kFund's. -/
 theorem G4a_escrow_solvent : check cfgG4 trG4a escrowSolvent = some true := by decide
-/-- G4: with every guard on, settle above the deposit reverts. -/
-theorem G4a_guard_rejects : (run guarded St.init trG4a).isNone = true := by decide
+/-- G4: with every guard on, the trace runs up to the settle above the deposit, and it
+  reverts. -/
+theorem G4a_guard_rejects : rejectedAt guarded trG4a 3 = true := by decide
 
 /-- G4c: settle 50, then settle the same 50-voucher again (a replay at settled, delta 0). -/
 def trG4c : List Act :=
@@ -174,8 +187,9 @@ theorem G4c_replay_accepted : (run cfgG4 St.init trG4c).isSome = true := by deci
 /-- G4c: settled is still 50 after the replay, so only the "replay reverts" half of P3 breaks. -/
 theorem G4c_settled_unchanged :
     check cfgG4 trG4c (fun st => (st.chans k).map (·.settled) == some 50) = some true := by decide
-/-- G4c: with every guard on, the replay reverts (cum > settled fails). -/
-theorem G4c_guard_rejects : (run guarded St.init trG4c).isNone = true := by decide
+/-- G4c: with every guard on, the first settle succeeds and the replay reverts
+  (cum > settled fails). -/
+theorem G4c_guard_rejects : rejectedAt guarded trG4c 3 = true := by decide
 
 /-! ### G5 — §12.1 keys accounting by (challengeId, channelId); §13.4 says the previous
   session's spending state is irrelevant and highestVoucherAmount (per channel) is the source of
@@ -187,16 +201,19 @@ def trG5 : List Act :=
 def cfgG5 : Cfg := { guarded with spentPerChannel := false }
 /-- G5: with spent reset per session, 200 units are delivered against 100 accepted (P8 broken). -/
 theorem G5_violates_P8 : check cfgG5 trG5 (fun st => p8 st k) = some false := by decide
-/-- G5: with every guard on, the second charge fails the balance check (spent stays 100). -/
-theorem G5_guard_rejects : (run guarded St.init trG5).isNone = true := by decide
+/-- G5: with every guard on, the trace runs up to the second charge, which fails the balance
+  check (spent stays 100). -/
+theorem G5_guard_rejects : rejectedAt guarded trG5 5 = true := by decide
 
-/-! ### G6 — §6.4.4 v1 close pays the full cumulativeAmount; §13.2 says servers MUST NOT capture
-  more than consumed, and the v2 close with captureAmount is never specified. With the §13.2
-  rule off (v1 semantics: capture = cumulativeAmount), the payee closes on a 60 voucher with
-  nothing delivered. -/
+/-! ### G6 — v1 close captures the whole voucher: an illustration, not a gap.
+  §6.4.4 v1 close pays the full cumulativeAmount, and TIP-1034's close accepts any capture
+  with settled ≤ capture ≤ cumulativeAmount: the contract never checks consumption. The §13.2
+  bound (v2 captureAmount = max(spent, settledOnChain)) is a rule for the server's choice of
+  capture, which P9_capture_le_consumed states. #399 closes the v1 side with the
+  lowest-voucher rule (GAPS.md row 6), which a v1 server follows by its choice of voucher.
+  This trace shows the contract alone does not enforce it: with every guard on, the payee
+  closes on a 60 voucher with nothing delivered. -/
 def trG6 : List Act := [.openCh PAYER k 100, .sign (v 60)]
-def closeG6 : Act := .close PAYEE k (v 60) 60
-def cfgG6 : Cfg := { guarded with guardCapture := false }
 /-- The close succeeds from the end of tr, and captures more than max(settled, delivered). -/
 def overCaptures (cfg : Cfg) (tr : List Act) (k : Key) (x : Sig) (cap : Nat) : Bool :=
   match run cfg St.init tr with
@@ -204,11 +221,14 @@ def overCaptures (cfg : Cfg) (tr : List Act) (k : Key) (x : Sig) (cap : Nat) : B
   | some st => match st.chans k with
     | none => false
     | some c => (step cfg st (.close PAYEE k x cap)).isSome && !decide (cap ≤ max c.settled (st.delivered k))
-/-- G6: with the §13.2 cap off, close(60) succeeds with settled = 0 and nothing delivered
-  (P9 broken). -/
-theorem G6_violates_P9 : overCaptures cfgG6 trG6 k (v 60) 60 = true := by decide
-/-- G6: with every guard on, the same close reverts (60 > max(0, spent = 0)). -/
-theorem G6_guard_rejects : (run guarded St.init (trG6 ++ [closeG6])).isNone = true := by decide
+/-- G6: the contract, with every guard on, accepts close(60) with settled = 0 and nothing
+  delivered, so a server that captures the voucher amount breaks P9's bound. -/
+theorem G6_violates_P9 : overCaptures guarded trG6 k (v 60) 60 = true := by decide
+/-- G6: the §13.2 server rule would not pick 60: at the end of trG6 it gives
+  max(spent, settled) = 0, the capture P9 is about. -/
+theorem G6_rule_picks_zero :
+    check guarded trG6 (fun st => (st.chans k).map (fun c => max (st.spent k) c.settled) == some 0) =
+      some true := by decide
 
 /-! ### G7 — §11.3 step 5 rejects vouchers while a close is pending, but §12.2 lets the server
   keep delivering against an accepted voucher (GAPS.md row 11). P8 still holds (delivered ≤ accepted), which is why P8c exists.
@@ -239,8 +259,9 @@ theorem G7_unpaid_delivery : check cfgG7 trG7 (fun st => unpaidAfterFinal st k) 
   reverts on the finalized channel. -/
 theorem G7_settle_too_late : (run cfgG7 St.init (trG7 ++ [.settle PAYEE k (v 60)])).isNone = true := by
   decide
-/-- G7: with the guard on, the charge after requestClose reverts. -/
-theorem G7_guard_rejects : (run guarded St.init trG7).isNone = true := by decide
+/-- G7: with the guard on, the trace runs up to the charge after requestClose, and it
+  reverts. -/
+theorem G7_guard_rejects : rejectedAt guarded trG7 5 = true := by decide
 
 /-- Baseline for G7, with every guard on: delivery before the close request, then the payee
   never settles during the 900 s grace window, and the payer withdraws. Unpaid too, but the

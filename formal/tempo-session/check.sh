@@ -25,6 +25,12 @@ if grep -vE '^[[:space:]]*(import[[:space:]]|--|$)' TempoSession.lean; then
   echo "FAIL: TempoSession.lean may contain only import lines and -- comments (it is not audited)"
   exit 1
 fi
+# No file may change options: set_option could raise maxHeartbeats or turn off warningAsError
+# (lakefile.toml). A match inside a comment or string fails too, which errs on the safe side.
+if grep -n 'set_option' TempoSession.lean TempoSession/*.lean; then
+  echo "FAIL: set_option is not allowed (options live in lakefile.toml)"
+  exit 1
+fi
 # Declarations below the audit command would escape it.
 if [ "$(grep -v '^[[:space:]]*$' TempoSession/Audit.lean | tail -n 1)" != "#audit_tempo_session" ]; then
   echo "FAIL: #audit_tempo_session must be the last line of TempoSession/Audit.lean"

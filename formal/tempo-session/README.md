@@ -1,6 +1,6 @@
 # Tempo session formal model
 
-A Lean 4 model of [draft-tempo-session-00](../../specs/methods/tempo/draft-tempo-session-00.md): the escrow contract (open, settle, topUp, close, requestClose, withdraw), voucher signatures, and the server's voucher acceptance and accounting. Lean checks every proof.
+A Lean 4 model of [draft-tempo-session-00](../../specs/methods/tempo/draft-tempo-session-00.md): the escrow contract (open, settle, topUp, close, requestClose, withdraw), voucher signatures, and the server's voucher acceptance and accounting. Lean checks every proof. Where the draft's contract text is silent, the contract steps follow TIP-1034 (`tempoxyz/tempo` `tips/tip-1034.md`, `tips/verify/src/TIP20ChannelReserve.sol`).
 
 ## Run
 
@@ -10,48 +10,61 @@ bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 ```
 
 - `lean-toolchain` pins Lean, and elan installs it on first build. There are no dependencies (no Mathlib).
-- A clean build takes about 20 s.
+- A clean build takes about 10 s.
 - CI (`.github/workflows/formal.yml`) runs `check.sh` on every pull request that touches `formal/`.
 
 ## What it checks
 
+- `lakefile.toml` sets `warningAsError`, so a `sorry`, a deprecated name or an unused hypothesis fails the build.
 - `TempoSession/Audit.lean` fails the build when any declaration is an axiom or depends on one beyond Lean's three standard axioms. That rules out `sorry`, `admit` and `native_decide`.
-- `check.sh` fails when a module isn't imported by `Audit.lean`, so every module is audited.
+- `check.sh` fails when a module isn't imported by `Audit.lean`, so every module is audited, and when any file uses `set_option` (which could raise `maxHeartbeats` or turn warnings back off).
 
 ## Files
 
 | File | Contents |
 |---|---|
 | `Model.lean` | State, actions and the computable `step` function, with § citations; `Reachable` |
-| `Invariant.lean` | Inductive invariant `Inv`, proved for every reachable state |
+| `Invariant.lean` | Inductive invariant `SysInv` (`Unopened` / `OpenInv` per channel), proved for every reachable state |
 | `Properties.lean` | P1–P9, below |
 | `Counterexamples.lean` | One trace per spec gap with its guard off, checked by `decide` ([GAPS.md](./GAPS.md)) |
+| `Witnesses.lean` | Traces showing every action still succeeds with the guards on, so no guard is stricter than the spec |
 | `Audit.lean` | Axiom audit |
+
+## Proofs
+
+- The invariant step and every property that ranges over all actions use one case split: `cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;> grind [...]`. That gives one goal per action and per guard outcome, and `grind` closes each one.
+- Each `grind` lists what it unfolds (`ChanInv`, `OpenInv`, `step`, `upd_apply`, `ValidSig`) and the guards it relies on (`hg.finalized`, `hg.bounds`, ...).
+- Proofs stay hand-written only where `grind` cannot finish: evaluating a three-step `run`, and naming a witness voucher.
 
 ## Properties
 
-Every theorem holds for all reachable states with the guards on (`Cfg.Guarded`).
+Every theorem holds for all reachable states with the guards on (`Cfg.Guarded`: five guard flags and a grace period of at least 900 s).
 
 | # | Property | Theorems |
 |---|---|---|
 | P1 | The payee never gets more than a signed voucher | `P1_payee_le_signed` |
 | P2 | Funds are conserved | `P2_conservation` |
 | P3 | Settled and accepted amounts only grow; lower vouchers and replays are rejected | `P3_*` |
-| P4a | The payer can always force-close: requestClose, wait the grace period, withdraw | `P4_withdraw_enabled`, `P4_forced_close_path` |
+| P4a | The payer can always force-close: requestClose, wait the grace period, withdraw. Only the payer's own topUp cancels a pending request, so this holds whatever others do meanwhile | `P4_withdraw_enabled`, `P4_forced_close_path`, `closeReq_sticky` |
 | P4b | A finalized channel refunds exactly deposit − settled | `P4_refund_is_deposit_minus_settled` |
 | P5 | A voucher only pays its own channel, escrow and chain | `P5_*` |
 | P6 | A channel finalizes at most once and is frozen after | `P6_finalize_at_most_once`, `P6_finalized_frozen` |
-| P7 | topUp keeps P1–P6, and a finalized channel holds no residual funds | `P7_*` |
+| P7 | topUp preserves the invariant, and a finalized channel holds no residual funds | `P7_*` |
 | P8 | Service delivered ≤ accepted amount | `P8_delivered_le_accepted` |
 | P8a | The accepted amount is within the deposit and backed by a valid voucher | `P8a_accepted_backed` |
 | P8b | withdraw needs a close request at least a grace period old; the payee can always settle the accepted voucher | `P8b_*` |
 | P8c | No delivery while a close is pending (with `guardDelivery`) | `P8c_no_delivery_while_closing` |
-| P9 | close captures ≤ max(settled, delivered) | `P9_capture_le_consumed` |
+| P9 | A close whose capture follows the §13.2 server rule captures ≤ max(settled, delivered) | `P9_capture_le_consumed` |
+
+The one-step theorems that only read a guard back (`P3_*_rejected`, `P3_server_*`, `P5_*`, `P8b_withdraw_needs_request`, `P8c`) are sanity checks that `step` encodes the rule as the spec states it.
 
 ## Modelling choices
 
-- keccak256 is injective, so a channel ID is its preimage (`Key`).
+- keccak256 is injective, so a channel ID is its preimage (`Key`). `Key` includes the v2 `expiringNonceHash`, and a `Key` opens at most once, as in TIP-1034.
 - Signatures are unforgeable: only `Act.sign` adds to the signed set.
 - uint256 subtraction is checked, so an underflow reverts.
+- close follows TIP-1034: settled ≤ capture ≤ cumulativeAmount and capture ≤ deposit, with a signature only when capture > settled. The §13.2 capture bound is the server's rule, not a contract check (P9).
+- A repeat requestClose keeps the first request's time.
 - The server reads chain state with no lag; reorgs aren't modelled.
 - Token transfers are ghost counters (`paid`, `refunded`, `deposited`) per channel.
+- The payee's operator isn't modelled.
