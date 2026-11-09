@@ -19,6 +19,12 @@ if [ -n "$(find TempoSession -mindepth 2 -name '*.lean')" ]; then
   echo "FAIL: keep modules directly under TempoSession/ (the import check reads only that level)"
   exit 1
 fi
+# The root module imports Audit, so it is elaborated after the audit runs: anything declared
+# there would be built but never audited. Allow only imports and comments.
+if grep -vE '^[[:space:]]*(import[[:space:]]|--|$)' TempoSession.lean; then
+  echo "FAIL: TempoSession.lean may contain only import lines and -- comments (it is not audited)"
+  exit 1
+fi
 # Declarations below the audit command would escape it.
 if [ "$(grep -v '^[[:space:]]*$' TempoSession/Audit.lean | tail -n 1)" != "#audit_tempo_session" ]; then
   echo "FAIL: #audit_tempo_session must be the last line of TempoSession/Audit.lean"
