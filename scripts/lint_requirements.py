@@ -180,6 +180,12 @@ def segments(
         line = re.sub(r"^( *)> ?", r"\1", raw.expandtabs(4))
         stripped = line.strip()
         column = len(line) - len(line.lstrip())
+        if in_comment:
+            # Checked before fences: a ~~~ inside a comment is comment text, and treating it
+            # as a fence would leave the rest of the draft "in code" past the -->.
+            code_lines.add(number)
+            in_comment = "-->" not in line
+            continue
         if fence is None and FENCE.match(line):
             # A fence less indented than an open item's text ends that item's list.
             while list_stack and list_stack[-1] > column:
@@ -192,10 +198,6 @@ def segments(
             continue
         if fence:
             code_lines.add(number)
-            continue
-        if in_comment:
-            code_lines.add(number)
-            in_comment = "-->" not in line
             continue
         if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
             # Indented four or more past the open item's text (or the margin) with no

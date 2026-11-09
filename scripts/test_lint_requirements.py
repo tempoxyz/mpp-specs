@@ -351,3 +351,11 @@ def test_one_line_html_comment_does_not_open_a_block():
     lines = ["<!-- note -->", "A rule MUST hold.", "{: #req-x-001}"]
     found, _, _, _ = segments(lines)
     assert [s.ids for s in found] == [["req-x-001"]]
+
+
+def test_fence_inside_html_comment_is_comment_text():
+    # The ~~~ is inside the comment, so it opens no fence and the rule after --> is prose.
+    lines = ["<!--", "~~~", "-->", "", "A rule MUST hold."]
+    found, _, _, code = segments(lines)
+    assert [s.first for s in found] == ["A rule MUST hold."]
+    assert 5 not in code
