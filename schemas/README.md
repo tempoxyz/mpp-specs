@@ -28,9 +28,16 @@ JSON Schemas for MPP protocol values.
     them for `method` and, where present, `intent`.
   - HttpServerOffer `method` is a `PaymentMethodId`, narrowed from
     `^[a-z][a-z0-9-]*$`.
-  - Challenge allows extra members as strings
-    (`additionalProperties: {type: string}`): custom parameters are
-    auth-params (token or quoted-string), and receivers ignore unknown ones.
+  - Challenge allows extra members whose names are lowercase RFC 9110
+    tokens (`propertyNames`) and whose values are `ParamValue` strings
+    (no control characters but HTA`): custom parameters are auth-params
+    (token or quoted-string), and receivers ignore unknown ones.
+  - Challenge `digest` is an RFC 9530 Content-Digest value
+    (`ContentDigest`), and Receipt `subscriptionId` is unpadded base64url,
+    as the core draft and the subscription intent require.
+  - Every pattern has a `not` guard that rejects a line terminator
+    anywhere in the value, so validators whose `$` also matches before a
+    final newline, or at every line (Ruby), accept no multi-line value.
   - Challenge `expires`, Receipt `timestamp` and HttpServerOffer
     `expires` use `DateTime`: `format: date-time` plus an RFC 3339
     pattern, since 2020-12 validators treat `format` as an annotation
