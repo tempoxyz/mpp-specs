@@ -64,7 +64,7 @@ The one-step theorems that only read a guard back (`P3_*_rejected`, `P3_server_*
 - Signatures are unforgeable: only `Act.sign` adds to the signed set.
 - uint256 subtraction is checked, so an underflow reverts.
 - close follows TIP-1034: settled ≤ capture ≤ cumulativeAmount and capture ≤ deposit, with a signature only when capture > settled. The §13.2 capture bound is the server's rule, not a contract check (P9).
-- A repeat requestClose keeps the first request's time.
+- A repeat requestClose keeps the first request's time, as TIP-1034 does and [#399](https://github.com/tempoxyz/mpp-specs/pull/399) adds to §6.4.5. The draft without #399 resets the time on every call, which only lets the payer delay its own withdraw; `closeReq_sticky` holds for the amended draft.
 - The server reads chain state with no lag; reorgs aren't modelled.
 - Token transfers are ghost counters (`paid`, `refunded`, `deposited`) per channel.
 - The payee's operator isn't modelled.
