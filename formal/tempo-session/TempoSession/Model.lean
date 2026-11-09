@@ -132,7 +132,8 @@ structure Cfg.Guarded (cfg : Cfg) : Prop where
   request : cfg.withdrawNeedsRequest = true
   /-- G5: spent is per channel. -/
   perChannel : cfg.spentPerChannel = true
-  /-- CLOSE_GRACE_PERIOD is at least 15 minutes (§6.4.5, §13.3). -/
+  /-- CLOSE_GRACE_PERIOD is at least 15 minutes (§6.4.5, §13.3). No proof needs it: the
+    properties hold for any grace period; it records the draft's minimum. -/
   grace : 900 ≤ cfg.grace
 
 /-- Global state: chain, signatures, ghost counters and server accounting.

@@ -37,8 +37,8 @@ elab "#audit_tempo_session" : command => do
   for (name, info, isLocal) in imported ++ local_ do
     -- A private declaration is stored as _private.<Module>.0.<name>, which Name.isInternal
     -- treats as internal. Look through that prefix first, so a private declaration is
-    -- audited like any other; only names still internal after it (compiler-generated
-    -- auxiliaries, covered through the declarations that use them) are skipped.
+    -- audited like any other. Names still internal after it (compiler-generated auxiliaries,
+    -- or a declaration a user named with a leading _) are audited too, but not counted.
     let userName := privateToUserName name
     -- Only this library: declared in a TempoSession.* module (or in this file), or named
     -- TempoSession.*. Lean core is skipped. A module from elsewhere can't smuggle in an axiom:
@@ -50,15 +50,14 @@ elab "#audit_tempo_session" : command => do
         let some mod := env.header.moduleNames[idx.toNat]? | pure false
         pure ((`TempoSession).isPrefixOf mod || (`TempoSession).isPrefixOf userName)
     unless inLibrary do continue
-    -- Checked before internal names are skipped, so no axiom hides behind an _ name.
     if let .axiomInfo _ := info then
       throwError m!"axiom audit: {name} is an axiom declaration; the library may declare none"
-    if userName.isInternal then continue
     let axioms ← liftCoreM <| collectAxioms (m := CoreM) name
     for ax in axioms do
       unless standardAxioms.contains ax do
         throwError m!"axiom audit: {name} depends on non-standard axiom {ax}"
-    if let .thmInfo _ := info then audited := audited + 1
+    if let .thmInfo _ := info then
+      unless userName.isInternal do audited := audited + 1
   -- Only this file may import beyond the library and Init. Read from Lean's own header data,
   -- so no spelling of an import (guillemets, comments, line breaks) gets past it. Without
   -- Lean, Lake or Std a module cannot reach the elaborator API (addDecl, kernel-check options), so
