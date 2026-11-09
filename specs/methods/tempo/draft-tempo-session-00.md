@@ -1506,7 +1506,9 @@ servers MUST follow this procedure:
    - Compute `available = acceptedCumulative - spent`
    - Compute `cost` for this request (see {{cost-calculation}})
    - If `available < cost`: return 402 with Problem Details including
-     `requiredTopUp = cost - available`
+     `requiredTopUp = cost - available`: the client signs a voucher at
+     least that much higher, after a `topUp` if the deposit cannot
+     cover it, since a `topUp` alone adds no credit
 
 3. **Charge and deliver** (if `available >= cost` and
    `closeRequestedAt == 0`):
@@ -1540,8 +1542,11 @@ it current: they MUST follow the escrow's `CloseRequested` and
 `CloseRequestCancelled` events, or read `closeRequestedAt` from the
 contract, as each block arrives, and MUST stop delivery when either
 source shows a close request. A `CloseRequestCancelled` event resets
-the stored `closeRequestedAt` to zero. A
-server that cannot read chain state for longer than the grace period
+the stored `closeRequestedAt` to zero. Servers MUST apply these
+events to a reserved `channelId` too, and Open Verification step 4
+MUST keep a `closeRequestedAt` that an event set after step 2 read
+the chain. A server that cannot read chain state for longer than
+the grace period
 less the time it needs to close MUST stop delivering metered service
 until it reads it again.
 
@@ -2417,9 +2422,9 @@ interface ITempoStreamChannel {
 
     // open: channelId was ever opened
     error ChannelAlreadyExists();
-    // any function but open: no such channel
+    // settle, topUp, requestClose, close, withdraw: no such channel
     error ChannelNotFound();
-    // any function but open: channel finalized
+    // settle, topUp, requestClose, close, withdraw: channel finalized
     error ChannelFinalized();
     error InvalidSignature();
     // settle, close: cumulativeAmount > deposit
