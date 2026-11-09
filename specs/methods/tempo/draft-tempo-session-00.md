@@ -1547,8 +1547,10 @@ To prevent fund loss from server crashes:
 To prevent double-charging on retries and network failures:
 
 - Clients SHOULD include an `Idempotency-Key` header on paid requests
-- Servers SHOULD track `(challengeId, idempotencyKey)` pairs and return
-  the cached response (including receipt) for duplicate requests
+- Servers SHOULD track `(channelId, idempotencyKey)` pairs and return
+  the cached response (including receipt) for duplicate requests. The
+  key is per channel, not per challenge, since `spent` is per channel
+  and a retry can arrive under a fresh challenge.
 - Servers MUST NOT increment `spent` for duplicate idempotent requests
 
 If idempotency is not implemented, servers MUST document this limitation
@@ -1920,7 +1922,8 @@ The escrow contract provides:
 Payer protection covers only what the payer signed. The escrow cannot
 see service delivery, so a signed voucher is a payment the payer
 cannot reclaim: the payee can settle it whether or not service
-consumed it. Clients SHOULD keep `acceptedCumulative` close to the
+consumed it, until the channel is finalized. A forced close refunds
+only what the payee has not settled by the end of the grace period. Clients SHOULD keep `acceptedCumulative` close to the
 `spent` amount that receipts report, signing ahead of consumption
 only what they accept losing if the server stops serving.
 
