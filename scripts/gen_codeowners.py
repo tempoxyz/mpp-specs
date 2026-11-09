@@ -42,8 +42,13 @@ REVISION = re.compile(r"-\d{2}\.md$")
 
 
 def owner_pattern(path: str) -> str:
-    """Return a CODEOWNERS pattern for a draft that survives revision bumps."""
-    return "/" + REVISION.sub("-*.md", path)
+    """Return a CODEOWNERS pattern for a draft that survives revision bumps.
+
+    '??' matches exactly the two-digit revision, so the rule doesn't also match a
+    sibling draft whose name extends this one (draft-x-charge-delegated-00.md), as
+    '*' would. CODEOWNERS doesn't support [0-9] character classes.
+    """
+    return "/" + REVISION.sub("-??.md", path)
 
 
 def login_from_email(email: str) -> str | None:

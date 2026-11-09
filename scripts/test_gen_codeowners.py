@@ -15,9 +15,9 @@ from gen_codeowners import (
 
 def test_owner_pattern_survives_revision_bumps():
     assert owner_pattern("specs/methods/tempo/draft-tempo-charge-00.md") == (
-        "/specs/methods/tempo/draft-tempo-charge-*.md"
+        "/specs/methods/tempo/draft-tempo-charge-??.md"
     )
-    assert owner_pattern("specs/core/draft-httpauth-payment-01.md") == ("/specs/core/draft-httpauth-payment-*.md")
+    assert owner_pattern("specs/core/draft-httpauth-payment-01.md") == ("/specs/core/draft-httpauth-payment-??.md")
 
 
 def test_login_from_noreply_email():
@@ -39,11 +39,11 @@ def test_render_adds_defaults_without_duplicates():
     lines = content.splitlines()
     assert not any(line.startswith("*") for line in lines)
     assert lines.index("/specs/ @brendanjryan") < lines.index(
-        "/specs/core/draft-httpauth-payment-*.md @brendanjryan"
+        "/specs/core/draft-httpauth-payment-??.md @brendanjryan"
     )
-    assert "/specs/core/draft-httpauth-payment-*.md @brendanjryan" in lines
-    assert "/specs/methods/solana/draft-solana-charge-*.md @lgalabru @brendanjryan" in lines
-    assert "/specs/methods/x/draft-x-charge-*.md @brendanjryan" in lines
+    assert "/specs/core/draft-httpauth-payment-??.md @brendanjryan" in lines
+    assert "/specs/methods/solana/draft-solana-charge-??.md @lgalabru @brendanjryan" in lines
+    assert "/specs/methods/x/draft-x-charge-??.md @brendanjryan" in lines
 
 
 def test_submitter_falls_back_when_github_fails(monkeypatch):
@@ -65,3 +65,11 @@ def test_revisions_glob_matches_by_draft_name():
         gen_codeowners.revisions_glob("specs/methods/tempo/draft-tempo-charge-01.md")
         == ":(glob)specs/**/draft-tempo-charge-[0-9][0-9].md"
     )
+
+
+def test_owner_pattern_does_not_match_extended_names():
+    import fnmatch
+
+    pattern = owner_pattern("specs/methods/solana/draft-solana-charge-00.md")
+    assert fnmatch.fnmatch("/specs/methods/solana/draft-solana-charge-01.md", pattern)
+    assert not fnmatch.fnmatch("/specs/methods/solana/draft-solana-charge-delegated-00.md", pattern)
