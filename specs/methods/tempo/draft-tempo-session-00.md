@@ -1273,6 +1273,8 @@ On `action="open"`, servers MUST:
    - `voucher.cumulativeAmount >= channel.settled` (at or above current
      settlement; a voucher equal to `channel.settled` authorizes no new
      service, and `settle` rejects it)
+   - `voucher.cumulativeAmount <= channel.deposit` (a voucher above the
+     deposit cannot be settled or closed)
 4. Initialize server-side channel state for the `channelId`.
 
 A repeated `open` MUST NOT be co-signed, broadcast or accepted. When
@@ -1555,7 +1557,9 @@ To prevent fund loss from server crashes:
 - For v1, servers MUST persist every accepted voucher whose
   `cumulativeAmount` is at least `max(spent, settledOnChain)` until
   the channel closes, since a v1 close uses the lowest of them (see
-  {{cooperative-close}}). Servers MAY discard lower vouchers.
+  {{cooperative-close}}). Servers MUST also keep the highest accepted
+  voucher, even when `spent` exceeds it, and MAY discard lower
+  vouchers.
 
 - Implementations SHOULD use transactional storage or write-ahead logging
   to ensure atomicity between state updates and service delivery.
