@@ -359,3 +359,11 @@ def test_fence_inside_html_comment_is_comment_text():
     found, _, _, code = segments(lines)
     assert [s.first for s in found] == ["A rule MUST hold."]
     assert 5 not in code
+
+
+def test_unclosed_html_comment_hides_nothing():
+    # kramdown renders a <!-- with no --> as text, so the rule after it still needs its ID.
+    lines = ["Intro.", "", "<!-- unclosed note", "", "A rule MUST hold.", "{: #req-x-001}"]
+    found, _, _, code = segments(lines)
+    assert found[-1].ids == ["req-x-001"]
+    assert 5 not in code

@@ -168,6 +168,9 @@ def segments(
     # Inside a block HTML comment (a line opening with <!-- and no --> after it). kramdown
     # drops everything up to the line holding -->, so its keywords and IDs don't count.
     in_comment = False
+    # The last line holding -->. A <!-- with no --> after it opens nothing: kramdown renders
+    # it as paragraph text and goes on reading the rest of the draft as usual.
+    last_close = max((i for i, text in enumerate(lines, start=1) if "-->" in text), default=0)
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
     for number, raw in enumerate(lines, start=1):
@@ -229,7 +232,7 @@ def segments(
             current = None
             continue
         if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
-            if stripped.startswith("<!--") and "-->" not in stripped[4:]:
+            if stripped.startswith("<!--") and "-->" not in stripped[4:] and last_close > number:
                 code_lines.add(number)
                 in_comment = True
             current = None
