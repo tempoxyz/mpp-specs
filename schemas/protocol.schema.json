@@ -53,9 +53,10 @@
       "additionalProperties": true
     },
     "Opaque": {
-      "description": "Core draft opaque parameter: base64url without padding (RFC 4648 Section 5) of a JCS-serialized JSON object whose values are strings. The pattern checks the encoding; the content keywords describe the decoded value, which validators only annotate, so consumers decode and check it.",
+      "description": "Core draft opaque parameter: base64url without padding (RFC 4648 Section 5) of a JCS-serialized JSON object whose values are strings. The pattern and minLength check the encoding (non-empty, no length that leaves a lone character, which no byte string encodes to); the content keywords describe the decoded value, which validators only annotate, so consumers decode and check it.",
       "type": "string",
-      "pattern": "^[A-Za-z0-9_-]*$",
+      "pattern": "^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-]{2,3})?$",
+      "minLength": 2,
       "contentEncoding": "base64url",
       "contentMediaType": "application/json",
       "contentSchema": { "type": "object", "additionalProperties": { "type": "string" } }
