@@ -1,8 +1,8 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-httpauth-payment-01
-version: "01"
+docname: draft-httpauth-payment-02
+version: "02"
 category: std
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -110,6 +110,7 @@ Payment Credential
   authorization data. The default field name is `Authorization`. A
   Payment challenge MAY select `Payment-Authorization` with the
   `header` parameter (see {{credential-header}}).
+{: #req-core-001}
 
 Payment Method
 : A mechanism for transferring value, identified by a registered
@@ -164,6 +165,7 @@ did not include a specific header field.
 
 The following table defines how servers MUST respond to payment-related
 conditions.
+{: #req-core-002}
 
 | Condition | Status | Response |
 |-----------|--------|----------|
@@ -178,6 +180,7 @@ conditions.
 Servers MUST return 402 with a `WWW-Authenticate: Payment` header when
 payment is required or when a payment credential fails validation
 (see {{usage-of-402}} for details).
+{: #req-core-003}
 
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
@@ -201,12 +204,14 @@ other authentication schemes that use 401.
 ### When to Return 402
 
 Servers SHOULD return 402 when:
+{: #req-core-004}
 
 - The resource requires payment as a precondition for access
 - The server can provide a Payment challenge that the client may fulfill
 - Payment is the primary barrier to access (not authentication or authorization)
 
 Servers MAY return 402 when:
+{: #req-core-005}
 
 - Offering optional paid features or premium content
 - Indicating that a previously-paid resource requires additional payment
@@ -215,6 +220,7 @@ Servers MAY return 402 when:
 ### When NOT to Return 402
 
 Servers SHOULD NOT return 402 when:
+{: #req-core-006}
 
 - The client lacks authentication credentials (use 401)
 - The client is authenticated but lacks authorization (use 403)
@@ -223,10 +229,12 @@ Servers SHOULD NOT return 402 when:
 
 Servers MUST NOT return 402 without including a `WWW-Authenticate` header
 containing at least one Payment challenge.
+{: #req-core-007}
 
 ### Interaction with Other Authentication Schemes
 
 When a resource requires both authentication and payment, servers SHOULD:
+{: #req-core-008}
 
 1. First verify authentication credentials
 2. Return 401 if authentication fails
@@ -243,6 +251,7 @@ omits `header` defaults to `Authorization`. A challenge that includes
 `header="Payment-Authorization"` requires the client to send the Payment
 credential in the `Payment-Authorization` header. This allows the client
 to retain its ordinary authentication credential in `Authorization`.
+{: #req-core-009}
 
 For example, the server can issue:
 
@@ -289,15 +298,19 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   missing or empty. Servers MUST bind this value to the challenge
   parameters as described in {{challenge-binding}}. Clients MUST include
   this value unchanged in the credential.
+{: #req-core-010}
 
 **`realm`**: Protection space identifier per {{RFC9110}}. Servers MUST
   include this parameter to define the scope of the payment requirement.
+{: #req-core-011}
 
 **`method`**: Payment method identifier ({{payment-methods}}). MUST be a lowercase
   ASCII string.
+{: #req-core-012}
 
 **`intent`**: Payment intent type ({{payment-intents}}). The value MUST be a
   registered entry in the IANA "HTTP Payment Intents" registry.
+{: #req-core-013}
 
 **`request`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
   payment-method-specific data needed to complete payment. Structure is
@@ -309,6 +322,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   request as it appears on the wire, different JSON serialization orders
   would produce different HMAC values, breaking cross-implementation
   interoperability.
+{: #req-core-014}
 
 ### Optional Parameters
 
@@ -318,15 +332,18 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   MUST submit the credential with a request body whose digest matches this
   value. See {{request-body-digest-binding}} for body binding
   requirements.
+{: #req-core-015}
 
 **`expires`**: Timestamp indicating when this challenge expires, formatted
   as an {{RFC3339}} date-time string (e.g., `"2025-01-15T12:00:00Z"`).
   Servers SHOULD include this parameter. Clients MUST NOT submit
   credentials for expired challenges.
+{: #req-core-016}
 
 **`description`**: Human-readable description of the resource or payment
   purpose. This parameter is for display purposes only and MUST NOT be
   relied upon for payment verification (see {{amount-verification}}).
+{: #req-core-017}
 
 **`header`**: Selects the HTTP field for the Payment credential, as
   specified in {{credential-header}}. When present, the value MUST be
@@ -344,6 +361,7 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   credential's `challenge` object. `Payment-Authorization` is
   RECOMMENDED when a resource needs to preserve `Authorization` for
   ordinary authentication.
+{: #req-core-018}
 
 **`opaque`**: Base64url-encoded {{RFC4648}} JSON {{RFC8259}} containing
   server-defined correlation data (e.g., a payment processor intent
@@ -353,8 +371,10 @@ auth-param      = token BWS "=" BWS ( token / quoted-string )
   serialized using JSON Canonicalization Scheme (JCS) {{RFC8785}} before
   base64url encoding. Servers MUST include `opaque` in the challenge
   binding ({{challenge-binding}}) to ensure tamper protection.
+{: #req-core-019}
 
 Unknown parameters MUST be ignored by clients.
+{: #req-core-020}
 
 #### Challenge Binding
 
@@ -363,19 +383,23 @@ Servers MUST bind the challenge `id` to `realm`, `method`, `intent`, and
 prevents request integrity attacks where a client signs or submits a
 payment different from what the server intended. The `description`
 parameter is excluded because it is not used for payment verification.
+{: #req-core-021}
 
 Servers MUST verify the binding when processing a credential and MUST
 reject a credential whose echoed challenge parameters do not match the
 expected binding.
+{: #req-core-022}
 
 The binding mechanism is implementation-defined. Servers MAY use stateful
 storage (e.g., database lookup) or stateless verification (e.g., HMAC,
 authenticated encryption) to validate the binding.
+{: #req-core-023}
 
 ##### Recommended: HMAC-SHA256 Binding
 
 Servers using HMAC-SHA256 for stateless challenge binding SHOULD compute
 the challenge `id` as follows:
+{: #req-core-024}
 
 The HMAC input consists of six fixed prefix slots, an optional `header`
 slot, and a final `opaque` slot. Required fields supply their string value;
@@ -538,6 +562,7 @@ Decoded `request` example:
 This challenge includes `header="Payment-Authorization"`. The client
 MUST send the corresponding Payment credential in the
 `Payment-Authorization` header, not in `Authorization`.
+{: #req-core-025}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -555,6 +580,7 @@ WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
 
 Servers SHOULD include the `digest` parameter when issuing challenges for
 requests with bodies. The digest value is computed per [RFC9530]:
+{: #req-core-026}
 
 ~~~http
 WWW-Authenticate: Payment id="...",
@@ -567,6 +593,7 @@ WWW-Authenticate: Payment id="...",
 ~~~
 
 When verifying a credential with a `digest` parameter, servers MUST:
+{: #req-core-027}
 
 1. Compute the digest of the current request body per [RFC9530]
 2. Compare it with the `digest` value from the challenge
@@ -580,6 +607,7 @@ The default HTTP field for the Payment credential is `Authorization`.
 A challenge that omits the `header` parameter selects this default.
 Clients receiving such a challenge MUST send the Payment credential in
 the `Authorization` header.
+{: #req-core-028}
 
 A challenge that includes the `header` parameter selects
 `Payment-Authorization` instead of the default. The value MUST be
@@ -591,10 +619,12 @@ challenge MUST send the Payment credential in the
 a different field than the one selected by the challenge. Clients MUST
 treat any other `header` value as an unrecognized challenge and MUST NOT
 send a Payment credential for it.
+{: #req-core-029}
 
 Servers MUST accept a Payment credential for a given challenge only from
 the field selected by that challenge. A Payment credential received in
 any other field MUST NOT satisfy the challenge.
+{: #req-core-030}
 
 The field value uses base64url encoding without
 padding per {{RFC4648}} Section 5:
@@ -634,6 +664,7 @@ exact structure.
 
 When the original challenge omitted `header`, clients MUST NOT include a
 `header` field in the credential's `challenge` object.
+{: #req-core-031}
 
 ### Example Credential
 
@@ -670,6 +701,7 @@ This credential corresponds to a challenge that included
 `header="Payment-Authorization"`. The client MUST send it in
 `Payment-Authorization`, and MUST echo `header` in the credential's
 `challenge` object:
+{: #req-core-032}
 
 ~~~http
 GET /api/data HTTP/1.1
@@ -700,6 +732,7 @@ Decoded credential:
 ## Payment-Receipt Header {#payment-receipt-header}
 
 Servers SHOULD include a `Payment-Receipt` header on successful responses:
+{: #req-core-033}
 
 ~~~abnf
 Payment-Receipt = base64url-nopad
@@ -715,17 +748,20 @@ The decoded JSON object contains:
 | `reference` | string | Method-specific reference (tx hash, invoice id, etc.) |
 
 Payment method specifications MAY define additional fields for receipts.
+{: #req-core-034}
 
 ### Receipt Status Semantics
 
 The `status` field MUST be `"success"`, indicating the payment was
 verified and settled successfully. Receipts are only issued on
 successful payment responses (2xx status codes).
+{: #req-core-035}
 
 Servers MUST NOT return a `Payment-Receipt` header on error responses.
 Payment failures are communicated via HTTP status codes and Problem
 Details {{RFC9457}}. Servers MUST return 402 with a fresh challenge
 and appropriate problem type when payment verification fails.
+{: #req-core-036}
 
 # Payment Methods {#payment-methods}
 
@@ -738,6 +774,7 @@ payment-method-id = 1*LOWERALPHA
 ~~~
 
 Method identifiers are case-sensitive and MUST be lowercase.
+{: #req-core-037}
 
 ## Method Registry
 
@@ -770,6 +807,7 @@ See the Payment Intent Registry for registered intents.
 ## Intent Negotiation
 
 If a server supports multiple intents, it MAY issue multiple challenges:
+{: #req-core-038}
 
 ~~~http
 WWW-Authenticate: Payment id="abc", realm="api.example.com", method="example", intent="charge", request="..."
@@ -778,11 +816,13 @@ WWW-Authenticate: Payment id="def", realm="api.example.com", method="example", i
 
 Clients choose which challenge to respond to. Clients that do not
 recognize an intent SHOULD treat the challenge as unsupported.
+{: #req-core-039}
 
 ## Client Payment Preferences {#client-payment-preferences}
 
 Clients MAY send an `Accept-Payment` request header to declare which
 payment method and intent combinations they support.
+{: #req-core-040}
 
 The header uses the same weighted-preference model as other HTTP
 negotiation fields: omitted `q` values are equivalent to `q=1`, and
@@ -806,8 +846,10 @@ Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge
 
 When `Accept-Payment` is present, servers SHOULD consider it when
 choosing which Payment challenges to return.
+{: #req-core-041}
 
 Specifically, servers SHOULD:
+{: #req-core-042}
 
 - Filter challenges to those matching at least one declared range with `q>0`
 - Order matching challenges by descending client `q` value
@@ -816,16 +858,20 @@ Specifically, servers SHOULD:
 
 If `Accept-Payment` is absent, servers MUST behave as though the client
 accepts any method and intent combination.
+{: #req-core-043}
 
 If `Accept-Payment` is malformed, servers MAY ignore it.
+{: #req-core-044}
 
 If `Accept-Payment` is present but no available challenge matches a
 declared range with `q>0`, servers MAY ignore the header and return
 their normal set of challenges.
+{: #req-core-045}
 
 The `WWW-Authenticate: Payment` challenge remains authoritative even
 when `Accept-Payment` is used. Clients MUST validate the returned
 challenge before authorizing payment.
+{: #req-core-046}
 
 # Error Handling
 
@@ -833,6 +879,7 @@ challenge before authorizing payment.
 
 Servers SHOULD return Problem Details {{RFC9457}} error bodies for
 payment-related errors, using the HTTP status defined below. For example:
+{: #req-core-047}
 
 ~~~json
 {
@@ -846,6 +893,7 @@ payment-related errors, using the HTTP status defined below. For example:
 The `type` URI SHOULD correspond to one of the problem types defined
 below, and the canonical base URI for problem types is
 `https://paymentauth.org/problems/`.
+{: #req-core-048}
 
 ## Error Codes
 
@@ -867,6 +915,7 @@ below, and the canonical base URI for problem types is
 
 Servers SHOULD use the `Retry-After` HTTP header {{RFC9110}} to indicate
 when clients may retry:
+{: #req-core-049}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -879,6 +928,7 @@ WWW-Authenticate: Payment ...
 ## Payment Method Specifications
 
 Payment method specifications MUST define:
+{: #req-core-050}
 
 1. **Method Identifier**: Unique lowercase string
 2. **Request Schema**: JSON structure for the `request` parameter
@@ -899,6 +949,7 @@ authentication schemes (`Basic`, `Bearer`, `Digest`). Evolution happens
 through adding optional parameters and fields; implementations MUST
 ignore unknown parameters and fields. If a future change is truly
 incompatible, a new scheme name (e.g., `Payment2`) would be registered.
+{: #req-core-051}
 
 ### Payment Methods {#versioning-payment-methods}
 
@@ -909,6 +960,7 @@ adds a `version` field starting at `2`. Compatible changes (adding
 optional fields, defining defaults) do not require a version change.
 Methods MAY also register a new identifier for changes fundamental
 enough to warrant a distinct name.
+{: #req-core-052}
 
 ### Payment Intents {#versioning-payment-intents}
 
@@ -920,15 +972,40 @@ identifier (e.g., `charge-v2`).
 ## Custom Parameters
 
 Implementations MAY define additional parameters in challenges:
+{: #req-core-053}
 
 - Parameters MUST use lowercase names
+  {: #req-core-054}
 - Unknown parameters MUST be ignored by clients
+  {: #req-core-055}
+
+## Extension Fields {#extension-fields}
+
+The `request` JSON object in a challenge, the `payload` object in a
+credential and the receipt JSON object are extension points.
+Receivers MUST ignore fields they do not recognize in these objects
+and MUST process the remaining fields as if the unrecognized fields
+were absent.
+{: #req-core-056}
+
+Fields defined by this document or by a published intent, payment
+method or extension specification use unprefixed names. Any other
+field, such as one an SDK or vendor defines, MUST use a
+reverse-domain name prefix under a domain its definer controls (for
+example, `xyz.tempo.example`).
+{: #req-core-057}
+
+An extension field MUST NOT change the meaning of a field defined by
+this document or by an intent or payment method specification, and
+MUST NOT relax any of their requirements.
+{: #req-core-058}
 
 ## Size Considerations
 
 Servers SHOULD keep challenges under 8KB. Clients MUST be able to handle
 challenges of at least 4KB. Servers MUST be able to handle credentials
 of at least 4KB.
+{: #req-core-059}
 
 # Internationalization Considerations
 
@@ -939,12 +1016,14 @@ All string values use UTF-8 encoding {{RFC3629}}:
 - The `request` and credential payloads are JSON {{RFC8259}}
 - Payment method identifiers are restricted to ASCII lowercase
 - The `realm` parameter SHOULD use ASCII-only values per {{RFC9110}}
+  {: #req-core-060}
 
 ## Human-Readable Text
 
 The `description` parameter may contain localized text. Servers SHOULD
 use the `Accept-Language` request header {{RFC9110}} to determine the
 appropriate language.
+{: #req-core-061}
 
 # Security Considerations
 
@@ -960,14 +1039,17 @@ This specification assumes:
 
 This specification REQUIRES TLS 1.2 {{!RFC5246}} or later for all Payment
 authentication flows. TLS 1.3 {{RFC8446}} is RECOMMENDED.
+{: #req-core-062}
 
 Implementations MUST use TLS when transmitting Payment challenges and
 credentials. Payment credentials contain sensitive authorization data
 that could result in financial loss if intercepted.
+{: #req-core-063}
 
 Servers MUST NOT issue Payment challenges over unencrypted HTTP. Clients
 MUST NOT send Payment credentials over unencrypted HTTP. Implementations
 SHOULD reject Payment protocol messages received over non-TLS connections.
+{: #req-core-064}
 
 ### Credential Handling
 
@@ -975,10 +1057,12 @@ Payment credentials are bearer tokens that authorize financial transactions.
 Servers and intermediaries MUST NOT log Payment credentials or include them
 in error messages, debugging output, or analytics. Credential exposure could
 enable replay attacks or unauthorized payments.
+{: #req-core-065}
 
 Implementations MUST treat Payment credentials with the same care as
 authentication passwords or session tokens. Credentials SHOULD be stored
 only in memory and cleared after use.
+{: #req-core-066}
 
 ### Challenge-Binding Secret Management
 
@@ -986,11 +1070,13 @@ Implementations that use a shared secret for stateless challenge binding
 (for example, HMAC) MUST keep that secret on trusted server-side systems
 only and MUST NOT disclose it to clients. Servers MUST NOT log the secret
 or include it in error messages, debugging output, or analytics.
+{: #req-core-067}
 
 If a server rotates a challenge-binding secret, it SHOULD continue
 verifying challenges issued under the previous secret until those
 challenges expire, or use an equivalent migration strategy that avoids
 invalidating unexpired challenges.
+{: #req-core-068}
 
 
 ## Replay Protection
@@ -999,6 +1085,7 @@ Payment methods used with this specification MUST provide single-use
 proof semantics. A payment proof MUST be usable exactly once; subsequent
 attempts to use the same proof MUST be rejected by the payment method
 infrastructure.
+{: #req-core-069}
 
 
 ## Idempotency and Side Effects
@@ -1007,12 +1094,14 @@ Servers MUST NOT perform side effects (database writes, external API
 calls, resource creation) for requests that have not been paid. The
 unpaid request that triggers a 402 challenge MUST NOT modify server
 state beyond recording the challenge itself.
+{: #req-core-070}
 
 For non-idempotent methods (POST, PUT, DELETE), servers SHOULD accept
 an `Idempotency-Key` header to enable safe client retries. When a client
 retries a request with the same `Idempotency-Key` and a valid Payment
 credential, the server SHOULD return the same response as the original
 successful request without re-executing the operation.
+{: #req-core-071}
 
 ## Concurrent Request Handling
 
@@ -1020,15 +1109,18 @@ Servers MUST ensure that concurrent requests with the same Payment
 credential result in at most one successful payment settlement and one
 resource delivery. Race conditions between parallel requests could
 otherwise cause double-payment or double-delivery.
+{: #req-core-072}
 
 Implementations SHOULD use atomic operations or distributed locks when
 verifying and consuming Payment credentials. The credential verification
 and resource delivery SHOULD be performed as an atomic operation where
 possible.
+{: #req-core-073}
 
 ## Amount Verification {#amount-verification}
 
 Clients MUST verify before authorizing payment:
+{: #req-core-074}
 
 1. Requested amount is reasonable for the resource
 2. Recipient/address is expected
@@ -1038,17 +1130,22 @@ Clients MUST verify before authorizing payment:
 Clients MUST NOT rely on the `description` parameter for payment
 verification. Malicious servers could provide a misleading description
 while the actual `request` payload requests a different amount.
+{: #req-core-075}
 
 ## Privacy
 
 - Servers MUST NOT require user accounts for payment.
+  {: #req-core-076}
 - Payment methods SHOULD support pseudonymous options where possible.
+  {: #req-core-077}
 - Servers SHOULD NOT log Payment credentials in plaintext
+  {: #req-core-078}
 
 ## Credential Storage
 
 Implementations MUST treat any header carrying a Payment credential and
 `Payment-Receipt` headers as sensitive data.
+{: #req-core-079}
 
 ## Intermediary Handling of 402
 
@@ -1061,18 +1158,22 @@ authentication prompts) may not apply the same behavior to 402.
 
 Servers SHOULD NOT rely on intermediary-specific handling of 402 responses.
 Clients MUST be prepared to receive 402 responses through any intermediary.
+{: #req-core-080}
 
 ## Caching
 
 Payment challenges contain unique identifiers and time-sensitive payment
 data that MUST NOT be cached or reused. To prevent challenge replay and
 stale payment information:
+{: #req-core-081}
 
 Servers MUST send `Cache-Control: no-store` {{RFC9111}} with 402 responses; this ensures no shared cache reuse.
+{: #req-core-082}
 
 Responses containing `Payment-Receipt` headers MUST include
 `Cache-Control: private` to prevent shared caches from storing
 payment receipts.
+{: #req-core-083}
 
 When a request carries a Payment credential in a field other than
 `Authorization`, every corresponding response MUST include
@@ -1081,10 +1182,12 @@ Section 3.5 restricts shared caching of responses to requests that
 contain `Authorization`; that protection does not apply to
 `Payment-Authorization`. `Payment-Receipt` is optional and does not by
 itself prevent shared caches from storing those responses.
+{: #req-core-084}
 
 ## Cross-Origin Considerations
 
 Clients (particularly browser-based wallets) SHOULD:
+{: #req-core-085}
 
 - Clearly display the origin requesting payment
 - Require explicit user confirmation before authorizing payments
@@ -1094,6 +1197,7 @@ Clients (particularly browser-based wallets) SHOULD:
 
 Servers SHOULD implement rate limiting on challenges issued and
 credential verification attempts.
+{: #req-core-086}
 
 # IANA Considerations
 
@@ -1297,6 +1401,7 @@ Accept-Payment: tempo/charge, tempo/session, stripe/charge;q=0.5, solana/charge;
 If the server supports all four combinations, it SHOULD prefer the
 higher-ranked `tempo` challenges, then `stripe/charge`, then
 `solana/charge`:
+{: #req-core-087}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -1310,6 +1415,7 @@ WWW-Authenticate: Payment id="kD4vLmNpQ2rStUwX5yAbCe", realm="api.example.com", 
 When multiple entries omit `q`, they are equally preferred. In that
 case, the server MAY order the returned challenges according to its own
 policy:
+{: #req-core-088}
 
 ~~~http
 GET /resource HTTP/1.1
@@ -1337,6 +1443,7 @@ Accept-Payment: tempo/*, solana/*;q=0.6, stripe/charge;q=0.2
 If the server can offer `tempo/session`, `tempo/charge`,
 `solana/charge`, and `stripe/charge`, it SHOULD rank the `tempo` offers
 first, then `solana/charge`, then `stripe/charge`:
+{: #req-core-089}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -1360,6 +1467,7 @@ Accept-Payment: tempo/charge, tempo/session;q=0, solana/charge;q=0.8, stripe/cha
 If the server would otherwise offer `tempo/charge`, `tempo/session`,
 `solana/charge`, and `stripe/charge`, it SHOULD omit `tempo/session`
 from the ranked set:
+{: #req-core-090}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -1422,6 +1530,7 @@ Decoded `request`:
 
 Servers MAY return multiple Payment challenges in a single 402 response,
 each with a different payment method or configuration:
+{: #req-core-091}
 
 ~~~http
 HTTP/1.1 402 Payment Required
@@ -1436,9 +1545,11 @@ one Payment credential in the subsequent request, in the field selected
 by that challenge ({{credential-header}}). A selected challenge that
 omits `header` uses `Authorization`; a selected challenge that includes
 `header` requires the credential in `Payment-Authorization`.
+{: #req-core-092}
 
 Servers receiving multiple Payment credentials in a single request
 SHOULD reject with 400 (Bad Request).
+{: #req-core-093}
 
 ## Failed Payment Verification
 
