@@ -943,3 +943,36 @@ class TestAnnotations:
         main(["--strict", str(drafts[-1])])
         out = capsys.readouterr().out
         assert "::warning file=specs/methods/tempo/" in out
+
+
+def test_id_shown_as_code_is_still_checked_where_misused(tmp_path):
+    # The ID appears as a syntax example in a code span and a code block; its real IAL on a
+    # block that another ID replaces is still reported.
+    report = lint_body(
+        tmp_path,
+        "Write `{: #req-test-charge-001}` after a paragraph.",
+        "",
+        "~~~",
+        "{: #req-test-charge-001}",
+        "~~~",
+        "",
+        "A rule MUST hold.",
+        "{: #req-test-charge-001}",
+        "{: #req-test-charge-002}",
+    )
+    assert any("req-test-charge-001" in e for e in report.errors)
+
+
+def test_id_only_in_code_stays_quiet(tmp_path):
+    report = lint_body(
+        tmp_path,
+        "Write `{: #req-test-charge-009}` after a paragraph.",
+        "",
+        "~~~",
+        "{: #req-test-charge-009}",
+        "~~~",
+        "",
+        "A rule MUST hold.",
+        "{: #req-test-charge-001}",
+    )
+    assert report.errors == []

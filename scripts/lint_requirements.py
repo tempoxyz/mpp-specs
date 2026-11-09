@@ -539,6 +539,20 @@ def lint_file(path: Path) -> Report:
     for comment in re.findall(r"<!--(.*?)-->", xml, re.DOTALL):
         quiet_ids.update(SOURCE_ID.findall(comment))
     rendered_ids = set(SOURCE_ID.findall(xml))
+    # Where those quiet IDs are written as code or comment in the source, so only those
+    # occurrences stay quiet: the same ID misused in a real IAL is still checked.
+    code_lines: set[int] = set()
+    for item in items:
+        if item.kind == "code" and item.start:
+            code_lines.update(range(item.start, item.end + 1))
+    # The source with HTML comments blanked (newlines kept, so line numbers hold) and code
+    # spans removed from each line: what is left is where an ID is written as an IAL.
+    blanked = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), "\n".join(lines), flags=re.DOTALL)
+    loud = [re.sub(r"(`+).*?\1", " ", line) for line in blanked.split("\n")]
+
+    def quiet_at(req_id: str, number: int) -> bool:
+        """Whether this occurrence of a quiet ID is in code or a comment, not an IAL."""
+        return number in code_lines or req_id not in loud[number - 1]
 
     def written_before(req_id: str, item: Item) -> int | None:
         """The line of a block's ID when written before the block's text, else None.
@@ -577,14 +591,14 @@ def lint_file(path: Path) -> Report:
     # set an ID of its own, is still an anchor (of the first block) but is lost on the second.
     anchored_by = {item.anchor for item in texts if item.anchor}
     for req_id, found in id_lines.items():
-        if req_id in quiet_ids:
-            continue
         # An anchor kept by a heading, list or span is checked with those items below.
         if req_id in anchors and req_id not in anchored_by:
             continue
         for number in found:
             line = lines[number - 1]
             if number in commented:
+                continue
+            if req_id in quiet_ids and quiet_at(req_id, number):
                 continue
             if req_id in anchors:
                 here = bisect.bisect_left(starts, number) - 1
