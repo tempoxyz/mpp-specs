@@ -268,7 +268,7 @@
       "required": ["url", "method", "headers", "body", "payment", "mode"],
       "additionalProperties": false,
       "properties": {
-        "url": { "type": "string", "format": "uri" },
+        "url": { "description": "Absolute http or https URL (RFC 3986 characters only). format: uri is an annotation by default in JSON Schema 2020-12, so the pattern enforces it in every validator (RE2-compatible).", "type": "string", "format": "uri", "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[A-Za-z0-9._~%!$&'()*+,;=:@\\[\\]-]+(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#\\[\\]-]*)?$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]$" } },
         "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
         "headers": {
           "type": "object",

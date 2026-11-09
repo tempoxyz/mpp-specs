@@ -35,6 +35,8 @@ JSON Schemas for MPP protocol values.
     `expires` use `DateTime`: `format: date-time` plus an RFC 3339
     pattern, since 2020-12 validators treat `format` as an annotation
     by default.
+  - HttpPaymentRequest `url` adds a pattern to `format: uri`: an
+    absolute http or https URL in RFC 3986 characters, for the same reason.
   - Credential allows extra members of any type
     (`additionalProperties: true`), since receivers ignore unknown fields.
 - The drafts are normative. Where a schema and a draft disagree, the
