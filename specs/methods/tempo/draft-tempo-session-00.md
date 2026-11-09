@@ -1275,7 +1275,9 @@ On `action="topUp"`, servers MUST:
    - `channel.deposit` increased by `additionalDeposit`
    - Channel is not finalized
 3. Update server-side accounting:
-   - Increase available balance by `additionalDeposit`
+   - Record the new `deposit`, which raises the cap on future vouchers
+   - Leave `acceptedCumulative` and `spent` unchanged: a top-up adds
+     no spendable balance until the client sends a higher voucher
 
 ## Voucher Verification {#voucher-verification}
 
