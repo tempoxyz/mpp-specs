@@ -300,6 +300,7 @@
       }
     },
     "HttpServerOffer": {
+      "description": "An offer in the conformance http.server adapter command (mpp-tools conformance/schemas/protocol.schema.json), not a general charge request: adapters serve only amount, currency and recipient, so the request is closed to those three and other draft fields are out of scope here.",
       "type": "object",
       "required": ["method", "intent", "request"],
       "additionalProperties": false,
