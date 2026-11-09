@@ -636,3 +636,19 @@ def test_ids_from_attribute_list_definitions(tmp_path):
     # A reference cycle doesn't loop.
     found, _, _, _ = segments(["{:a: b}", "{:b: a #req-x-001}", "", "P MUST x.", "{: a}"])
     assert found[0].ids == ["req-x-001"]
+
+
+def test_unmatched_longer_backtick_run_shows_keyword():
+    # kramdown closes a code span only at a run of the same length, so the keyword after an
+    # unclosed double backtick is prose (checked with kramdown-rfc).
+    assert segments(["R ``MUST` x."])[0][0].is_requirement
+
+
+def test_ial_at_another_quote_depth_tags_nothing():
+    # '> {: #id}' after unquoted text is paragraph text; an unquoted IAL after a quoted
+    # paragraph goes on the blockquote (checked with kramdown-rfc).
+    found, detached, _, _ = segments(["P MUST a.", "> {: #req-test-charge-001}"])
+    assert [s.ids for s in found] == [[]]
+    found, detached, _, _ = segments(["> Q MUST b.", "{: #req-test-charge-002}"])
+    assert [s.ids for s in found] == [[]]
+    assert [i for _, i in detached] == ["req-test-charge-002"]

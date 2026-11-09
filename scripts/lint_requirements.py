@@ -56,7 +56,7 @@ IAL_ATTR = re.compile(
 # Bullets, numbered items and definition-list definitions (": text"); each is its own block.
 LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
 # kramdown (and kramdown-rfc) fence code with ~~~ only. A ``` line is ordinary text: a ```
-# pair renders as inline verbatim, which INLINE_CODE already strips from the prose.
+# pair renders as inline verbatim, which strip_code_spans already removes from the prose.
 FENCE = re.compile(r"^( *)(~{3,})(.*)$")
 # A fence opener as kramdown reads it (FENCED_CODEBLOCK_MATCH): at its container's column 0,
 # with at most one info word ("~~~ json", not "~~~ a b").
@@ -69,7 +69,8 @@ EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\
 EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
-INLINE_CODE = re.compile(r"`+[^`]*`+")
+# A run of backticks that is not backslash-escaped: a code span may open there.
+BACKTICKS = re.compile(r"(?<!\\)`+")
 # Inline markup that renders as nothing between letters: * emphasis, link brackets and
 # targets, HTML comments and tags, and span IALs and extension tags. Removing it shows a
 # keyword split by markup (M**UST**, [MU](x)ST, M<!-- -->UST), which renders whole.
@@ -114,6 +115,43 @@ def decode_refs(text: str) -> str:
     return CHAR_REF.sub(char, text)
 
 
+def code_span_end(text: str, start: int, end: int) -> int | None:
+    """Return where the code span opened by the backtick run text[start:end] ends.
+
+    Mirrors kramdown's parse_codespan (kramdown 2.4) and mpp-tools' gap report: the span
+    closes only at a later run of exactly as many backticks, so ``MUST` x shows MUST
+    as prose (checked with kramdown-rfc). None means the run is literal text: nothing
+    closes it, or it is a single backtick with whitespace (or the start of the text)
+    before it and whitespace after it.
+    """
+    run = end - start
+    if run == 1 and (start == 0 or text[start - 1].isspace()) and end < len(text) and text[end].isspace():
+        return None
+    close = text.find("`" * run, end)
+    return None if close < 0 else close + run
+
+
+def strip_code_spans(text: str) -> str:
+    """Replace each kramdown code span with a space; its text is verbatim, never a rule.
+
+    Pairing any two backtick runs with one regex would hide a keyword after
+    an opener that nothing of its length closes, which kramdown prints as text.
+    """
+    pieces: list[str] = []
+    position = 0
+    while match := BACKTICKS.search(text, position):
+        close = code_span_end(text, match.start(), match.end())
+        if close is None:
+            pieces.append(text[position : match.end()])
+            position = match.end()
+            continue
+        pieces.append(text[position : match.start()])
+        pieces.append(" ")
+        position = close
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 @dataclass
 class Segment:
     """A paragraph or list item and the requirement IDs attached to it."""
@@ -127,6 +165,8 @@ class Segment:
     ials: list[str] = field(default_factory=list)
     # Column of a list item's text; an IAL indented less applies to the whole list.
     indent: int = 0
+    # Blockquote depth of its first line: an IAL at another depth doesn't tag it.
+    quote: int = 0
     # Continuation lines, joined only when read (appending to one string is quadratic).
     rest: list[str] = field(default_factory=list)
 
@@ -136,7 +176,7 @@ class Segment:
 
     @property
     def is_requirement(self) -> bool:
-        text = EXT_COMMENT_SPAN.sub("", INLINE_CODE.sub("", self.text))
+        text = EXT_COMMENT_SPAN.sub("", strip_code_spans(self.text))
         # Decoded after code spans go: inside one, &#77; is shown literally.
         text = decode_refs(text)
         # The source and the text with inline markup removed: a keyword in either counts, so
@@ -376,6 +416,18 @@ def segments(
             current.rest.append(stripped)
             current.end = number
             continue
+        if ial and current is not None and quote_depth(raw) != current.quote:
+            if quote_depth(raw) > current.quote:
+                # '> {: #id}' after unquoted text: a blockquote can't interrupt a paragraph,
+                # so kramdown reads the line as more of it (with its '>'); it tags nothing.
+                current.rest.append(raw.strip())
+                current.end = number
+                continue
+            # Less quoted than the paragraph: kramdown ends the quote here and puts the IAL
+            # on the blockquote, not the paragraph inside it (checked with kramdown-rfc).
+            detached_ials.append((number, ial.group(1)))
+            current = None
+            continue
         if ial:
             lazy_indent = 0
             if current is not None and column < current.indent:
@@ -449,7 +501,7 @@ def segments(
         marker = LIST_MARKER.match(line)
         if not marker and current is None and lazy and column < lazy:
             # Lazy continuation: still the item's text, so its ID must be indented to it.
-            current = Segment(number, stripped, number, indent=lazy)
+            current = Segment(number, stripped, number, indent=lazy, quote=quote_depth(raw))
             result.append(current)
             continue
         if marker:
@@ -468,7 +520,7 @@ def segments(
                     code_lines.add(number)
                     current = None
                     continue
-            current = Segment(number, stripped, number, indent=marker.end())
+            current = Segment(number, stripped, number, indent=marker.end(), quote=quote_depth(raw))
             result.append(current)
         elif current is None:
             # A paragraph continues the innermost open item it is indented to; items
@@ -476,7 +528,7 @@ def segments(
             while list_stack and list_stack[-1] > column:
                 list_stack.pop()
             indent = list_stack[-1] if list_stack else 0
-            current = Segment(number, stripped, number, indent=indent)
+            current = Segment(number, stripped, number, indent=indent, quote=quote_depth(raw))
             result.append(current)
         else:
             current.rest.append(stripped)
@@ -505,7 +557,7 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
         if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
-            cell = decode_refs(INLINE_CODE.sub("", cell)).strip()
+            cell = decode_refs(strip_code_spans(cell)).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
