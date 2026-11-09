@@ -66,7 +66,7 @@ QUOTED_KEYWORDS = re.compile(
 PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 # What follows a marker and makes it a condition after all ("REQUIRED: if d is absent").
 CONDITION = re.compile(
-    r"^\W*(?:if|when|whenever|unless|for|only|except|where|while|after|before|once|until|during|provided|otherwise)\b",
+    r"^\W*(?:if|when|whenever|unless|for|only|except|where|while|after|before|once|until|during|provided|otherwise|on|upon)\b",
     re.IGNORECASE,
 )
 

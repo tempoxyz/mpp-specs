@@ -1036,8 +1036,9 @@ def test_linear_scanners_on_unclosed_openers():
     assert time.monotonic() - start < 2
 
 def test_conditions_beyond_if_and_when_are_flagged(tmp_path):
-    for word in ("whenever", "after", "before", "once", "until", "during", "provided", "otherwise"):
-        spec = write_spec(tmp_path, f"| f | REQUIRED {word} d is set |\n| g | OPTIONAL |\n")
+    # "REQUIRED: <word>" so the presence marker is stripped and CONDITION alone decides.
+    for word in ("whenever", "after", "before", "once", "until", "during", "provided", "otherwise", "on", "upon"):
+        spec = write_spec(tmp_path, f"| f | REQUIRED: {word} d is set |\n| g | OPTIONAL |\n")
         report = lint_file(spec)
         assert sum("table cell" in e for e in report.errors) == 1, word
 
