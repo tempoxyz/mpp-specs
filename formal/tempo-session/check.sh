@@ -42,7 +42,7 @@ fi
 for file in TempoSession/*.lean; do
   [ "$file" = TempoSession/Audit.lean ] && continue
   if grep -nE '^[[:space:]]*import[[:space:]]+Lean([.[:space:]]|$)' "$file" \
-    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|run_cmd|run_elab|run_meta|#eval|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file"; then
+    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|notation|infix|infixl|infixr|prefix|postfix|run_cmd|run_elab|run_meta|#eval|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file"; then
     echo "FAIL: $file may not import Lean or use metaprogramming (only Audit.lean may)"
     exit 1
   fi
@@ -56,10 +56,14 @@ fi
 rm -rf .lake
 log=$(lake build 2>&1) || { echo "$log"; exit 1; }
 echo "$log"
-summary=$(grep -o 'axiom audit: [0-9]* theorems use only standard axioms' <<<"$log" || true)
+# Read the audit's lines only from Audit.lean's own messages: any module can print text
+# (#print "..."), and a forged line from elsewhere must not stand in for the audit's.
+audit_log=$(grep -E '^info: TempoSession/Audit\.lean:[0-9]+:[0-9]+: ' <<<"$log" | sed -E 's/^info: [^ ]+ //' || true)
+summary=$(grep -oE '^axiom audit: [0-9]+ theorems use only standard axioms$' <<<"$audit_log" || true)
+[ "$(grep -c . <<<"$summary")" -le 1 ] || { echo "FAIL: the axiom audit reported more than once"; exit 1; }
 [ -n "$summary" ] || { echo "FAIL: the axiom audit did not run"; exit 1; }
 # Lean prints the list on the info line, unquoted and space-separated.
-audited=$(grep -o 'audited modules: .*' <<<"$log" | head -n 1 | sed 's/^audited modules: //' \
+audited=$(grep -o '^audited modules: .*' <<<"$audit_log" | head -n 1 | sed 's/^audited modules: //' \
   | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')
 if [ "$audited" != "$expected" ]; then
   echo "FAIL: the audit saw modules [$audited], but TempoSession/ holds [$expected]"
