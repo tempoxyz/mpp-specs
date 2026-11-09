@@ -40,7 +40,6 @@ elab "#audit_tempo_session" : command => do
     -- audited like any other; only names still internal after it (compiler-generated
     -- auxiliaries, covered through the declarations that use them) are skipped.
     let userName := privateToUserName name
-    if userName.isInternal then continue
     -- Only this library: declared in a TempoSession.* module (or in this file), or named
     -- TempoSession.*. Lean core is skipped. A module from elsewhere can't smuggle in an axiom:
     -- collectAxioms follows every dependency of this library's declarations, across modules.
@@ -51,8 +50,10 @@ elab "#audit_tempo_session" : command => do
         let some mod := env.header.moduleNames[idx.toNat]? | pure false
         pure ((`TempoSession).isPrefixOf mod || (`TempoSession).isPrefixOf userName)
     unless inLibrary do continue
+    -- Checked before internal names are skipped, so no axiom hides behind an _ name.
     if let .axiomInfo _ := info then
       throwError m!"axiom audit: {name} is an axiom declaration; the library may declare none"
+    if userName.isInternal then continue
     let axioms ← liftCoreM <| collectAxioms (m := CoreM) name
     for ax in axioms do
       unless standardAxioms.contains ax do
