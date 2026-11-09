@@ -63,6 +63,7 @@
     },
     "Challenge": {
       "type": "object",
+      "propertyNames": { "description": "RFC 9110 token, lowercase (core draft auth-param syntax and lowercase parameter names)", "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$" },
       "required": ["id", "realm", "method", "intent", "request"],
       "additionalProperties": { "type": "string" },
       "properties": {

@@ -202,14 +202,23 @@ class Report:
 
 
 def ial_ids(
-    attrs: str, alds: dict[str, list[str]] | None = None, seen: frozenset[str] = frozenset()
+    attrs: str,
+    alds: dict[str, list[str]] | None = None,
+    seen: frozenset[str] = frozenset(),
+    memo: dict[str, list[str]] | None = None,
 ) -> list[str]:
     """Return the IDs a block IAL sets, in order: #id names and quoted id="..." values.
 
     kramdown keeps only the last one as the block's anchor. A name of an ALD in alds (its
     definitions' attribute strings) brings in that ALD's IDs first, as kramdown applies
     referenced ALDs before the IAL's own attributes. seen stops a reference cycle.
+
+    memo holds each ALD's IDs once resolved, without repeats (keeping each ID's last place,
+    so the last ID, the anchor, is unchanged). An ALD that names another several times would
+    otherwise expand exponentially with chain depth and stall the lint.
     """
+    if memo is None:
+        memo = {}
     ids: list[str] = []
     referenced: list[str] = []
     for match in IAL_ATTR.finditer(attrs):
@@ -219,8 +228,11 @@ def ial_ids(
         elif names:
             ids.extend(re.findall(r"#([A-Za-z][\w:-]*)", names))
         elif ref and alds and ref in alds and ref not in seen:
-            for definition in alds[ref]:
-                referenced.extend(ial_ids(definition, alds, seen | {ref}))
+            if ref not in memo:
+                expanded = [i for d in alds[ref] for i in ial_ids(d, alds, seen | {ref}, memo)]
+                # Keep each ID's last occurrence only.
+                memo[ref] = [i for n, i in enumerate(expanded) if i not in expanded[n + 1 :]]
+            referenced.extend(memo[ref])
     return referenced + ids
 
 
@@ -587,12 +599,21 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
         if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
+            cell = strip_code_spans(cell)
+            raw_cell = decode_refs(cell).strip()
             # Inline HTML and {::comment} spans render as nothing, so drop them before reading
             # the marker: "REQUIRED: <!-- x -->if m" is the condition "REQUIRED: if m".
-            cell = EXT_COMMENT_SPAN.sub("", strip_code_spans(cell))
+            cell = EXT_COMMENT_SPAN.sub("", cell)
             cell = decode_refs(re.sub(r"<!--.*?-->", "", cell)).strip()
             text = PRESENCE_MARKER.sub("", cell)
-            if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
+            # A keyword counts in the raw cell too, as Segment.is_requirement does for prose:
+            # an escaped opener (\<!-- MUST -->) renders literally, so stripping it would hide
+            # a visible rule. Stripping only ever adds a match here, never removes one.
+            if (
+                KEYWORD.search(text)
+                or KEYWORD.search(PRESENCE_MARKER.sub("", raw_cell))
+                or (text != cell and CONDITION.match(text))
+            ):
                 found.append(number)
                 break
     return found

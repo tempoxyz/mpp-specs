@@ -690,3 +690,19 @@ def test_ald_looking_prose_line_is_paragraph_text():
 def test_comment_inside_table_cell_does_not_hide_a_condition():
     lines = ["| f | g |", "|---|---|", "| a | REQUIRED: <!--hidden-->if mode is payment |", "| b | REQUIRED |"]
     assert table_keywords(lines) == [3]
+
+
+def test_escaped_comment_opener_in_table_cell_still_flags():
+    lines = ["| f | g |", "|---|---|", "| a | Clients \\<!-- MUST --> verify |", "| b | X \\{::comment}MUST{:/comment} y |"]
+    assert table_keywords(lines) == [3, 4]
+
+
+def test_repeated_ald_references_resolve_quickly():
+    import time
+    from lint_requirements import ial_ids
+    alds = {"a0": ["#req-test-charge-001"]}
+    for n in range(1, 40):
+        alds[f"a{n}"] = [f"a{n - 1} a{n - 1}"]
+    start = time.monotonic()
+    assert ial_ids("a39", alds) == ["req-test-charge-001"]
+    assert time.monotonic() - start < 1
