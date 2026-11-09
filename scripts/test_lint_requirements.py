@@ -269,8 +269,8 @@ class TestIdProblems:
         assert lint_file(spec).total == 0
 
     def test_table_after_list_nested_fence_is_checked(self, tmp_path):
-        # The fence opens inside the item (column 2) and closes at column 4, 2 past the item's
-        # text, which kramdown accepts; the table after it must still be checked.
+        # kramdown closes a fence only at the item's text column, so the ~~~ at column 4 closes
+        # nothing and the opener is item text; the table after the item must still be checked.
         spec = write_spec(
             tmp_path,
             "- item\n\n  ~~~\n  code\n    ~~~\n\n| f | MUST be set if x |\n",
@@ -449,3 +449,68 @@ def test_tab_after_space_in_indentation_is_an_error(tmp_path):
     # Leading tabs alone expand the same way in both.
     spec = write_spec(tmp_path, "* a\n\n\tpara MUST x.\n\t{: #req-test-charge-001}\n")
     assert lint_file(spec).errors == []
+
+
+def test_kramdown_comment_stop_tag_must_be_in_the_openers_container():
+    # Checked against kramdown-rfc: a stop tag that is quoted, indented four or more, or
+    # outside the opener's list item closes nothing, so the opener is text and the rule after
+    # it renders. Up to three spaces in, in the same quote or item, it closes.
+    for closer in ("> {:/comment}", "    {:/comment}"):
+        lines = ["{::comment}", "", "Servers MUST verify.", "", closer, "", "After."]
+        found, _, _, code = segments(lines)
+        assert [s.first for s in found if s.is_requirement] == ["Servers MUST verify."], closer
+        assert not {1, 2, 3} & code, closer
+    lines = ["- item", "", "  {::comment}", "", "Servers MUST verify.", "", "{:/comment}"]
+    found, _, _, code = segments(lines)
+    assert "Servers MUST verify." in [s.first for s in found] and not {3, 5} & code
+    lines = ["{::comment}", "hidden MUST", "   {:/comment}", "", "> {::comment}", "> hid MUST", ">    {:/}",
+             "", "- item", "", "  {::comment}", "  gone MUST", "     {:/comment}", "", "  Kept MUST x."]
+    found, _, _, code = segments(lines)
+    assert [s.first for s in found if s.is_requirement] == ["Kept MUST x."]
+    assert {1, 2, 3, 5, 6, 7, 11, 12, 13} <= code
+    # The comment doesn't end its item's list: the paragraph after it is still the item's.
+    assert found[-1].indent == 2
+
+
+def test_fence_follows_kramdown_rules():
+    # Checked against kramdown-rfc. Each ~~~ below opens no fence (no closer in its container,
+    # an indented opener, two info words, or right after paragraph text), so the rule after
+    # it is prose; before this, the lint hid everything to the end of the draft.
+    for body in (
+        ["~~~", "x MUST a"],  # no closer
+        ["```text", "~~~", "x MUST a", "```"],  # a ~~~ inside a backtick pair
+        [" ~~~", "x MUST a", " ~~~"],  # indented: kramdown fences only at column 0
+        ["~~~ a b", "x MUST a", "~~~"],  # more than one info word
+        ["> ~~~", "> x MUST a"],  # its closer is outside the quote
+    ):
+        # A closer after the rule, which only the quoted opener can't reach; the first opener
+        # would take it, as kramdown does.
+        tail = [] if body[0] == "~~~" else ["", "~~~"]
+        lines = ["Intro.", "", *body, "", "Rule MUST hold.", *tail]
+        found, _, _, code = segments(lines)
+        assert "Rule MUST hold." in [s.first for s in found], body
+        assert not code & set(range(3, 3 + len(body))), body
+    # A fence can't interrupt a paragraph or list item text: the ~~~ lines are its text.
+    found, _, _, code = segments(["P x.", "~~~", "code MUST", "~~~", "", "- i", "  ~~~", "  y MUST", "  ~~~"])
+    assert [s.is_requirement for s in found] == [True, True] and not code
+    # Its closer must be in the opener's list item, at the item's text column.
+    lines = ["- item", "", "  ~~~", "  code", "", "Rule MUST hold.", "", "~~~"]
+    found, _, _, code = segments(lines)
+    assert "Rule MUST hold." in [s.first for s in found] and 6 not in code
+    # A shorter run, an indented run or a run with text after it doesn't close the fence.
+    lines = ["~~~~", "~~~", "  ~~~~", "~~~~ x", "a MUST b", "~~~~~", "", "Rule MUST hold."]
+    found, _, _, code = segments(lines)
+    assert [s.first for s in found] == ["Rule MUST hold."] and set(range(1, 7)) <= code
+
+
+def test_character_references_are_keywords(tmp_path):
+    # kramdown renders &#77;UST and &#x4d;UST as MUST (also in a table cell), but not &#X4D;AY,
+    # &#77UST (no ';') or a reference inside a code span; &quot;MUST&quot; names the keyword.
+    spec = write_spec(
+        tmp_path,
+        "A &#77;UST b.\n\nC &#x4d;UST d.\n\nE &#0083;HOULD f.\n\n"
+        "G &#X4D;AY &#77UST `&#77;UST ` &quot;MUST&quot; h.\n\n| f | &#x4d;AY be set |\n",
+    )
+    report = lint_file(spec)
+    assert len(report.untagged) == 3
+    assert any("table cell" in e for e in report.errors)

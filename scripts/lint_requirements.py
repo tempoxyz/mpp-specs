@@ -15,6 +15,7 @@ number wherever it goes.
 from __future__ import annotations
 
 import argparse
+import html.entities
 import re
 import sys
 from dataclasses import dataclass, field
@@ -52,14 +53,21 @@ LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
 # kramdown (and kramdown-rfc) fence code with ~~~ only. A ``` line is ordinary text: a ```
 # pair renders as inline verbatim, which INLINE_CODE already strips from the prose.
 FENCE = re.compile(r"^( *)(~{3,})(.*)$")
+# A fence opener as kramdown reads it (FENCED_CODEBLOCK_MATCH): at its container's column 0,
+# with at most one info word ("~~~ json", not "~~~ a b").
+FENCE_OPEN = re.compile(r"^(~{3,})\s*\S*\s*$")
 # A line that is only a kramdown block extension tag ({::name attrs}, {::name /}, {:/name} or
 # {:/}). Anything after the tag makes the line paragraph text instead.
 EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\w-]*)?\}\s*$")
-# The line closing a block {::comment}: kramdown drops everything up to it.
-EXT_COMMENT_STOP = re.compile(r"^\s*\{:/(?:comment)?\} *$")
+# The line closing a block {::comment} (kramdown's EXT_BLOCK_STOP_STR), relative to the
+# opener's container: at most three spaces in. kramdown drops everything up to it.
+EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
+# A character reference as kramdown decodes it (HTML_ENTITY_RE): &name;, &#77; or &#x4d;.
+# &#X4D; (capital X) and references without their ';' stay literal text.
+CHAR_REF = re.compile(r"&([\w:][\-\w.:]*);|&#(\d+);|&#x([0-9a-fA-F]+);")
 # A keyword in double quotes is named, not used: the BCP 14 boilerplate ('The key words
 # "MUST", "MUST NOT", ...') and prose about a keyword. Removing just the quoted names keeps a
 # real requirement appended to the boilerplate paragraph visible.
@@ -73,32 +81,25 @@ PRESENCE_MARKER = re.compile(r"^(?:REQUIRED|OPTIONAL|RECOMMENDED)(?:[.:]|$)")
 CONDITION = re.compile(r"^\W*(?:if|when|unless|for|only|except|where|while)\b", re.IGNORECASE)
 
 
-Fence = tuple[str, int]
+def decode_refs(text: str) -> str:
+    """Decode character references the way kramdown renders them.
 
-
-def fence_step(line: str, fence: Fence | None, base: int = 0) -> tuple[Fence | None, bool]:
-    """Track ~~~ code blocks as kramdown does.
-
-    line has tabs expanded and any blockquote marker removed. fence is the open
-    block's delimiter and its base column (the open list item's text column, or 0),
-    or None outside one. Returns the new state and whether this line is a fence
-    line. A fence opens or closes only when indented at most 3 columns past its
-    base: indented further, the line is code (an indented code block, or text
-    inside the open block). Only a run at least as long as the opener, with
-    nothing after it, closes the block.
+    &#77;UST shows as MUST, so it has to count as the keyword. Unknown names and code
+    points Python can't represent stay as written, as kramdown leaves them.
     """
-    match = FENCE.match(line)
-    if not match:
-        return fence, False
-    indent, run, rest = len(match.group(1)), match.group(2), match.group(3)
-    if fence is None:
-        if indent > base + 3:
-            return None, False
-        return (run, base), True
-    opener, opener_base = fence
-    if indent <= opener_base + 3 and len(run) >= len(opener) and not rest.strip():
-        return None, True
-    return fence, False
+
+    def char(match: re.Match[str]) -> str:
+        name, decimal, hexa = match.groups()
+        if name is not None:
+            code = html.entities.name2codepoint.get(name)
+        else:
+            code = int(decimal) if decimal is not None else int(hexa, 16)
+        try:
+            return chr(code) if code is not None else match.group(0)
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    return CHAR_REF.sub(char, text)
 
 
 @dataclass
@@ -121,7 +122,8 @@ class Segment:
     @property
     def is_requirement(self) -> bool:
         text = EXT_COMMENT_SPAN.sub("", INLINE_CODE.sub("", self.text))
-        return bool(KEYWORD.search(QUOTED_KEYWORDS.sub("", text)))
+        # Decoded after code spans go: inside one, &#77; is shown literally.
+        return bool(KEYWORD.search(QUOTED_KEYWORDS.sub("", decode_refs(text))))
 
 
 @dataclass
@@ -178,19 +180,50 @@ def comment_closes(lines: list[str], number: int, last_close: int) -> bool:
     return False
 
 
-def ext_comment_closes(lines: list[str], number: int) -> bool:
-    """Whether the block {::comment} on line number has a {:/comment} line after it.
+def container_text(raw: str, depth: int) -> str:
+    """Return raw as the segments loop reads it: tabs expanded and, in a blockquote, one >
+    marker dropped. Outside a quote nothing is dropped, so a > line never reads as a tag."""
+    line = raw.expandtabs(4)
+    return re.sub(r"^( *)> ?", r"\1", line) if depth else line
 
-    Scoped like comment_closes: a quoted tag only closes within the same quote. Without
-    one, kramdown renders the tag line as paragraph text.
+
+def container_end(lines: list[str], number: int, base: int, closes: re.Pattern[str]) -> int:
+    """Return the first line after line number that closes matches in the same container,
+    or 0 if the container ends first.
+
+    kramdown parses a blockquote's lines, and a list item's lines with its text column
+    (base) removed, as their own source, and looks for a fence's closer or a {::comment}'s
+    stop tag only there. So the closer must be at the opener's quote depth and is matched
+    from column base on. A line at a smaller quote depth leaves the quote, and a non-blank
+    line indented less than base leaves the item. Without a closer kramdown renders the
+    opener as text, so the lint must not hide anything either.
     """
     depth = quote_depth(lines[number - 1])
-    for text in lines[number:]:
-        if depth and quote_depth(text) != depth:
-            return False
-        if EXT_COMMENT_STOP.match(re.sub(r"^ {0,3}(?:> ?)*", "", text.expandtabs(4))):
-            return True
-    return False
+    for later in range(number + 1, len(lines) + 1):
+        raw = lines[later - 1]
+        level = quote_depth(raw)
+        if level < depth:
+            return 0
+        text = container_text(raw, depth)
+        if text.strip() and len(text) - len(text.lstrip()) < base:
+            return 0
+        if level == depth and closes.match(text[base:]):
+            return later
+    return 0
+
+
+def fence_end(lines: list[str], number: int, base: int) -> int:
+    """Return the line closing a ~~~ fence opened on line number, or 0 if it opens none.
+
+    As kramdown (FENCED_CODEBLOCK_MATCH): opener and closer sit at the container's column 0
+    (base), and only a run at least as long as the opener with nothing after it closes. So
+    a ``` line or an indented ~~~ inside the block is code, and a ~~~ with no closer is text.
+    """
+    raw = lines[number - 1]
+    opener = FENCE_OPEN.match(container_text(raw, quote_depth(raw))[base:])
+    if not opener:
+        return 0
+    return container_end(lines, number, base, re.compile(rf"^{opener.group(1)}~*\s*$"))
 
 
 # A kramdown header ID ({#id} at the end of a heading line). A requirement ID there would be a
@@ -230,15 +263,17 @@ def segments(
     # to that item, even after a nested item has closed.
     list_stack: list[int] = []
     code_lines: set[int] = set()
-    fence: Fence | None = None
+    # The line closing the open ~~~ fence (fence_end), or 0 outside one.
+    fence_close = 0
     # Text column of a list item whose ID line just closed it. kramdown still reads the next
     # line as that item's text (a lazy continuation) unless a blank line comes first.
     lazy_indent = 0
     # Inside a block HTML comment (a line opening with <!-- and no --> after it). kramdown
     # drops everything up to the line holding -->, so its keywords and IDs don't count.
     in_comment = False
-    # Inside a block {::comment} extension, up to its {:/comment} line; dropped the same way.
-    in_ext_comment = False
+    # The {:/comment} line closing the open block {::comment} (container_end), or 0 outside
+    # one. kramdown drops everything up to it, the same way.
+    ext_comment_close = 0
     # The last line holding -->. A <!-- with no --> after it opens nothing: kramdown renders
     # it as paragraph text and goes on reading the rest of the draft as usual.
     last_close = max((i for i, text in enumerate(lines, start=1) if "-->" in text), default=0)
@@ -260,23 +295,27 @@ def segments(
             code_lines.add(number)
             in_comment = "-->" not in line
             continue
-        if in_ext_comment:
+        if ext_comment_close:
             code_lines.add(number)
-            in_ext_comment = not EXT_COMMENT_STOP.match(line)
+            if number == ext_comment_close:
+                ext_comment_close = 0
             continue
-        if fence is None and FENCE.match(line):
-            # A fence less indented than an open item's text ends that item's list.
+        if fence_close:
+            code_lines.add(number)
+            if number == fence_close:
+                fence_close = 0
+            continue
+        if current is None and FENCE.match(line):
+            # A fence can't interrupt a paragraph: kramdown keeps a ~~~ right after paragraph
+            # text as more of that text. A fence less indented than an open item's text ends
+            # that item's list.
             while list_stack and list_stack[-1] > column:
                 list_stack.pop()
-        fence, is_fence = fence_step(line, fence, list_stack[-1] if list_stack else 0)
-        if is_fence:
-            code_lines.add(number)
-            current = None
-            lazy_indent = 0
-            continue
-        if fence:
-            code_lines.add(number)
-            continue
+            fence_close = fence_end(lines, number, list_stack[-1] if list_stack else 0)
+            if fence_close:
+                code_lines.add(number)
+                lazy_indent = 0
+                continue
         if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
             # Indented four or more past the open item's text (or the margin) with no
             # paragraph to continue: kramdown renders it as a code block, not prose.
@@ -313,12 +352,15 @@ def segments(
             current.rest.append(stripped)
             current.end = number
             continue
-        if ext and ext.group(1) == "comment" and not ext.group(2) and ext_comment_closes(lines, number):
-            code_lines.add(number)
-            in_ext_comment = True
-            current = None
-            list_stack.clear()
-            continue
+        if ext and ext.group(1) == "comment" and not ext.group(2):
+            # The stop tag must be in the opener's own quote and list item (container_end).
+            # The comment doesn't end that item's list, but one less indented does.
+            stack = [c for c in list_stack if c <= column]
+            ext_comment_close = container_end(lines, number, stack[-1] if stack else 0, EXT_COMMENT_STOP)
+            if ext_comment_close:
+                code_lines.add(number)
+                list_stack[:] = stack
+                continue
         if (
             stripped.startswith(("#", "|", "<!--"))
             or (ext and not (ext.group(1) == "comment" and not ext.group(2)))
@@ -384,7 +426,7 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
         if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
-            cell = INLINE_CODE.sub("", cell).strip()
+            cell = decode_refs(INLINE_CODE.sub("", cell)).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
