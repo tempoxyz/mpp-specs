@@ -1434,8 +1434,9 @@ Servers MUST NOT deliver metered service on a channel whose
 `withdraw` at once, and service delivered then is paid only if the
 payee's `settle` lands first. Delivery MAY resume after a `topUp`
 cancels the close request. On observing a close request, servers
-SHOULD settle, or close with, their highest accepted voucher within
-the grace period.
+SHOULD, within the grace period, settle or close with the lowest
+accepted voucher whose `cumulativeAmount` is at least `spent`
+(see {{cooperative-close}}).
 
 ## Crash Safety
 
@@ -1566,7 +1567,7 @@ Servers SHOULD close promptly when clients request—the economic
 incentive is to claim earned funds immediately.
 
 Servers MUST NOT capture more than the amount actually consumed by
-delivered service. A client can pre-authorize more funds than were spent;
+delivered service (for v1, within the limit below). A client can pre-authorize more funds than were spent;
 the server MUST use its accounting state to determine the close capture
 amount and MUST NOT treat `cumulativeAmount` alone as the amount to
 capture. For v2, the close capture amount is:
@@ -1581,11 +1582,13 @@ and `captureAmount` MUST be less than or equal to both the close voucher
 A v1 `close()` has no capture amount and captures the full
 `cumulativeAmount` of the voucher it is given. For v1, the bound
 holds only through the choice of voucher: servers MUST close with the
-client's close voucher or another accepted voucher whose
-`cumulativeAmount` is at least `max(spent, settledOnChain)`, and
-SHOULD use the lowest such voucher. Clients SHOULD sign the close
-voucher for the greater of the `spent` amount in the latest receipt
-and the on-chain `settled` amount.
+lowest accepted voucher, the client's close voucher included, whose
+`cumulativeAmount` is at least `max(spent, settledOnChain)`.
+That voucher can exceed the consumed amount only when no signed
+voucher equals it; the excess is the gap between two amounts the
+client signed. Clients SHOULD sign the close voucher for the greater
+of the `spent` amount in the latest receipt and the on-chain
+`settled` amount, so that the v1 capture is exact.
 
 The capture bound limits what `close` adds, not what the payee
 collects in total: `settle` redeems any signed voucher, consumed or
