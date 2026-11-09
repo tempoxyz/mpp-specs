@@ -542,15 +542,17 @@ User requests channel closure, starting a grace period of at least 15 minutes.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Channel for which to request closure |
 
-Sets `channel.closeRequestedAt` to current block timestamp. The grace period
-allows the payee time to submit any outstanding vouchers before forced closure.
+A first request sets `channel.closeRequestedAt` to the current block
+timestamp and emits `CloseRequested` with `closeGraceEnd` equal to
+that timestamp plus `CLOSE_GRACE_PERIOD`. The grace period allows the
+payee time to submit any outstanding vouchers before forced closure.
 
-`CLOSE_GRACE_PERIOD` is a per-contract constant of at least 15
-minutes (900 seconds). A `requestClose` while a request is already
-pending MUST succeed and MUST leave `channel.closeRequestedAt`
-unchanged, so the grace period runs from the first request; a
-`topUp` cancels the request. `settle` and `close` remain
-callable during and after the grace period until the channel is
+`CLOSE_GRACE_PERIOD` is a per-contract constant of at least 15 minutes
+(900 seconds). A `requestClose` while a request is already pending
+MUST succeed, MUST leave `channel.closeRequestedAt` unchanged and MUST
+NOT emit `CloseRequested` again, so the grace period runs from the
+first request; a `topUp` cancels the request. `settle` and `close`
+remain callable during and after the grace period until the channel is
 finalized.
 
 ~~~solidity
@@ -1369,13 +1371,15 @@ Servers MUST treat voucher submissions idempotently:
 
 A voucher is a cumulative authorization, not a single-use proof:
 presenting the same voucher again, in the same or a later session,
-changes no state and authorizes no further service. What is
-single-use is each increment of authorization. The amount by which a
-voucher raises `acceptedCumulative` pays for service at most once,
-because `spent` never exceeds `acceptedCumulative` on the channel
-(see {{server-accounting}}), and the escrow pays each base unit at
-most once, because `settle` and `close` transfer only the amount
-above `channel.settled`. This is how the session intent provides the
+changes no state and adds no authorization: such a request is served
+only from the channel's existing `available` balance, which any
+request that presents a valid voucher for the channel can spend. What
+is single-use is each increment of authorization. The amount by which
+a voucher raises `acceptedCumulative` pays for service at most once,
+because `spent` never exceeds `acceptedCumulative` on the channel (see
+{{server-accounting}}), and the escrow pays each base unit at most
+once, because `settle` and `close` transfer only the amount above
+`channel.settled`. This is how the session intent provides the
 single-use proof semantics that {{I-D.httpauth-payment}} requires.
 
 ## Rejection and Error Responses {#error-responses}
@@ -1480,18 +1484,20 @@ servers MUST follow this procedure:
 4. **Receipt generation**:
    - Include balance state in receipt (see {{receipt-generation}})
 
-Servers MUST NOT deliver metered service on a channel whose
+Servers MUST NOT charge metered service on a channel whose
 `closeRequestedAt` is non-zero, even against accepted vouchers that
-`spent` has not yet consumed. After the grace period the payer can
-`withdraw` at once, and service delivered then is paid only if the
-payee's `settle` lands first. To a request it does not serve for
-this reason, the server returns 402 with a fresh Challenge; the
-client can `topUp` to cancel the close request. Delivery MAY resume
-after a `topUp` cancels the close request. On observing a close
-request, servers SHOULD, within the grace period, close with the
-lowest accepted voucher whose `cumulativeAmount` is at least
-`max(spent, settledOnChain)` (see {{cooperative-close}}). A voucher
-below `settledOnChain` reverts on chain.
+`spent` has not yet consumed. A request whose `spent` increment
+persisted before the server observed the close request SHOULD still be
+delivered, since `spent`, and so the capture, already includes it.
+After the grace period the payer can `withdraw` at once, and service
+delivered then is paid only if the payee's `settle` lands first. To a
+request it does not serve for this reason, the server returns 402 with
+a fresh Challenge; the client can `topUp` to cancel the close request.
+Delivery MAY resume after a `topUp` cancels the close request. On
+observing a close request, servers SHOULD, within the grace period,
+close with the lowest accepted voucher whose `cumulativeAmount` is at
+least `max(spent, settledOnChain)` (see {{cooperative-close}}). A
+voucher below `settledOnChain` reverts on chain.
 
 The guard reads the server's `closeRequestedAt`, so servers MUST keep
 it current: they MUST follow the escrow's `CloseRequested` and
@@ -1663,17 +1669,19 @@ accepted voucher, the client's close voucher included, whose
 `cumulativeAmount` is at least `max(spent, settledOnChain)`. That
 voucher can exceed the consumed amount only when no signed voucher
 equals it; the excess is the gap between two amounts the client
-signed. The close voucher is exempt from the monotonicity check in
-{{voucher-verification}}: it MAY be lower than `highestVoucherAmount`,
-and servers MUST accept it when it is at least
-`max(spent, settledOnChain)` and at most the deposit. Unless it equals
-`highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
+signed. The close voucher is exempt from the monotonicity check and
+the pending close request check in {{voucher-verification}}, since a
+close is what the payee does during a forced close: it MAY be lower
+than `highestVoucherAmount`, and servers MUST accept it when it is at
+least `max(spent, settledOnChain)` and at most the deposit. Unless it
+equals `highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
 `settledOnChain`: every settled voucher is public in `settle`
 calldata, so without this check anyone could replay one to close the
 channel. When the `spent` amount in the latest receipt exceeds the
 on-chain `settled` amount, clients SHOULD sign the close voucher for
-it, so that the v1 capture is exact; otherwise the voucher the server
-settled is the lowest one that qualifies.
+it, but never above the highest voucher they have already signed, so
+that the v1 capture is exact; otherwise the voucher the server settled
+is the lowest one that qualifies.
 
 The capture bound limits what `close` adds, not what the payee
 collects in total: `settle` redeems any signed voucher, consumed or
