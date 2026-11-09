@@ -18,6 +18,7 @@ bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 - `lakefile.toml` sets `warningAsError`, so a `sorry`, a deprecated name or an unused hypothesis fails the build.
 - `TempoSession/Audit.lean` fails the build when any declaration is an axiom or depends on one beyond Lean's three standard axioms. That rules out `sorry`, `admit` and `native_decide`.
 - `check.sh` fails when a module isn't imported by `Audit.lean`, so every module is audited, and when any file uses `set_option` (which could raise `maxHeartbeats` or turn warnings back off).
+- `check.sh` also fails when a module other than `Audit.lean` imports `Lean` or runs metaprograms, or any file names `skipKernelTC`: the audit doesn't re-check declarations in the kernel, so code that skipped the kernel check would pass it.
 
 ## Files
 

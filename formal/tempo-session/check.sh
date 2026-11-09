@@ -30,6 +30,22 @@ if grep -n 'set_option' TempoSession.lean TempoSession/*.lean; then
   echo "FAIL: set_option is not allowed (options live in lakefile.toml)"
   exit 1
 fi
+# The audit reads declarations already in the environment and doesn't re-check them in the
+# kernel, so code that skips the kernel check (debug.skipKernelTC, set through Lean's API
+# rather than set_option) would pass it. Only Audit.lean may import Lean or run
+# metaprograms; the model and proofs are plain Lean.
+if grep -n 'skipKernelTC' TempoSession.lean TempoSession/*.lean; then
+  echo "FAIL: skipKernelTC is not allowed"
+  exit 1
+fi
+for file in TempoSession/*.lean; do
+  [ "$file" = TempoSession/Audit.lean ] && continue
+  if grep -nE '^[[:space:]]*import[[:space:]]+Lean([.[:space:]]|$)' "$file" \
+    || grep -nwE 'elab|elab_rules|macro|macro_rules|syntax|run_cmd|run_elab|run_meta|#eval|initialize|builtin_initialize|unsafe|implemented_by|extern' "$file"; then
+    echo "FAIL: $file may not import Lean or use metaprogramming (only Audit.lean may)"
+    exit 1
+  fi
+done
 # Declarations below the audit command would escape it.
 if [ "$(grep -v '^[[:space:]]*$' TempoSession/Audit.lean | tail -n 1)" != "#audit_tempo_session" ]; then
   echo "FAIL: #audit_tempo_session must be the last line of TempoSession/Audit.lean"
