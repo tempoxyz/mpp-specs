@@ -1,0 +1,17 @@
+# Spec gaps
+
+Each row is a rule the draft leaves out. With its guard off, `IntentSubscription/Counterexamples.lean` holds a `decide`-checked trace that breaks the named property; with the guard on, the same trace runs up to the guarded step and that step is rejected (`rejectedAt`). Rows 5–7 have no trace.
+
+| # | Where | Gap | Guard (`Cfg`) | Breaks | Counterexample |
+|---|---|---|---|---|---|
+| 1 | §Single-Use, core §Replay Protection | Only the Credential is single-use per Challenge; two grants for one Challenge activate two subscriptions | `challengeSingleUse` | P4, payer charged twice per period | `G1_violates_P4`, `G1_double_charge` |
+| 2 | §Renewal | Missed periods can't accumulate, but nothing stops charging future periods in advance | `renewCurrentOnly` | P2, P5 | `G2_violates_P2`, `G2_violates_P5` |
+| 3 | §Cancellation | Effective time is method-defined with no bound (cancel is only SHOULD), so renewals can go on after a cancellation | `cancelBounded` (effective by the end of the current period) | P5 | `G3_violates_P5` |
+| 4 | §Optional Fields, §Activation | `subscriptionExpires` only stops future periods; nothing refuses an activation once it is reached | `activateBeforeExpiry` | P8 | `G4_violates_P8` |
+| 5 | §Cancellation | A repeated cancellation is unspecified; one could postpone the effective time | modelled: only the first counts | P5 | — |
+| 6 | core §Optional Parameters, §Status Codes | `expires` is a client MUST; the server-side rejection is only in the status table | modelled: the server rejects | P4 | — |
+| 7 | §Optional Fields | A period begun before `subscriptionExpires` may end after it: the payer pays a full period for a partial one | none | wording | — |
+
+- Rows 1–4 also have `G*_guard_rejects` with the guard on.
+- Row 2: a charge in advance also survives a later cancellation (`G2_violates_P5`), contradicting "MUST NOT collect renewal charges for billing periods after cancellation takes effect".
+- Row 3: the draft's Cancellation Example uses the end of the current paid period, which is the guard.
