@@ -471,8 +471,9 @@ pay out other channels' funds held by the same escrow.
 
 `settle` accepts any voucher within these bounds, whatever service
 was delivered, because the contract cannot observe consumption. A
-signed voucher is therefore a payment the payer cannot reclaim, and
-the contract lets the payee settle vouchers that service has not yet
+signed voucher is therefore a payment the payer cannot reclaim until
+the channel is finalized, and the contract lets the payee settle
+vouchers that service has not yet
 consumed; {{settlement-timing}} limits when servers do (see also
 {{cooperative-close}} and {{escrow-guarantees}}).
 
@@ -1542,7 +1543,7 @@ the metered request, and the client sends a voucher.
 Servers MUST NOT charge metered service on a channel whose
 `closeRequestedAt` is non-zero, even against accepted vouchers that
 `spent` has not yet consumed. A request whose `spent` increment
-persisted before the server observed the close request SHOULD still be
+persisted before the server observed the close request MUST still be
 delivered, since `spent`, and so the capture, already includes it.
 After the grace period the payer can `withdraw` at once, and service
 delivered then is paid only if the payee's `settle` lands first. To a
@@ -1563,7 +1564,9 @@ it current: they MUST follow the escrow's `CloseRequested` and
 `CloseRequestCancelled` events, or read `closeRequestedAt` from the
 contract, as each block arrives, and MUST stop delivery when either
 source shows a close request. A `CloseRequestCancelled` event resets
-the stored `closeRequestedAt` to zero. Servers MUST apply these
+the stored `closeRequestedAt` to zero only once the block holding it
+is final; until then, the guard and Voucher Verification treat the
+close request as pending. Servers MUST apply these
 events to a reserved `channelId` too, and Open Verification step 4
 MUST keep a `closeRequestedAt` that an event set after step 2 read
 the chain. A server that cannot read chain state for longer than
@@ -1755,7 +1758,9 @@ A v1 `close()` has no capture amount and captures the full
 only through the choice of voucher: servers MUST close with the lowest
 accepted voucher, the client's close voucher included, whose
 `cumulativeAmount` is at least `max(spent, settledOnChain)`, or with
-the highest accepted voucher when none is that high. A
+the highest accepted voucher when none is that high. Servers MUST
+read `settledOnChain` here from the contract's `channel.settled`,
+not from their own record, which can lag the chain. A
 `settle` the server has broadcast that is not yet final counts toward
 `settledOnChain` here: servers MUST wait for it to execute or fail
 before choosing the close voucher, since a close below a settled
@@ -1770,7 +1775,9 @@ monotonicity check and the pending close request check in
 {{voucher-verification}}, since a close is what the payee does during
 a forced close: it MAY be lower than `highestVoucherAmount`, and
 servers MUST accept it when it is at least
-`max(spent, settledOnChain)` and at most the deposit. Its
+`max(spent, settledOnChain)` and at most the deposit. Accepting it
+changes neither `acceptedCumulative` nor `highestVoucherAmount`,
+and the server keeps its highest voucher. Its
 `cumulativeAmount` MUST also exceed the disclosed amount (see
 {{voucher-disclosure}}): every voucher the server has broadcast is
 public, so without this check anyone could replay one to close the
@@ -1799,8 +1806,8 @@ instead.
 The capture bound limits what `close` adds, not what the payee
 collects in total. Servers settle no more than `spent` (see
 {{settlement-timing}}), but the escrow cannot enforce that: `settle`
-redeems any signed voucher, consumed or not. A signed voucher is a
-payment the payer cannot reclaim (see {{escrow-guarantees}}).
+redeems any signed voucher, consumed or not, until the channel is
+finalized (see {{escrow-guarantees}}).
 
 ## Forced Close {#forced-close}
 
