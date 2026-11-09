@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import functools
 import os
 import re
 import shutil
@@ -549,10 +550,11 @@ def ial_bodies(line: str) -> list[str]:
     return bodies
 
 
-def in_braces(line: str, text: str) -> bool:
-    """Whether text occurs after a { with no } in between, as an IAL or ALD writes it.
+@functools.lru_cache(maxsize=1024)
+def brace_marks(line: str) -> tuple[tuple[int, int], ...]:
+    """For each index of a line, the positions of the last { and } before it (-1 for none).
 
-    One pass over the line, so a run of unclosed braces stays linear.
+    Cached, so a line with many ID mentions is scanned once rather than once per mention.
     """
     last_open = last_close = -1
     marks: list[tuple[int, int]] = []
@@ -562,6 +564,16 @@ def in_braces(line: str, text: str) -> bool:
             last_open = index
         elif char == "}":
             last_close = index
+    return tuple(marks)
+
+
+def in_braces(line: str, text: str) -> bool:
+    """Whether text occurs after a { with no } in between, as an IAL or ALD writes it.
+
+    The brace table is built once per line, so a run of unclosed braces or many ID
+    mentions on one line stays linear.
+    """
+    marks = brace_marks(line)
     pos = 0
     while (found := line.find(text, pos)) >= 0:
         opened, closed = marks[found]
