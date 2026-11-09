@@ -411,6 +411,14 @@ signatures shown are a reference implementation; alternative implementations
 MAY use different parameter types (e.g., `uint256` instead of `uint128`)
 as long as the semantics are preserved.
 
+Every function in this section except `open` MUST revert if the
+channel does not exist (`ChannelNotFound` in {{legacy-contract}}) or
+is finalized (`ChannelFinalized`). In particular, `settle`, `topUp`,
+`requestClose`, `close`, and `withdraw` MUST NOT move funds or
+change channel state after `close` or `withdraw` has finalized the
+channel: a second payout or refund would be paid from other channels'
+deposits held by the same escrow.
+
 ### open
 
 Opens a new channel with escrowed funds.
@@ -424,6 +432,13 @@ Opens a new channel with escrowed funds.
 | `authorizedSigner` | address | Delegated signer; use `0x0` to default to payer |
 
 Returns the computed `channelId`.
+
+`open` MUST revert (`ChannelAlreadyExists`) if a channel with the
+computed `channelId` was ever opened, including one that is now
+finalized. A contract that deletes a finalized channel's state
+MUST still detect a reused `channelId`, for example by keeping a
+record of opened IDs. Otherwise vouchers signed for the earlier
+channel would settle again against the new deposit.
 
 ~~~solidity
 function open(
@@ -448,6 +463,18 @@ Server withdraws funds using a signed voucher without closing the channel.
 The contract computes `delta = cumulativeAmount - channel.settled` and
 transfers `delta` tokens to the payee.
 
+`settle` MUST revert unless
+`channel.settled < cumulativeAmount <= channel.deposit`. A voucher at
+or below `channel.settled` (`AmountNotIncreasing`) has already been
+paid, and one above `channel.deposit` (`AmountExceedsDeposit`) would
+pay out other channels' funds held by the same escrow.
+
+`settle` accepts any voucher within these bounds, whatever service
+was delivered, because the contract cannot observe consumption. A
+signed voucher is therefore a payment the payer cannot reclaim, and
+the payee MAY settle vouchers that service has not yet consumed (see
+{{cooperative-close}} and {{escrow-guarantees}}).
+
 ~~~solidity
 function settle(
     bytes32 channelId,
@@ -461,7 +488,9 @@ function settle(
 User adds more funds to an existing channel. If a close request is
 pending (`closeRequestedAt != 0`), calling `topUp()` MUST cancel it by
 resetting `closeRequestedAt` to zero and emitting a
-`CloseRequestCancelled` event.
+`CloseRequestCancelled` event. Like every function other than
+`open`, `topUp` MUST revert on a finalized channel, so no deposit is
+stranded in a channel that can no longer pay it out.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -489,6 +518,14 @@ the remainder to the payer. Only callable by the payee.
 Transfers `cumulativeAmount - channel.settled` to payee, refunds
 `channel.deposit - cumulativeAmount` to payer, and marks channel finalized.
 
+`close` MUST revert unless
+`channel.settled <= cumulativeAmount <= channel.deposit`. Unlike
+`settle`, `close` accepts `cumulativeAmount == channel.settled`,
+which transfers nothing to the payee and refunds the rest of the
+deposit. `close` has no separate capture amount: it captures the full
+`cumulativeAmount` of the voucher it is given (see
+{{cooperative-close}}).
+
 ~~~solidity
 function close(
     bytes32 channelId,
@@ -508,6 +545,14 @@ User requests channel closure, starting a grace period of at least 15 minutes.
 Sets `channel.closeRequestedAt` to current block timestamp. The grace period
 allows the payee time to submit any outstanding vouchers before forced closure.
 
+`CLOSE_GRACE_PERIOD` is a per-contract constant of at least 15
+minutes (900 seconds). A `requestClose` while a request is already
+pending MUST succeed and MUST leave `channel.closeRequestedAt`
+unchanged, so the grace period runs from the first request; a
+`topUp` cancels the request. `settle` and `close` remain
+callable during and after the grace period until the channel is
+finalized.
+
 ~~~solidity
 function requestClose(bytes32 channelId) external;
 ~~~
@@ -520,8 +565,13 @@ User withdraws remaining funds after the grace period expires.
 |-----------|------|-------------|
 | `channelId` | bytes32 | Channel to withdraw from |
 
-Requires `block.timestamp >= channel.closeRequestedAt + CLOSE_GRACE_PERIOD`.
-Refunds all remaining deposit to payer and marks channel finalized.
+`withdraw` MUST revert (`CloseNotReady`) unless
+`channel.closeRequestedAt != 0` and
+`block.timestamp >= channel.closeRequestedAt + CLOSE_GRACE_PERIOD`.
+Without the first check, a payer who never called `requestClose`
+(`closeRequestedAt == 0`) could withdraw at once, before the payee
+could settle. Refunds `channel.deposit - channel.settled` to payer
+and marks channel finalized.
 
 ~~~solidity
 function withdraw(bytes32 channelId) external;
@@ -1200,7 +1250,9 @@ On `action="open"`, servers MUST:
    - Verify signature uses canonical low-s values (see {{signature-malleability}})
    - Signer matches `channel.payer` or `channel.authorizedSigner`
    - `voucher.channelId` matches
-   - `voucher.cumulativeAmount >= channel.settled` (at or above current settlement)
+   - `voucher.cumulativeAmount >= channel.settled` (at or above current
+     settlement; a voucher equal to `channel.settled` authorizes no new
+     service, and `settle` rejects it)
 4. Initialize server-side channel state
 
 ## TopUp Verification
@@ -1232,7 +1284,8 @@ On `action="voucher"`, servers MUST:
 4. Recover signer and MUST verify it matches expected signer from on-chain state
 5. Verify `channel.closeRequestedAt == 0` (no pending close request).
    Servers MUST reject vouchers on channels with a pending forced close
-   to prevent service delivery that cannot be settled.
+   to prevent service delivery that cannot be settled (see
+   {{per-request-processing}}).
 6. Verify monotonicity:
    - `cumulativeAmount >= highestVoucherAmount`
    - if `cumulativeAmount == highestVoucherAmount`, treat the request as
@@ -1261,6 +1314,17 @@ Servers MUST treat voucher submissions idempotently:
 - Submitting a voucher with lower `cumulativeAmount` than highest accepted
   MUST be rejected
 - Clients MAY safely retry voucher submissions after network failures
+
+A voucher is a cumulative authorization, not a single-use proof:
+presenting the same voucher again, in the same or a later session,
+changes no state and authorizes no further service. What is
+single-use is each increment of authorization. The amount by which a
+voucher raises `acceptedCumulative` pays for service at most once,
+because `spent` never exceeds `acceptedCumulative` on the channel
+(see {{server-accounting}}), and the escrow pays each base unit at
+most once, because `settle` and `close` transfer only the amount
+above `channel.settled`. This is how the session intent provides the
+single-use proof semantics that {{I-D.httpauth-payment}} requires.
 
 ## Rejection and Error Responses {#error-responses}
 
@@ -1304,14 +1368,13 @@ carrying `Authorization: Payment`), servers MUST return 402 with a fresh
 
 # Server-Side Accounting {#server-accounting}
 
-Servers MUST maintain per-session accounting state to track authorized
+Servers MUST maintain per-channel accounting state to track authorized
 funds versus consumed service. This section defines the normative
 requirements for balance tracking, crash safety, and idempotency.
 
 ## Accounting State
 
-For each active session identified by `(challengeId, channelId)`, servers
-MUST maintain:
+For each channel, keyed by `channelId`, servers MUST maintain:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1326,13 +1389,20 @@ For v2 channels, `acceptedCumulative`, `spent`, `settledOnChain`, and
 lowercase `channelId`. Channel state updates MUST be linearizable per
 channel across concurrent requests.
 
+Accounting is per channel, not per session: `acceptedCumulative` and
+`spent` span every session and challenge on the channel, so a voucher
+pays for service once however many challenges present it. The
+`challengeId` attributes requests and receipts to a session (see
+{{session-attribution}}) and MUST NOT partition or reset
+`acceptedCumulative` or `spent`.
+
 The `available` balance is computed as:
 
 ~~~
 available = acceptedCumulative - spent
 ~~~
 
-## Per-Request Processing
+## Per-Request Processing {#per-request-processing}
 
 For each request carrying a Payment credential with `intent="session"`,
 servers MUST follow this procedure:
@@ -1348,7 +1418,8 @@ servers MUST follow this procedure:
    - If `available < cost`: return 402 with Problem Details including
      `requiredTopUp = cost - available`
 
-3. **Charge and deliver** (if `available >= cost`):
+3. **Charge and deliver** (if `available >= cost` and
+   `closeRequestedAt == 0`):
    - **MUST persist** `spent := spent + cost` to durable storage BEFORE
      or atomically with delivering the metered service
    - Deliver the response (or next chunk/token window for streaming)
@@ -1356,6 +1427,15 @@ servers MUST follow this procedure:
 
 4. **Receipt generation**:
    - Include balance state in receipt (see {{receipt-generation}})
+
+Servers MUST NOT deliver metered service on a channel whose
+`closeRequestedAt` is non-zero, even against accepted vouchers that
+`spent` has not yet consumed. After the grace period the payer can
+`withdraw` at once, and service delivered then is paid only if the
+payee's `settle` lands first. Delivery MAY resume after a `topUp`
+cancels the close request. On observing a close request, servers
+SHOULD settle, or close with, their highest accepted voucher within
+the grace period.
 
 ## Crash Safety
 
@@ -1468,9 +1548,10 @@ Settlement frequency is an implementation detail left to servers.
 The `close()` function settles any delta between the provided
 `cumulativeAmount` and `channel.settled`. If the server has already
 settled the highest voucher via `settle()`, calling `close()` with the
-same amount will only refund the payer the remaining deposit.
+same amount transfers nothing to the payee and refunds the payer the
+remaining deposit.
 
-## Cooperative Close
+## Cooperative Close {#cooperative-close}
 
 When the client sends `action="close"`:
 
@@ -1497,26 +1578,46 @@ captureAmount = max(spent, settledOnChain)
 and `captureAmount` MUST be less than or equal to both the close voucher
 `cumulativeAmount` and the on-chain `deposit`.
 
+A v1 `close()` has no capture amount and captures the full
+`cumulativeAmount` of the voucher it is given. For v1, the bound
+holds only through the choice of voucher: servers MUST close with the
+client's close voucher or another accepted voucher whose
+`cumulativeAmount` is at least `max(spent, settledOnChain)`, and
+SHOULD use the lowest such voucher. Clients SHOULD sign the close
+voucher for the greater of the `spent` amount in the latest receipt
+and the on-chain `settled` amount.
+
+The capture bound limits what `close` adds, not what the payee
+collects in total: `settle` redeems any signed voucher, consumed or
+not, so `settledOnChain` can exceed `spent`. A signed voucher is a
+payment the payer cannot reclaim (see {{escrow-guarantees}}).
+
 ## Forced Close
 
 If the server does not respond to close requests:
 
 1. Client calls `requestClose(channelId)` on-chain
-2. 15-minute grace period begins (wall-clock time via `block.timestamp`)
-3. Server can still `settle()` or `close()` during grace period
+2. A grace period of `CLOSE_GRACE_PERIOD`, at least 15 minutes,
+   begins (wall-clock time via `block.timestamp`)
+3. Server stops delivering service (see {{per-request-processing}})
+   and can still `settle()` or `close()`, during the grace period and
+   after it until the channel is finalized
 4. After grace period, client calls `withdraw(channelId)`
 5. Client receives all remaining (unsettled) funds
 
-Clients SHOULD wait at least 16 minutes after `requestClose()` before
+A repeated `requestClose()` does not restart the grace period.
+Clients SHOULD wait at least `CLOSE_GRACE_PERIOD` plus one minute
+(16 minutes for a 15-minute grace period) after the first
+`requestClose()` of the pending request before
 calling `withdraw()` to account for block time variance.
 
 ## Sequential Sessions
 
 A single channel supports sequential sessions. Each session uses the same
-cumulative voucher counter. When a new session begins on a channel, the
-previous session's spending state is irrelevant—the channel's
-`highestVoucherAmount` is the source of truth for the next voucher's
-minimum value.
+cumulative voucher counter. When a new session begins on a channel, it
+continues the channel's `acceptedCumulative` and `spent` (see
+{{server-accounting}}), and the channel's `highestVoucherAmount` is the
+source of truth for the next voucher's minimum value.
 
 ## Voucher Submission Transport
 
@@ -1621,8 +1722,11 @@ Vouchers are bound to a specific channel and contract via:
 
 The escrow contract enforces:
 
-- `cumulativeAmount > channel.settled` (monotonicity)
-- `cumulativeAmount <= channel.deposit` (cap)
+- `cumulativeAmount > channel.settled` for `settle` (monotonicity)
+- `cumulativeAmount >= channel.settled` for `close`
+- `cumulativeAmount <= channel.deposit` for both (cap)
+- No function runs on a finalized channel, and `open` never reuses a
+  `channelId`
 
 ## No Voucher Expiry
 
@@ -1672,13 +1776,24 @@ The EIP-712 domain includes `verifyingContract`, binding vouchers to a
 specific escrow contract address. This prevents replay of vouchers
 across different escrow contract deployments.
 
-## Escrow Guarantees
+## Escrow Guarantees {#escrow-guarantees}
 
 The escrow contract provides:
 
 - **Payer protection**: Funds only withdrawn with valid voucher signature
-- **Payee protection**: Deposited funds guaranteed (cannot be drained)
-- **Forced close**: 15-minute grace period protects both parties
+- **Payee protection**: Deposited funds guaranteed (cannot be drained):
+  the payer can `withdraw` only after a close request at least
+  `CLOSE_GRACE_PERIOD` old, and a finalized channel pays out nothing
+  more
+- **Forced close**: A grace period of at least 15 minutes protects both
+  parties
+
+Payer protection covers only what the payer signed. The escrow cannot
+see service delivery, so a signed voucher is a payment the payer
+cannot reclaim: the payee can settle it whether or not service
+consumed it. Clients SHOULD keep `acceptedCumulative` close to the
+`spent` amount that receipts report, signing ahead of consumption
+only what they accept losing if the server stops serving.
 
 ## Authorized Signer
 
@@ -1729,7 +1844,7 @@ implementations are encouraged to:
 - Display the payee address and token in human-readable form
 - Show cumulative vs. incremental amounts clearly
 
-## Session Attribution
+## Session Attribution {#session-attribution}
 
 Vouchers are bound to channels but not to specific HTTP sessions or API
 requests. When a payee operates multiple services using the same channel,
@@ -1742,10 +1857,13 @@ Servers MUST implement challenge-to-voucher mapping for:
 - Usage accounting
 - Audit trails
 
+This mapping is attribution only: the balance a voucher funds belongs
+to the channel, not to a challenge (see {{server-accounting}}).
+
 ## Cross-Session Replay Prevention {#session-binding}
 
 Vouchers use cumulative amount semantics: each voucher authorizes a total
-payment up to `cumulativeAmount`, and the on-chain contract enforces strict
+payment up to `cumulativeAmount`, and `settle` enforces strict
 monotonicity (`cumulativeAmount > channel.settled`). This means a voucher
 can only ever advance the channel state forward -- it cannot be "replayed"
 to extract additional funds because the settlement watermark only moves in
@@ -1755,8 +1873,9 @@ A separate `sessionHash` binding is therefore unnecessary:
 
 - **Cross-session replay is harmless**: If a voucher from session A is
   presented in session B, it can only authorize funds up to the amount
-  already committed. The server tracks `highestVoucherAmount` per session
-  and rejects vouchers that do not advance state.
+  already committed. The server tracks `highestVoucherAmount` and
+  `spent` per channel, across sessions, and rejects vouchers that do
+  not advance state.
 - **Cross-resource replay**: Vouchers authorize cumulative payment on a
   channel, not access to specific resources. Resource authorization is
   handled at the application layer via `challengeId` correlation.
@@ -1783,7 +1902,8 @@ server SHOULD:
 
 ## Grace Period Rationale
 
-The 15-minute forced close grace period balances competing concerns:
+The forced close grace period of at least 15 minutes balances competing
+concerns:
 
 - **Payer protection**: Ensures timely fund recovery if the server becomes
   unresponsive
@@ -1792,8 +1912,11 @@ The 15-minute forced close grace period balances competing concerns:
 - **Block time variance**: Allows margin for timestamp variations in
   on-chain enforcement
 
-Implementations MAY use different grace periods in their escrow contracts,
-but MUST clearly document the value and ensure clients are aware.
+Implementations MAY use longer grace periods in their escrow contracts,
+but MUST NOT use one shorter than 15 minutes, and MUST clearly document
+the value and ensure clients are aware. A repeated `requestClose`
+leaves the pending request's timestamp unchanged, so the payee has
+one full grace period from the first request to settle.
 
 # IANA Considerations
 
@@ -1976,7 +2099,7 @@ The credential payload for a close request:
 
 The voucher fields contain the final cumulative amount for on-chain settlement.
 
-# Legacy Contract Reference Implementation
+# Legacy Contract Reference Implementation {#legacy-contract}
 
 This appendix provides legacy v1 contract reference implementation details.
 These are informative and not normative.
@@ -2105,15 +2228,22 @@ interface ITempoStreamChannel {
         uint256 refundedToPayer
     );
 
+    // open: channelId was ever opened
     error ChannelAlreadyExists();
+    // any function but open: no such channel
     error ChannelNotFound();
+    // any function but open: channel finalized
     error ChannelFinalized();
     error InvalidSignature();
+    // settle, close: cumulativeAmount > deposit
     error AmountExceedsDeposit();
+    // settle: cumulativeAmount <= settled;
+    // close: cumulativeAmount < settled
     error AmountNotIncreasing();
     error NotPayer();
     error NotPayee();
     error TransferFailed();
+    // withdraw: no close request, or grace period not over
     error CloseNotReady();
 }
 ~~~
