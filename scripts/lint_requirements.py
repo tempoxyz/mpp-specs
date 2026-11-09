@@ -69,8 +69,9 @@ EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
 # Inline math ($$...$$): kramdown reads its content literally, so a <!-- inside it opens no
-# comment. It is removed (a formula states no rule) before comments are.
-MATH_SPAN = re.compile(r"\$\$.*?\$\$")
+# comment, and a formula states no rule. An escaped opener (\$$, after an even number of
+# backslashes, group 1) is a literal dollar; the closer is formula text, escaped or not.
+MATH_SPAN = re.compile(r"(?<!\\)((?:\\\\)*)\$\$.*?\$\$")
 # An inline HTML comment or {::comment} span that kramdown drops: its opener is not escaped
 # (an even number of backslashes, group 1, before it). An escaped opener (\<!-- or \{::)
 # renders literally, so its text stays visible. Substitute group 1 to keep those backslashes.
@@ -162,25 +163,41 @@ def strip_code_spans(text: str) -> str:
 
 
 def strip_literal_spans(text: str) -> str:
-    """Replace each code span and inline math span with a space, in kramdown's order.
+    """Drop code spans, inline math and comments the way kramdown reads them.
 
-    kramdown takes whichever span starts first, so a backtick inside $$...$$ is formula text
-    and pairs with nothing outside it, and a $$ inside a code span opens no formula. Removing
-    one kind before the other would pair a backtick in a formula with one after it and hide
-    the keyword kramdown shows between them.
+    kramdown takes whichever span starts first, so a backtick or <!-- inside $$...$$ is
+    formula text, a $$ or <!-- inside a code span is code, and a $$ or backtick inside a
+    comment is comment text. Removing one kind before another would pair markers kramdown
+    never pairs and hide a keyword it shows. Code spans and formulas become a space (they
+    state no rule); a comment becomes nothing, so a keyword it splits (M<!-- -->UST) reads
+    whole, keeping any escaping backslashes before it (COMMENT_SPAN group 1).
     """
     pieces: list[str] = []
     position = 0
     while True:
         tick = BACKTICKS.search(text, position)
         math = MATH_SPAN.search(text, position)
-        if math and (tick is None or math.start() < tick.start(2)):
-            pieces.append(text[position : math.start()])
+        comment = COMMENT_SPAN.search(text, position)
+        # Where each construct's own marker starts, after any escaping backslashes.
+        starts = {
+            "tick": tick.start(2) if tick else None,
+            "math": math.end(1) if math else None,
+            "comment": comment.end(1) if comment else None,
+        }
+        found = {k: v for k, v in starts.items() if v is not None}
+        if not found:
+            break
+        kind = min(found, key=lambda k: (found[k], k != "tick"))
+        if kind == "math" and math:
+            pieces.append(text[position : math.end(1)])
             pieces.append(" ")
             position = math.end()
             continue
-        if tick is None:
-            break
+        if kind == "comment" and comment:
+            pieces.append(text[position : comment.end(1)])
+            position = comment.end()
+            continue
+        assert tick is not None
         close = code_span_end(text, tick.start(2), tick.end(2))
         if close is None:
             pieces.append(text[position : tick.end()])
@@ -218,7 +235,7 @@ class Segment:
     @property
     def is_requirement(self) -> bool:
         # Comments render as nothing, so their keywords don't count (escaped openers do).
-        text = COMMENT_SPAN.sub(r"\1", strip_literal_spans(self.text))
+        text = strip_literal_spans(self.text)
         # Decoded after code spans go: inside one, &#77; is shown literally.
         text = decode_refs(text)
         # The source and the text with inline markup removed: a keyword in either counts, so
@@ -664,7 +681,7 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
             # Comments render as nothing, so drop them before reading the marker ("REQUIRED:
             # <!-- x -->if m" is the condition "REQUIRED: if m") and the keywords: a keyword in a
             # comment is hidden, one after an escaped opener (\<!-- MUST -->) is visible.
-            cell = decode_refs(COMMENT_SPAN.sub(r"\1", strip_literal_spans(cell))).strip()
+            cell = decode_refs(strip_literal_spans(cell)).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)

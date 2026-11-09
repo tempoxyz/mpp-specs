@@ -378,6 +378,15 @@ def test_code_span_and_math_pair_in_kramdown_order():
     assert table_keywords(["| a | b |", "|---|---|", "| x | $$`$$ MUST ` |"]) == [3]
 
 
+def test_escaped_or_commented_dollars_open_no_math():
+    # Checked with kramdown-rfc: \$$ is a literal dollar, and a $$ inside an earlier comment
+    # is comment text, so neither opens a formula that would hide the keyword after it.
+    for line in ["A \\$$ MUST $$ x.", "B <!-- $$ --> SHOULD $$ y.", "C $$ <!-- $$ MAY -->."]:
+        found, _, _, _ = segments(["Intro.", "", line])
+        assert [s.line for s in found if s.is_requirement] == [3], line
+    assert table_keywords(["| a | b |", "|---|---|", "| x | <!-- $$ --> MUST $$ |"]) == [3]
+
+
 def test_unclosed_html_comment_opener_line_is_prose():
     # kramdown renders the unclosed <!-- line itself as paragraph text (checked with
     # kramdown-rfc), so its keyword is a requirement that needs an ID, quoted or not.
