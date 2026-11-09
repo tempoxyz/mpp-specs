@@ -1294,10 +1294,12 @@ MUST make that change atomic and run it once: step 4 initializes state
 only while the record is still an unresolved reservation, and a
 handler, restart or sweep that finds the channel already tracked MUST
 leave its state unchanged. If the reserved `open` does not create the
-channel (it reverts, or its `validBefore` passes before it is
-mined), the server MUST release the reservation, so that the payer can
-submit a new `open`. An `open` dropped from the mempool can still be
-mined until then, so dropping alone releases nothing.
+channel (it reverts, or a final block with a timestamp at or after
+its `validBefore` exists and no block includes the `open`), the
+server MUST release the reservation, so that the payer can submit a
+new `open`. Block timestamps decide this, not the server's clock.
+An `open` dropped from the mempool can still be mined until then, so
+dropping alone releases nothing.
 
 Servers MUST persist the reservation, with the decoded `open`, any
 initial voucher, and the Challenge's `amount` and `currency` that step
@@ -1324,7 +1326,7 @@ client then continues with `action="voucher"`, `action="topUp"` or a
 close, each under its own verification. While the channel is not on
 chain, the server keeps the reservation as long as the stored `open`
 can still be mined, and releases it only as above, once that `open`
-reverts or expires. A client retrying with
+reverts or a final block shows it expired. A client retrying with
 `action="voucher"` on an opened channel then finds its state.
 
 ## TopUp Verification
