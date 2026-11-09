@@ -1355,10 +1355,10 @@ On `action="voucher"`, servers MUST:
    Servers MUST reject vouchers on channels with a pending forced close
    to prevent service delivery that cannot be settled (see
    {{per-request-processing}}).
-6. Verify `cumulativeAmount > settledOnChain`, counting any `settle`
-   the server has broadcast that has not failed. Every settled voucher
-   is public, so a voucher at or below that amount proves nothing about
-   who presents it (see {{voucher-disclosure}}). On failure, return 402
+6. Verify `cumulativeAmount` exceeds the disclosed amount (see
+   {{voucher-disclosure}}). Every voucher the server has broadcast is
+   public, so a voucher at or below that amount proves nothing about
+   who presents it. On failure, return 402
    with a fresh challenge, so that the client signs a new voucher.
 7. Verify monotonicity:
    - `cumulativeAmount >= highestVoucherAmount`
@@ -1716,11 +1716,12 @@ monotonicity check and the pending close request check in
 a forced close: it MAY be lower than `highestVoucherAmount`, and
 servers MUST accept it when it is at least
 `max(spent, settledOnChain)` and at most the deposit. Its
-`cumulativeAmount` MUST also exceed `settledOnChain`, counting any
-`settle` the server has broadcast that has not failed: every settled
-voucher is public in `settle` calldata, and in the mempool once
-broadcast, so without this check anyone could replay one to close the
-channel (see {{voucher-disclosure}}).
+`cumulativeAmount` MUST also exceed the disclosed amount (see
+{{voucher-disclosure}}): every voucher the server has broadcast is
+public, so without this check anyone could replay one to close the
+channel. When the client's close voucher is at or below the disclosed
+amount, servers close with the voucher they broadcast when it is at
+least `spent`.
 When the `spent` amount in the latest receipt exceeds the on-chain
 `settled` amount, clients SHOULD sign the close voucher for it, but
 never above the highest voucher they have already signed, so that the
@@ -1875,9 +1876,13 @@ The escrow contract enforces:
 A voucher signs only `channelId` and `cumulativeAmount`, so whoever
 holds it can present it. Every voucher the payee settles becomes
 public in `settle` calldata, and in the mempool once broadcast.
-Servers therefore MUST NOT accept a voucher whose `cumulativeAmount`
-is at or below `settledOnChain`, counting any `settle` they have
-broadcast that has not failed, either to serve a request (see
+The disclosed amount is the highest `cumulativeAmount` of any voucher
+the server has broadcast in a `settle` or `close` transaction,
+whether that transaction is pending, executed or failed, and at least
+`settledOnChain`: a transaction that fails after broadcast has still
+published its voucher. Servers therefore MUST NOT accept a voucher
+whose `cumulativeAmount` is at or below the disclosed amount, either
+to serve a request (see
 {{voucher-verification}}) or to close the channel (see
 {{cooperative-close}}). Servers settle only consumed amounts while the
 channel is open (see {{settlement-timing}}), so this refusal never
