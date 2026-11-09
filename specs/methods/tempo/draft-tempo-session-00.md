@@ -1470,6 +1470,11 @@ To prevent fund loss from server crashes:
 - Servers MUST persist `acceptedCumulative` BEFORE relying on the new
   balance for service authorization.
 
+- For v1, servers MUST persist every accepted voucher whose
+  `cumulativeAmount` is at least `max(spent, settledOnChain)` until
+  the channel closes, since a v1 close uses the lowest of them (see
+  {{cooperative-close}}). Servers MAY discard lower vouchers.
+
 - Implementations SHOULD use transactional storage or write-ahead logging
   to ensure atomicity between state updates and service delivery.
 
