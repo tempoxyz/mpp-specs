@@ -69,9 +69,9 @@
       "pattern": "^(?:[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)[Tt](?:[01][0-9]|2[0-3]):[0-5][0-9]:(?:[0-5][0-9]|60)(?:\\.[0-9]+)?(?:[Zz]|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" }
     },
     "ContentDigest": {
-      "description": "RFC 9530 Content-Digest field value, as the core draft requires for Challenge digest: a Structured Fields Dictionary (RFC 8941) of algorithm keys to byte sequences, such as sha-256=:...:, without parameters.",
+      "description": "RFC 9530 Content-Digest field value, as the core draft requires for Challenge digest: a Structured Fields Dictionary (RFC 8941) of algorithm keys to byte sequences, such as sha-256=:...:, without parameters. Each byte sequence is base64 that decodes (whole 4-character groups, then 2 or 3 characters with optional padding), since RFC 8941 parsers reject other lengths and misplaced padding.",
       "type": "string",
-      "pattern": "^[a-z*][a-z0-9_.*-]*=:[A-Za-z0-9+/]*={0,2}:(?:[ \t]*,[ \t]*[a-z*][a-z0-9_.*-]*=:[A-Za-z0-9+/]*={0,2}:)*$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" }
+      "pattern": "^[a-z*][a-z0-9_.*-]*=:(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?:(?:[ \t]*,[ \t]*[a-z*][a-z0-9_.*-]*=:(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?:)*$", "not": { "pattern": "[\r\n\u0085\u2028\u2029]" }
     },
     "ParamValue": {
       "description": "An auth-param value after token or quoted-string decoding (RFC 9110): no control characters but HTAB, since neither grammar can carry CR, LF or another one.",
