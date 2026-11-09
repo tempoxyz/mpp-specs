@@ -132,6 +132,35 @@ def ial_ids(attrs: str) -> list[str]:
     return [t[1:] for t in QUOTED.sub(" ", attrs).split() if t.startswith("#") and len(t) > 1]
 
 
+def quote_depth(raw: str) -> int:
+    """Return how many blockquote markers (>) open a line."""
+    match = re.match(r"^ {0,3}((?:> ?)+)", raw.expandtabs(4))
+    return match.group(1).count(">") if match else 0
+
+
+def comment_closes(lines: list[str], number: int, last_close: int) -> bool:
+    """Whether the <!-- opening line number is closed by a later -->, as kramdown sees it.
+
+    At the top level kramdown matches a comment across the rest of the source, so any later
+    --> closes it. Inside a blockquote kramdown parses the quote's lines on their own, so only
+    a --> on a following line of that same quote counts; a <!-- with none is paragraph text.
+    """
+    depth = quote_depth(lines[number - 1])
+    if depth == 0:
+        return last_close > number
+    for text in lines[number:]:
+        if quote_depth(text) != depth:
+            return False
+        if "-->" in text:
+            return True
+    return False
+
+
+# A kramdown header ID ({#id} at the end of a heading line). A requirement ID there would be a
+# second anchor for the same ID, or an ID on text that states no rule.
+HEADING_ID = re.compile(r"^ {0,3}(?:> ?)*#{1,6}\s.*\{#(req-[^}\s]+)\}\s*$")
+
+
 def short_name(path: Path) -> str:
     """Return the ID prefix part for a draft: draft-tempo-charge-01 -> tempo-charge."""
     name = re.sub(r"-\d{2}$", "", path.stem)
@@ -232,7 +261,7 @@ def segments(
             current = None
             continue
         if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
-            if stripped.startswith("<!--") and "-->" not in stripped[4:] and last_close > number:
+            if stripped.startswith("<!--") and "-->" not in stripped[4:] and comment_closes(lines, number, last_close):
                 code_lines.add(number)
                 in_comment = True
             current = None
@@ -307,6 +336,14 @@ def lint_file(path: Path) -> Report:
     id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
     lines = path.read_text(encoding="utf-8").splitlines()
     found, detached, misindented, code_lines = segments(lines)
+
+    for number, raw in enumerate(lines, start=1):
+        heading = None if number in code_lines else HEADING_ID.match(raw.expandtabs(4))
+        if heading:
+            report.errors.append(
+                f"line {number}: requirement ID {heading.group(1)} on a heading; "
+                "put it on the normative paragraph only"
+            )
 
     for number in table_keywords(lines, code_lines):
         report.errors.append(

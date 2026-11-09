@@ -367,3 +367,19 @@ def test_unclosed_html_comment_hides_nothing():
     found, _, _, code = segments(lines)
     assert found[-1].ids == ["req-x-001"]
     assert 5 not in code
+
+
+def test_quoted_unclosed_comment_does_not_borrow_a_later_closer():
+    # kramdown parses the quote alone: its <!-- has no --> there, so it is text and the
+    # rule after the quote is still prose.
+    lines = ["Intro.", "", "> <!-- quoted unclosed", "", "A rule MUST hold.", "", "<!-- real -->"]
+    found, _, _, code = segments(lines)
+    assert "A rule MUST hold." in [s.first for s in found]
+    assert 5 not in code
+
+
+def test_requirement_id_on_heading_is_an_error(tmp_path):
+    draft = tmp_path / "draft-hd-00.md"
+    draft.write_text("# Heading {#req-hd-001}\n\nA rule MUST hold.\n{: #req-hd-001}\n")
+    report = lint_file(draft)
+    assert any("on a heading" in e for e in report.errors)
