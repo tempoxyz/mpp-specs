@@ -983,10 +983,11 @@ it to broadcast later. So that a withheld transaction expires rather
 than relying on that rule alone, clients MUST sign `topUp`
 transactions with an expiring nonce, as for `open`, whose
 `validBefore` bounds how long anyone can hold them, and servers MUST
-refuse a `topUp` transaction without one. Clients MUST NOT send a
-`topUp` action while their close request is pending, and a client
-about to request a close SHOULD wait until every `topUp` it sent has
-landed or expired.
+refuse a `topUp` transaction without one. A `topUp` sent while a
+close request is pending cancels it, so a client that intends its
+close request to complete MUST NOT send a `topUp` action while it is
+pending, and a client about to request a close SHOULD wait until every
+`topUp` it sent has landed or expired.
 
 Clients MUST include a `challenge` object in the Payment credential for `topUp`
 actions. To obtain a challenge for a top-up outside an active streaming
@@ -1326,7 +1327,12 @@ client then continues with `action="voucher"`, `action="topUp"` or a
 close, each under its own verification. While the channel is not on
 chain, the server keeps the reservation as long as the stored `open`
 can still be mined, and releases it only as above, once that `open`
-reverts or a final block shows it expired. A client retrying with
+reverts or a final block shows it expired. Until then, servers SHOULD
+broadcast the stored `open` again when they resolve the reservation,
+so that a failure between persisting and broadcasting delays the
+channel rather than blocking its `channelId` until the `open`
+expires; this is not a repeated `open`, since only the server sends
+it. A client retrying with
 `action="voucher"` on an opened channel then finds its state.
 
 ## TopUp Verification
@@ -1392,8 +1398,9 @@ Servers MUST treat voucher submissions idempotently:
 
 - Resubmitting a voucher with the same `cumulativeAmount` as the highest
   accepted MUST return 200 OK with the current `acceptedCumulative`,
-  unless that amount is at or below `settledOnChain`, which step 6 of
-  {{voucher-verification}} rejects
+  unless that amount is at or below the disclosed amount (see
+  {{voucher-disclosure}}), which step 6 of {{voucher-verification}}
+  rejects
 - Submitting a voucher with lower `cumulativeAmount` than highest accepted
   MUST be rejected
 - Clients MAY safely retry voucher submissions after network failures
@@ -1403,9 +1410,9 @@ presenting the same voucher again, in the same or a later session,
 changes no state and adds no authorization: such a request is served
 only from the channel's existing `available` balance, which any
 request that presents a valid voucher for the channel can spend.
-Servers refuse a voucher at or below `settledOnChain` (step 6 of
-{{voucher-verification}}), since settled vouchers are public. Because
-servers settle no more than `spent` while the channel is open (see
+Servers refuse a voucher at or below the disclosed amount (step 6 of
+{{voucher-verification}}), since broadcast vouchers are public.
+Because servers settle no more than `spent` (see
 {{settlement-timing}}), no unspent balance is left behind such a
 voucher. What is single-use is each increment of authorization. The
 amount by which
@@ -1477,7 +1484,10 @@ For each channel, keyed by `channelId`, servers MUST maintain:
 For v2 channels, `acceptedCumulative`, `spent`, `settledOnChain`, and
 `deposit` are uint96 values. Servers MUST key channel state by normalized
 lowercase `channelId`. Channel state updates MUST be linearizable per
-channel across concurrent requests.
+channel across concurrent requests. Every service and instance that
+accepts vouchers on the same channel, for example several services
+sharing one payee address, MUST share that channel's accounting
+state, since the escrow pays each increment once.
 
 Accounting is per channel, not per session: `acceptedCumulative` and
 `spent` span every session and challenge on the channel, so a voucher
@@ -1510,8 +1520,8 @@ servers MUST follow this procedure:
      least that much higher, after a `topUp` if the deposit cannot
      cover it, since a `topUp` alone adds no credit
 
-3. **Charge and deliver** (if `available >= cost` and
-   `closeRequestedAt == 0`):
+3. **Charge and deliver** (if the credential carries a voucher that
+   step 1 accepts, `available >= cost` and `closeRequestedAt == 0`):
    - **MUST persist** `spent := spent + cost` to durable storage BEFORE
      or atomically with delivering the metered service
    - Deliver the response (or next chunk/token window for streaming)
@@ -1519,6 +1529,12 @@ servers MUST follow this procedure:
 
 4. **Receipt generation**:
    - Include balance state in receipt (see {{receipt-generation}})
+
+Servers MUST NOT charge or deliver metered service for a credential
+that carries no voucher, such as a `topUp`: its transaction is public
+once broadcast, so it proves nothing about who presents it. The
+server completes the action and returns 402 with a fresh Challenge to
+the metered request, and the client sends a voucher.
 
 Servers MUST NOT charge metered service on a channel whose
 `closeRequestedAt` is non-zero, even against accepted vouchers that
@@ -1660,14 +1676,16 @@ any circumstances. See {{dos-mitigation}} for rate limiting requirements.
 
 ## Settlement Timing {#settlement-timing}
 
-While the channel is open and no close request is pending, servers
-MUST NOT settle a voucher whose `cumulativeAmount` exceeds `spent`.
-Every settled voucher becomes public, and servers refuse it afterwards
-(see {{voucher-disclosure}}), so settling authorization that service
-has not consumed would strand the payer's remaining balance. A server
-holding only vouchers above `spent` waits, or settles when it closes.
-While a close request is pending, and when closing, servers MAY settle
-any accepted voucher, since no further service is delivered.
+Servers MUST NOT settle a voucher whose `cumulativeAmount` exceeds
+`spent`, whether or not a close request is pending or the server is
+closing. Every settled voucher becomes public, and servers refuse it
+afterwards (see {{voucher-disclosure}}), so settling authorization
+that service has not consumed would strand the payer's remaining
+balance, and a settle above `spent` before a close would raise
+`settledOnChain` and so the close capture (see
+{{cooperative-close}}) above the consumed amount. A server holding
+only vouchers above `spent` waits, or captures the amount owed with
+`close()` as {{cooperative-close}} describes.
 
 Within this limit, servers MAY settle using their own criteria:
 
@@ -1702,10 +1720,13 @@ After accepting a close request, or starting a close of their own,
 servers MUST NOT deliver further metered service on the channel, even
 if a later `topUp` cancels a forced close. Servers MUST persist that
 the channel is closing before they choose the close voucher, so that
-delivery stays stopped after a restart. Servers MUST choose the
+delivery stays stopped after a restart. A request whose `spent`
+increment persisted before the close started is not further service:
+servers SHOULD still deliver it, since the capture includes it.
+Servers MUST choose the
 close voucher and capture amount only after charging stops and every
-charge already in progress has persisted `spent`, so that no service
-is delivered after the capture amount is fixed.
+charge already in progress has persisted `spent`, so that the capture
+includes every request charged before it is fixed.
 
 Servers MUST NOT capture more than the amount actually consumed by
 delivered service (for v1, within the limit below). A client can pre-authorize more funds than were spent;
@@ -1754,10 +1775,13 @@ see a pending or failed `settle`, so when the server refuses its
 close voucher with 402, a v2 client signs a new one one base unit
 above the highest voucher it has signed, which is above every voucher
 the server can have broadcast, and a v1 client calls `requestClose`.
+When the amount a v2 client would sign under this paragraph exceeds
+the deposit, it calls `requestClose` instead.
 
 The capture bound limits what `close` adds, not what the payee
-collects in total: `settle` redeems any signed voucher, consumed or
-not, so `settledOnChain` can exceed `spent`. A signed voucher is a
+collects in total. Servers settle no more than `spent` (see
+{{settlement-timing}}), but the escrow cannot enforce that: `settle`
+redeems any signed voucher, consumed or not. A signed voucher is a
 payment the payer cannot reclaim (see {{escrow-guarantees}}).
 
 ## Forced Close {#forced-close}
