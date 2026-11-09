@@ -85,8 +85,15 @@ def revisions_glob(path: str) -> str:
 
 
 def first_commit(path: str) -> tuple[str, str] | None:
-    """Return (sha, author email) of the commit that first added any revision of path."""
-    log = git("log", "--diff-filter=A", "--format=%H %ae", "--", revisions_glob(path)).split("\n")
+    """Return (sha, author email) of the commit that first added any revision of path.
+
+    --topo-order never lists a commit before its descendants, so the last line is an
+    ancestor-most commit even when a later revision carries an older (backdated) date,
+    which git's default date order would put last.
+    """
+    log = git(
+        "log", "--topo-order", "--diff-filter=A", "--format=%H %ae", "--", revisions_glob(path)
+    ).split("\n")
     lines = [line for line in log if line]
     if not lines:
         return None

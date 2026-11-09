@@ -1,5 +1,7 @@
 """Tests for gen_codeowners.py."""
 
+import os
+import subprocess
 from urllib.error import HTTPError
 
 import gen_codeowners
@@ -122,3 +124,25 @@ def test_owner_pattern_does_not_match_extended_names():
     pattern = owner_pattern("specs/methods/solana/draft-solana-charge-00.md")
     assert fnmatch.fnmatch("/specs/methods/solana/draft-solana-charge-01.md", pattern)
     assert not fnmatch.fnmatch("/specs/methods/solana/draft-solana-charge-delegated-00.md", pattern)
+
+
+def test_first_commit_ignores_backdated_descendants(tmp_path, monkeypatch):
+    # A later revision committed with a date older than the draft's real first commit
+    # must not be taken as the submitter's commit: --topo-order lists children first.
+    def run(*args, date=None):
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_COMMITTER_NAME="t")
+        if date:
+            env.update(GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
+        subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True, capture_output=True)
+
+    run("init", "-q")
+    (tmp_path / "specs").mkdir()
+    (tmp_path / "specs/draft-a-00.md").write_text("a")
+    run("add", ".")
+    run("-c", "user.email=first@x", "commit", "-qm", "add", date="2024-01-01T00:00:00")
+    (tmp_path / "specs/draft-a-01.md").write_text("b")
+    run("add", ".")
+    run("-c", "user.email=late@x", "commit", "-qm", "bump", date="2020-01-01T00:00:00")
+    monkeypatch.chdir(tmp_path)
+    added = gen_codeowners.first_commit("specs/draft-a-01.md")
+    assert added is not None and added[1] == "first@x"
