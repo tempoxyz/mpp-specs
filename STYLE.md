@@ -52,6 +52,31 @@ Use RFC 2119 keywords precisely:
 | SHOULD NOT | Discouraged, but valid reasons to do it may exist |
 | MAY | Truly optional |
 
+#### Requirement IDs
+
+Every normative statement carries a stable ID that tests, schemas
+and gap reports cite.
+
+- A requirement is a paragraph or list item containing an RFC
+  2119/8174 keyword in capitals.
+- Tag it with a kramdown block IAL on the line right after it:
+  `{: #req-<draft>-<nnn>}`. In a list, indent it to the item's text.
+- `<draft>` is the file name without `draft-`, a leading
+  `payment-` and the revision: `core` (`draft-httpauth-payment`),
+  `tempo-charge`, `intent-charge`, `discovery`.
+- `<nnn>` is three digits, in document order when a draft is first
+  tagged.
+- Never renumber or reuse an ID. A new rule takes the next free
+  number wherever it goes; a removed rule's number stays retired.
+- A keyword in a table cell can't carry an ID: state the rule in
+  prose next to the table.
+- IDs become `anchor` attributes in the XML and don't show in the
+  TXT or HTML output.
+- `scripts/lint_requirements.py` (in `make lint`) reports untagged
+  requirements and duplicate, malformed or out-of-order IDs. It
+  warns by default; `--strict <draft>` fails on untagged, duplicate
+  or malformed IDs.
+
 ### 3. Structure
 
 Following IETF guidelines, every spec should follow the structure below:

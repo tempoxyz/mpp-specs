@@ -6,7 +6,7 @@ The IETF Internet-Drafts that define the Machine Payments Protocol: the `Payment
 
 ```bash
 make docker-build   # build the ietf-spec-tools image (kramdown-rfc, xml2rfc, rfclint, pytest); once, and after Dockerfile changes
-make lint           # frontmatter, JSON examples, external section refs, encoded examples, problem types
+make lint           # frontmatter, JSON examples, external section refs, encoded examples, problem types, requirement IDs (warn only)
 make test           # pytest over scripts/ (scripts/test_*.py)
 make check          # build every draft to XML/HTML/TXT/PDF in artifacts/, then rfclint the XML
 make build          # build only (scripts/gen.sh in Docker)
@@ -21,6 +21,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 - `specs/intents/`: standardized payment intents (`draft-payment-intent-{name}-NN.md`).
 - `specs/methods/<network>/`: payment methods, one draft per intent (`draft-{network}-{intent}-NN.md`, such as `tempo/draft-tempo-charge-00.md`).
 - `specs/extensions/`: optional extensions (`draft-payment-discovery-NN.md`) and `transports/` (MCP).
+- `schemas/`: JSON Schemas for protocol values, copied from tempoxyz/mpp-tools (`schemas/README.md`).
 - `examples/`: templates for new intents, methods and extensions, with the required sections per track (`examples/README.md`).
 - `scripts/`: `gen.sh` (Markdown → XML → HTML/TXT/PDF), `check.sh`, the `lint_*.py` linters and their `test_*.py`, `bump_and_rename.sh`, `gen_index.py` and `gen_problems.py` for the site, `serve.py`.
 - `pages/templates/`: HTML templates for the paymentauth.org index and `/problems/` pages.
@@ -35,6 +36,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 - Frontmatter needs `title`, `abbrev`, `docname`, `version`, `category`, `ipr` (`noModificationTrust200902`), `submissiontype`, `consensus` and `author` (`name`, `ins`, `email`, `org` in that order); `lint_frontmatter.py` enforces it.
 - Avoid new hardcoded external section references such as `Section X.Y of {{I-D...}}`; allowed ones are listed in `scripts/allowed_external_section_refs.txt`.
 - Write in RFC 7322 style with RFC 2119/8174 keywords, terms defined before use, and Security and IANA Considerations in every draft (STYLE.md). Keep Markdown source lines under 72 characters.
+- Every normative statement carries a requirement ID, `{: #req-<draft>-<nnn>}` on the line after it, never renumbered or reused (STYLE.md). `python3 scripts/lint_requirements.py --strict <draft>` checks a tagged draft.
 - JSON and encoded examples must be valid and decode to what they claim; problem types used in drafts must have pages (`lint_problem_types.py`).
 - Cross-references flow downward: core → intents → methods.
 - Versioning: the core carries no wire version, intents carry none, and methods may add `methodDetails.version` (absent means 1) for breaking changes. Implementations ignore unknown fields.
