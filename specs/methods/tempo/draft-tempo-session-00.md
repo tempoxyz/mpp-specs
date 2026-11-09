@@ -1266,6 +1266,11 @@ the channel's existing `acceptedCumulative` and `spent` (see
 {{server-accounting}}); the client continues with
 `action="voucher"`, which also covers a retry after a crash.
 
+The reservation becomes the channel's tracked state at step 4. If
+the reserved `open` does not create the channel (it reverts, is
+dropped, or expires before it is mined), the server MUST release the
+reservation, so that the payer can submit a new `open`.
+
 ## TopUp Verification
 
 On `action="topUp"`, servers MUST:
