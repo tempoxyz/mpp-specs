@@ -110,7 +110,7 @@ Payment Credential
   authorization data. The default field name is `Authorization`. A
   Payment challenge MAY select `Payment-Authorization` with the
   `header` parameter (see {{credential-header}}).
-{: #req-core-001}
+  {: #req-core-001}
 
 Payment Method
 : A mechanism for transferring value, identified by a registered
@@ -996,8 +996,8 @@ example, `xyz.tempo.example`).
 {: #req-core-057}
 
 An extension field MUST NOT change the meaning of a field defined by
-this document or by an intent or payment method specification, and
-MUST NOT relax any of their requirements.
+this document or by an intent, payment method or extension
+specification, and MUST NOT relax any of their requirements.
 {: #req-core-058}
 
 ## Size Considerations
