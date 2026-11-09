@@ -61,6 +61,18 @@ def test_submitter_falls_back_when_github_fails(monkeypatch):
     assert gen_codeowners.LOOKUP_FAILURES
 
 
+def test_submitter_prefers_current_login_over_noreply_email(monkeypatch):
+    def lookup(url):
+        if url.endswith("/pulls"):
+            return []
+        return {"author": {"login": "renamed"}}
+
+    monkeypatch.setattr(gen_codeowners, "github", lookup)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
+    # The noreply email still names the old login; the API's current one wins.
+    assert submitter("abc123", "1572504+oldname@users.noreply.github.com") == "renamed"
+
+
 def test_unpushed_commit_is_not_a_lookup_failure(monkeypatch):
     def missing(url):
         raise HTTPError(url, 404, "not found", None, None)

@@ -125,20 +125,22 @@ def try_github(url: str) -> object | None:
 def submitter(sha: str, email: str) -> str | None:
     """Return the login of whoever submitted the commit sha.
 
-    Tries the pull request that merged it, then a noreply author email, then
-    the commit's GitHub author. Returns None when none of them work, which
-    leaves the entry to DEFAULT_OWNERS.
+    Tries the pull request that merged it, then the commit's GitHub author,
+    then a noreply author email. The API returns the account's current login;
+    a noreply email keeps the login from when the commit was made, so it is
+    only a last resort (an account rename would leave a stale owner). Returns
+    None when none of them work, which leaves the entry to DEFAULT_OWNERS.
     """
     pulls = try_github(f"repos/{REPOSITORY}/commits/{sha}/pulls")
     if isinstance(pulls, list):
         merged = [pull for pull in pulls if pull.get("merged_at")] or pulls
         if merged and merged[0].get("user"):
             return merged[0]["user"]["login"]
-    if login := login_from_email(email):
-        return login
     commit = try_github(f"repos/{REPOSITORY}/commits/{sha}")
     author = commit.get("author") if isinstance(commit, dict) else None
-    return author["login"] if author else None
+    if author and author.get("login"):
+        return author["login"]
+    return login_from_email(email)
 
 
 def owner(path: str) -> str | None:
