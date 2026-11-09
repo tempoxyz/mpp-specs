@@ -974,6 +974,15 @@ The `topUp` action adds funds to an existing channel during a streaming
 session. Like `open`, the client provides a signed transaction for the
 server to broadcast.
 
+Because a top-up cancels a pending close request (see the `topUp`
+function above), a server holding a signed `topUp` transaction could
+broadcast it later to cancel the payer's forced close. Servers MUST
+broadcast a `topUp` transaction when they verify it and MUST NOT keep
+it to broadcast later. Clients SHOULD set the transaction's
+`validBefore` to a short window, so that a withheld transaction
+expires, and SHOULD NOT send a `topUp` action while their close
+request is pending.
+
 Clients MUST include a `challenge` object in the Payment credential for `topUp`
 actions. To obtain a challenge for a top-up outside an active streaming
 response, clients MAY send a `HEAD` request to the protected resource;
