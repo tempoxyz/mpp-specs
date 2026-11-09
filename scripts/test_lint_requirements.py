@@ -369,6 +369,24 @@ def test_unclosed_html_comment_hides_nothing():
     assert 5 not in code
 
 
+def test_code_span_and_math_pair_in_kramdown_order():
+    # kramdown takes the span that starts first (checked with kramdown-rfc): a backtick in
+    # $$...$$ pairs with nothing outside it, and a $$ in a code span opens no formula.
+    for line in ["Servers $$a`b$$ MUST verify `x`.", "And `a $$` SHOULD `$$ b`."]:
+        found, _, _, _ = segments(["Intro.", "", line])
+        assert [s.line for s in found if s.is_requirement] == [3]
+    assert table_keywords(["| a | b |", "|---|---|", "| x | $$`$$ MUST ` |"]) == [3]
+
+
+def test_unclosed_html_comment_opener_line_is_prose():
+    # kramdown renders the unclosed <!-- line itself as paragraph text (checked with
+    # kramdown-rfc), so its keyword is a requirement that needs an ID, quoted or not.
+    for opener in ["<!-- Servers MUST verify it.", "> <!-- Servers MUST verify it."]:
+        found, _, _, code = segments(["Intro.", "", opener, "", "More text."])
+        assert [s.line for s in found if s.is_requirement] == [3]
+        assert 3 not in code
+
+
 def test_quoted_unclosed_comment_does_not_borrow_a_later_closer():
     # kramdown parses the quote alone: its <!-- has no --> there, so it is text and the
     # rule after the quote is still prose.

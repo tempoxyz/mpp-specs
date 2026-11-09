@@ -161,6 +161,38 @@ def strip_code_spans(text: str) -> str:
     return "".join(pieces)
 
 
+def strip_literal_spans(text: str) -> str:
+    """Replace each code span and inline math span with a space, in kramdown's order.
+
+    kramdown takes whichever span starts first, so a backtick inside $$...$$ is formula text
+    and pairs with nothing outside it, and a $$ inside a code span opens no formula. Removing
+    one kind before the other would pair a backtick in a formula with one after it and hide
+    the keyword kramdown shows between them.
+    """
+    pieces: list[str] = []
+    position = 0
+    while True:
+        tick = BACKTICKS.search(text, position)
+        math = MATH_SPAN.search(text, position)
+        if math and (tick is None or math.start() < tick.start(2)):
+            pieces.append(text[position : math.start()])
+            pieces.append(" ")
+            position = math.end()
+            continue
+        if tick is None:
+            break
+        close = code_span_end(text, tick.start(2), tick.end(2))
+        if close is None:
+            pieces.append(text[position : tick.end()])
+            position = tick.end()
+            continue
+        pieces.append(text[position : tick.start(2)])
+        pieces.append(" ")
+        position = close
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 @dataclass
 class Segment:
     """A paragraph or list item and the requirement IDs attached to it."""
@@ -186,7 +218,7 @@ class Segment:
     @property
     def is_requirement(self) -> bool:
         # Comments render as nothing, so their keywords don't count (escaped openers do).
-        text = COMMENT_SPAN.sub(r"\1", MATH_SPAN.sub(" ", strip_code_spans(self.text)))
+        text = COMMENT_SPAN.sub(r"\1", strip_literal_spans(self.text))
         # Decoded after code spans go: inside one, &#77; is shown literally.
         text = decode_refs(text)
         # The source and the text with inline markup removed: a keyword in either counts, so
@@ -522,12 +554,19 @@ def segments(
                 code_lines.add(number)
                 list_stack[:] = stack
                 continue
+        # A <!-- that no --> closes opens no comment: kramdown renders that line as paragraph
+        # text, keywords included, so it falls through to the paragraph handling below.
+        unclosed_opener = (
+            stripped.startswith("<!--")
+            and "-->" not in stripped[4:]
+            and not comment_closes(lines, number, last_close)
+        )
         if (
-            stripped.startswith(("#", "|", "<!--"))
+            (stripped.startswith(("#", "|", "<!--")) and not unclosed_opener)
             or (ext and not (ext.group(1) == "comment" and not ext.group(2)))
             or re.match(r"^---\s*\w*$", stripped)
         ):
-            if stripped.startswith("<!--") and "-->" not in stripped[4:] and comment_closes(lines, number, last_close):
+            if stripped.startswith("<!--") and "-->" not in stripped[4:]:
                 code_lines.add(number)
                 in_comment = True
             current = None
@@ -625,7 +664,7 @@ def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list
             # Comments render as nothing, so drop them before reading the marker ("REQUIRED:
             # <!-- x -->if m" is the condition "REQUIRED: if m") and the keywords: a keyword in a
             # comment is hidden, one after an escaped opener (\<!-- MUST -->) is visible.
-            cell = decode_refs(COMMENT_SPAN.sub(r"\1", MATH_SPAN.sub(" ", strip_code_spans(cell)))).strip()
+            cell = decode_refs(COMMENT_SPAN.sub(r"\1", strip_literal_spans(cell))).strip()
             text = PRESENCE_MARKER.sub("", cell)
             if KEYWORD.search(text) or (text != cell and CONDITION.match(text)):
                 found.append(number)
