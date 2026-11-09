@@ -2,16 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://paymentauth.org/schemas/protocol.schema.json",
   "title": "MPP Conformance Protocol Values",
+  "$comment": "Every pattern ends in $(?!\\n): ECMA-262 $ matches only at the end of the string, but Python's re (used by the jsonschema package) also matches it before a final LF, so the lookahead keeps a trailing newline from passing there too.",
   "$defs": {
     "IntentId": {
       "description": "core intent = 1*( ALPHA / DIGIT / \"-\" )",
       "type": "string",
-      "pattern": "^[A-Za-z0-9-]+$"
+      "pattern": "^[A-Za-z0-9-]+$(?!\\n)"
     },
     "PaymentMethodId": {
       "description": "core payment-method-id = 1*LOWERALPHA",
       "type": "string",
-      "pattern": "^[a-z]+$"
+      "pattern": "^[a-z]+$(?!\\n)"
     },
     "Operation": {
       "type": "string",
@@ -55,7 +56,7 @@
     "Opaque": {
       "description": "Core draft opaque parameter: base64url without padding (RFC 4648 Section 5) of a JCS-serialized JSON object whose values are strings. The pattern and minLength check the encoding (non-empty, no length that leaves a lone character, which no byte string encodes to, and zero unused bits in the last character, so each byte string has exactly one accepted encoding); the content keywords describe the decoded value, which validators only annotate, so consumers decode and check it.",
       "type": "string",
-      "pattern": "^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-][AQgw]|[A-Za-z0-9_-]{2}[AEIMQUYcgkosw048])?$",
+      "pattern": "^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-][AQgw]|[A-Za-z0-9_-]{2}[AEIMQUYcgkosw048])?$(?!\\n)",
       "minLength": 2,
       "contentEncoding": "base64url",
       "contentMediaType": "application/json",
@@ -64,11 +65,11 @@
     "ParamValue": {
       "description": "An auth-param value after token or quoted-string decoding (RFC 9110): no control characters but HTAB, since neither grammar can carry CR, LF or another one.",
       "type": "string",
-      "pattern": "^[^\\u0000-\\u0008\\u000A-\\u001F\\u007F]*$"
+      "pattern": "^[^\\u0000-\\u0008\\u000A-\\u001F\\u007F]*$(?!\\n)"
     },
     "Challenge": {
       "type": "object",
-      "propertyNames": { "description": "RFC 9110 token, lowercase (core draft auth-param syntax and lowercase parameter names)", "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$" },
+      "propertyNames": { "description": "RFC 9110 token, lowercase (core draft auth-param syntax and lowercase parameter names)", "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$(?!\\n)" },
       "required": ["id", "realm", "method", "intent", "request"],
       "additionalProperties": { "$ref": "#/$defs/ParamValue" },
       "properties": {
@@ -327,7 +328,7 @@
       "required": ["path", "offers"],
       "additionalProperties": false,
       "properties": {
-        "path": { "type": "string", "pattern": "^/[A-Za-z0-9/_-]*$" },
+        "path": { "type": "string", "pattern": "^/[A-Za-z0-9/_-]*$(?!\\n)" },
         "offers": {
           "type": "array",
           "minItems": 1,
@@ -336,7 +337,7 @@
         "echoHeaders": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$(?!\\n)" }
         }
       }
     },
@@ -361,7 +362,7 @@
       "required": ["url"],
       "additionalProperties": false,
       "properties": {
-        "url": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$" }
+        "url": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$(?!\\n)" }
       }
     },
     "ServerVerifyRequest": {
@@ -422,16 +423,16 @@
     },
     "Address": {
       "type": "string",
-      "pattern": "^0x[0-9a-fA-F]{40}$"
+      "pattern": "^0x[0-9a-fA-F]{40}$(?!\\n)"
     },
     "HexValue": {
       "type": "string",
-      "pattern": "^0x[0-9a-fA-F]*$"
+      "pattern": "^0x[0-9a-fA-F]*$(?!\\n)"
     },
     "UintValue": {
       "anyOf": [
         { "type": "integer", "minimum": 0 },
-        { "type": "string", "pattern": "^(0|[1-9][0-9]*|max|now\\+[1-9][0-9]*)$" }
+        { "type": "string", "pattern": "^(0|[1-9][0-9]*|max|now\\+[1-9][0-9]*)$(?!\\n)" }
       ]
     },
     "TempoFeePayerCall": {
