@@ -19,6 +19,12 @@ if [ -n "$(find IntentSubscription -mindepth 2 -name '*.lean')" ]; then
   echo "FAIL: keep modules directly under IntentSubscription/ (the module list reads only that level)"
   exit 1
 fi
+# Every module must be a regular file: grep exits 2 on a directory named *.lean, which the
+# 'if grep' gates below would read as "no match" and pass.
+if [ -n "$(find IntentSubscription.lean IntentSubscription -maxdepth 1 -name '*.lean' ! -type f -print)" ]; then
+  echo "FAIL: every module under IntentSubscription/ must be a regular file"
+  exit 1
+fi
 # The root module holds only imports: allow only whole lines holding one import, a -- comment,
 # or both.
 if grep -vE '^[[:space:]]*(import[[:space:]]+[A-Za-z0-9_.]+[[:space:]]*)?(--.*)?$' IntentSubscription.lean; then

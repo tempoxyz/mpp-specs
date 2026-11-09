@@ -4,8 +4,9 @@ A Lean 4 model of [draft-payment-intent-subscription-00](../../specs/intents/dra
 
 ## Run
 
+Install elan from a release, checking its SHA-256 as `.github/workflows/formal.yml` does (it pins the version and checksum), then:
+
 ```bash
-curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
 bash formal/intent-subscription/check.sh   # clean build plus axiom audit; prints OK
 ```
 

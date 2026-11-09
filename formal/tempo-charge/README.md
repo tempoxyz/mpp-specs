@@ -4,8 +4,9 @@ A Lean 4 model of [draft-tempo-charge-00](../../specs/methods/tempo/draft-tempo-
 
 ## Run
 
+Install elan from a release, checking its SHA-256 as `.github/workflows/formal.yml` does (it pins the version and checksum), then:
+
 ~~~bash
-curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
 bash formal/tempo-charge/check.sh   # clean build plus axiom audit; prints OK
 ~~~
 
