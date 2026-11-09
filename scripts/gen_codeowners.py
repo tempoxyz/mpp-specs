@@ -39,6 +39,10 @@ HEADER = (
 
 NOREPLY = re.compile(r"^(?:\d+\+)?([A-Za-z0-9-]+)@users\.noreply\.github\.com$")
 REVISION = re.compile(r"-\d{2}\.md$")
+# Paths written into CODEOWNERS unescaped: no spaces, '#', '*' or other pattern syntax.
+SAFE_PATH = re.compile(r"^specs/[A-Za-z0-9._/-]+\.md$")
+# GitHub lookups that failed for a reason other than "commit not on GitHub yet".
+LOOKUP_FAILURES: list[str] = []
 
 
 def owner_pattern(path: str) -> str:
@@ -93,19 +97,23 @@ def github(url: str) -> object:
 
 
 def try_github(url: str) -> object | None:
-    """Call the GitHub API, printing a note and returning None on failure."""
+    """Call the GitHub API; return None on failure.
+
+    404/422 (a commit not pushed yet) is expected and only noted. Any other
+    failure (bad token, rate limit, 5xx, network) is recorded in
+    LOOKUP_FAILURES, and main() then refuses to write a CODEOWNERS file that
+    would silently drop submitters.
+    """
     try:
         return github(url)
     except HTTPError as error:
-        if error.code in (403, 429):
-            reason = "rate limited: set GITHUB_TOKEN"
-        elif error.code in (404, 422):
-            reason = "commit not on GitHub yet"
-        else:
-            reason = f"HTTP {error.code}"
-        print(f"note: GitHub API {url}: {reason}; falling back", file=sys.stderr)
+        if error.code in (404, 422):
+            print(f"note: GitHub API {url}: commit not on GitHub yet", file=sys.stderr)
+            return None
+        reason = "rate limited: set GITHUB_TOKEN" if error.code in (403, 429) else f"HTTP {error.code}"
     except URLError as error:
-        print(f"note: GitHub API {url}: {error.reason}; falling back", file=sys.stderr)
+        reason = str(error.reason)
+    LOOKUP_FAILURES.append(f"{url}: {reason}")
     return None
 
 
@@ -159,7 +167,16 @@ def main() -> int:
         return 1
 
     paths = [p for p in git("ls-files", "specs/**.md").split("\n") if p]
+    unsafe = [p for p in paths if not SAFE_PATH.match(p)]
+    if unsafe:
+        print(f"error: spec paths CODEOWNERS can't express safely: {unsafe}", file=sys.stderr)
+        return 1
     owners = {path: owner(path) for path in paths}
+    if LOOKUP_FAILURES:
+        print("error: GitHub lookups failed; not writing CODEOWNERS:", file=sys.stderr)
+        for failure in LOOKUP_FAILURES:
+            print(f"  {failure}", file=sys.stderr)
+        return 1
     content = render(owners, DEFAULT_OWNERS)
 
     if args.check:

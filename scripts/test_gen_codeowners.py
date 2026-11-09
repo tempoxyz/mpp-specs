@@ -51,8 +51,27 @@ def test_submitter_falls_back_when_github_fails(monkeypatch):
         raise HTTPError(url, 403, "rate limited", None, None)
 
     monkeypatch.setattr(gen_codeowners, "github", fail)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
     assert submitter("abc123", "1572504+brendanjryan@users.noreply.github.com") == "brendanjryan"
     assert submitter("abc123", "ludo@example.org") is None
+    # A rate limit is recorded, so main() refuses to write a partial CODEOWNERS.
+    assert gen_codeowners.LOOKUP_FAILURES
+
+
+def test_unpushed_commit_is_not_a_lookup_failure(monkeypatch):
+    def missing(url):
+        raise HTTPError(url, 404, "not found", None, None)
+
+    monkeypatch.setattr(gen_codeowners, "github", missing)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
+    assert submitter("abc123", "ludo@example.org") is None
+    assert gen_codeowners.LOOKUP_FAILURES == []
+
+
+def test_safe_path_rejects_pattern_syntax():
+    assert gen_codeowners.SAFE_PATH.match("specs/core/draft-httpauth-payment-01.md")
+    for bad in ("specs/core/draft-httpauth-payment-01 #.md", "specs/a*.md", "specs/a b.md"):
+        assert not gen_codeowners.SAFE_PATH.match(bad)
 
 
 def test_owner_of_uncommitted_spec_is_none(monkeypatch):
