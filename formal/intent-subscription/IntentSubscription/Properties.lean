@@ -1,7 +1,7 @@
 import IntentSubscription.Model
 import IntentSubscription.Invariant
 /-
-  Properties P1-P11; README.md lists each with its theorems. State properties hold in every
+  Properties P1-P12; README.md lists each with its theorems. State properties hold in every
   reachable state with every guard on (read off Inv); one-step properties unfold step. The
   one-step theorems that only read a guard back are sanity checks that step encodes the rule.
 -/
@@ -167,6 +167,33 @@ theorem P5_cancel_sticky (hg : cfg.Guarded) (hr : Reachable cfg s) {a : Act}
     (h : step cfg s a = some s') {sid : Nat} {t : Sub}
     (ht : s.subs sid = some t) {e : Nat} (he : t.cancelEff = some e) :
     ∃ t', s'.subs sid = some t' ∧ t'.cancelEff = some e ∧ t'.cancelReq = t.cancelReq := by
+  have hf := (reachable_inv hg hr).fresh
+  cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;>
+    grind [upd_apply]
+
+/-! ## P12 — no charge after revocation (§Single-Use) -/
+
+/-- P12: once the payment method revokes the authorization of a subscription whose last paid
+  period was q, no charge of that subscription is for a period after q. -/
+theorem P12_no_charge_after_revoke (hg : cfg.Guarded) (hr : Reachable cfg s) {c : Charge}
+    (hc : c ∈ s.charges) {t : Sub} (ht : s.subs c.sub = some t) {q : Nat}
+    (hq : t.revokedAt = some q) : c.period ≤ q := by
+  have hI := reachable_inv hg hr
+  obtain ⟨u, hu, hp, -⟩ := hI.charges c hc
+  rw [ht] at hu
+  cases hu
+  rcases (hI.subs _ _ ht).revoked with h | h <;> grind
+
+/-- P12: a revoked subscription's renewal is rejected. -/
+theorem P12_revoked_renewal_rejected {sid p : Nat} {t : Sub} (ht : s.subs sid = some t)
+    (hq : t.revokedAt ≠ none) : step cfg s (.renew sid p) = none := by
+  grind [step]
+
+/-- P12: a revocation, once made, is never undone by any step. -/
+theorem P12_revoke_sticky (hg : cfg.Guarded) (hr : Reachable cfg s) {a : Act}
+    (h : step cfg s a = some s') {sid : Nat} {t : Sub}
+    (ht : s.subs sid = some t) {q : Nat} (hq : t.revokedAt = some q) :
+    ∃ t', s'.subs sid = some t' ∧ t'.revokedAt = some q := by
   have hf := (reachable_inv hg hr).fresh
   cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;>
     grind [upd_apply]

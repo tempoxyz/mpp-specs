@@ -5,8 +5,9 @@ import TempoCharge.Model
 
   Proof plan
   * SysInv: what the server's records and the chain satisfy together.
-  * inv_init / inv_step / reachable_inv: induction on Reachable. inv_step splits step into one
-    goal per action and guard outcome and lets grind rebuild SysInv in each.
+  * inv_init / inv_step / reachable_inv: induction on Reachable. inv_step dispatches to one
+    lemma per action (inv_pull and inv_settlePull for the two pull steps), each splitting step
+    into one goal per guard outcome and letting grind rebuild SysInv in each.
 -/
 namespace TempoCharge
 
@@ -41,6 +42,15 @@ structure SysInv (cfg : Cfg) (st : St) : Prop where
   sponsored_ok : ∀ id ∈ st.sponsored, ∃ c, st.issued id = some c ∧ c.request.feePayer = true
   /-- Every included transaction landed before its validBefore. -/
   validBefore_ok : ∀ i ∈ st.included, ∀ vb, i.tx.validBefore = some vb → i.time < vb
+  /-- A pending pull settlement names an unused, issued challenge its transaction matches
+    one-to-one; the transaction is on chain with the recorded outcome, recorded as spent (G1),
+    and no receipt references it yet (what its receipt's RefOk and P3 need). -/
+  pending_ok : ∀ cid t ok, st.pending cid = some (t, ok) →
+    st.used cid = false ∧ (∃ c, st.issued cid = some c ∧ matchOne t.calls c.request.required = true) ∧
+    (∃ i ∈ st.included, i.tx = t ∧ i.ok = ok) ∧ t ∈ st.consumedTx ∧ ∀ r ∈ st.receipts, r.ref ≠ .tx t
+  /-- No transaction is pending for two challenges. -/
+  pending_tx : ∀ cid cid' t ok ok', st.pending cid = some (t, ok) → st.pending cid' = some (t, ok') →
+    cid = cid'
 
 /-- The empty chain and server satisfy SysInv. -/
 theorem inv_init (cfg : Cfg) : SysInv cfg St.init := by
@@ -89,37 +99,177 @@ theorem RefOk.ofProof {st : St} {c : Challenge} {cid time : Nat} (ha : c.request
       p.chainId = c.request.chainId ∧ p.version = 3) : RefOk st c ⟨cid, .challenge cid, time⟩ :=
   ⟨fun _ ht => (by cases ht), fun _ ht => (by cases ht; exact ⟨rfl, ha, hp⟩)⟩
 
+/-- Time advancing preserves SysInv (it issues no receipt). -/
+theorem inv_tick {cfg : Cfg} {s s' : St} {d : Nat}
+    (hI : SysInv cfg s) (h : step cfg s (.tick d) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- Funding an account preserves SysInv (it issues no receipt). -/
+theorem inv_fund {cfg : Cfg} {s s' : St} {tok acct amt : Nat}
+    (hI : SysInv cfg s) (h : step cfg s (.fund tok acct amt) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- Signing a transaction preserves SysInv (it issues no receipt). -/
+theorem inv_signTx {cfg : Cfg} {s s' : St} {t : Tx}
+    (hI : SysInv cfg s) (h : step cfg s (.signTx t) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- Signing a proof preserves SysInv (it issues no receipt). -/
+theorem inv_signProof {cfg : Cfg} {s s' : St} {p : ProofSig}
+    (hI : SysInv cfg s) (h : step cfg s (.signProof p) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- A client broadcast preserves SysInv (it issues no receipt). -/
+theorem inv_broadcast {cfg : Cfg} {s s' : St} {t : Tx}
+    (hI : SysInv cfg s) (h : step cfg s (.broadcast t) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- Issuing a challenge preserves SysInv (it issues no receipt). -/
+theorem inv_issue {cfg : Cfg} {s s' : St} {c : Challenge}
+    (hI : SysInv cfg s) (h : step cfg s (.issue c) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf]
+  | -- receipts_ok with receipts unchanged: RefOk.mono
+    intro r hr
+    obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+    exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
+
+/-- A pull broadcast (Act.submit with a transaction) preserves SysInv: it issues no receipt and
+  leaves a pending settlement whose facts come from its checks. -/
+theorem inv_pull {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {cr : Cred} {t : Tx}
+    (hI : SysInv cfg s) (hp : cr.payload = .transaction t) (h : step cfg s (.submit cr) = some s') :
+    SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step, hp, hg.txSingleUse, ↓reduceIte] at h
+  (repeat' split at h) <;> cases h <;> simp only [sponsorFor] <;> constructor <;>
+    grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
+      List.mem_cons_self, txOf_mem, RefOk.mono, Ref.txOf, hg.splitsOneToOne, Pays]
+
+/-- Settling a pending pull credential preserves SysInv: the receipt's facts are the pending
+  entry's (G2 makes its transaction a successful one). -/
+theorem inv_settlePull {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {cid : Nat}
+    (hI : SysInv cfg s) (h : step cfg s (.settlePull cid) = some s') : SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step, hg.txSingleUse, hg.pullNeedsSuccess, ↓reduceIte] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, txOf_mem, RefOk.mono, Ref.txOf, List.mem_cons_self]
+  | -- receipts_ok: the new receipt's facts are the pending entry's, old receipts keep theirs
+    intro r hr
+    simp only [List.mem_cons] at hr
+    rcases hr with rfl | hr
+    · obtain ⟨-, ⟨c, hc, hm⟩, ⟨i, hi, hit, hio⟩, hct, -⟩ := h8 _ _ _ ‹s.pending _ = some _›
+      have hok : i.ok = true := by grind
+      refine ⟨by grind [upd_apply], c, hc, RefOk.ofTx ?_ hct hm⟩
+      simp only [succeeded, List.any_eq_true, Bool.and_eq_true, beq_iff_eq]
+      exact ⟨i, hi, hit, hok⟩
+    · obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+      refine ⟨by grind [upd_apply], c, hc, hrc.mono ?_ ?_ ?_⟩ <;> grind [succeeded]
+
+/-- A hash credential preserves SysInv: an old receipt keeps its facts (RefOk.mono), the new
+  one is built from the branch's checks (RefOk.ofTx); G1 keeps its transaction fresh. -/
+theorem inv_hash {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {cr : Cred} {t : Tx}
+    (hI : SysInv cfg s) (hp : cr.payload = .hash t) (h : step cfg s (.submit cr) = some s') :
+    SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step, hp] at h
+  (repeat' split at h) <;> cases h <;> simp only [settleTx] <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, txOf_mem, RefOk.mono, Ref.txOf, hg.txSingleUse,
+      hg.splitsOneToOne, Pays]
+  | intro r hr
+    simp only [List.mem_cons] at hr
+    rcases hr with rfl | hr
+    · obtain ⟨hiss, -, -⟩ := ‹s.issued _ = some _ ∧ _›
+      refine ⟨by grind [upd_apply], _, hiss, ?_⟩
+      exact RefOk.ofTx (by grind [succeeded]) (by grind) (by grind [Pays, hg.splitsOneToOne])
+    · obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+      refine ⟨by grind [upd_apply], c, hc, hrc.mono ?_ ?_ ?_⟩ <;> grind [succeeded]
+
+/-- A proof credential preserves SysInv: the new receipt is built from the branch's checks
+  (RefOk.ofProof); G3 makes the request free. -/
+theorem inv_proof {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {cr : Cred} {p : ProofSig}
+    (hI : SysInv cfg s) (hp : cr.payload = .proof p) (h : step cfg s (.submit cr) = some s') :
+    SysInv cfg s' := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hI
+  simp only [step, hp] at h
+  (repeat' split at h) <;> cases h <;> constructor <;>
+  first
+  | grind [RefOk, succeeded, upd_apply, txOf_mem, RefOk.mono, Ref.txOf, hg.proofOnlyZero]
+  | intro r hr
+    simp only [List.mem_cons] at hr
+    rcases hr with rfl | hr
+    · obtain ⟨hiss, -, -⟩ := ‹s.issued _ = some _ ∧ _›
+      refine ⟨by grind [upd_apply], _, hiss, ?_⟩
+      exact RefOk.ofProof (by grind [hg.proofOnlyZero]) (by grind)
+    · obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
+      refine ⟨by grind [upd_apply], c, hc, hrc.mono ?_ ?_ ?_⟩ <;> grind [succeeded]
+
 /-- Inductive step: with every guard on, every successful step preserves SysInv. -/
 theorem inv_step {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {a : Act}
     (hI : SysInv cfg s) (h : step cfg s a = some s') : SysInv cfg s' := by
-  obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := hI
-  -- One goal per action, guard outcome and SysInv field; grind closes most, and receipts_ok
-  -- is handled by hand: old receipts keep their facts (RefOk.mono), a new one is built from
-  -- the branch's checks (RefOk.ofTx, RefOk.ofProof).
-  cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;>
-    (try simp only [settleTx, sponsorFor] at *) <;>
-    constructor <;>
-    first
-    | grind [RefOk, succeeded, upd_apply, chainOk, nonceFree, not_nonceFree_of_succeeded,
-        txOf_mem, RefOk.mono, Ref.txOf, hg.txSingleUse, hg.pullNeedsSuccess, hg.proofOnlyZero,
-        hg.splitsOneToOne, Pays]
-    | -- receipts_ok with receipts unchanged (signProof): RefOk.mono
-      intro r hr
-      obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
-      exact ⟨hu, c, hc, hrc.mono (by grind [succeeded]) (by grind) (by grind)⟩
-    | -- receipts_ok: an old receipt keeps its facts (RefOk.mono), a new one is built from the
-      -- branch's checks
-      intro r hr
-      simp only [List.mem_cons] at hr
-      rcases hr with rfl | hr
-      · obtain ⟨hiss, -, -⟩ := ‹s.issued _ = some _ ∧ _›
-        refine ⟨by grind [upd_apply], _, hiss, ?_⟩
-        first
-        | exact RefOk.ofTx (by grind [succeeded]) (by grind) (by grind [Pays, hg.splitsOneToOne])
-        | exact RefOk.ofProof (by grind [hg.proofOnlyZero]) (by grind)
-      · obtain ⟨hu, c, hc, hrc⟩ := h2 r hr
-        refine ⟨by grind [upd_apply], c, by grind [upd_apply], hrc.mono ?_ ?_ ?_⟩ <;>
-          grind [succeeded]
+  cases a with
+  | tick => exact inv_tick hI h
+  | fund => exact inv_fund hI h
+  | signTx => exact inv_signTx hI h
+  | signProof => exact inv_signProof hI h
+  | broadcast => exact inv_broadcast hI h
+  | issue => exact inv_issue hI h
+  | settlePull => exact inv_settlePull hg hI h
+  | submit cr =>
+    cases hp : cr.payload with
+    | transaction t => exact inv_pull hg hI hp h
+    | hash t => exact inv_hash hg hI hp h
+    | proof p => exact inv_proof hg hI hp h
 
 /-- Every reachable state satisfies SysInv (every guard on). -/
 theorem reachable_inv {cfg : Cfg} (hg : cfg.Guarded) {s : St} (h : Reachable cfg s) :

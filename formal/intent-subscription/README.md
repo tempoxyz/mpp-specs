@@ -18,7 +18,7 @@ bash formal/intent-subscription/check.sh   # clean build plus axiom audit; print
 |---|---|
 | `Model.lean` | State, actions, the computable `step`, with § citations; `Reachable` |
 | `Invariant.lean` | Inductive invariant `Inv` (`SubInv` per subscription plus the logs), proved for every reachable state |
-| `Properties.lean` | P1–P11, below |
+| `Properties.lean` | P1–P12, below |
 | `Counterexamples.lean` | One trace per gap with its guard off, checked by `decide` ([GAPS.md](./GAPS.md)) |
 | `Witnesses.lean` | Guarded traces where legitimate flows succeed and boundary calls are rejected |
 | `Audit.lean` | Axiom audit, run by `check.sh` (not part of the library) |
@@ -40,8 +40,9 @@ Every state property holds in all reachable states with the guards on (`Cfg.Guar
 | P9 | Fresh `subscriptionId` per activation | `P9_subscription_id_fresh` |
 | P10 | Issuing a Challenge (unpaid request) has no other side effect | `P10_challenge_no_side_effect` |
 | P11 | Renewal is idempotent: a retry or a missed period is rejected; `lastPaid` only grows | `P11_*` |
+| P12 | No charge for a period after the last one paid when the payment method revoked the authorization; a revocation is never undone | `P12_no_charge_after_revoke`, `P12_revoke_sticky`, `P12_revoked_renewal_rejected` |
 
-- One-step theorems that only read a guard back (`P4_*_rejected`, `P11_missed_period_rejected`) are sanity checks that `step` encodes the rule.
+- One-step theorems that only read a guard back (`P4_*_rejected`, `P11_missed_period_rejected`, `P12_revoked_renewal_rejected`) are sanity checks that `step` encodes the rule.
 - 50 hand-written theorems; the audit counts 143 including generated equation lemmas.
 
 ## Abstractions

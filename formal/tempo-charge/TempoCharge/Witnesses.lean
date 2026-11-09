@@ -15,7 +15,7 @@ theorem guarded_ok : guarded.Guarded := ⟨rfl, rfl, rfl, rfl⟩
   fee, the receipt references the transaction. -/
 theorem W_pull_sponsored :
     check guarded [.fund TOKEN PAYER 100, .issue chF, .signTx txF,
-      .submit { echo := chF, payload := .transaction txF }]
+      .submit { echo := chF, payload := .transaction txF }, .settlePull 1]
       (fun st => st.bal TOKEN MERCHANT == 100 && st.sponsored == [1] &&
         st.receipts == [⟨1, .tx txF, 1⟩]) = some true := by decide
 
@@ -28,7 +28,7 @@ def txSplit : Tx := { tx1 with calls := [{ pay with dst := 12, amount := 5, memo
   { pay with amount := 85 }, { pay with dst := PLATFORM, amount := 10 }] }
 theorem W_pull_splits :
     check guarded [.fund TOKEN PAYER 100, .issue chSplit, .signTx txSplit,
-      .submit { echo := chSplit, payload := .transaction txSplit }]
+      .submit { echo := chSplit, payload := .transaction txSplit }, .settlePull 1]
       (fun st => st.bal TOKEN MERCHANT == 85 && st.bal TOKEN PLATFORM == 10 && st.bal TOKEN 12 == 5 &&
         st.receipts.length == 1) = some true := by decide
 
@@ -49,11 +49,11 @@ def txMemoFirst : Tx := { tx1 with calls := [{ pay with amount := 5, memo := som
 def txMemoLast : Tx := { tx1 with calls := [{ pay with amount := 5 }, { pay with amount := 5, memo := some 7 }] }
 theorem W_split_order_memo_first :
     check guarded [.fund TOKEN PAYER 10, .issue chSameDst, .signTx txMemoFirst,
-      .submit { echo := chSameDst, payload := .transaction txMemoFirst }]
+      .submit { echo := chSameDst, payload := .transaction txMemoFirst }, .settlePull 1]
       (fun st => st.bal TOKEN MERCHANT == 10 && st.receipts.length == 1) = some true := by decide
 theorem W_split_order_memo_last :
     check guarded [.fund TOKEN PAYER 10, .issue chSameDst, .signTx txMemoLast,
-      .submit { echo := chSameDst, payload := .transaction txMemoLast }]
+      .submit { echo := chSameDst, payload := .transaction txMemoLast }, .settlePull 1]
       (fun st => st.bal TOKEN MERCHANT == 10 && st.receipts.length == 1) = some true := by decide
 
 /-- Push (§Hash Settlement): the client broadcasts, then submits the hash. -/
@@ -77,12 +77,25 @@ theorem W_proof_v2_rejected :
       .submit { echo := chZero, payload := .proof { proofA with version := 2 }, source := some (CHAIN, PAYER) }] 2 = true := by
   decide
 
-/-- The pull credential, replayed after it settled, is rejected (intent §Single-Use). -/
+/-- Pull is two steps: broadcast, then settlement. The pull credential, resubmitted while its
+  settlement is pending or replayed after it settled, is rejected (intent §Single-Use), and a
+  settlement can't be completed twice. -/
 def trPull : List Act :=
-  [.fund TOKEN PAYER 100, .issue chA, .signTx tx1, .submit { echo := chA, payload := .transaction tx1 }]
-theorem W_pull : (run guarded St.init trPull).isSome = true := by decide
+  [.fund TOKEN PAYER 100, .issue chA, .signTx tx1, .submit { echo := chA, payload := .transaction tx1 },
+   .settlePull 1]
+theorem W_pull :
+    check guarded trPull (fun st => st.bal TOKEN MERCHANT == 100 && st.receipts == [⟨1, .tx tx1, 1⟩] &&
+      (st.pending 1).isNone) = some true := by decide
+theorem W_pull_pending_no_receipt :
+    check guarded (trPull.take 4) (fun st => st.receipts.isEmpty && !st.used 1 &&
+      st.pending 1 == some (tx1, true)) = some true := by decide
+theorem W_pending_resubmit_rejected :
+    rejectedAt guarded (trPull.take 4 ++ [.submit { echo := chA, payload := .transaction tx1 }]) 4 = true := by
+  decide
 theorem W_replay_rejected :
-    rejectedAt guarded (trPull ++ [.submit { echo := chA, payload := .transaction tx1 }]) 4 = true := by decide
+    rejectedAt guarded (trPull ++ [.submit { echo := chA, payload := .transaction tx1 }]) 5 = true := by decide
+theorem W_settle_twice_rejected :
+    rejectedAt guarded (trPull ++ [.settlePull 1]) 5 = true := by decide
 
 /-- At expires the credential is rejected; one second earlier it settles. -/
 theorem W_expired_rejected :

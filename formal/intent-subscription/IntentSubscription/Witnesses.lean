@@ -93,4 +93,13 @@ theorem W_subscription_expiry :
       .tick DAY, .renew 0 2] 6 = true := by
   decide
 
+/-- After the payment method revokes the authorization, period 0 is still served and the
+  period 1 renewal is rejected. -/
+theorem W_revocation :
+    (run guarded St.init [.issue req none, .sign (cred 0), .activate (cred 0), .revoke 0,
+      .serve PAYER 0]).isSome = true ∧
+    rejectedAt guarded [.issue req none, .sign (cred 0), .activate (cred 0), .revoke 0,
+      .tick DAY, .renew 0 1] 5 = true := by
+  decide
+
 end IntentSubscription.Witnesses

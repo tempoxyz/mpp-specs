@@ -15,10 +15,13 @@
     transaction is still included and consumes its nonce (fees are paid). Finality is immediate.
   * A transaction's calls are its transfer / transferWithMemo calls; their Transfer events are
     the calls themselves when it succeeds. Other call shapes (swaps, smart wallets) are omitted.
-  * Server handling of one credential is atomic: verify, broadcast (pull, eth_sendRawTxSync),
-    settle and deliver happen in one step, so concurrent requests (core §Concurrent Request
-    Handling) are serialized. A receipt in St.receipts stands for "200 + Payment-Receipt +
-    resource delivered".
+  * Server handling of a pull credential takes two steps: Act.submit verifies it and
+    broadcasts the transaction (eth_sendRawTxSync, so it is on chain when the step ends) and
+    leaves the settlement pending (St.pending); Act.settlePull later settles and delivers.
+    Other credentials interleave between the two, since core §Concurrent Request Handling only
+    serializes identical credentials. Hash and proof credentials verify, settle and deliver in
+    one step. A receipt in St.receipts stands for "200 + Payment-Receipt + resource
+    delivered".
   * Access-key proof signers (§Proof Verification step 5), ERC-1271, fee token choice and fee
     amounts, Idempotency-Key replays, digest/opaque/header parameters are not modelled.
 
@@ -135,8 +138,12 @@ structure Cfg where
   realm : Nat
   /-- the Tempo chain the server settles on -/
   chainId : Nat
-  /-- G1: the server records every transaction hash it settles (pull or push) and rejects a
-      hash credential naming one again (§Hash Verification is silent). -/
+  /-- G1: the server records a pull transaction when it broadcasts it, before settlement, and
+      a hash transaction when it settles it, and rejects a hash credential naming any recorded
+      transaction (§Hash Verification is silent). Recording a pull transaction only at
+      settlement leaves a window, after broadcast, in which a hash credential for another
+      challenge can claim it. With the guard off the server records at settlement and refuses
+      nothing. -/
   txSingleUse : Bool := true
   /-- G2: a pull credential settles only when the broadcast transaction succeeded
       (§Settlement Procedure says so only for hash credentials). -/
@@ -226,14 +233,18 @@ structure St where
   used : Nat → Bool
   /-- server: receipts issued (and resources delivered), newest first -/
   receipts : List Receipt
-  /-- server: transactions that settled a challenge (used by G1) -/
+  /-- server: transactions recorded as spent (used by G1): broadcast pull transactions (G1) or
+      settled ones -/
   consumedTx : List Tx
+  /-- server: pull settlements broadcast but not yet settled, by challenge id: the transaction
+      and whether it succeeded -/
+  pending : Nat → Option (Tx × Bool)
   /-- ghost: challenge ids whose transaction fees the server paid -/
   sponsored : List Nat
 
 /-- Empty chain and server at time 1. -/
 def St.init : St :=
-  ⟨1, fun _ _ => 0, [], [], [], fun _ => none, fun _ => false, [], [], []⟩
+  ⟨1, fun _ _ => 0, [], [], [], fun _ => none, fun _ => false, [], [], fun _ => none, []⟩
 
 /-- Point update of a map keyed by challenge id. -/
 def upd {β : Type} (f : Nat → β) (k : Nat) (b : β) : Nat → β :=
@@ -255,7 +266,8 @@ def chainOk (cfg : Cfg) (st : St) (t : Tx) : Bool :=
 def succeeded (st : St) (t : Tx) : Bool :=
   st.included.any fun i => i.tx == t && i.ok
 
-/-- Record a settlement: mark the challenge used, issue the receipt, remember the transaction. -/
+/-- Record a hash settlement: mark the challenge used, issue the receipt, remember the
+  transaction. -/
 def settleTx (st : St) (cid : Nat) (t : Tx) : St :=
   { st with used := upd st.used cid true, receipts := ⟨cid, .tx t, st.now⟩ :: st.receipts,
             consumedTx := t :: st.consumedTx }
@@ -280,6 +292,8 @@ inductive Act where
   | issue (c : Challenge)
   /-- the server receives a credential -/
   | submit (cr : Cred)
+  /-- the server settles the pull credential it broadcast for challenge cid -/
+  | settlePull (cid : Nat)
 deriving Repr
 
 /-- The protocol as a computable transition function; none = reverted or rejected. -/
@@ -301,26 +315,28 @@ def step (cfg : Cfg) (st : St) : Act → Option St
     if st.issued c.id = none ∧ c.realm = cfg.realm ∧ c.request.valid cfg.chainId = true then
       some { st with issued := upd st.issued c.id (some c) }
     else none
-  -- intent §Server Responsibilities: an outstanding (issued, unused) challenge whose echo
-  -- matches the binding (core §Challenge Binding), not expired; then the method's checks
+  -- intent §Server Responsibilities: an outstanding (issued, unused, not pending) challenge
+  -- whose echo matches the binding (core §Challenge Binding), not expired; then the method's
+  -- checks
   | .submit cr =>
-    if st.issued cr.echo.id = some cr.echo ∧ st.used cr.echo.id = false ∧ st.now < cr.echo.expires then
+    if st.issued cr.echo.id = some cr.echo ∧ st.used cr.echo.id = false ∧ st.pending cr.echo.id = none ∧
+       st.now < cr.echo.expires then
       match cr.payload with
       -- §Transaction Verification steps 2-7, then broadcast (adding the fee payer signature
-      -- when feePayer, §Server-Paid Fees) and settle; G2 asks for success first
+      -- when feePayer, §Server-Paid Fees); settlement is left pending (Act.settlePull). G1
+      -- records the transaction now.
       | .transaction t =>
         if cr.echo.request.pull = true ∧ t ∈ st.signed ∧ Pays cfg cr.echo.request t.calls = true ∧
            chainOk cfg st t = true ∧ (t.sponsor = false ∨ cr.echo.request.feePayer = true) then
           match exec st.bal t.sender t.calls with
-          | some b => some (settleTx { st with bal := b, included := ⟨t, true, st.now⟩ :: st.included,
-                                               sponsored := sponsorFor st cr.echo.request cr.echo.id } cr.echo.id t)
-          | none =>
-            if cfg.pullNeedsSuccess = true then
-              some { st with included := ⟨t, false, st.now⟩ :: st.included,
-                             sponsored := sponsorFor st cr.echo.request cr.echo.id }
-            else
-              some (settleTx { st with included := ⟨t, false, st.now⟩ :: st.included,
-                                       sponsored := sponsorFor st cr.echo.request cr.echo.id } cr.echo.id t)
+          | some b => some { st with bal := b, included := ⟨t, true, st.now⟩ :: st.included,
+                                     sponsored := sponsorFor st cr.echo.request cr.echo.id,
+                                     pending := upd st.pending cr.echo.id (some (t, true)),
+                                     consumedTx := if cfg.txSingleUse then t :: st.consumedTx else st.consumedTx }
+          | none => some { st with included := ⟨t, false, st.now⟩ :: st.included,
+                                   sponsored := sponsorFor st cr.echo.request cr.echo.id,
+                                   pending := upd st.pending cr.echo.id (some (t, false)),
+                                   consumedTx := if cfg.txSingleUse then t :: st.consumedTx else st.consumedTx }
         else none
       -- §Hash Settlement Limitations (no feePayer, push allowed), §Hash Verification
       -- (successful receipt, matching Transfer events); G1 refuses an already settled hash
@@ -341,6 +357,18 @@ def step (cfg : Cfg) (st : St) : Act → Option St
                            receipts := ⟨cr.echo.id, .challenge cr.echo.id, st.now⟩ :: st.receipts }
           else none
     else none
+  -- §Settlement Procedure: settle a pending pull credential and deliver; G2 asks for success
+  -- first (otherwise the challenge reopens without a receipt). Without G1 the transaction is
+  -- recorded only now.
+  | .settlePull cid =>
+    match st.pending cid with
+    | none => none
+    | some (t, ok) =>
+      if ok = true ∨ cfg.pullNeedsSuccess = false then
+        some { st with pending := upd st.pending cid none, used := upd st.used cid true,
+                       receipts := ⟨cid, .tx t, st.now⟩ :: st.receipts,
+                       consumedTx := if cfg.txSingleUse then st.consumedTx else t :: st.consumedTx }
+      else some { st with pending := upd st.pending cid none }
 
 /-- Run a list of actions; none if any step fails. -/
 def run (cfg : Cfg) : St → List Act → Option St

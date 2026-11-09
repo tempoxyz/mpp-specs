@@ -3,8 +3,8 @@ import TempoCharge.Properties
 /-
   Spec gaps as machine-checked counterexamples. Each trace runs on the executable model with
   ONE guard off and shows a property broken; with every guard on the same trace is rejected at
-  the step the guard blocks (rejectedAt), or, for G2, runs without issuing a receipt. Gap 5
-  holds with every guard on. All checked by 'decide' (kernel evaluation, no native code).
+  the step the guard blocks (rejectedAt), or, for G2, runs without issuing a receipt. Gaps 5
+  and 7 hold with every guard on. All checked by 'decide' (kernel evaluation, no native code).
   GAPS.md maps each one to its section.
 -/
 namespace TempoCharge.Examples
@@ -61,19 +61,42 @@ def p1amount (st : St) : Bool :=
     | .tx t, some c => decide (c.request.amount ≤ sumOn c.request.currency t.calls)
     | _, _ => true
 
-/-! ### G1 — §Hash Verification: a settled transaction's hash is not refused again.
+/-! ### G1 — §Hash Verification: a spent transaction's hash is not refused again.
   The hash checks (successful receipt, matching Transfer events, push allowed, no feePayer)
   hold for any challenge with the same request, so one payment settles two challenges: here
   by pull for chA, then by hash for chB. Core §Replay Protection wants single-use proofs;
   the draft relies on nonce consumption, which stops a second broadcast, not a second claim. -/
 def trG1 : List Act :=
   [.fund TOKEN PAYER 100, .issue chA, .issue chB, .signTx tx1,
-   .submit { echo := chA, payload := .transaction tx1 }, .submit { echo := chB, payload := .hash tx1 }]
+   .submit { echo := chA, payload := .transaction tx1 }, .settlePull 1,
+   .submit { echo := chB, payload := .hash tx1 }]
 def cfgG1 : Cfg := { guarded with txSingleUse := false }
 /-- G1: with the guard off, one transaction backs two receipts (P3 broken). -/
 theorem G1_violates_P3 : check cfgG1 trG1 p3 = some false := by decide
 /-- G1: with every guard on, the second claim is rejected. -/
-theorem G1_guard_rejects : rejectedAt guarded trG1 5 = true := by decide
+theorem G1_guard_rejects : rejectedAt guarded trG1 6 = true := by decide
+
+/-! ### G1, the race — recording a pull transaction only at settlement is too late.
+  Core §Concurrent Request Handling serializes only identical credentials, so a hash
+  credential for chB can arrive after the server broadcast tx1 for chA (it is on chain) and
+  before it settles chA. A server that records transactions only when it settles them has not
+  recorded tx1 yet, so even refusing recorded hashes would accept chB's claim. -/
+def trRace : List Act :=
+  [.fund TOKEN PAYER 100, .issue chA, .issue chB, .signTx tx1,
+   .submit { echo := chA, payload := .transaction tx1 }, .submit { echo := chB, payload := .hash tx1 },
+   .settlePull 1]
+/-- G1 race: after the broadcast tx1 succeeded on chain, but a server recording at settlement
+  has not recorded it and issued no receipt yet. -/
+theorem G1_race_window :
+    check cfgG1 (trRace.take 5)
+      (fun st => succeeded st tx1 && decide (tx1 ∉ st.consumedTx) && st.receipts.isEmpty) = some true := by
+  decide
+/-- G1 race: with the guard off, chB settles by hash, then chA's pull settles: one transaction
+  backs two receipts (P3 broken). -/
+theorem G1_race_violates_P3 : check cfgG1 trRace p3 = some false := by decide
+/-- G1 race: with every guard on, tx1 was recorded at broadcast and the hash claim is
+  rejected. -/
+theorem G1_race_guard_rejects : rejectedAt guarded trRace 5 = true := by decide
 
 /-! ### G2 — §Settlement Procedure: no rule that a pull transaction succeeded.
   §Hash Verification requires a successful receipt; the pull steps only say the transaction
@@ -82,14 +105,16 @@ theorem G1_guard_rejects : rejectedAt guarded trG1 5 = true := by decide
 def reqF : Request := { req with feePayer := true, push := false }
 def chF : Challenge := { chA with request := reqF }
 def txF : Tx := { tx1 with sponsor := true }
-def trG2 : List Act := [.issue chF, .signTx txF, .submit { echo := chF, payload := .transaction txF }]
+def trG2 : List Act :=
+  [.issue chF, .signTx txF, .submit { echo := chF, payload := .transaction txF }, .settlePull 1]
 def cfgG2 : Cfg := { guarded with pullNeedsSuccess := false }
 /-- G2: with the guard off, a receipt backs a reverted transaction (P1 broken). -/
 theorem G2_violates_P1 : check cfgG2 trG2 p1ok = some false := by decide
 /-- G2: with every guard on, the same trace runs (the revert is on chain, the server paid the
-  fee, as §Server-Paid Fees warns) but issues no receipt. -/
+  fee, as §Server-Paid Fees warns) but issues no receipt, and the challenge reopens. -/
 theorem G2_guard_no_receipt :
-    check guarded trG2 (fun st => st.receipts.isEmpty && st.sponsored == [1]) = some true := by
+    check guarded trG2 (fun st => st.receipts.isEmpty && st.sponsored == [1] && !st.used 1 &&
+      (st.pending 1).isNone) = some true := by
   decide
 
 /-! ### G3 — §Proof Verification: no amount check.
@@ -114,7 +139,8 @@ def reqS : Request :=
   { req with amount := 30, splits := [{ recipient := PLATFORM, amount := 10 }, { recipient := PLATFORM, amount := 10 }] }
 def chS : Challenge := { chA with request := reqS }
 def txS : Tx := { tx1 with calls := [{ pay with amount := 10 }, { pay with dst := PLATFORM, amount := 10 }] }
-def trG4 : List Act := [.fund TOKEN PAYER 30, .issue chS, .signTx txS, .submit { echo := chS, payload := .transaction txS }]
+def trG4 : List Act :=
+  [.fund TOKEN PAYER 30, .issue chS, .signTx txS, .submit { echo := chS, payload := .transaction txS }, .settlePull 1]
 def cfgG4 : Cfg := { guarded with splitsOneToOne := false }
 /-- G4: with the guard off, a receipt backs a transaction that moved 20 of 30 (P1 broken). -/
 theorem G4_violates_P1 :
@@ -135,5 +161,21 @@ theorem Gap5_observer_claims_payment :
       tx1.sender != chB.client) = some true := by decide
 /-- Gap 5: and PAYER's own credential for chA is then rejected. -/
 theorem Gap5_payer_rejected : rejectedAt guarded trGap5 6 = true := by decide
+
+/-! ### Gap 7 — §Transaction Verification: a pull transaction is not bound to its challenge.
+  With every guard on: PAYER signs tx1 to pay chA. Its transfers match any challenge with the
+  same request, so whoever holds the credential (it reaches only the server, so a proxy, a
+  client library or a compromised client) submits tx1 with chB's echo instead and chB settles;
+  PAYER's credential for chA is then refused, since tx1's nonce is spent. -/
+def trGap7 : List Act :=
+  [.fund TOKEN PAYER 100, .issue chA, .issue chB, .signTx tx1,
+   .submit { echo := chB, payload := .transaction tx1 }, .settlePull 2,
+   .submit { echo := chA, payload := .transaction tx1 }]
+/-- Gap 7: with every guard on, the transaction PAYER signed for chA settles chB. -/
+theorem Gap7_pull_rebinds :
+    check guarded (trGap7.take 6) (fun st => st.receipts == [⟨2, .tx tx1, 1⟩] &&
+      st.bal TOKEN MERCHANT == 100) = some true := by decide
+/-- Gap 7: and the credential for chA is then rejected. -/
+theorem Gap7_payer_rejected : rejectedAt guarded trGap7 6 = true := by decide
 
 end TempoCharge.Examples

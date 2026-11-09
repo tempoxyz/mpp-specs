@@ -25,8 +25,8 @@ bash formal/tempo-charge/check.sh   # clean build plus axiom audit; prints OK
 
 ## What is modelled
 
-- Server: issues challenges (fresh id, its realm, valid request: splits each > 0 with sum < amount, at least one mode), and handles one credential per step: binding (echo = issued), unused, not expired, then the method checks.
-- Pull: §Transaction Verification steps 2–7, broadcast with the server's fee payer signature when `feePayer`, receipt.
+- Server: issues challenges (fresh id, its realm, valid request: splits each > 0 with sum < amount, at least one mode), and checks each credential: binding (echo = issued), unused, not pending, not expired, then the method checks.
+- Pull: two steps. `submit` runs §Transaction Verification steps 2–7 and broadcasts (with the server's fee payer signature when `feePayer`), leaving the settlement pending; `settlePull` later settles and issues the receipt (only for a successful transaction, G2). Other credentials interleave between the two.
 - Push: §Hash Settlement limitations (no `feePayer`, `push` allowed) and §Hash Verification (successful receipt, matching Transfer events).
 - Proof: §Proof Verification steps 1–4 with domain version 3 (account, challengeId, realm, chainId).
 - Chain: TIP-20 balances, atomic transfers, 2D nonce consumption (a revert still consumes it), validBefore, chain id, fee sponsorship.
@@ -34,7 +34,7 @@ bash formal/tempo-charge/check.sh   # clean build plus axiom audit; prints OK
 ## What is abstracted
 
 - Crypto is perfect: hashes are injective (a transaction is its hash; the challenge binding is equality), signatures unforgeable (only `signTx` / `signProof` add).
-- Network: one server handles one credential per step (verify, broadcast, settle, deliver are atomic), so concurrent requests are serialized; a receipt stands for 200 + `Payment-Receipt` + resource.
+- Network: one server; hash and proof credentials are handled in one step (verify, settle, deliver), a pull credential in two (verify and broadcast, then settle and deliver), with any other action between them, since core §Concurrent Request Handling serializes only identical credentials. `eth_sendRawTxSync` returns once the transaction is on chain, so broadcast and inclusion are one step. A receipt stands for 200 + `Payment-Receipt` + resource.
 - Chain: one chain, immediate finality, no reorgs; a transaction's calls are its transfers and their events (no swaps or smart wallets); fee amounts and fee tokens are not tracked, only who paid (`sponsored`).
 - Not modelled: access-key proof signers (§Proof Verification step 5), ERC-1271, `Idempotency-Key`, `digest` / `opaque` / `header`, `externalId`, `description`.
 
@@ -47,7 +47,7 @@ State properties hold for all reachable states with every guard on (`Cfg.Guarded
 | P1 | A receipt means its challenge was paid: a successful on-chain transaction matching the request one-to-one, moving at least `amount` of `currency`; or, for a proof, a free challenge and a version 3 proof binding its id, realm and chain | `P1_receipt_paid`, `matchOne_amount` |
 | P2 | At most one receipt per challenge (single use, no double delivery) | `P2_one_receipt_per_challenge` |
 | P3 | At most one challenge per transaction, across pull and push (no double counting) | `P3_one_challenge_per_tx` |
-| P4 | A receipt answers the submitted credential's challenge, which was issued with that exact echo, unused and unexpired; nothing else issues receipts; replayed, expired and tampered credentials are rejected | `P4_receipt_answers_challenge`, `P4_replay_rejected`, `P4_expired_rejected`, `P4_unbound_rejected` |
+| P4 | A receipt answers the submitted credential's challenge, which was issued with that exact echo, unused and unexpired (for pull, when it was broadcast); nothing else issues receipts; replayed, expired and tampered credentials are rejected | `P4_receipt_answers_challenge`, `P4_pending_answers_challenge`, `P4_replay_rejected`, `P4_expired_rejected`, `P4_unbound_rejected` |
 | P5 | Receipts and used challenges are permanent | `P5_monotone` |
 | P6 | The server pays fees only for challenges with `feePayer: true`; hash credentials for those are rejected | `P6_sponsor_only_feePayer`, `P6_hash_feePayer_rejected` |
 | P7 | A transaction lands only before its `validBefore`, so a client following §Method Details is never charged after `expires` | `P7_included_before_validBefore`, `P7_no_charge_after_expiry` |
@@ -60,7 +60,7 @@ The one-step `*_rejected`, `P8` and `P9` theorems are sanity checks that `step` 
 
 - Guards for rules the draft leaves out are `Cfg` flags, default on; each has a counterexample with it off ([GAPS.md](./GAPS.md)).
 - `splits = []` means absent; `pull` / `push` stand for `supportedModes` (both true when omitted).
-- A pull transaction that reverts stays on chain (nonce used, fee paid by the sponsor) and the challenge stays open, so a client can retry; §Server-Paid Fees accepts that fee risk.
+- A pull transaction that reverts stays on chain (nonce used, fee paid by the sponsor); its settlement issues no receipt and the challenge reopens, so a client can retry; §Server-Paid Fees accepts that fee risk.
 - The server sponsors any pull transaction for a `feePayer` challenge; one with `sponsor = false` needs no fee payer.
 - `expires` is always present (see GAPS.md row 6).
 - `Challenge.client` is a ghost field (who asked), used only to state Gap 5.

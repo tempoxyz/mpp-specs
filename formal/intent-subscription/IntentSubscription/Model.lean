@@ -56,7 +56,8 @@ deriving DecidableEq, Repr
   * anchor: activation time (§Shared Fields, billing anchor);
   * lastPaid: last charged billing-period index (activation charges period 0);
   * cancelReq: period index when the payer cancelled (ghost, for the properties);
-  * cancelEff: period index at which the cancellation takes effect. -/
+  * cancelEff: period index at which the cancellation takes effect;
+  * revokedAt: lastPaid when the payment method revoked the authorization (§Single-Use). -/
 structure Sub where
   payer : Nat
   req : Req
@@ -66,6 +67,7 @@ structure Sub where
   lastPaid : Nat
   cancelReq : Option Nat
   cancelEff : Option Nat
+  revokedAt : Option Nat := none
 deriving DecidableEq, Repr
 
 /-- Current billing-period index at time now: (now - anchor) / len. -/
@@ -173,6 +175,8 @@ inductive Act where
   | renew (sid p : Nat)
   /-- the payer cancels, effective from period eff (§Cancellation) -/
   | cancel (caller sid eff : Nat)
+  /-- the payment method revokes or invalidates the authorization (§Single-Use) -/
+  | revoke (sid : Nat)
   /-- the server delivers service for the current period to caller (§Renewal) -/
   | serve (caller sid : Nat)
 deriving Repr
@@ -194,7 +198,7 @@ def step (cfg : Cfg) (st : St) : Act → Option St
       some { st with
         nextSub := st.nextSub + 1
         subs := upd st.subs st.nextSub
-          (some ⟨c.payer, c.chal.req, c.chal.id, st.now, 0, none, none⟩)
+          (some ⟨c.payer, c.chal.req, c.chal.id, st.now, 0, none, none, none⟩)
         usedChal := c.chal.id :: st.usedChal
         usedCred := c :: st.usedCred
         charges := ⟨st.nextSub, c.payer, 0, c.chal.req.amount, c.chal.req.currency,
@@ -203,13 +207,14 @@ def step (cfg : Cfg) (st : St) : Act → Option St
     else none
   -- §Renewal: one charge per period, no accumulated missed periods, (G1) current period only;
   -- §Optional Fields: not once subscriptionExpires is reached; §Cancellation: no period
-  -- after cancellation takes effect
+  -- after cancellation takes effect; §Single-Use: not once the authorization is revoked
   | .renew sid p =>
     match st.subs sid with
     | none => none
     | some s =>
       if s.lastPaid < p ∧ s.cur st.now ≤ p ∧ (cfg.renewCurrentOnly = true → p = s.cur st.now) ∧
-         before s.req.subExp st.now = true ∧ before s.cancelEff p = true then
+         before s.req.subExp st.now = true ∧ before s.cancelEff p = true ∧
+         s.revokedAt = none then
         some { st with
           subs := upd st.subs sid (some { s with lastPaid := p })
           charges := ⟨sid, s.payer, p, s.req.amount, s.req.currency, s.req.recipient, st.now⟩
@@ -226,6 +231,15 @@ def step (cfg : Cfg) (st : St) : Act → Option St
         some { st with
           subs := upd st.subs sid
             (some { s with cancelReq := some (s.cur st.now), cancelEff := some eff }) }
+      else none
+  -- §Single-Use: the payment method revokes the authorization once, at any time; the
+  -- period already paid stays paid
+  | .revoke sid =>
+    match st.subs sid with
+    | none => none
+    | some s =>
+      if s.revokedAt = none then
+        some { st with subs := upd st.subs sid (some { s with revokedAt := some s.lastPaid }) }
       else none
   -- §Renewal: service for a period only once its charge is collected; §Subscription
   -- Identifier: only to the authenticated payer

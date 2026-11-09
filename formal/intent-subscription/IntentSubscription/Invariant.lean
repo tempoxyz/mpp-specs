@@ -28,6 +28,8 @@ structure SubInv (st : St) (sid : Nat) (s : Sub) : Prop where
   /-- after a cancellation at period r, nothing beyond r is charged or chargeable -/
   cancel : (s.cancelReq = none ∧ s.cancelEff = none) ∨
     ∃ r e, s.cancelReq = some r ∧ s.cancelEff = some e ∧ s.lastPaid ≤ r ∧ e ≤ r + 1
+  /-- after a revocation, nothing beyond the period already paid is charged -/
+  revoked : s.revokedAt = none ∨ s.revokedAt = some s.lastPaid
 
 /-- Global invariant. -/
 structure Inv (st : St) : Prop where
@@ -62,7 +64,7 @@ theorem inv_step {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {a : Act}
   -- one goal per field of Inv
   all_goals refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   -- SubInv goals: open the structure, then grind each field
-  all_goals try (intro sid t ht; refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩)
+  all_goals try (intro sid t ht; refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩)
   -- receipts and charges with a new head: split the membership first
   all_goals try (intro x hx; rcases List.mem_cons.1 hx with rfl | hx)
   -- a new receipt or charge: name its witness; tick: the period index only grows (cur_mono);

@@ -125,16 +125,28 @@ theorem P3_one_challenge_per_tx (hg : cfg.Guarded) (hr : Reachable cfg s) :
 
 /-! ## P4 — a receipt answers an outstanding, matching, unexpired challenge -/
 
-/-- P4: a step that issues a receipt is the submission of a credential whose echoed challenge
-  is the one issued under its id (core §Challenge Binding), unused and not expired (intent
-  §Server Responsibilities steps 1-2), and the receipt names that challenge. No other action
-  issues a receipt (core §Idempotency and Side Effects), and old receipts stay. -/
+/-- P4: a step that issues a receipt either is the submission of a hash or proof credential
+  whose echoed challenge is the one issued under its id (core §Challenge Binding), unused and
+  not expired (intent §Server Responsibilities steps 1-2), or settles the pull credential
+  pending for that challenge (P4_pending_answers_challenge says when that one was accepted);
+  the receipt names that challenge. No other action issues a receipt (core §Idempotency and
+  Side Effects), and old receipts stay. -/
 theorem P4_receipt_answers_challenge {a : Act} (h : step cfg s a = some s') {r : Receipt}
     (hnew : r ∈ s'.receipts) (hold : r ∉ s.receipts) :
-    ∃ cr, a = .submit cr ∧ r.cid = cr.echo.id ∧ s.issued cr.echo.id = some cr.echo ∧
-      s.used cr.echo.id = false ∧ s.now < cr.echo.expires := by
+    (∃ cr, a = .submit cr ∧ r.cid = cr.echo.id ∧ s.issued cr.echo.id = some cr.echo ∧
+      s.used cr.echo.id = false ∧ s.now < cr.echo.expires) ∨
+    (a = .settlePull r.cid ∧ ∃ t ok, s.pending r.cid = some (t, ok)) := by
   cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;>
     simp only [settleTx, List.mem_cons] at hnew <;> grind
+
+/-- P4: a step that leaves a pull settlement pending is the submission of a credential whose
+  echoed challenge is the one issued under its id, unused, not pending and not expired. -/
+theorem P4_pending_answers_challenge {a : Act} (h : step cfg s a = some s') {cid : Nat}
+    {e : Tx × Bool} (hnew : s'.pending cid = some e) (hold : s.pending cid = none) :
+    ∃ cr, a = .submit cr ∧ cid = cr.echo.id ∧ s.issued cr.echo.id = some cr.echo ∧
+      s.used cr.echo.id = false ∧ s.now < cr.echo.expires := by
+  cases a <;> simp only [step] at h <;> (repeat' split at h) <;> cases h <;>
+    simp only [settleTx] at hnew <;> grind [upd_apply]
 
 /-- P4 (sanity): a credential for a used challenge is rejected (replay). -/
 theorem P4_replay_rejected {cr : Cred} (hu : s.used cr.echo.id = true) :

@@ -40,11 +40,11 @@ def vd (amt : Nat) : Sig :=
   { signer := 9, v := { chainId := CHAIN, escrow := ESCROW, chan := kd, amount := amt } }
 
 /-- A delegated-signer channel works end to end: open, the delegated key signs, accept, charge,
-  settle and a cooperative close that captures spent = 30. -/
+  and a cooperative close that captures spent = 30 from the 40 voucher. -/
 theorem W_delegated_signer :
     check strict [.openCh PAYER kd 100, .sign (vd 40), .accept kd (vd 40), .charge kd 30,
-      .settle PAYEE kd (vd 40), .close PAYEE kd (vd 40) 40]
-      (fun st => st.paid kd == 40 && st.refunded kd == 60) = some true := by decide
+      .close PAYEE kd (vd 40) 30]
+      (fun st => st.paid kd == 30 && st.refunded kd == 70) = some true := by decide
 
 /-- A replayed voucher (the same 60) is accepted as an idempotent retry (§11.4). -/
 theorem W_accept_replay : (run strict St.init (trAll ++ [.accept k (v 60)])).isSome = true := by
