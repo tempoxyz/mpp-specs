@@ -25,7 +25,11 @@ SPECS_DIR = ROOT / "specs"
 
 KEYWORD = re.compile(r"\b(?:MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)\b")
 IAL_LINE = re.compile(r"^\s*\{:\s*([^}]*)\}\s*$")
-IAL_ID = re.compile(r"#([^\s}]+)")
+# An attribute-list definition ({:name: ...}) only names attributes for later use;
+# it attaches nothing to the block above it.
+ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
+# Quoted attribute values, removed before looking for IDs: {: title="#req-x"} sets no id.
+QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
 LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 FENCE = re.compile(r"^\s*(~~~|```)")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
@@ -69,6 +73,11 @@ class Report:
         return self.tagged + len(self.untagged)
 
 
+def ial_ids(attrs: str) -> list[str]:
+    """Return the IDs a block IAL sets: whitespace-separated tokens that start with #."""
+    return [t[1:] for t in QUOTED.sub(" ", attrs).split() if t.startswith("#") and len(t) > 1]
+
+
 def short_name(path: Path) -> str:
     """Return the ID prefix part for a draft: draft-tempo-charge-01 -> tempo-charge."""
     name = re.sub(r"-\d{2}$", "", path.stem)
@@ -92,9 +101,10 @@ def segments(
     detached: list[tuple[int, str]] = []
     misindented: list[tuple[int, str]] = []
     current: Segment | None = None
-    # Text column of the open list's latest item. It survives blank lines, so a later
-    # paragraph indented to it (a loose-list continuation) still belongs to that item.
-    list_indent = 0
+    # Text columns of the open list items, outermost first. They survive blank lines,
+    # so a later paragraph indented to one (a loose-list continuation) still belongs
+    # to that item, even after a nested item has closed.
+    list_stack: list[int] = []
     in_fence = False
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
@@ -112,10 +122,14 @@ def segments(
 
         line = re.sub(r"^\s*>\s?", "", raw)
         stripped = line.strip()
-        ial = IAL_LINE.match(line)
+        column = len(line) - len(line.lstrip())
+        if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
+            # Indented four or more past the open item's text (or the margin) with no
+            # paragraph to continue: kramdown renders it as a code block, not prose.
+            continue
+        ial = None if ALD_LINE.match(line) else IAL_LINE.match(line)
         if ial:
-            ids = IAL_ID.findall(ial.group(1))
-            column = len(line) - len(line.lstrip())
+            ids = ial_ids(ial.group(1))
             if current is not None and column < current.indent:
                 # kramdown ends the list here and puts the IAL on the list, not the item.
                 misindented.extend((number, i) for i in ids if i.startswith("req-"))
@@ -131,20 +145,27 @@ def segments(
             continue
         if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
             current = None
-            list_indent = 0
+            list_stack.clear()
+            continue
+        if ALD_LINE.match(line):
+            current = None
             continue
         marker = LIST_MARKER.match(line)
-        column = len(line) - len(line.lstrip())
         if marker:
-            list_indent = marker.end()
-            current = Segment(number, stripped, number, indent=list_indent)
+            # Close items whose text starts right of this marker: it is their sibling or
+            # belongs to an outer list.
+            while list_stack and list_stack[-1] > column:
+                list_stack.pop()
+            list_stack.append(marker.end())
+            current = Segment(number, stripped, number, indent=marker.end())
             result.append(current)
         elif current is None:
-            # A paragraph indented to the open list's text continues its item; one indented
-            # less ends the list.
-            if column < list_indent:
-                list_indent = 0
-            current = Segment(number, stripped, number, indent=list_indent)
+            # A paragraph continues the innermost open item it is indented to; items
+            # indented further are closed, and with none left the list has ended.
+            while list_stack and list_stack[-1] > column:
+                list_stack.pop()
+            indent = list_stack[-1] if list_stack else 0
+            current = Segment(number, stripped, number, indent=indent)
             result.append(current)
         else:
             current.text += " " + stripped

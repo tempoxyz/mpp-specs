@@ -204,13 +204,21 @@
           "required": ["name", "version", "chainId"],
           "additionalProperties": false,
           "properties": {
-            "name": { "type": "string" },
-            "version": { "type": "string" },
+            "name": { "const": "MPP" },
+            "version": { "const": "3" },
             "chainId": { "type": "integer", "minimum": 0 }
           }
         },
-        "types": { "$ref": "#/$defs/JsonObject" },
-        "primaryType": { "type": "string" },
+        "types": {
+          "const": {
+            "Proof": [
+              { "name": "account", "type": "address" },
+              { "name": "challengeId", "type": "string" },
+              { "name": "realm", "type": "string" }
+            ]
+          }
+        },
+        "primaryType": { "const": "Proof" },
         "message": {
           "type": "object",
           "required": ["account", "challengeId", "realm"],
@@ -256,13 +264,7 @@
           "additionalProperties": false,
           "properties": {
             "payload": { "$ref": "#/$defs/JsonObject" },
-            "source": {
-              "anyOf": [
-                { "$ref": "#/$defs/JsonObject" },
-                { "type": "string" },
-                { "type": "null" }
-              ]
-            }
+            "source": { "type": ["string", "null"] }
           }
         },
         "mode": { "$ref": "#/$defs/HttpPaymentMode" }

@@ -144,6 +144,42 @@ class TestIdProblems:
         assert report.errors == []
 
 
+    def test_untagged_line_after_ial_is_reported(self, tmp_path):
+        spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\nC MUST d.\n")
+        report = lint_file(spec)
+        assert report.tagged == 1
+        assert len(report.untagged) == 1
+
+    def test_ids_in_quotes_or_alds_do_not_tag(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            'A MUST b.\n{: title="#req-test-charge-001"}\n\n'
+            "C MUST d.\n{:ref: #req-test-charge-002}\n",
+        )
+        report = lint_file(spec)
+        assert report.tagged == 0
+        assert len(report.untagged) == 2
+
+    def test_column_zero_id_after_outer_continuation_is_misindented(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- Outer MUST a.\n  {: #req-test-charge-001}\n"
+            "  - Inner MUST b.\n    {: #req-test-charge-002}\n\n"
+            "  Outer continuation MUST c.\n{: #req-test-charge-003}\n",
+        )
+        report = lint_file(spec)
+        assert any("req-test-charge-003 is not indented" in e for e in report.errors)
+        # Indented to the outer item's text, the same ID attaches to the continuation.
+        spec.write_text(spec.read_text().replace("\n{: #req-test-charge-003}", "\n  {: #req-test-charge-003}"))
+        report = lint_file(spec)
+        assert report.errors == []
+        assert report.tagged == 3
+
+    def test_indented_code_block_is_not_prose(self, tmp_path):
+        spec = write_spec(tmp_path, "Intro.\n\n    Clients MUST x.\n    {: #req-test-charge-001}\n")
+        report = lint_file(spec)
+        assert report.total == 0
+
 class TestMain:
     def test_warn_mode_exits_zero(self, tmp_path):
         spec = write_spec(tmp_path, "Clients MUST NOT reuse it.\n")
