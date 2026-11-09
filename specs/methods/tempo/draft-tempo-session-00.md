@@ -522,8 +522,9 @@ Transfers `cumulativeAmount - channel.settled` to payee, refunds
 `channel.settled <= cumulativeAmount <= channel.deposit`. Unlike
 `settle`, `close` accepts `cumulativeAmount == channel.settled`,
 which transfers nothing to the payee and refunds the rest of the
-deposit. `close` has no separate capture amount: it captures the full
-`cumulativeAmount` of the voucher it is given (see
+deposit. This v1 `close` has no separate capture amount: it captures
+the full `cumulativeAmount` of the voucher it is given. The v2
+channel's close takes a capture amount instead (see
 {{cooperative-close}}).
 
 ~~~solidity
@@ -1666,15 +1667,19 @@ A v1 `close()` has no capture amount and captures the full
 `cumulativeAmount` of the voucher it is given. For v1, the bound holds
 only through the choice of voucher: servers MUST close with the lowest
 accepted voucher, the client's close voucher included, whose
-`cumulativeAmount` is at least `max(spent, settledOnChain)`. That
-voucher can exceed the consumed amount only when no signed voucher
-equals it; the excess is the gap between two amounts the client
-signed. The close voucher is exempt from the monotonicity check and
-the pending close request check in {{voucher-verification}}, since a
-close is what the payee does during a forced close: it MAY be lower
-than `highestVoucherAmount`, and servers MUST accept it when it is at
-least `max(spent, settledOnChain)` and at most the deposit. Unless it
-equals `highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
+`cumulativeAmount` is at least `max(spent, settledOnChain)`. A
+`settle` the server has broadcast that is not yet final counts toward
+`settledOnChain` here: servers MUST wait for it to execute or fail
+before choosing the close voucher, since a close below a settled
+amount reverts. The chosen voucher can exceed the consumed amount only
+when no signed voucher equals it; the excess is the gap between two
+amounts the client signed. The close voucher is exempt from the
+monotonicity check and the pending close request check in
+{{voucher-verification}}, since a close is what the payee does during
+a forced close: it MAY be lower than `highestVoucherAmount`, and
+servers MUST accept it when it is at least
+`max(spent, settledOnChain)` and at most the deposit. Unless it equals
+`highestVoucherAmount`, its `cumulativeAmount` MUST also exceed
 `settledOnChain`: every settled voucher is public in `settle`
 calldata, so without this check anyone could replay one to close the
 channel. When the `spent` amount in the latest receipt exceeds the
