@@ -61,20 +61,25 @@
       "contentMediaType": "application/json",
       "contentSchema": { "type": "object", "additionalProperties": { "type": "string" } }
     },
+    "ParamValue": {
+      "description": "An auth-param value after token or quoted-string decoding (RFC 9110): no control characters but HTAB, since neither grammar can carry CR, LF or another one.",
+      "type": "string",
+      "pattern": "^[^\\u0000-\\u0008\\u000A-\\u001F\\u007F]*$"
+    },
     "Challenge": {
       "type": "object",
       "propertyNames": { "description": "RFC 9110 token, lowercase (core draft auth-param syntax and lowercase parameter names)", "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+$" },
       "required": ["id", "realm", "method", "intent", "request"],
-      "additionalProperties": { "type": "string" },
+      "additionalProperties": { "$ref": "#/$defs/ParamValue" },
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "realm": { "type": "string" },
+        "id": { "$ref": "#/$defs/ParamValue", "minLength": 1 },
+        "realm": { "$ref": "#/$defs/ParamValue" },
         "method": { "$ref": "#/$defs/PaymentMethodId" },
         "intent": { "$ref": "#/$defs/IntentId" },
         "request": { "$ref": "#/$defs/JsonObject" },
         "expires": { "type": "string", "format": "date-time" },
-        "description": { "type": "string" },
-        "digest": { "type": "string" },
+        "description": { "$ref": "#/$defs/ParamValue" },
+        "digest": { "$ref": "#/$defs/ParamValue" },
         "header": { "const": "Payment-Authorization" },
         "opaque": { "$ref": "#/$defs/Opaque" }
       }

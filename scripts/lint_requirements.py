@@ -66,14 +66,21 @@ EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\
 # The line closing a block {::comment} (kramdown's EXT_BLOCK_STOP_STR), relative to the
 # opener's container: at most three spaces in. kramdown drops everything up to it.
 EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
+# The same for a block {::nomarkdown}: kramdown copies its body to the output raw, so a
+# {: #req-...} line in it is raw text, never an anchor.
+EXT_NOMARKDOWN_STOP = re.compile(r"^ {0,3}\{:/(?:nomarkdown)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
 # Inline math ($$...$$): kramdown reads its content literally, so a <!-- inside it opens no
 # comment, and a formula states no rule. An escaped opener (\$$, after an even number of
 # backslashes, group 1) is a literal dollar; the closer is formula text, escaped or not.
 # An inline link's destination (](url "title")): kramdown reads it literally, so a $$, backtick
-# or <!-- in a URL opens nothing. It is kept as text; INLINE_MARKUP drops it later.
-LINK_DEST = re.compile(r"\]\([^)]*\)")
+# or <!-- in a URL opens nothing. It is kept as text; INLINE_MARKUP drops it later. The URL may
+# be <...> or hold balanced parentheses, and the title may hold a ), as kramdown allows.
+LINK_DEST = re.compile(
+    r"\]\((?:<[^>\n]*>|(?:[^()\s]|\([^()\s]*\))*)"
+    r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"
+)
 MATH_SPAN = re.compile(r"(?<!\\)((?:\\\\)*)\$\$.*?\$\$")
 # An inline HTML comment or {::comment} span that kramdown drops: its opener is not escaped
 # (an even number of backslashes, group 1, before it). An escaped opener (\<!-- or \{::)
@@ -582,11 +589,13 @@ def segments(
             current.rest.append(stripped)
             current.end = number
             continue
-        if ext and ext.group(1) == "comment" and not ext.group(2):
+        if ext and ext.group(1) in ("comment", "nomarkdown") and not ext.group(2):
             # The stop tag must be in the opener's own quote and list item (container_end).
-            # The comment doesn't end that item's list, but one less indented does.
+            # The comment doesn't end that item's list, but one less indented does. A raw
+            # {::nomarkdown} body is skipped the same way: nothing in it is Markdown.
             stack = [c for c in list_stack if c <= column]
-            ext_comment_close = container_end(lines, number, stack[-1] if stack else 0, EXT_COMMENT_STOP)
+            stop = EXT_COMMENT_STOP if ext.group(1) == "comment" else EXT_NOMARKDOWN_STOP
+            ext_comment_close = container_end(lines, number, stack[-1] if stack else 0, stop)
             if ext_comment_close:
                 code_lines.add(number)
                 list_stack[:] = stack
@@ -600,7 +609,7 @@ def segments(
         )
         if (
             (stripped.startswith(("#", "|", "<!--")) and not unclosed_opener)
-            or (ext and not (ext.group(1) == "comment" and not ext.group(2)))
+            or (ext and not (ext.group(1) in ("comment", "nomarkdown") and not ext.group(2)))
             or re.match(r"^---\s*\w*$", stripped)
         ):
             if stripped.startswith("<!--") and "-->" not in stripped[4:]:

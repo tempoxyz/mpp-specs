@@ -396,6 +396,28 @@ def test_dollars_in_link_destination_open_no_math():
     assert table_keywords(["| a | b |", "|---|---|", "| x | [y]($$) MUST $$ |"]) == [3]
 
 
+def test_link_destination_with_parentheses_or_title_stays_literal():
+    # kramdown accepts balanced parentheses, a <...> URL and a quoted title holding a ), so
+    # a $$ after any of them pairs with nothing in the URL (checked with kramdown-rfc).
+    for line in [
+        "A [x](https://e.x/a_(b)) MUST $$ y $$.",
+        "B [x](<https://e.x/$$)>) SHOULD $$.",
+        "C [x](https://e.x/ \"t)$$\") MAY $$.",
+    ]:
+        found, _, _, _ = segments(["Intro.", "", line])
+        assert [s.line for s in found if s.is_requirement] == [3], line
+
+
+def test_nomarkdown_block_body_is_raw():
+    # kramdown copies a {::nomarkdown} body raw (checked with kramdown-rfc), so an IAL line
+    # in it tags nothing.
+    # Right after a paragraph the tag is span text and the IAL does tag it, as kramdown does.
+    lines = ["Intro.", "", "A rule MUST hold.", "", "{::nomarkdown}", "{: #req-x-001}", "{:/nomarkdown}"]
+    found, _, _, code = segments(lines)
+    assert all(s.ids == [] for s in found)
+    assert {5, 6, 7} <= code
+
+
 def test_unclosed_html_comment_opener_line_is_prose():
     # kramdown renders the unclosed <!-- line itself as paragraph text (checked with
     # kramdown-rfc), so its keyword is a requirement that needs an ID, quoted or not.
