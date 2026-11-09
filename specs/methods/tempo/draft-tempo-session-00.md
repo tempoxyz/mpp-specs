@@ -1572,6 +1572,12 @@ When the client sends `action="close"`:
 Servers SHOULD close promptly when clients request—the economic
 incentive is to claim earned funds immediately.
 
+After accepting a close request, servers MUST NOT deliver further
+metered service on the channel. Servers MUST choose the close voucher
+and capture amount only after charging stops and every charge already
+in progress has persisted `spent`, so that no service is delivered
+after the capture amount is fixed.
+
 Servers MUST NOT capture more than the amount actually consumed by
 delivered service (for v1, within the limit below). A client can pre-authorize more funds than were spent;
 the server MUST use its accounting state to determine the close capture
