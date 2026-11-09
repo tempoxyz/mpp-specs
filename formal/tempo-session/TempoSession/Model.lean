@@ -21,7 +21,8 @@
   * One escrow deployment per model instance; vouchers for other escrows/chains may exist in sigs.
   * Server accounting (§12) is keyed per channel and reads chain state with no lag (§14.12 ignored).
   * The payee's operator (TIP-1034 descriptor.operator) is not modelled: only the payee settles
-    and closes.
+    and closes, and Key omits the operator. The EIP-712 domain's name and version are not
+    modelled either, so P5 binds only the components Key and Voucher hold.
 
   Spec guards that the contract-function sections (§6.4.x) do NOT state, but that other sections
   imply, are Cfg flags. Theorems hold for every Cfg with all flags on (Cfg.Guarded); see

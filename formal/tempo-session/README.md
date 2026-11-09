@@ -48,7 +48,7 @@ Every theorem holds for all reachable states with the guards on (`Cfg.Guarded`: 
 | P3 | Settled and accepted amounts only grow; lower vouchers and replays are rejected | `P3_*` |
 | P4a | The payer can always force-close: requestClose, wait the grace period, withdraw. Only a topUp the payer signed cancels a pending request, so this holds whatever others do meanwhile. The model counts a topUp as the payer's action; a payee that broadcasts one the payer signed earlier can cancel the request, which #399 rules out by requiring servers to broadcast a top-up at once | `P4_withdraw_enabled`, `P4_forced_close_path`, `closeReq_sticky` |
 | P4b | A finalized channel refunds exactly deposit − settled | `P4_refund_is_deposit_minus_settled` |
-| P5 | A voucher only pays its own channel, escrow and chain | `P5_*` |
+| P5 | A voucher only pays its own channel, escrow and chain, as far as `Key` and the domain model them (see below) | `P5_*` |
 | P6 | A channel finalizes at most once and is frozen after | `P6_finalize_at_most_once`, `P6_finalized_frozen` |
 | P7 | topUp preserves the invariant, and a finalized channel holds no residual funds | `P7_*` |
 | P8 | Service charged (`spent`, which bounds delivered service) ≤ accepted amount | `P8_delivered_le_accepted` |
@@ -71,4 +71,4 @@ The one-step theorems that only read a guard back (`P3_*_rejected`, `P3_server_*
 - There is one server, and it is every channel's payee: the payee and token checks of §11.1 Open Verification step 2 are assumed, not modelled. P8b shows `k.payee` can settle what the server accepted.
 - The server reads chain state with no lag; reorgs aren't modelled.
 - Token transfers are ghost counters (`paid`, `refunded`, `deposited`) per channel.
-- The payee's operator isn't modelled.
+- The payee's operator isn't modelled, so `Key` omits the v2 descriptor's operator. The EIP-712 domain is (chainId, verifyingContract); its name and version aren't modelled. P5 covers only the components `Key` and `Voucher` hold: two channels that differ only by operator, or v1 and v2 domains of one contract address, aren't told apart.
