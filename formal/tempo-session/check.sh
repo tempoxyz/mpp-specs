@@ -4,17 +4,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# The axiom audit only sees modules that TempoSession/Audit.lean imports, so every module
-# must be imported there. lakefile.toml builds every module either way (globs), so a module
-# missing here would be type-checked but not audited.
-for file in TempoSession/*.lean; do
+# The axiom audit only sees modules that TempoSession/Audit.lean imports. lakefile.toml
+# builds every module either way (globs), so a module missing there would be type-checked
+# but not audited. The audit prints the modules it saw, from Lean's own environment, and
+# the end of this script compares that list with the files below.
+expected=$(for file in TempoSession/*.lean; do
   module="TempoSession.$(basename "$file" .lean)"
-  [ "$module" = TempoSession.Audit ] && continue
-  if ! grep -qx "import $module" TempoSession/Audit.lean; then
-    echo "FAIL: $module is not imported by TempoSession/Audit.lean, so it is not audited"
-    exit 1
-  fi
-done
+  [ "$module" = TempoSession.Audit ] || echo "$module"
+done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')
 if [ -n "$(find TempoSession -mindepth 2 -name '*.lean')" ]; then
   echo "FAIL: keep modules directly under TempoSession/ (the import check reads only that level)"
   exit 1
@@ -44,4 +41,11 @@ log=$(lake build 2>&1) || { echo "$log"; exit 1; }
 echo "$log"
 summary=$(grep -o 'axiom audit: [0-9]* theorems use only standard axioms' <<<"$log" || true)
 [ -n "$summary" ] || { echo "FAIL: the axiom audit did not run"; exit 1; }
+# Lean prints the list on the info line, unquoted and space-separated.
+audited=$(grep -o 'audited modules: .*' <<<"$log" | head -n 1 | sed 's/^audited modules: //' \
+  | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')
+if [ "$audited" != "$expected" ]; then
+  echo "FAIL: the audit saw modules [$audited], but TempoSession/ holds [$expected]"
+  exit 1
+fi
 echo "OK: $summary"

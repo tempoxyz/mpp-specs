@@ -59,5 +59,11 @@ elab "#audit_tempo_session" : command => do
         throwError m!"axiom audit: {name} depends on non-standard axiom {ax}"
     if let .thmInfo _ := info then audited := audited + 1
   logInfo m!"axiom audit: {audited} theorems use only standard axioms"
+  -- The modules this audit saw, read from the environment rather than from Audit.lean's text
+  -- (where a commented-out import would look real). check.sh compares this list with the
+  -- files on disk, so a module that is built but not imported here fails the check.
+  let mods := env.header.moduleNames.toList.filter (fun m => (`TempoSession).isPrefixOf m)
+  let names := (mods.map toString).toArray.qsort (· < ·)
+  logInfo m!"audited modules: {" ".intercalate names.toList}"
 
 #audit_tempo_session
