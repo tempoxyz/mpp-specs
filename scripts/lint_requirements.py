@@ -445,7 +445,9 @@ class Report:
         return [m if n is None else f"line {n}: {m}" for n, m in self.problems]
 
     def error(self, line: int | None, message: str) -> None:
-        self.problems.append((line, message))
+        # Two checks can find the same misplaced ID; report it once.
+        if (line, message) not in self.problems:
+            self.problems.append((line, message))
 
 
 def short_name(path: Path) -> str:
@@ -562,7 +564,13 @@ def lint_file(path: Path) -> Report:
         for the ID right after the paragraph. An ID only written before it, or only in an
         ALD (which IALs anywhere can name), is taken as written: kramdown put it here.
         """
-        found = id_lines.get(req_id, [])
+        # Only IAL occurrences count: a later mention in prose, code or a comment doesn't
+        # place the ID after the block.
+        found = [
+            n
+            for n in id_lines.get(req_id, [])
+            if n not in code_lines and re.search(r"\{[^}]*" + re.escape(req_id), loud[n - 1])
+        ]
         if not found or any(n >= item.start for n in found):
             return None
         before = [n for n in found if not ALD_LINE.match(lines[n - 1])]

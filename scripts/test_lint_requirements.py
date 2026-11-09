@@ -976,3 +976,11 @@ def test_id_only_in_code_stays_quiet(tmp_path):
         "{: #req-test-charge-001}",
     )
     assert report.errors == []
+
+
+def test_ial_before_its_block_is_reported_despite_later_mentions(tmp_path):
+    # A later mention of the ID in prose or code is no IAL, so it doesn't place the ID.
+    for mention in ("See req-test-charge-001 above.", "See `req-test-charge-001` above.", ""):
+        report = lint_body(tmp_path, "Intro.", "", "{: #req-test-charge-001}", "P MUST x.", "", mention)
+        assert report.errors == [f"line {at(3)[0]}: req-test-charge-001 is not directly after a paragraph or list item"]
+        assert report.untagged == at(4)
