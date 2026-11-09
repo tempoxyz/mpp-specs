@@ -44,6 +44,9 @@ def test_render_adds_defaults_without_duplicates():
     assert "/specs/core/draft-httpauth-payment-??.md @brendanjryan" in lines
     assert "/specs/methods/solana/draft-solana-charge-??.md @lgalabru @brendanjryan" in lines
     assert "/specs/methods/x/draft-x-charge-??.md @brendanjryan" in lines
+    # The review policy is owned too, so it can't be changed without a default owner.
+    assert "/.github/CODEOWNERS @brendanjryan" in lines
+    assert "/scripts/gen_codeowners.py @brendanjryan" in lines
 
 
 def test_submitter_falls_back_when_github_fails(monkeypatch):
