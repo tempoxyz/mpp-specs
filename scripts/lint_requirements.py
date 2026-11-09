@@ -550,34 +550,32 @@ def ial_bodies(line: str) -> list[str]:
     return bodies
 
 
-@functools.lru_cache(maxsize=1024)
-def brace_marks(line: str) -> tuple[tuple[int, int], ...]:
-    """For each index of a line, the positions of the last { and } before it (-1 for none).
+@functools.lru_cache(maxsize=64)
+def brace_positions(line: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """The positions of every { and every } in a line, in order.
 
     Cached, so a line with many ID mentions is scanned once rather than once per mention.
+    Only brace positions are kept, so memory grows with the braces, not the line length.
     """
-    last_open = last_close = -1
-    marks: list[tuple[int, int]] = []
-    for index, char in enumerate(line):
-        marks.append((last_open, last_close))
-        if char == "{":
-            last_open = index
-        elif char == "}":
-            last_close = index
-    return tuple(marks)
+    opens = tuple(i for i, char in enumerate(line) if char == "{")
+    closes = tuple(i for i, char in enumerate(line) if char == "}")
+    return opens, closes
 
 
 def in_braces(line: str, text: str) -> bool:
     """Whether text occurs after a { with no } in between, as an IAL or ALD writes it.
 
-    The brace table is built once per line, so a run of unclosed braces or many ID
-    mentions on one line stays linear.
+    Each mention looks up the last { and } before it by binary search, so a run of
+    unclosed braces or many ID mentions on one line stays near linear.
     """
-    marks = brace_marks(line)
+    if "{" not in line:
+        return False
+    opens, closes = brace_positions(line)
     pos = 0
     while (found := line.find(text, pos)) >= 0:
-        opened, closed = marks[found]
-        if opened > closed:
+        opened = bisect.bisect_left(opens, found)
+        closed = bisect.bisect_left(closes, found)
+        if opened and (not closed or opens[opened - 1] > closes[closed - 1]):
             return True
         pos = found + 1
     return False
