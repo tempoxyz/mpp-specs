@@ -42,11 +42,16 @@ IAL_LINE = re.compile(r"^\s*\{:(?![:/])\s*([^}]*)\}\s*$")
 # An attribute-list definition ({:name: ...}) only names attributes for later use;
 # it attaches nothing to the block above it.
 ALD_LINE = re.compile(r"^\s*\{:[\w-]+:")
+# Its name and attributes, as kramdown reads them (ALD_START). An IAL naming it (a bare
+# word, {: name}) gets its attributes, wherever in the draft it is defined.
+ALD_DEF = re.compile(r"^\s*\{:(\w[\w-]*):((?:\\\}|[^}])+)\}\s*$")
 # One attribute of an IAL, as kramdown scans them (ALD_TYPE_ANY): a quoted key-value pair
-# (only id= sets an id, and title="#req-x" none), a run of #id and .class names, or any
-# other whitespace-separated token. kramdown ignores unquoted values such as id=x.
+# (only id= sets an id, and title="#req-x" none), a reference to an ALD by name, a run of
+# #id and .class names, or any other whitespace-separated token. kramdown ignores unquoted
+# values such as id=x.
 IAL_ATTR = re.compile(
-    r"""(?:^|(?<=\s))(?:(\w[\w-]*)=(?:"([^"]*)"|'([^']*)')|((?:#[A-Za-z][\w:-]*|\.[^\s.#]+)+)(?=\s|$)|\S+)"""
+    r"""(?:^|(?<=\s))(?:(\w[\w-]*)=(?:"([^"]*)"|'([^']*)')|(\w[\w-]*)(?=\s|$)|"""
+    r"""((?:#[A-Za-z][\w:-]*|\.[^\s.#]+)+)(?=\s|$)|\S+)"""
 )
 # Bullets, numbered items and definition-list definitions (": text"); each is its own block.
 LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
@@ -55,7 +60,7 @@ LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
 FENCE = re.compile(r"^( *)(~{3,})(.*)$")
 # A fence opener as kramdown reads it (FENCED_CODEBLOCK_MATCH): at its container's column 0,
 # with at most one info word ("~~~ json", not "~~~ a b").
-FENCE_OPEN = re.compile(r"^(~{3,})\s*\S*\s*$")
+FENCE_OPEN = re.compile(r"^(~{3,})(\s*\S*\s*)$")
 # A line that is only a kramdown block extension tag ({::name attrs}, {::name /}, {:/name} or
 # {:/}). Anything after the tag makes the line paragraph text instead.
 EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\w-]*)?\}\s*$")
@@ -65,6 +70,11 @@ EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
+# Inline markup that renders as nothing between letters: * emphasis, link brackets and
+# targets, HTML comments and tags, and span IALs and extension tags. Removing it shows a
+# keyword split by markup (M**UST**, [MU](x)ST, M<!-- -->UST), which renders whole.
+# Not _: kramdown leaves an intraword _ as text.
+INLINE_MARKUP = re.compile(r"<!--.*?-->|</?[A-Za-z][^>]*>|\{:[^}]*\}|\]\([^)]*\)|\]\[[^\]]*\]|[*\[\]]")
 # A character reference as kramdown decodes it (HTML_ENTITY_RE): &name;, &#77; or &#x4d;.
 # &#X4D; (capital X) and references without their ';' stay literal text.
 CHAR_REF = re.compile(r"&([\w:][\-\w.:]*);|&#(\d+);|&#x([0-9a-fA-F]+);")
@@ -112,6 +122,9 @@ class Segment:
     first: str
     end: int = 0
     ids: list[str] = field(default_factory=list)
+    # The attribute strings of its IALs; segments() turns them into ids at the end, once it
+    # has seen every ALD they may name.
+    ials: list[str] = field(default_factory=list)
     # Column of a list item's text; an IAL indented less applies to the whole list.
     indent: int = 0
     # Continuation lines, joined only when read (appending to one string is quadratic).
@@ -125,7 +138,10 @@ class Segment:
     def is_requirement(self) -> bool:
         text = EXT_COMMENT_SPAN.sub("", INLINE_CODE.sub("", self.text))
         # Decoded after code spans go: inside one, &#77; is shown literally.
-        return bool(KEYWORD.search(QUOTED_KEYWORDS.sub("", decode_refs(text))))
+        text = decode_refs(text)
+        # The source and the text with inline markup removed: a keyword in either counts, so
+        # the markup check only ever adds requirements.
+        return any(KEYWORD.search(QUOTED_KEYWORDS.sub("", t)) for t in (text, INLINE_MARKUP.sub("", text)))
 
 
 @dataclass
@@ -143,19 +159,27 @@ class Report:
         return self.tagged + len(self.untagged)
 
 
-def ial_ids(attrs: str) -> list[str]:
+def ial_ids(
+    attrs: str, alds: dict[str, list[str]] | None = None, seen: frozenset[str] = frozenset()
+) -> list[str]:
     """Return the IDs a block IAL sets, in order: #id names and quoted id="..." values.
 
-    kramdown keeps only the last one as the block's anchor.
+    kramdown keeps only the last one as the block's anchor. A name of an ALD in alds (its
+    definitions' attribute strings) brings in that ALD's IDs first, as kramdown applies
+    referenced ALDs before the IAL's own attributes. seen stops a reference cycle.
     """
     ids: list[str] = []
+    referenced: list[str] = []
     for match in IAL_ATTR.finditer(attrs):
-        key, double, single, names = match.groups()
+        key, double, single, ref, names = match.groups()
         if key == "id":
             ids.append(double if double is not None else single)
         elif names:
             ids.extend(re.findall(r"#([A-Za-z][\w:-]*)", names))
-    return ids
+        elif ref and alds and ref in alds and ref not in seen:
+            for definition in alds[ref]:
+                referenced.extend(ial_ids(definition, alds, seen | {ref}))
+    return referenced + ids
 
 
 def quote_depth(raw: str) -> int:
@@ -225,7 +249,17 @@ def fence_end(lines: list[str], number: int, base: int) -> int:
     opener = FENCE_OPEN.match(container_text(raw, quote_depth(raw))[base:])
     if not opener:
         return 0
-    return container_end(lines, number, base, re.compile(rf"^{opener.group(1)}~*\s*$"))
+    run, info = opener.groups()
+    # kramdown's regex backtracks: with no closer as long as the whole run, it tries a shorter
+    # run, down to ~~~, and reads the tildes it drops as the start of the info word
+    # (~~~~~~ is ~~~~ with info ~~). That works only with no space between them.
+    for length in range(len(run), 2, -1):
+        if length < len(run) and info.strip() and info[0].isspace():
+            break
+        end = container_end(lines, number, base, re.compile(rf"^~{{{length}}}~*\s*$"))
+        if end:
+            return end
+    return 0
 
 
 # A kramdown header ID ({#id} at the end of a heading line). A requirement ID there would be a
@@ -234,6 +268,13 @@ HEADING_ID = re.compile(r"^ {0,3}(?:> ?)*#{1,6}\s.*\{#(req-[^}\s]+)\}\s*$")
 # A tab after a space in a line's indentation. kramdown strips a list item's indentation
 # first and then expands such a tab from there, so expandtabs(4) can misplace the line.
 MIXED_INDENT = re.compile(r"^[ \t]*(?:> ?)*[ \t]* \t")
+
+
+def close_items(list_stack: list[int], column: int) -> None:
+    """Close the open list items whose text starts right of column: a block there is
+    outside them."""
+    while list_stack and list_stack[-1] > column:
+        list_stack.pop()
 
 
 def short_name(path: Path) -> str:
@@ -257,8 +298,13 @@ def segments(
     fenced and indented code), which table_keywords skips with the same rules.
     """
     result: list[Segment] = []
-    detached: list[tuple[int, str]] = []
-    misindented: list[tuple[int, str]] = []
+    # IAL attribute strings not attached to a segment, resolved to IDs at the end like
+    # Segment.ials.
+    detached_ials: list[tuple[int, str]] = []
+    misindented_ials: list[tuple[int, str]] = []
+    # ALD definitions by name, in draft order. kramdown resolves references after parsing,
+    # so an ALD applies to IALs before it too.
+    alds: dict[str, list[str]] = {}
     current: Segment | None = None
     # Text columns of the open list items, outermost first. They survive blank lines,
     # so a later paragraph indented to one (a loose-list continuation) still belongs
@@ -331,16 +377,20 @@ def segments(
             current.end = number
             continue
         if ial:
-            ids = ial_ids(ial.group(1))
+            lazy_indent = 0
             if current is not None and column < current.indent:
-                # kramdown ends the list here and puts the IAL on the list, not the item.
-                misindented.extend((number, i) for i in ids if i.startswith("req-"))
+                # kramdown ends the list here and puts the IAL on the list, not the item. The
+                # items it closes take no more blocks, and no lazy line follows: a paragraph
+                # after it is outside the list.
+                misindented_ials.append((number, ial.group(1)))
+                close_items(list_stack, column)
             elif current is not None:
-                current.ids.extend(ids)
+                current.ials.append(ial.group(1))
+                # The item stays open: kramdown still reads the next line as its text.
+                lazy_indent = current.indent
             else:
-                detached.extend((number, i) for i in ids if i.startswith("req-"))
+                detached_ials.append((number, ial.group(1)))
             # kramdown ends the block at the IAL: the next line starts a new one.
-            lazy_indent = current.indent if current is not None and current.indent else 0
             current = None
             continue
         lazy, lazy_indent = lazy_indent, 0
@@ -348,9 +398,11 @@ def segments(
             current = None
             continue
         ext = EXT_BLOCK.match(stripped)
-        if ext and ext.group(1) in ("comment", None) and current is not None:
-            # Inside a paragraph kramdown reads {::comment} and its stop tag as a span: the
-            # paragraph goes on and EXT_COMMENT_SPAN drops the comment from its text.
+        if ext and current is not None:
+            # Extension tags don't end a kramdown paragraph (PARAGRAPH_END): inside one,
+            # kramdown reads {::comment}, {::options /}, {::nomarkdown} and stop tags as spans
+            # and the paragraph goes on, so a ~~~ after them is still its text.
+            # EXT_COMMENT_SPAN drops a comment from that text.
             current.rest.append(stripped)
             current.end = number
             continue
@@ -372,15 +424,24 @@ def segments(
                 code_lines.add(number)
                 in_comment = True
             current = None
-            list_stack.clear()
+            if stripped.startswith("---"):
+                # A thematic break (or a kramdown-rfc section line) ends every open list.
+                list_stack.clear()
+            else:
+                # A heading, table, comment or extension indented to an open item's text is
+                # more of that item: only the items it is less indented than end.
+                close_items(list_stack, column)
             continue
         if ALD_LINE.match(line):
+            ald = ALD_DEF.match(line)
+            if ald:
+                alds.setdefault(ald.group(1), []).append(ald.group(2))
             current = None
             continue
         if BLOCK_END.match(stripped):
             current = None
             if not stripped.startswith("^"):
-                list_stack.clear()
+                close_items(list_stack, column)
             continue
         if current is None and THEMATIC_BREAK.match(stripped):
             list_stack.clear()
@@ -397,6 +458,16 @@ def segments(
             while list_stack and list_stack[-1] > column:
                 list_stack.pop()
             list_stack.append(marker.end())
+            # The item's first block can be a fence: kramdown reads the text after the marker
+            # from the item's column 0 (- ~~~). Only where kramdown starts an item here: a
+            # definition (:) always does, a bullet or number not inside top-level paragraph
+            # text, which it can't interrupt.
+            if current is None or current.indent or stripped.startswith(":"):
+                fence_close = fence_end(lines, number, marker.end())
+                if fence_close:
+                    code_lines.add(number)
+                    current = None
+                    continue
             current = Segment(number, stripped, number, indent=marker.end())
             result.append(current)
         elif current is None:
@@ -410,7 +481,13 @@ def segments(
         else:
             current.rest.append(stripped)
             current.end = number
-    return result, detached, misindented, code_lines
+
+    def req_ids(found: list[tuple[int, str]]) -> list[tuple[int, str]]:
+        return [(n, i) for n, attrs in found for i in ial_ids(attrs, alds) if i.startswith("req-")]
+
+    for segment in result:
+        segment.ids = [i for attrs in segment.ials for i in ial_ids(attrs, alds)]
+    return result, req_ids(detached_ials), req_ids(misindented_ials), code_lines
 
 
 def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list[int]:

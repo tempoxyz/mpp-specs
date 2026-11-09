@@ -520,3 +520,119 @@ def test_huge_decimal_character_reference_stays_as_written():
     # More digits than Python's int-from-string limit: left as text, no crash.
     ref = "&#" + "7" * 5000 + ";"
     assert decode_refs(ref + "UST") == ref + "UST"
+
+def test_fence_on_a_list_marker_line(tmp_path):
+    # Checked against kramdown-rfc (finding: a fence opening on its item's marker line). The
+    # text after "- ", "1. " or ": " starts the item's first block, so "- ~~~" opens a fence
+    # there. Missing it, the lint read the real closer as an opener that took the ~~~ after
+    # the rule, and hid a rendered rule.
+    for marker in ("- ", "1. ", "-   "):
+        pad = " " * len(marker)
+        lines = [f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~"]
+        found, _, _, code = segments(lines)
+        assert [s.first for s in found if s.is_requirement] == ["Clients MUST verify."], marker
+        assert code == {1, 2, 3, 4}, marker
+    # Right after a sibling item, a parent item or a definition's term, it opens one too.
+    for before, marker in (("- Item", "- "), ("- Item", "  - "), ("Term", ": ")):
+        pad = " " * len(marker)
+        lines = [before, f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~"]
+        found, _, _, code = segments(lines)
+        assert "Clients MUST verify." in [s.first for s in found], marker
+        assert code == {2, 3, 4, 5}, marker
+    # Not after top-level paragraph text, which a list can't interrupt: all of it is text.
+    found, _, _, code = segments(["Text", "- ~~~", "  Servers MUST x.", "  ~~~"])
+    assert any(s.is_requirement for s in found) and not code
+
+
+def test_split_keyword_in_inline_markup_is_a_requirement(tmp_path):
+    # Checked against kramdown-rfc: emphasis, a link or an HTML comment or tag inside the
+    # keyword still renders MUST. An intraword _ stays as text (M_UST_), as does \U.
+    spec = write_spec(
+        tmp_path,
+        "A M**UST** b.\n\nC M<!-- x -->UST d.\n\nE [MU](https://x.example)ST f.\n\n"
+        "G M*UST h*.\n\nI M<span>UST</span> j.\n\nK M_UST_ l.\n\nM M\\UST n.\n\nO _M_UST p.\n",
+    )
+    assert lint_file(spec).untagged == [8, 10, 12, 14, 16]
+
+
+def test_fence_opener_backtracks_to_a_shorter_run(tmp_path):
+    # Checked against kramdown-rfc: with no closer as long as ~~~~~~, kramdown opens with a
+    # shorter run and reads the dropped tildes as the info word, so ~~~~ closes it. Lines 1-5
+    # are code and the rule renders; the lint used to pair lines 5 and 7 and hide it.
+    lines = ["~~~~~~", "x", "~~~", "", "~~~~", "Servers MUST verify the token.", "~~~~"]
+    found, _, _, code = segments(lines)
+    assert [s.first for s in found] == ["Servers MUST verify the token."] and code == {1, 2, 3, 4, 5}
+    # The other way: everything up to a later ~~~ is code, so the ID tags nothing.
+    found, _, _, code = segments(["~~~~~~", "Servers MUST x.", "{: #req-x-001}", "~~~"])
+    assert found == [] and code == {1, 2, 3, 4}
+    # An info word glued to the tildes backtracks too; one after a space doesn't.
+    found, _, _, code = segments(["~~~~~json", "x", "~~~~", "", "Servers MUST verify."])
+    assert code == {1, 2, 3}
+    found, _, _, code = segments(["~~~~~~ json", "x", "~~~", "", "~~~~", "Hidden MUST x.", "~~~~"])
+    assert code == {5, 6, 7} and not any(s.is_requirement for s in found)
+
+
+def test_paragraph_after_a_misindented_id_is_outside_the_list(tmp_path):
+    # Checked against kramdown-rfc: the column-0 ID ends the list and anchors it; the next
+    # paragraph, indented or lazy, is top-level, so its column-0 ID attaches to it.
+    for gap in ("\n  ", "\n"):
+        spec = write_spec(
+            tmp_path,
+            f"- Item MUST a.\n{{: #req-test-charge-001}}\n{gap}Para MUST b.\n{{: #req-test-charge-002}}\n",
+        )
+        report = lint_file(spec)
+        assert report.tagged == 1 and len(report.errors) == 1, gap
+        assert "req-test-charge-001 is not indented" in report.errors[0]
+    # A fence at column 0 ends the list the same way.
+    spec = write_spec(tmp_path, "- Item.\n\n~~~\ncode\n~~~\n\n  Indented para MUST x.\n{: #req-test-charge-001}\n")
+    report = lint_file(spec)
+    assert report.tagged == 1 and report.errors == []
+
+
+def test_extension_tag_inside_a_paragraph_keeps_it_open():
+    # Checked against kramdown-rfc: {::options /} or {::nomarkdown} right after paragraph text
+    # is a span, so the ~~~ lines after it are still that paragraph's text and the rule shows.
+    for tag in ('{::options toc_levels="2" /}', "{::nomarkdown}x{:/nomarkdown}", "{:/}"):
+        found, _, _, code = segments(["Intro text.", tag, "~~~", "Servers MUST verify.", "~~~"])
+        assert found[0].is_requirement and not code, tag
+    # At the start of a block it is one, and the fence after it opens.
+    found, _, _, code = segments(['{::options toc_levels="2" /}', "~~~", "Servers MUST verify.", "~~~"])
+    assert found == [] and code == {2, 3, 4}
+
+
+def test_indented_block_inside_a_list_item_keeps_the_list_open(tmp_path):
+    # Checked against kramdown-rfc: a comment, table, heading, extension or HTML block
+    # indented to the item's text stays in the item, so a column-0 ID after the next
+    # paragraph lands on the list. A thematic break ends the list instead.
+    for block in ("<!-- note -->", "| x | y |", "# Head", '{::options toc_levels="2" /}', "<div>"):
+        spec = write_spec(
+            tmp_path,
+            f"- A MUST b.\n  {{: #req-test-charge-001}}\n\n  {block}\n\n  C MUST d.\n{{: #req-test-charge-002}}\n",
+        )
+        report = lint_file(spec)
+        assert any("req-test-charge-002 is not indented" in e for e in report.errors), block
+    spec = write_spec(tmp_path, "- A MUST b.\n  {: #req-test-charge-001}\n\n  ***\n\n  C MUST d.\n{: #req-test-charge-002}\n")
+    assert lint_file(spec).errors == []
+
+
+def test_ids_from_attribute_list_definitions(tmp_path):
+    # Checked against kramdown-rfc: {: name} applies the ALD {:name: ...}, defined before or
+    # after it (not inside code), and a reference may name another ALD.
+    spec = write_spec(
+        tmp_path,
+        "{:reused: #req-test-charge-001}\n\nSome note.\n{: reused}\n\n"
+        "Servers MUST x.\n{: #req-test-charge-001}\n",
+    )
+    errors = lint_file(spec).errors
+    assert any("no BCP 14 keyword" in e for e in errors) and any("duplicate ID" in e for e in errors)
+    spec = write_spec(tmp_path, "Servers MUST x.\n{: a}\n\n{:a: b}\n{:b: #req-test-charge-001}\n")
+    report = lint_file(spec)
+    assert report.tagged == 1 and report.errors == []
+    spec = write_spec(tmp_path, "~~~\n{:tag: #req-test-charge-001}\n~~~\n\nServers MUST x.\n{: tag}\n")
+    assert lint_file(spec).untagged == [12]
+    # A literal ID next to a referenced one is a second requirement ID.
+    spec = write_spec(tmp_path, "Servers MUST x.\n{: tag #req-test-charge-002}\n\n{:tag: #req-test-charge-001}\n")
+    assert any("more than one requirement ID" in e for e in lint_file(spec).errors)
+    # A reference cycle doesn't loop.
+    found, _, _, _ = segments(["{:a: b}", "{:b: a #req-x-001}", "", "P MUST x.", "{: a}"])
+    assert found[0].ids == ["req-x-001"]
