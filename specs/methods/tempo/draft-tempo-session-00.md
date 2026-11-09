@@ -1287,19 +1287,23 @@ reached step 4 whenever an `open` or `action="voucher"` names its
 `channelId`, after a restart, and in a periodic sweep. When the
 channel is on chain and matches the reserved `open`, the server
 completes steps 2-4 from the stored `open` and chain state, without
-broadcasting again. If step 2 or 3 fails on a channel that the
-reserved `open` created (for example, the stored initial voucher is
-invalid, or the payer has requested a close), the server MUST still
-track the channel, with no accepted voucher and with
-`acceptedCumulative`, `spent` and `settledOnChain` equal to
-`channel.settled`, and MUST NOT accept the stored voucher or deliver
-service for that `open`. The client then continues with
-`action="voucher"`, `action="topUp"` or a close, each under its own
-verification. While the channel is not on chain, the server keeps the
-reservation as long as the stored `open` can still be mined, and
-releases it only as above, once that `open` reverts, is dropped, or
-expires. A client retrying with `action="voucher"` on an opened
-channel then finds its state.
+broadcasting again. If step 2 fails because `channel.payee` is not the
+server's address or `channel.token` is not the stored `currency`, the
+server MUST reject the channel: it keeps the reservation's record, so
+that the `channelId` cannot be opened again, and refuses every later
+voucher, top-up and request for service on it. If step 2 or 3 fails
+otherwise on a channel that the reserved `open` created (for example,
+the deposit is too small, the stored initial voucher is invalid, or
+the payer has requested a close), the server MUST still track the
+channel, with no accepted voucher and with `acceptedCumulative`,
+`spent` and `settledOnChain` equal to `channel.settled`, and MUST NOT
+accept the stored voucher or deliver service for that `open`. The
+client then continues with `action="voucher"`, `action="topUp"` or a
+close, each under its own verification. While the channel is not on
+chain, the server keeps the reservation as long as the stored `open`
+can still be mined, and releases it only as above, once that `open`
+reverts, is dropped, or expires. A client retrying with
+`action="voucher"` on an opened channel then finds its state.
 
 ## TopUp Verification
 
@@ -1318,8 +1322,6 @@ On `action="topUp"`, servers MUST:
    - Channel is not finalized
 3. Update server-side accounting:
    - Record the new `deposit`, which raises the cap on future vouchers
-   - Record `channel.closeRequestedAt` as read in step 2, which is
-     zero when this top-up cancelled a pending close request
    - Leave `acceptedCumulative` and `spent` unchanged: a top-up adds
      no spendable balance until the client sends a higher voucher
 
