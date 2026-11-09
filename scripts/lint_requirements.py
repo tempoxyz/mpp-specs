@@ -165,6 +165,9 @@ def segments(
     # Text column of a list item whose ID line just closed it. kramdown still reads the next
     # line as that item's text (a lazy continuation) unless a blank line comes first.
     lazy_indent = 0
+    # Inside a block HTML comment (a line opening with <!-- and no --> after it). kramdown
+    # drops everything up to the line holding -->, so its keywords and IDs don't count.
+    in_comment = False
     in_frontmatter = bool(lines) and lines[0].strip() == "---"
 
     for number, raw in enumerate(lines, start=1):
@@ -190,12 +193,22 @@ def segments(
         if fence:
             code_lines.add(number)
             continue
+        if in_comment:
+            code_lines.add(number)
+            in_comment = "-->" not in line
+            continue
         if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
             # Indented four or more past the open item's text (or the margin) with no
             # paragraph to continue: kramdown renders it as a code block, not prose.
             code_lines.add(number)
             continue
         ial = None if ALD_LINE.match(line) else IAL_LINE.match(line)
+        if ial and current is not None and column >= current.indent + 4:
+            # Four or more columns past the block's text: kramdown only reads an IAL indented
+            # up to three, so this line is more of the paragraph's text and tags nothing.
+            current.rest.append(stripped)
+            current.end = number
+            continue
         if ial:
             ids = ial_ids(ial.group(1))
             if current is not None and column < current.indent:
@@ -214,6 +227,9 @@ def segments(
             current = None
             continue
         if stripped.startswith(("#", "|", "{::", "<!--")) or re.match(r"^---\s*\w*$", stripped):
+            if stripped.startswith("<!--") and "-->" not in stripped[4:]:
+                code_lines.add(number)
+                in_comment = True
             current = None
             list_stack.clear()
             continue

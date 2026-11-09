@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from lint_requirements import ROOT, lint_file, main, short_name
+from lint_requirements import ROOT, lint_file, main, segments, short_name, table_keywords
 
 
 def write_spec(
@@ -328,3 +328,26 @@ class TestMain:
         drafts = sorted((ROOT / "specs/methods/tempo").glob("draft-tempo-charge-*.md"))
         assert drafts
         assert main(["--strict", str(drafts[-1])]) == 0
+
+
+def test_ial_indented_four_past_text_is_paragraph_text():
+    # kramdown reads an IAL only up to three columns in; deeper, it is more text.
+    lines = ["A rule MUST hold.", "    {: #req-x-001}", "", "* item MUST x.", "      {: #req-x-002}"]
+    found, detached, misindented, _ = segments(lines)
+    assert [s.ids for s in found] == [[], []]
+    assert detached == [] and misindented == []
+
+
+def test_block_html_comment_hides_keywords_and_ids():
+    lines = ["Intro.", "", "<!--", "A hidden rule MUST hold.", "{: #req-x-003}", "| MUST | x |", "-->", "", "Visible SHOULD x."]
+    found, detached, _, code = segments(lines)
+    assert [s.first for s in found] == ["Intro.", "Visible SHOULD x."]
+    assert detached == []
+    assert {3, 4, 5, 6, 7} <= code
+    assert table_keywords(lines, code) == []
+
+
+def test_one_line_html_comment_does_not_open_a_block():
+    lines = ["<!-- note -->", "A rule MUST hold.", "{: #req-x-001}"]
+    found, _, _, _ = segments(lines)
+    assert [s.ids for s in found] == [["req-x-001"]]
