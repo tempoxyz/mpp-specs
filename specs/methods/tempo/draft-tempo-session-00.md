@@ -1716,9 +1716,11 @@ monotonicity check and the pending close request check in
 a forced close: it MAY be lower than `highestVoucherAmount`, and
 servers MUST accept it when it is at least
 `max(spent, settledOnChain)` and at most the deposit. Its
-`cumulativeAmount` MUST also exceed `settledOnChain`: every settled
-voucher is public in `settle` calldata, so without this check anyone
-could replay one to close the channel (see {{voucher-disclosure}}).
+`cumulativeAmount` MUST also exceed `settledOnChain`, counting any
+`settle` the server has broadcast that has not failed: every settled
+voucher is public in `settle` calldata, and in the mempool once
+broadcast, so without this check anyone could replay one to close the
+channel (see {{voucher-disclosure}}).
 When the `spent` amount in the latest receipt exceeds the on-chain
 `settled` amount, clients SHOULD sign the close voucher for it, but
 never above the highest voucher they have already signed, so that the
@@ -1909,7 +1911,9 @@ To mitigate voucher flooding, servers MUST implement rate limiting:
 - Servers MUST enforce `minVoucherDelta` when present to prevent tiny increments
 - Servers MAY skip expensive signature verification for vouchers whose
   `cumulativeAmount` is below the accepted cumulative amount, because such
-  vouchers are rejected before they can advance state
+  vouchers are rejected before they can advance state. A close voucher
+  is the exception: it can be below that amount and still be acted on
+  (see {{cooperative-close}}), so servers MUST verify its signature
 
 Servers SHOULD perform format validation (field presence, hex encoding,
 length checks) before expensive ECDSA signature recovery to minimize
