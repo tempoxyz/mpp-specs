@@ -36,7 +36,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 - Frontmatter needs `title`, `abbrev`, `docname`, `version`, `category`, `ipr` (`noModificationTrust200902`), `submissiontype`, `consensus` and `author` (`name`, `ins`, `email`, `org` in that order); `lint_frontmatter.py` enforces it.
 - Avoid new hardcoded external section references such as `Section X.Y of {{I-D...}}`; allowed ones are listed in `scripts/allowed_external_section_refs.txt`.
 - Write in RFC 7322 style with RFC 2119/8174 keywords, terms defined before use, and Security and IANA Considerations in every draft (STYLE.md). Keep Markdown source lines under 72 characters.
-- Every normative statement carries a requirement ID, `{: #req-<draft>-<nnn>}` on the line after it, never renumbered or reused (STYLE.md). `python3 scripts/lint_requirements.py --strict <draft>` checks a tagged draft.
+- Every normative statement carries a requirement ID, `{: #req-<draft>-<nnn>}` on the line after it, never renumbered or reused (STYLE.md). `python3 scripts/lint_requirements.py --strict <draft>` checks a tagged draft. It reads the draft as kramdown-rfc renders it, so it needs kramdown-rfc (run it in the Docker image).
 - JSON and encoded examples must be valid and decode to what they claim; problem types used in drafts must have pages (`lint_problem_types.py`).
 - Cross-references flow downward: core → intents → methods.
 - Versioning: the core carries no wire version, intents carry none, and methods may add `methodDetails.version` (absent means 1) for breaking changes. Implementations ignore unknown fields.

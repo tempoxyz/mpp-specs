@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from lint_requirements import ROOT, decode_refs, lint_file, main, segments, short_name, table_keywords
+from lint_requirements import ROOT, annotation, lint_file, main, short_name
 
 
 def write_spec(
@@ -290,11 +290,15 @@ class TestIdProblems:
         assert len(lint_file(spec).untagged) == 2
 
     def test_block_end_lines_end_the_paragraph(self, tmp_path):
-        for end in ("^", "<div>"):
-            spec = write_spec(tmp_path, f"A MUST b.\n{end}\n{{: #req-test-charge-001}}\n")
-            report = lint_file(spec)
-            assert report.tagged == 0, end
-            assert any("not directly after" in e for e in report.errors), end
+        # kramdown drops the ID after ^, so it tags nothing.
+        spec = write_spec(tmp_path, "A MUST b.\n^\n{: #req-test-charge-001}\n")
+        report = lint_file(spec)
+        assert report.tagged == 0
+        assert any("not directly after" in e for e in report.errors)
+        # An unclosed <div> swallows the rest of the draft as raw HTML: kramdown-rfc's XML
+        # doesn't parse, and xml2rfc couldn't build it either.
+        spec = write_spec(tmp_path, "A MUST b.\n<div>\n{: #req-test-charge-001}\n")
+        assert any("doesn't parse" in e for e in lint_file(spec).errors)
 
     def test_rule_line_after_paragraph_text_stays_in_it(self, tmp_path):
         # kramdown-rfc keeps a *** right after a paragraph line as that paragraph's text.
@@ -337,110 +341,101 @@ class TestMain:
         assert main(["--strict", str(drafts[-1])]) == 0
 
 
-def test_ial_indented_four_past_text_is_paragraph_text():
-    # kramdown reads an IAL only up to three columns in; deeper, it is more text.
-    lines = ["A rule MUST hold.", "    {: #req-x-001}", "", "* item MUST x.", "      {: #req-x-002}"]
-    found, detached, misindented, _ = segments(lines)
-    assert [s.ids for s in found] == [[], []]
-    assert detached == [] and misindented == []
+# Below, each draft body is linted through kramdown-rfc. write_spec puts 7 lines before the
+# body, so body line n is draft line n + 7 (at).
+def lint_body(tmp_path, *lines: str):
+    return lint_file(write_spec(tmp_path, "\n".join(lines) + "\n"))
 
 
-def test_block_html_comment_hides_keywords_and_ids():
-    lines = ["Intro.", "", "<!--", "A hidden rule MUST hold.", "{: #req-x-003}", "| MUST | x |", "-->", "", "Visible SHOULD x."]
-    found, detached, _, code = segments(lines)
-    assert [s.first for s in found] == ["Intro.", "Visible SHOULD x."]
-    assert detached == []
-    assert {3, 4, 5, 6, 7} <= code
-    assert table_keywords(lines, code) == []
+def at(*numbers: int) -> list[int]:
+    return [n + 7 for n in numbers]
 
 
-def test_one_line_html_comment_does_not_open_a_block():
-    lines = ["<!-- note -->", "A rule MUST hold.", "{: #req-x-001}"]
-    found, _, _, _ = segments(lines)
-    assert [s.ids for s in found] == [["req-x-001"]]
+def test_ial_indented_four_past_text_is_paragraph_text(tmp_path):
+    # kramdown reads an IAL only up to three columns in; deeper, it is more text, so the ID
+    # shows in the rendered text instead of anchoring anything.
+    report = lint_body(tmp_path, "A rule MUST hold.", "    {: #req-test-charge-001}", "", "* item MUST x.", "      {: #req-test-charge-002}")
+    assert report.untagged == at(1, 4)
+    assert sum("renders as text" in e for e in report.errors) == 2
 
 
-def test_fence_inside_html_comment_is_comment_text():
+def test_block_html_comment_hides_keywords_and_ids(tmp_path):
+    report = lint_body(
+        tmp_path, "Intro.", "", "<!--", "A hidden rule MUST hold.", "{: #req-test-charge-003}", "| MUST | x |", "-->", "", "Visible SHOULD x."
+    )
+    assert report.untagged == at(9)
+    assert report.errors == []
+
+
+def test_one_line_html_comment_does_not_open_a_block(tmp_path):
+    report = lint_body(tmp_path, "<!-- note -->", "A rule MUST hold.", "{: #req-test-charge-001}")
+    assert report.tagged == 1 and report.errors == []
+
+
+def test_fence_inside_html_comment_is_comment_text(tmp_path):
     # The ~~~ is inside the comment, so it opens no fence and the rule after --> is prose.
-    lines = ["<!--", "~~~", "-->", "", "A rule MUST hold."]
-    found, _, _, code = segments(lines)
-    assert [s.first for s in found] == ["A rule MUST hold."]
-    assert 5 not in code
+    assert lint_body(tmp_path, "<!--", "~~~", "-->", "", "A rule MUST hold.").untagged == at(5)
 
 
-def test_unclosed_html_comment_hides_nothing():
-    # kramdown renders a <!-- with no --> as text, so the rule after it still needs its ID.
-    lines = ["Intro.", "", "<!-- unclosed note", "", "A rule MUST hold.", "{: #req-x-001}"]
-    found, _, _, code = segments(lines)
-    assert found[-1].ids == ["req-x-001"]
-    assert 5 not in code
+def test_unclosed_html_comment_is_a_render_error(tmp_path):
+    # kramdown-rfc copies a <!-- with no --> into its XML, which then doesn't parse: no such
+    # draft builds. Inside a blockquote kramdown escapes it as text instead.
+    report = lint_body(tmp_path, "Intro.", "", "<!-- unclosed note", "", "A rule MUST hold.", "{: #req-test-charge-001}")
+    assert len(report.errors) == 1 and "doesn't parse" in report.errors[0]
+    report = lint_body(tmp_path, "Intro.", "", "> <!-- unclosed note", "", "A rule MUST hold.", "{: #req-test-charge-001}")
+    assert report.tagged == 1 and report.untagged == [] and report.errors == []
 
 
-def test_code_span_and_math_pair_in_kramdown_order():
-    # kramdown takes the span that starts first (checked with kramdown-rfc): a backtick in
-    # $$...$$ pairs with nothing outside it, and a $$ in a code span opens no formula.
+def test_code_span_and_math_pair_in_kramdown_order(tmp_path):
+    # kramdown takes the span that starts first: a backtick in $$...$$ pairs with nothing
+    # outside it, and a $$ in a code span opens no formula.
     for line in ["Servers $$a`b$$ MUST verify `x`.", "And `a $$` SHOULD `$$ b`."]:
-        found, _, _, _ = segments(["Intro.", "", line])
-        assert [s.line for s in found if s.is_requirement] == [3]
-    assert table_keywords(["| a | b |", "|---|---|", "| x | $$`$$ MUST ` |"]) == [3]
+        assert lint_body(tmp_path, "Intro.", "", line).untagged == at(3), line
+    report = lint_body(tmp_path, "| a | b |", "|---|---|", "| x | $$`$$ MUST ` |")
+    assert any(e.startswith(f"line {at(3)[0]}: keyword in a table cell") for e in report.errors)
 
 
-def test_escaped_or_commented_dollars_open_no_math():
-    # Checked with kramdown-rfc: \$$ is a literal dollar, and a $$ inside an earlier comment
-    # is comment text, so neither opens a formula that would hide the keyword after it.
+def test_escaped_or_commented_dollars_open_no_math(tmp_path):
+    # \$$ is a literal dollar, and a $$ inside an earlier comment is comment text, so neither
+    # opens a formula that would hide the keyword after it.
     for line in ["A \\$$ MUST $$ x.", "B <!-- $$ --> SHOULD $$ y.", "C $$ <!-- $$ MAY -->."]:
-        found, _, _, _ = segments(["Intro.", "", line])
-        assert [s.line for s in found if s.is_requirement] == [3], line
-    assert table_keywords(["| a | b |", "|---|---|", "| x | <!-- $$ --> MUST $$ |"]) == [3]
+        assert lint_body(tmp_path, "Intro.", "", line).untagged == at(3), line
+    report = lint_body(tmp_path, "| a | b |", "|---|---|", "| x | <!-- $$ --> MUST $$ |")
+    assert any("table cell" in e for e in report.errors)
 
 
-def test_dollars_in_link_destination_open_no_math():
-    # kramdown reads a link destination literally (checked with kramdown-rfc), so its $$
-    # pairs with nothing after the link and the keyword between stays visible.
+def test_dollars_in_link_destination_open_no_math(tmp_path):
     for line in ["A [x](https://e.x/$$a) MUST $$ b.", "B [y]($$) SHOULD $$."]:
-        found, _, _, _ = segments(["Intro.", "", line])
-        assert [s.line for s in found if s.is_requirement] == [3], line
-    assert table_keywords(["| a | b |", "|---|---|", "| x | [y]($$) MUST $$ |"]) == [3]
+        assert lint_body(tmp_path, "Intro.", "", line).untagged == at(3), line
+    report = lint_body(tmp_path, "| a | b |", "|---|---|", "| x | [y]($$) MUST $$ |")
+    assert any("table cell" in e for e in report.errors)
 
 
-def test_link_destination_with_parentheses_or_title_stays_literal():
-    # kramdown accepts balanced parentheses, a <...> URL and a quoted title holding a ), so
-    # a $$ after any of them pairs with nothing in the URL (checked with kramdown-rfc).
+def test_link_destination_with_parentheses_or_title_stays_literal(tmp_path):
     for line in [
         "A [x](https://e.x/a_(b)) MUST $$ y $$.",
         "B [x](<https://e.x/$$)>) SHOULD $$.",
-        "C [x](https://e.x/ \"t)$$\") MAY $$.",
+        'C [x](https://e.x/ "t)$$") MAY $$.',
     ]:
-        found, _, _, _ = segments(["Intro.", "", line])
-        assert [s.line for s in found if s.is_requirement] == [3], line
+        assert lint_body(tmp_path, "Intro.", "", line).untagged == at(3), line
 
 
-def test_nomarkdown_block_body_is_raw():
-    # kramdown copies a {::nomarkdown} body raw (checked with kramdown-rfc), so an IAL line
-    # in it tags nothing.
-    # Right after a paragraph the tag is span text and the IAL does tag it, as kramdown does.
-    lines = ["Intro.", "", "A rule MUST hold.", "", "{::nomarkdown}", "{: #req-x-001}", "{:/nomarkdown}"]
-    found, _, _, code = segments(lines)
-    assert all(s.ids == [] for s in found)
-    assert {5, 6, 7} <= code
+def test_nomarkdown_block_body_is_raw(tmp_path):
+    # kramdown copies a {::nomarkdown} body raw, so an IAL line in it tags nothing: it is
+    # text in the XML, which the lint reports.
+    report = lint_body(tmp_path, "Intro.", "", "A rule MUST hold.", "", "{::nomarkdown}", "{: #req-test-charge-001}", "{:/nomarkdown}")
+    assert report.tagged == 0 and report.untagged == at(3)
+    assert any("renders as text" in e for e in report.errors)
 
 
-def test_unclosed_html_comment_opener_line_is_prose():
-    # kramdown renders the unclosed <!-- line itself as paragraph text (checked with
-    # kramdown-rfc), so its keyword is a requirement that needs an ID, quoted or not.
-    for opener in ["<!-- Servers MUST verify it.", "> <!-- Servers MUST verify it."]:
-        found, _, _, code = segments(["Intro.", "", opener, "", "More text."])
-        assert [s.line for s in found if s.is_requirement] == [3]
-        assert 3 not in code
+def test_unclosed_html_comment_opener_line_is_prose_in_a_quote(tmp_path):
+    # In a blockquote kramdown renders the unclosed <!-- line itself as paragraph text.
+    assert lint_body(tmp_path, "Intro.", "", "> <!-- Servers MUST verify it.", "", "More text.").untagged == at(3)
 
 
-def test_quoted_unclosed_comment_does_not_borrow_a_later_closer():
-    # kramdown parses the quote alone: its <!-- has no --> there, so it is text and the
-    # rule after the quote is still prose.
-    lines = ["Intro.", "", "> <!-- quoted unclosed", "", "A rule MUST hold.", "", "<!-- real -->"]
-    found, _, _, code = segments(lines)
-    assert "A rule MUST hold." in [s.first for s in found]
-    assert 5 not in code
+def test_quoted_unclosed_comment_does_not_borrow_a_later_closer(tmp_path):
+    report = lint_body(tmp_path, "Intro.", "", "> <!-- quoted unclosed", "", "A rule MUST hold.", "", "<!-- real -->")
+    assert report.untagged == at(5)
 
 
 def test_requirement_id_on_heading_is_an_error(tmp_path):
@@ -449,12 +444,10 @@ def test_requirement_id_on_heading_is_an_error(tmp_path):
     report = lint_file(draft)
     assert any("on a heading" in e for e in report.errors)
 
-def test_quoted_html_comment_closes_inside_its_quote():
-    # A --> on a following line of the same quote closes it: only the quote is hidden.
-    lines = ["> <!--", "> hidden MUST x.", "> -->", "", "A rule MUST hold.", "{: #req-x-001}"]
-    found, _, _, code = segments(lines)
-    assert [s.ids for s in found] == [["req-x-001"]]
-    assert {1, 2, 3} <= code and 5 not in code
+
+def test_quoted_html_comment_closes_inside_its_quote(tmp_path):
+    report = lint_body(tmp_path, "> <!--", "> hidden MUST x.", "> -->", "", "A rule MUST hold.", "{: #req-test-charge-001}")
+    assert report.tagged == 1 and report.total == 1 and report.errors == []
 
 
 def test_quoted_id_attribute_sets_the_id(tmp_path):
@@ -474,40 +467,38 @@ def test_quoted_id_attribute_sets_the_id(tmp_path):
     assert len(report.errors) == 2
 
 
-def test_block_kramdown_comment_hides_keywords_and_ids():
-    lines = ["Intro.", "", "{::comment}", "Hidden MUST x.", "{: #req-x-001}", "{:/comment}", "", "Visible SHOULD y."]
-    found, detached, _, code = segments(lines)
-    assert [s.first for s in found] == ["Intro.", "Visible SHOULD y."]
-    assert detached == [] and {3, 4, 5, 6} <= code
+def test_block_kramdown_comment_hides_keywords_and_ids(tmp_path):
+    report = lint_body(tmp_path, "Intro.", "", "{::comment}", "Hidden MUST x.", "{: #req-test-charge-001}", "{:/comment}", "", "Visible SHOULD y.")
+    assert report.untagged == at(8) and report.errors == []
 
 
-def test_kramdown_comment_in_a_paragraph_is_a_span():
+def test_kramdown_comment_in_a_paragraph_is_a_span(tmp_path):
     # Right after a paragraph line kramdown reads {::comment} as a span: the paragraph goes
     # on, the comment drops out, and the IAL after its stop tag tags the paragraph.
-    lines = ["P MUST one.", "{::comment}", "x MUST", "{:/comment}", "{: #req-x-001}", "", "A {::comment}MAY{:/comment} b."]
-    found, detached, _, _ = segments(lines)
-    assert [s.ids for s in found] == [["req-x-001"], []]
-    assert detached == [] and not found[1].is_requirement
+    report = lint_body(
+        tmp_path, "P MUST one.", "{::comment}", "x MUST", "{:/comment}", "{: #req-test-charge-001}", "", "A {::comment}MAY{:/comment} b."
+    )
+    assert report.tagged == 1 and report.total == 1 and report.errors == []
 
 
-def test_kramdown_comment_tag_with_text_after_it_is_a_paragraph():
-    lines = ["{::comment}x{:/comment} The client MUST go.", "{: #req-x-001}", "", "{::comment}y MUST{:/comment}"]
-    found, detached, _, _ = segments(lines)
-    assert found[0].ids == ["req-x-001"] and detached == []
-    assert not found[1].is_requirement
+def test_kramdown_comment_tag_with_text_after_it_is_a_paragraph(tmp_path):
+    report = lint_body(
+        tmp_path, "{::comment}x{:/comment} The client MUST go.", "{: #req-test-charge-001}", "", "{::comment}y MUST{:/comment}"
+    )
+    assert report.tagged == 1 and report.total == 1 and report.errors == []
 
 
-def test_unclosed_or_cross_quote_kramdown_comment_hides_nothing():
+def test_unclosed_or_cross_quote_kramdown_comment_hides_nothing(tmp_path):
     # Without a {:/comment} line (in the same quote) kramdown renders the tag as text.
-    lines = ["> {::comment}", "> hidden MUST", "", "{:/comment}", "", "{::comment}", "Rule MUST hold.", "{: #req-x-001}"]
-    found, _, _, code = segments(lines)
-    assert found[0].is_requirement and found[-1].ids == ["req-x-001"]
-    assert not {1, 2, 6, 7} & code
+    report = lint_body(
+        tmp_path, "> {::comment}", "> hidden MUST", "", "{:/comment}", "", "{::comment}", "Rule MUST hold.", "{: #req-test-charge-001}"
+    )
+    assert report.untagged == at(1) and report.tagged == 1
 
 
 def test_tab_after_space_in_indentation_is_an_error(tmp_path):
-    # kramdown expands "  \t" after stripping the item's two columns, making this a code
-    # block; expandtabs(4) would read it as the item's tagged paragraph.
+    # kramdown-rfc expands tabs before kramdown reads the draft ("undefined behavior will
+    # ensue"), so a tab after spaces is reported wherever it is.
     spec = write_spec(tmp_path, "* a\n\n  \tpara MUST x.\n  \t{: #req-test-charge-001}\n")
     report = lint_file(spec)
     assert sum("tab after a space" in e for e in report.errors) == 2
@@ -516,31 +507,29 @@ def test_tab_after_space_in_indentation_is_an_error(tmp_path):
     assert lint_file(spec).errors == []
 
 
-def test_kramdown_comment_stop_tag_must_be_in_the_openers_container():
-    # Checked against kramdown-rfc: a stop tag that is quoted, indented four or more, or
-    # outside the opener's list item closes nothing, so the opener is text and the rule after
-    # it renders. Up to three spaces in, in the same quote or item, it closes.
+def test_kramdown_comment_stop_tag_must_be_in_the_openers_container(tmp_path):
+    # A stop tag that is quoted, indented four or more, or outside the opener's list item
+    # closes nothing, so the opener is text and the rule after it renders. Up to three
+    # spaces in, in the same quote or item, it closes.
     for closer in ("> {:/comment}", "    {:/comment}"):
-        lines = ["{::comment}", "", "Servers MUST verify.", "", closer, "", "After."]
-        found, _, _, code = segments(lines)
-        assert [s.first for s in found if s.is_requirement] == ["Servers MUST verify."], closer
-        assert not {1, 2, 3} & code, closer
-    lines = ["- item", "", "  {::comment}", "", "Servers MUST verify.", "", "{:/comment}"]
-    found, _, _, code = segments(lines)
-    assert "Servers MUST verify." in [s.first for s in found] and not {3, 5} & code
-    lines = ["{::comment}", "hidden MUST", "   {:/comment}", "", "> {::comment}", "> hid MUST", ">    {:/}",
-             "", "- item", "", "  {::comment}", "  gone MUST", "     {:/comment}", "", "  Kept MUST x."]
-    found, _, _, code = segments(lines)
-    assert [s.first for s in found if s.is_requirement] == ["Kept MUST x."]
-    assert {1, 2, 3, 5, 6, 7, 11, 12, 13} <= code
-    # The comment doesn't end its item's list: the paragraph after it is still the item's.
-    assert found[-1].indent == 2
+        report = lint_body(tmp_path, "{::comment}", "", "Servers MUST verify.", "", closer, "", "After.")
+        assert report.untagged == at(3), closer
+    report = lint_body(tmp_path, "- item", "", "  {::comment}", "", "Servers MUST verify.", "", "{:/comment}")
+    assert report.untagged == at(5)
+    report = lint_body(tmp_path, "{::comment}", "hidden MUST", "   {:/comment}", "", "> {::comment}", "> hid MUST", ">    {:/}", "", "Kept MUST x.")
+    assert report.untagged == at(9)
 
 
-def test_fence_follows_kramdown_rules():
-    # Checked against kramdown-rfc. Each ~~~ below opens no fence (no closer in its container,
-    # an indented opener, two info words, or right after paragraph text), so the rule after
-    # it is prose; before this, the lint hid everything to the end of the draft.
+def test_kramdown_comment_block_in_a_loose_list_item_is_a_render_error(tmp_path):
+    # kramdown-rfc 1.7 crashes (NoMethodError in convert_li) on a {::comment} block between a
+    # list item's paragraphs, so no such draft builds.
+    report = lint_body(tmp_path, "- item", "", "  {::comment}", "  gone MUST", "  {:/comment}", "", "  Kept MUST x.")
+    assert len(report.errors) == 1 and report.errors[0].startswith("kramdown-rfc could not render the draft")
+
+
+def test_fence_follows_kramdown_rules(tmp_path):
+    # Each ~~~ below opens no fence (no closer in its container, an indented opener, two info
+    # words, or right after paragraph text), so the rule after it is prose.
     for body in (
         ["~~~", "x MUST a"],  # no closer
         ["```text", "~~~", "x MUST a", "```"],  # a ~~~ inside a backtick pair
@@ -548,24 +537,18 @@ def test_fence_follows_kramdown_rules():
         ["~~~ a b", "x MUST a", "~~~"],  # more than one info word
         ["> ~~~", "> x MUST a"],  # its closer is outside the quote
     ):
-        # A closer after the rule, which only the quoted opener can't reach; the first opener
-        # would take it, as kramdown does.
         tail = [] if body[0] == "~~~" else ["", "~~~"]
-        lines = ["Intro.", "", *body, "", "Rule MUST hold.", *tail]
-        found, _, _, code = segments(lines)
-        assert "Rule MUST hold." in [s.first for s in found], body
-        assert not code & set(range(3, 3 + len(body))), body
+        report = lint_body(tmp_path, "Intro.", "", *body, "", "Rule MUST hold.", *tail)
+        assert at(4 + len(body))[0] in report.untagged, body
     # A fence can't interrupt a paragraph or list item text: the ~~~ lines are its text.
-    found, _, _, code = segments(["P x.", "~~~", "code MUST", "~~~", "", "- i", "  ~~~", "  y MUST", "  ~~~"])
-    assert [s.is_requirement for s in found] == [True, True] and not code
+    report = lint_body(tmp_path, "P x.", "~~~", "code MUST", "~~~", "", "- i", "  ~~~", "  y MUST", "  ~~~")
+    assert report.untagged == at(1, 6)
     # Its closer must be in the opener's list item, at the item's text column.
-    lines = ["- item", "", "  ~~~", "  code", "", "Rule MUST hold.", "", "~~~"]
-    found, _, _, code = segments(lines)
-    assert "Rule MUST hold." in [s.first for s in found] and 6 not in code
+    report = lint_body(tmp_path, "- item", "", "  ~~~", "  code", "", "Rule MUST hold.", "", "~~~")
+    assert report.untagged == at(6)
     # A shorter run, an indented run or a run with text after it doesn't close the fence.
-    lines = ["~~~~", "~~~", "  ~~~~", "~~~~ x", "a MUST b", "~~~~~", "", "Rule MUST hold."]
-    found, _, _, code = segments(lines)
-    assert [s.first for s in found] == ["Rule MUST hold."] and set(range(1, 7)) <= code
+    report = lint_body(tmp_path, "~~~~", "~~~", "  ~~~~", "~~~~ x", "a MUST b", "~~~~~", "", "Rule MUST hold.")
+    assert report.untagged == at(8)
 
 
 def test_character_references_are_keywords(tmp_path):
@@ -577,41 +560,35 @@ def test_character_references_are_keywords(tmp_path):
         "G &#X4D;AY &#77UST `&#77;UST ` &quot;MUST&quot; h.\n\n| f | &#x4d;AY be set |\n",
     )
     report = lint_file(spec)
-    assert len(report.untagged) == 3
+    assert report.untagged == at(1, 3, 5)
     assert any("table cell" in e for e in report.errors)
 
 
-def test_huge_decimal_character_reference_stays_as_written():
-    # More digits than Python's int-from-string limit: left as text, no crash.
-    ref = "&#" + "7" * 5000 + ";"
-    assert decode_refs(ref + "UST") == ref + "UST"
+def test_huge_decimal_character_reference_stays_as_written(tmp_path):
+    # More digits than Python's int-from-string limit: kramdown leaves it as text.
+    report = lint_body(tmp_path, "X &#" + "7" * 5000 + ";UST y.")
+    assert report.total == 0
+
 
 def test_fence_on_a_list_marker_line(tmp_path):
-    # Checked against kramdown-rfc (finding: a fence opening on its item's marker line). The
-    # text after "- ", "1. " or ": " starts the item's first block, so "- ~~~" opens a fence
-    # there. Missing it, the lint read the real closer as an opener that took the ~~~ after
-    # the rule, and hid a rendered rule.
+    # The text after "- ", "1. " or ": " starts the item's first block, so "- ~~~" opens a
+    # fence there, and the rule after it renders.
     for marker in ("- ", "1. ", "-   "):
         pad = " " * len(marker)
-        lines = [f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~"]
-        found, _, _, code = segments(lines)
-        assert [s.first for s in found if s.is_requirement] == ["Clients MUST verify."], marker
-        assert code == {1, 2, 3, 4}, marker
+        report = lint_body(tmp_path, f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~")
+        assert report.untagged == at(6), marker
     # Right after a sibling item, a parent item or a definition's term, it opens one too.
     for before, marker in (("- Item", "- "), ("- Item", "  - "), ("Term", ": ")):
         pad = " " * len(marker)
-        lines = [before, f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~"]
-        found, _, _, code = segments(lines)
-        assert "Clients MUST verify." in [s.first for s in found], marker
-        assert code == {2, 3, 4, 5}, marker
+        report = lint_body(tmp_path, before, f"{marker}~~~", f"{pad}code", "", f"{pad}~~~", "", f"{pad}Clients MUST verify.", f"{pad}~~~")
+        assert report.untagged == at(7), marker
     # Not after top-level paragraph text, which a list can't interrupt: all of it is text.
-    found, _, _, code = segments(["Text", "- ~~~", "  Servers MUST x.", "  ~~~"])
-    assert any(s.is_requirement for s in found) and not code
+    assert lint_body(tmp_path, "Text", "- ~~~", "  Servers MUST x.", "  ~~~").untagged == at(1)
 
 
 def test_split_keyword_in_inline_markup_is_a_requirement(tmp_path):
-    # Checked against kramdown-rfc: emphasis, a link or an HTML comment or tag inside the
-    # keyword still renders MUST. An intraword _ stays as text (M_UST_), as does \U.
+    # Emphasis, a link or an HTML comment or tag inside the keyword still renders MUST. An
+    # intraword _ stays as text (M_UST_), as does \U.
     spec = write_spec(
         tmp_path,
         "A M**UST** b.\n\nC M<!-- x -->UST d.\n\nE [MU](https://x.example)ST f.\n\n"
@@ -621,25 +598,22 @@ def test_split_keyword_in_inline_markup_is_a_requirement(tmp_path):
 
 
 def test_fence_opener_backtracks_to_a_shorter_run(tmp_path):
-    # Checked against kramdown-rfc: with no closer as long as ~~~~~~, kramdown opens with a
-    # shorter run and reads the dropped tildes as the info word, so ~~~~ closes it. Lines 1-5
-    # are code and the rule renders; the lint used to pair lines 5 and 7 and hide it.
-    lines = ["~~~~~~", "x", "~~~", "", "~~~~", "Servers MUST verify the token.", "~~~~"]
-    found, _, _, code = segments(lines)
-    assert [s.first for s in found] == ["Servers MUST verify the token."] and code == {1, 2, 3, 4, 5}
+    # With no closer as long as ~~~~~~, kramdown opens with a shorter run and reads the
+    # dropped tildes as the info word, so ~~~~ closes it and the rule renders.
+    report = lint_body(tmp_path, "~~~~~~", "x", "~~~", "", "~~~~", "Servers MUST verify the token.", "~~~~")
+    assert report.untagged == at(6)
     # The other way: everything up to a later ~~~ is code, so the ID tags nothing.
-    found, _, _, code = segments(["~~~~~~", "Servers MUST x.", "{: #req-x-001}", "~~~"])
-    assert found == [] and code == {1, 2, 3, 4}
+    report = lint_body(tmp_path, "~~~~~~", "Servers MUST x.", "{: #req-test-charge-001}", "~~~")
+    assert report.total == 0 and report.errors == []
     # An info word glued to the tildes backtracks too; one after a space doesn't.
-    found, _, _, code = segments(["~~~~~json", "x", "~~~~", "", "Servers MUST verify."])
-    assert code == {1, 2, 3}
-    found, _, _, code = segments(["~~~~~~ json", "x", "~~~", "", "~~~~", "Hidden MUST x.", "~~~~"])
-    assert code == {5, 6, 7} and not any(s.is_requirement for s in found)
+    assert lint_body(tmp_path, "~~~~~json", "x", "~~~~", "", "Servers MUST verify.").untagged == at(5)
+    report = lint_body(tmp_path, "~~~~~~ json", "x", "~~~", "", "~~~~", "Hidden MUST x.", "~~~~")
+    assert report.total == 0
 
 
 def test_paragraph_after_a_misindented_id_is_outside_the_list(tmp_path):
-    # Checked against kramdown-rfc: the column-0 ID ends the list and anchors it; the next
-    # paragraph, indented or lazy, is top-level, so its column-0 ID attaches to it.
+    # The column-0 ID ends the list and anchors it; the next paragraph, indented or lazy, is
+    # top-level, so its column-0 ID attaches to it.
     for gap in ("\n  ", "\n"):
         spec = write_spec(
             tmp_path,
@@ -654,22 +628,22 @@ def test_paragraph_after_a_misindented_id_is_outside_the_list(tmp_path):
     assert report.tagged == 1 and report.errors == []
 
 
-def test_extension_tag_inside_a_paragraph_keeps_it_open():
-    # Checked against kramdown-rfc: {::options /} or {::nomarkdown} right after paragraph text
-    # is a span, so the ~~~ lines after it are still that paragraph's text and the rule shows.
+def test_extension_tag_inside_a_paragraph_keeps_it_open(tmp_path):
+    # {::options /} or {::nomarkdown} right after paragraph text is a span, so the ~~~ lines
+    # after it are still that paragraph's text and the rule shows.
     for tag in ('{::options toc_levels="2" /}', "{::nomarkdown}x{:/nomarkdown}", "{:/}"):
-        found, _, _, code = segments(["Intro text.", tag, "~~~", "Servers MUST verify.", "~~~"])
-        assert found[0].is_requirement and not code, tag
+        report = lint_body(tmp_path, "Intro text.", tag, "~~~", "Servers MUST verify.", "~~~")
+        assert report.untagged == at(1), tag
     # At the start of a block it is one, and the fence after it opens.
-    found, _, _, code = segments(['{::options toc_levels="2" /}', "~~~", "Servers MUST verify.", "~~~"])
-    assert found == [] and code == {2, 3, 4}
+    report = lint_body(tmp_path, '{::options toc_levels="2" /}', "~~~", "Servers MUST verify.", "~~~")
+    assert report.total == 0
 
 
 def test_indented_block_inside_a_list_item_keeps_the_list_open(tmp_path):
-    # Checked against kramdown-rfc: a comment, table, heading, extension or HTML block
-    # indented to the item's text stays in the item, so a column-0 ID after the next
-    # paragraph lands on the list. A thematic break ends the list instead.
-    for block in ("<!-- note -->", "| x | y |", "# Head", '{::options toc_levels="2" /}', "<div>"):
+    # A comment, table, extension or HTML block indented to the item's text stays in the
+    # item, so a column-0 ID after the next paragraph lands on the list. A thematic break
+    # ends the list instead.
+    for block in ("<!-- note -->", "| x | y |", '{::options toc_levels="2" /}', "<div>"):
         spec = write_spec(
             tmp_path,
             f"- A MUST b.\n  {{: #req-test-charge-001}}\n\n  {block}\n\n  C MUST d.\n{{: #req-test-charge-002}}\n",
@@ -680,9 +654,18 @@ def test_indented_block_inside_a_list_item_keeps_the_list_open(tmp_path):
     assert lint_file(spec).errors == []
 
 
+def test_heading_inside_a_list_item_is_a_render_error(tmp_path):
+    # kramdown-rfc writes a <section> inside the list for it, which isn't well-formed XML;
+    # xml2rfc can't build that draft either.
+    spec = write_spec(tmp_path, "- A MUST b.\n  {: #req-test-charge-001}\n\n  # Head\n\n  C MUST d.\n")
+    report = lint_file(spec)
+    assert len(report.errors) == 1 and "doesn't parse" in report.errors[0]
+    assert main(["--strict", str(spec)]) == 1
+
+
 def test_ids_from_attribute_list_definitions(tmp_path):
-    # Checked against kramdown-rfc: {: name} applies the ALD {:name: ...}, defined before or
-    # after it (not inside code), and a reference may name another ALD.
+    # {: name} applies the ALD {:name: ...}, defined before or after it (not inside code), and
+    # a reference may name another ALD.
     spec = write_spec(
         tmp_path,
         "{:reused: #req-test-charge-001}\n\nSome note.\n{: reused}\n\n"
@@ -695,105 +678,232 @@ def test_ids_from_attribute_list_definitions(tmp_path):
     assert report.tagged == 1 and report.errors == []
     spec = write_spec(tmp_path, "~~~\n{:tag: #req-test-charge-001}\n~~~\n\nServers MUST x.\n{: tag}\n")
     assert lint_file(spec).untagged == [12]
-    # A literal ID next to a referenced one is a second requirement ID.
+    # A literal ID after a referenced one wins: kramdown keeps the last ID.
     spec = write_spec(tmp_path, "Servers MUST x.\n{: tag #req-test-charge-002}\n\n{:tag: #req-test-charge-001}\n")
-    assert any("more than one requirement ID" in e for e in lint_file(spec).errors)
-    # kramdown overflows its stack on a reference cycle, so the lint reports one.
+    report = lint_file(spec)
+    assert report.tagged == 1 and report.errors == []
+
+
+def test_ald_cycle_is_a_render_error(tmp_path):
+    # kramdown overflows its stack on a reference cycle, so no such draft builds.
     spec = write_spec(tmp_path, "{:a: b}\n{:b: a #req-test-charge-001}\n\nP MUST x.\n{: a}\n")
-    assert any("refers back to itself" in e for e in lint_file(spec).errors)
+    report = lint_file(spec)
+    assert len(report.errors) == 1 and report.errors[0].startswith("kramdown-rfc could not render the draft")
 
 
-def test_unmatched_longer_backtick_run_shows_keyword():
-    # kramdown closes a code span only at a run of the same length, so the keyword after an
-    # unclosed double backtick is prose (checked with kramdown-rfc).
-    assert segments(["R ``MUST` x."])[0][0].is_requirement
+def test_unmatched_longer_backtick_run_shows_keyword(tmp_path):
+    # kramdown closes a code span only at a run of the same length.
+    assert lint_body(tmp_path, "R ``MUST` x.").untagged == at(1)
 
 
-def test_ial_at_another_quote_depth_tags_nothing():
+def test_ial_at_another_quote_depth_tags_nothing(tmp_path):
     # '> {: #id}' after unquoted text is paragraph text; an unquoted IAL after a quoted
-    # paragraph goes on the blockquote (checked with kramdown-rfc).
-    found, detached, _, _ = segments(["P MUST a.", "> {: #req-test-charge-001}"])
-    assert [s.ids for s in found] == [[]]
-    found, detached, _, _ = segments(["> Q MUST b.", "{: #req-test-charge-002}"])
-    assert [s.ids for s in found] == [[]]
-    assert [i for _, i in detached] == ["req-test-charge-002"]
+    # paragraph goes on the blockquote.
+    report = lint_body(tmp_path, "P MUST a.", "> {: #req-test-charge-001}")
+    assert report.untagged == at(1) and any("renders as text" in e for e in report.errors)
+    report = lint_body(tmp_path, "> Q MUST b.", "{: #req-test-charge-002}")
+    assert report.untagged == at(1)
+    assert report.errors == [f"line {at(2)[0]}: req-test-charge-002 is not directly after a paragraph or list item"]
 
 
-def test_consecutive_ials_tag_the_same_block():
+def test_consecutive_ials_tag_the_same_block(tmp_path):
     # kramdown applies both IAL lines to the paragraph and keeps the last ID.
-    found, detached, _, _ = segments(["Servers MUST verify.", "{: #req-test-charge-045}", "{: #alternate}"])
-    assert [s.ids for s in found] == [["req-test-charge-045", "alternate"]]
-    assert detached == []
+    report = lint_body(tmp_path, "Servers MUST verify.", "{: #req-test-charge-045}", "{: #alternate}")
+    assert report.tagged == 1
+    assert report.errors == [
+        f"line {at(1)[0]}: req-test-charge-045 shares its block with another ID "
+        "(req-test-charge-045, alternate); kramdown keeps only the last"
+    ]
 
 
-def test_indented_ald_in_a_paragraph_defines_nothing():
-    found, _, _, _ = segments(["P MUST a.", "    {:ref: #req-test-charge-003}", "{: ref}"])
-    assert [s.ids for s in found] == [[]]
+def test_indented_ald_in_a_paragraph_defines_nothing(tmp_path):
+    report = lint_body(tmp_path, "P MUST a.", "    {:ref: #req-test-charge-003}", "{: ref}")
+    assert report.untagged == at(1) and any("renders as text" in e for e in report.errors)
 
 
-def test_escaped_backslash_before_backticks_opens_a_code_span():
+def test_escaped_backslash_before_backticks_opens_a_code_span(tmp_path):
     # '\\\\' renders one backslash, so the backticks after it delimit code.
-    assert not segments(["Code \\\\`MUST` here."])[0][0].is_requirement
+    assert lint_body(tmp_path, "Code \\\\`MUST` here.").total == 0
     # '\\`' is a literal backtick, so MUST stays prose.
-    assert segments(["Tick \\`MUST here."])[0][0].is_requirement
+    assert lint_body(tmp_path, "Tick \\`MUST here.").untagged == at(1)
 
 
-def test_second_ial_left_of_item_text_does_not_tag_the_item():
-    found, detached, _, _ = segments(["- Servers MUST verify.", "  {: .foo}", "{: #req-test-charge-044}"])
-    assert [s.ids for s in found] == [[]]
-    assert [i for _, i in detached] == ["req-test-charge-044"]
+def test_second_ial_left_of_item_text_does_not_tag_the_item(tmp_path):
+    report = lint_body(tmp_path, "- Servers MUST verify.", "  {: .foo}", "{: #req-test-charge-044}")
+    assert report.untagged == at(1) and report.tagged == 0
+    assert len(report.errors) == 1 and "req-test-charge-044" in report.errors[0]
 
 
-def test_ald_looking_prose_line_is_paragraph_text():
+def test_ald_looking_prose_line_is_paragraph_text(tmp_path):
     # Text after the first } makes it no definition: kramdown renders the line as prose.
-    found, _, _, _ = segments(["{:ref: x} Servers MUST verify."])
-    assert [s.is_requirement for s in found] == [True]
-    found, _, _, _ = segments(["P a.", "{:ref: x} Servers MUST verify."])
-    assert len(found) == 1 and found[0].is_requirement
+    assert lint_body(tmp_path, "{:ref: x} Servers MUST verify.").untagged == at(1)
+    assert lint_body(tmp_path, "P a.", "{:ref: x} Servers MUST verify.").untagged == at(1)
 
 
-def test_comment_inside_table_cell_does_not_hide_a_condition():
-    lines = ["| f | g |", "|---|---|", "| a | REQUIRED: <!--hidden-->if mode is payment |", "| b | REQUIRED |"]
-    assert table_keywords(lines) == [3]
+def test_comment_inside_table_cell_does_not_hide_a_condition(tmp_path):
+    report = lint_body(tmp_path, "| f | g |", "|---|---|", "| a | REQUIRED: <!--hidden-->if mode is payment |", "| b | REQUIRED |")
+    assert report.errors == [f"line {at(3)[0]}: keyword in a table cell; state the rule in a tagged paragraph"]
 
 
-def test_escaped_comment_opener_in_table_cell_still_flags():
-    lines = ["| f | g |", "|---|---|", "| a | Clients \\<!-- MUST --> verify |", "| b | X \\{::comment}MUST{:/comment} y |"]
-    assert table_keywords(lines) == [3, 4]
+def test_escaped_comment_opener_in_table_cell_still_flags(tmp_path):
+    report = lint_body(tmp_path, "| f | g |", "|---|---|", "| a | Clients \\<!-- MUST --> verify |", "| b | X \\{::comment}MUST{:/comment} y |")
+    assert [e.split(":")[0] for e in report.errors] == [f"line {n}" for n in at(3, 4)]
 
 
-def test_repeated_ald_references_resolve_quickly():
-    import time
-    from lint_requirements import ial_ids
-    alds = {"a0": ["#req-test-charge-001"]}
-    for n in range(1, 40):
-        alds[f"a{n}"] = [f"a{n - 1} a{n - 1}"]
-    start = time.monotonic()
-    assert ial_ids("a39", alds) == ["req-test-charge-001"]
-    assert time.monotonic() - start < 1
+def test_exponential_ald_references_time_out(tmp_path, monkeypatch):
+    # kramdown expands ALD references without memoising them: a chain where each ALD names
+    # the previous one twice takes exponential time, so the lint stops waiting.
+    import lint_requirements
+
+    monkeypatch.setattr(lint_requirements, "RENDER_TIMEOUT", 3)
+    alds = "".join(f"{{:a{n}: a{n - 1} a{n - 1}}}\n" for n in range(1, 40))
+    spec = write_spec(tmp_path, "{:a0: #req-test-charge-001}\n" + alds + "\nP MUST x.\n{: a39}\n")
+    report = lint_file(spec)
+    assert report.errors == ["kramdown-rfc did not finish rendering the draft in 3 s"]
 
 
-def test_keywords_inside_comments_are_hidden():
-    assert not segments(["Note <!-- Servers MUST verify. -->"])[0][0].is_requirement
-    assert not segments(["Note {::comment}Servers MUST verify.{:/comment}"])[0][0].is_requirement
+def test_keywords_inside_comments_are_hidden(tmp_path):
+    assert lint_body(tmp_path, "Note <!-- Servers MUST verify. -->").total == 0
+    assert lint_body(tmp_path, "Note {::comment}Servers MUST verify.{:/comment}").total == 0
     # An escaped opener renders literally, keyword included.
-    assert segments(["Note BB<!-- MUST -->".replace("BB", chr(92))])[0][0].is_requirement
-    lines = ["| f | g |", "|---|---|", "| a | <!-- Servers MUST verify. --> |", "| b | {::comment}MUST{:/comment} |"]
-    assert table_keywords(lines) == []
+    assert lint_body(tmp_path, "Note \\<!-- MUST -->").untagged == at(1)
+    report = lint_body(tmp_path, "| f | g |", "|---|---|", "| a | <!-- Servers MUST verify. --> |", "| b | {::comment}MUST{:/comment} |")
+    assert report.errors == []
 
 
-def test_wide_ald_references_resolve_quickly():
+def test_wide_ald_references_resolve_quickly(tmp_path):
     import time
-    from lint_requirements import ial_ids
-    alds = {"a": [" ".join(f"#req-test-charge-{n:03d}" for n in range(1, 201))], "b": [" ".join(["a"] * 200)]}
+
+    ids = " ".join(f"#req-test-charge-{n:03d}" for n in range(1, 201))
+    spec = write_spec(tmp_path, f"{{:a: {ids}}}\n{{:b: {' '.join(['a'] * 200)}}}\n\nP MUST x.\n{{: b}}\n")
     start = time.monotonic()
-    ids = ial_ids("b", alds)
-    assert len(ids) == 200 and ids[-1] == "req-test-charge-200"
-    assert time.monotonic() - start < 1
+    report = lint_file(spec)
+    assert time.monotonic() - start < 10
+    # kramdown keeps the last ID.
+    assert report.tagged == 1 and report.errors == [] and report.notes == []
 
 
-def test_comment_markers_inside_math_hide_nothing():
+def test_comment_markers_inside_math_hide_nothing(tmp_path):
     # kramdown-rfc renders "Servers <!-- MUST verify -->." here: the markers are math.
-    assert segments(["Servers $$<!--$$ MUST verify $$-->$$."])[0][0].is_requirement
-    lines = ["| a | b |", "|---|---|", "| x | $$<!--$$ MUST $$-->$$ |"]
-    assert table_keywords(lines) == [3]
+    assert lint_body(tmp_path, "Servers $$<!--$$ MUST verify $$-->$$.").untagged == at(1)
+    report = lint_body(tmp_path, "| a | b |", "|---|---|", "| x | $$<!--$$ MUST $$-->$$ |")
+    assert any("table cell" in e for e in report.errors)
+
+
+class TestRenderedConstructs:
+    """Constructs the hand-written Markdown parser got wrong; kramdown-rfc decides them now."""
+
+    def test_span_ial_id_is_reported(self, tmp_path):
+        # A span IAL anchors the span, not the paragraph.
+        report = lint_body(tmp_path, "Clients *MUST*{: #req-test-charge-001} retry.")
+        assert report.untagged == at(1)
+        assert report.errors == [f"line {at(1)[0]}: req-test-charge-001 is a span IAL inside the text; put it on its own line after the block"]
+
+    def test_ial_with_classes_and_attributes_tags(self, tmp_path):
+        report = lint_body(tmp_path, "Clients MUST retry.", '{: .note title="x" #req-test-charge-001}')
+        assert report.tagged == 1 and report.errors == []
+
+    def test_many_alds_lint_quickly(self, tmp_path):
+        # Thousands of definitions and references: kramdown resolves them, in linear time.
+        import time
+
+        alds = "".join(f"{{:d{n}: .c{n}}}\n" for n in range(2000))
+        body = "".join(f"Rule {n} MUST hold.\n{{: d{n} #req-test-charge-{n + 1:03d}}}\n\n" for n in range(300))
+        spec = write_spec(tmp_path, alds + "\n" + body)
+        start = time.monotonic()
+        report = lint_file(spec)
+        assert time.monotonic() - start < 20
+        assert report.tagged == 300 and report.errors == [] and report.notes == []
+
+    def test_reference_style_links(self, tmp_path):
+        # The link text renders; the definition (and a keyword in its title) renders nothing.
+        report = lint_body(tmp_path, "See [the spec][s]; servers MUST follow it.", "{: #req-test-charge-001}", "", '[s]: https://e.x "Clients MUST"')
+        assert report.tagged == 1 and report.total == 1 and report.errors == []
+        report = lint_body(tmp_path, "[MU][s]ST be split.", "", "[s]: https://e.x")
+        assert report.untagged == at(1)
+
+    def test_html_comment_inside_a_list_item(self, tmp_path):
+        report = lint_body(tmp_path, "- item", "  <!-- c MUST -->", "  more.", "", "- Next MUST x.", "  {: #req-test-charge-001}")
+        assert report.tagged == 1 and report.total == 1 and report.errors == []
+
+    def test_hash_lines_in_code_blocks_are_not_headings(self, tmp_path):
+        report = lint_body(tmp_path, "~~~", "# Servers MUST {#req-test-charge-009}", "~~~", "", "    # Indented MUST {#req-test-charge-008}", "", "Rule MUST x.")
+        assert report.untagged == at(7) and report.errors == []
+
+    def test_thematic_breaks(self, tmp_path):
+        # A break between paragraphs separates them; after a list it ends the list, so the
+        # column-0 ID tags the paragraph after it.
+        report = lint_body(tmp_path, "A MUST b.", "", "- - -", "", "C MUST d.", "{: #req-test-charge-001}")
+        assert report.untagged == at(1) and report.tagged == 1
+        report = lint_body(tmp_path, "- item", "", "***", "", "  Para MUST x.", "{: #req-test-charge-001}")
+        assert report.tagged == 1 and report.errors == []
+
+    def test_table_rows_map_to_their_lines(self, tmp_path):
+        # Rows with the same cells in two tables: each is reported on its own line.
+        report = lint_body(
+            tmp_path, "| f | g |", "|---|---|", "| a | REQUIRED |", "| b | MUST be set |", "",
+            "Text between.", "", "| f | g |", "|---|---|", "| a | REQUIRED |", "| b | MUST be set |",
+        )
+        assert [e.split(":")[0] for e in report.errors] == [f"line {n}" for n in at(4, 11)]
+
+    def test_setext_headings_are_headings(self, tmp_path):
+        report = lint_body(tmp_path, "Servers MUST heading", "====================", "", "Sub MUST", "--------", "", "Rule MUST x.")
+        assert report.untagged == at(7)
+        report = lint_body(tmp_path, "Heading {#req-test-charge-001}", "===============================", "", "Rule MUST x.")
+        assert any("on a heading" in e for e in report.errors)
+
+    def test_line_separator_does_not_split_lines(self, tmp_path):
+        # kramdown splits lines on \n only; str.splitlines would also split on U+2028 and
+        # shift every line number after it.
+        report = lint_body(tmp_path, "A\u2028B text.", "", "Servers MUST x.", "", "C\u2029D text.", "", "Clients MUST y.")
+        assert report.untagged == at(3, 7)
+
+    def test_requirement_after_code_with_the_same_words(self, tmp_path):
+        # The code repeats the rule's words; the rule maps to its own line, not the code's.
+        report = lint_body(tmp_path, "~~~", "Servers MUST reject expired credentials.", "~~~", "", "Servers MUST reject expired credentials.")
+        assert report.untagged == at(5)
+
+    def test_lines_after_boilerplate_and_in_back(self, tmp_path):
+        # {::boilerplate} expands to more lines; kramdown-rfc's later line markers count them.
+        spec = tmp_path / "draft-test-charge-00.md"
+        spec.write_text(
+            "---\ntitle: T\n---\n\n--- middle\n\n# Language\n\n{::boilerplate bcp14-tagged}\n\n"
+            "# Body\n\nServers MUST x.\n\n--- back\n\n# Example\n\nNote: values MUST be full.\n"
+        )
+        assert lint_file(spec).untagged == [13, 19]
+
+
+class TestAnnotations:
+    def test_escaping(self):
+        assert annotation("specs/a,b:c.md", 12, "100% sure\r\nnext") == (
+            "::warning file=specs/a%2Cb%3Ac.md,line=12,title=Requirement lint::100%25 sure%0D%0Anext"
+        )
+        assert annotation("specs/x.md", None, "whole draft") == "::warning file=specs/x.md,title=Requirement lint::whole draft"
+
+    def test_github_actions_prints_one_annotation_per_warning(self, tmp_path, monkeypatch, capsys):
+        spec = write_spec(tmp_path, "A MUST b.\n{: #req-test-charge-001}\n\nC MUST d.\n\nPlain.\n{: #req-test-charge-002}\n")
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        assert main([str(spec)]) == 0
+        out = capsys.readouterr().out
+        warnings = [line for line in out.splitlines() if line.startswith("::warning")]
+        path = spec.as_posix()
+        assert warnings == [
+            f"::warning file={path},line=11,title=Requirement lint::untagged requirement",
+            f"::warning file={path},line=13,title=Requirement lint::req-test-charge-002 is on text with no BCP 14 "
+            "keyword; drop the ID or restore the keyword",
+        ]
+        # The plain output is unchanged.
+        assert "    line 11: untagged requirement" in out
+
+    def test_no_annotations_outside_github_actions(self, tmp_path, monkeypatch, capsys):
+        spec = write_spec(tmp_path, "C MUST d.\n")
+        monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+        main(["--strict", str(spec)])
+        assert "::warning" not in capsys.readouterr().out
+
+    def test_repo_relative_path(self, monkeypatch, capsys):
+        drafts = sorted((ROOT / "specs/methods/tempo").glob("draft-tempo-session-*.md"))
+        monkeypatch.setenv("GITHUB_ACTIONS", "1")
+        main(["--strict", str(drafts[-1])])
+        out = capsys.readouterr().out
+        assert "::warning file=specs/methods/tempo/" in out
