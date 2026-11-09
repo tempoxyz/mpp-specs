@@ -1599,8 +1599,10 @@ To prevent double-charging on retries and network failures:
   key is per channel, not per challenge, since `spent` is per channel
   and a retry can arrive under a fresh challenge. Servers MUST return
   a cached response only to a request for the same method, target URI
-  and body as the one that produced it, since several services or
-  principals can share a channel.
+  and body as the one that produced it, and from the same principal
+  where the service authenticates one, since several services or
+  principals can share a channel. A key reused for a different
+  request SHOULD be refused with 422, without charging.
 - Servers MUST NOT increment `spent` for duplicate idempotent requests
 
 If idempotency is not implemented, servers MUST document this limitation
