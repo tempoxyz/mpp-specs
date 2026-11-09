@@ -1432,8 +1432,10 @@ Servers MUST NOT deliver metered service on a channel whose
 `closeRequestedAt` is non-zero, even against accepted vouchers that
 `spent` has not yet consumed. After the grace period the payer can
 `withdraw` at once, and service delivered then is paid only if the
-payee's `settle` lands first. Delivery MAY resume after a `topUp`
-cancels the close request. On observing a close request, servers
+payee's `settle` lands first. To a request it does not serve for
+this reason, the server returns 402 with a fresh Challenge; the
+client can `topUp` to cancel the close request. Delivery MAY resume
+after a `topUp` cancels the close request. On observing a close request, servers
 SHOULD, within the grace period, settle or close with the lowest
 accepted voucher whose `cumulativeAmount` is at least `spent`
 (see {{cooperative-close}}).
@@ -1586,7 +1588,11 @@ lowest accepted voucher, the client's close voucher included, whose
 `cumulativeAmount` is at least `max(spent, settledOnChain)`.
 That voucher can exceed the consumed amount only when no signed
 voucher equals it; the excess is the gap between two amounts the
-client signed. Clients SHOULD sign the close voucher for the greater
+client signed. The close voucher is exempt from the monotonicity
+check in {{voucher-verification}}: it MAY be lower than
+`highestVoucherAmount`, and servers MUST accept it when it is at
+least `max(spent, settledOnChain)` and at most the deposit.
+Clients SHOULD sign the close voucher for the greater
 of the `spent` amount in the latest receipt and the on-chain
 `settled` amount, so that the v1 capture is exact.
 
