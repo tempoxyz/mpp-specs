@@ -90,11 +90,13 @@ def decode_refs(text: str) -> str:
 
     def char(match: re.Match[str]) -> str:
         name, decimal, hexa = match.groups()
-        if name is not None:
-            code = html.entities.name2codepoint.get(name)
-        else:
-            code = int(decimal) if decimal is not None else int(hexa, 16)
+        # int() is inside the try too: a decimal reference of thousands of digits trips
+        # Python's int-from-string digit limit (ValueError) and must stay as written.
         try:
+            if name is not None:
+                code = html.entities.name2codepoint.get(name)
+            else:
+                code = int(decimal) if decimal is not None else int(hexa, 16)
             return chr(code) if code is not None else match.group(0)
         except (ValueError, OverflowError):
             return match.group(0)

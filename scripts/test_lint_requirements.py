@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from lint_requirements import ROOT, lint_file, main, segments, short_name, table_keywords
+from lint_requirements import ROOT, decode_refs, lint_file, main, segments, short_name, table_keywords
 
 
 def write_spec(
@@ -514,3 +514,9 @@ def test_character_references_are_keywords(tmp_path):
     report = lint_file(spec)
     assert len(report.untagged) == 3
     assert any("table cell" in e for e in report.errors)
+
+
+def test_huge_decimal_character_reference_stays_as_written():
+    # More digits than Python's int-from-string limit: left as text, no crash.
+    ref = "&#" + "7" * 5000 + ";"
+    assert decode_refs(ref + "UST") == ref + "UST"
