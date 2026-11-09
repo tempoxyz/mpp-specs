@@ -652,3 +652,22 @@ def test_ial_at_another_quote_depth_tags_nothing():
     found, detached, _, _ = segments(["> Q MUST b.", "{: #req-test-charge-002}"])
     assert [s.ids for s in found] == [[]]
     assert [i for _, i in detached] == ["req-test-charge-002"]
+
+
+def test_consecutive_ials_tag_the_same_block():
+    # kramdown applies both IAL lines to the paragraph and keeps the last ID.
+    found, detached, _, _ = segments(["Servers MUST verify.", "{: #req-test-charge-045}", "{: #alternate}"])
+    assert [s.ids for s in found] == [["req-test-charge-045", "alternate"]]
+    assert detached == []
+
+
+def test_indented_ald_in_a_paragraph_defines_nothing():
+    found, _, _, _ = segments(["P MUST a.", "    {:ref: #req-test-charge-003}", "{: ref}"])
+    assert [s.ids for s in found] == [[]]
+
+
+def test_escaped_backslash_before_backticks_opens_a_code_span():
+    # '\\\\' renders one backslash, so the backticks after it delimit code.
+    assert not segments(["Code \\\\`MUST` here."])[0][0].is_requirement
+    # '\\`' is a literal backtick, so MUST stays prose.
+    assert segments(["Tick \\`MUST here."])[0][0].is_requirement

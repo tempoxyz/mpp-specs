@@ -69,8 +69,11 @@ EXT_BLOCK = re.compile(r"^\{::(\w+)(?:\s(?:\\\}|[^}])*?)?(/)?\}\s*$|^\{:/(?:\w[\
 EXT_COMMENT_STOP = re.compile(r"^ {0,3}\{:/(?:comment)?\}\s*$")
 # A span {::comment}...{:/comment} (or {:/}): kramdown drops it from the paragraph.
 EXT_COMMENT_SPAN = re.compile(r"\{::comment(?:\s[^}]*?)?(?<!/)\}.*?\{:/(?:comment)?\}")
-# A run of backticks that is not backslash-escaped: a code span may open there.
-BACKTICKS = re.compile(r"(?<!\\)`+")
+# A run of backticks a code span may open at (group 2), after an even number of backslashes
+# (group 1): a doubled backslash is a literal one, so two backslashes and a backtick open a
+# span while one backslash and a backtick is an escaped backtick, which kramdown prints;
+# the rest of its run may still open one.
+BACKTICKS = re.compile(r"(?<!\\)((?:\\\\)*)(`+)")
 # Inline markup that renders as nothing between letters: * emphasis, link brackets and
 # targets, HTML comments and tags, and span IALs and extension tags. Removing it shows a
 # keyword split by markup (M**UST**, [MU](x)ST, M<!-- -->UST), which renders whole.
@@ -140,12 +143,12 @@ def strip_code_spans(text: str) -> str:
     pieces: list[str] = []
     position = 0
     while match := BACKTICKS.search(text, position):
-        close = code_span_end(text, match.start(), match.end())
+        close = code_span_end(text, match.start(2), match.end(2))
         if close is None:
             pieces.append(text[position : match.end()])
             position = match.end()
             continue
-        pieces.append(text[position : match.start()])
+        pieces.append(text[position : match.start(2)])
         pieces.append(" ")
         position = close
     pieces.append(text[position:])
@@ -342,6 +345,10 @@ def segments(
     # Segment.ials.
     detached_ials: list[tuple[int, str]] = []
     misindented_ials: list[tuple[int, str]] = []
+    # The block the latest IAL line tagged, and that line's number: an IAL on the very next
+    # line tags the same block.
+    ial_target: Segment | None = None
+    ial_line = 0
     # ALD definitions by name, in draft order. kramdown resolves references after parsing,
     # so an ALD applies to IALs before it too.
     alds: dict[str, list[str]] = {}
@@ -428,6 +435,14 @@ def segments(
             detached_ials.append((number, ial.group(1)))
             current = None
             continue
+        if ial and ial_target is not None and ial_line == number - 1:
+            # The next IAL line right after one that tagged a block applies to that same
+            # block, as kramdown does: '{: #req-x-001}' then '{: #note}' leaves it two IDs,
+            # which the ID check reports, since kramdown keeps only the last.
+            ial_target.ials.append(ial.group(1))
+            ial_line = number
+            lazy_indent = ial_target.indent
+            continue
         if ial:
             lazy_indent = 0
             if current is not None and column < current.indent:
@@ -438,6 +453,7 @@ def segments(
                 close_items(list_stack, column)
             elif current is not None:
                 current.ials.append(ial.group(1))
+                ial_target, ial_line = current, number
                 # The item stays open: kramdown still reads the next line as its text.
                 lazy_indent = current.indent
             else:
@@ -483,6 +499,12 @@ def segments(
                 # A heading, table, comment or extension indented to an open item's text is
                 # more of that item: only the items it is less indented than end.
                 close_items(list_stack, column)
+            continue
+        if ALD_LINE.match(line) and current is not None and column >= current.indent + 4:
+            # Indented four or more past the open paragraph's text, a definition line is more
+            # of that paragraph (kramdown's ALD_START allows three spaces): it defines nothing.
+            current.rest.append(stripped)
+            current.end = number
             continue
         if ALD_LINE.match(line):
             ald = ALD_DEF.match(line)
