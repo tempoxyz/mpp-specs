@@ -1719,9 +1719,9 @@ servers MUST accept it when it is at least
 `cumulativeAmount` MUST also exceed the disclosed amount (see
 {{voucher-disclosure}}): every voucher the server has broadcast is
 public, so without this check anyone could replay one to close the
-channel. When the client's close voucher is at or below the disclosed
-amount, servers close with the voucher they broadcast when it is at
-least `spent`.
+channel. Servers MUST refuse such a close voucher, even when they
+hold a voucher of their own that could close the channel, since the
+request is not authenticated.
 When the `spent` amount in the latest receipt exceeds the on-chain
 `settled` amount, clients SHOULD sign the close voucher for it, but
 never above the highest voucher they have already signed, so that the
