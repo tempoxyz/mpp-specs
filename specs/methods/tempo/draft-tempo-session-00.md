@@ -1268,10 +1268,14 @@ the channel's existing `acceptedCumulative` and `spent` (see
 `action="voucher"`, which also covers a retry after a crash (see
 below).
 
-The reservation becomes the channel's tracked state at step 4. If
-the reserved `open` does not create the channel (it reverts, is
-dropped, or expires before it is mined), the server MUST release the
-reservation, so that the payer can submit a new `open`.
+The reservation becomes the channel's tracked state at step 4. Servers
+MUST make that change atomic and run it once: step 4 initializes state
+only while the record is still an unresolved reservation, and a
+handler, restart or sweep that finds the channel already tracked MUST
+leave its state unchanged. If the reserved `open` does not create the
+channel (it reverts, is dropped, or expires before it is mined), the
+server MUST release the reservation, so that the payer can submit a
+new `open`.
 
 Servers MUST persist the reservation, with the decoded `open`, any
 initial voucher, and the Challenge's `amount` and `currency` that step
