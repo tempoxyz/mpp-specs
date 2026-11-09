@@ -23,7 +23,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SPECS_DIR = ROOT / "specs"
 
-KEYWORD = re.compile(r"\b(?:MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)\b")
+# Letters and digits only around a keyword, not \b: '_' is a word character, and _MUST_ or
+# *MUST* renders as an emphasised MUST.
+KEYWORD = re.compile(r"(?<![A-Za-z0-9])(?:MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z0-9])")
+# Lines that end a kramdown paragraph without being one: the ^ end-of-block marker and a
+# block-level HTML tag.
+BLOCK_END = re.compile(
+    r"^(?:\^|</?(?:address|article|aside|blockquote|details|div|dl|fieldset|"
+    r"figure|footer|form|h[1-6]|header|hr|ol|p|pre|section|table|ul)\b[^>]*>?)\s*$",
+    re.IGNORECASE,
+)
+# A thematic break (***, - - -, ___). Only outside a paragraph: right after a paragraph
+# line kramdown keeps it as that paragraph's text.
+THEMATIC_BREAK = re.compile(r"^([-*_])(?: *\1){2,}\s*$")
 IAL_LINE = re.compile(r"^\s*\{:\s*([^}]*)\}\s*$")
 # An attribute-list definition ({:name: ...}) only names attributes for later use;
 # it attaches nothing to the block above it.
@@ -36,7 +48,10 @@ LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d+\.|:)\s+")
 # pair renders as inline verbatim, which INLINE_CODE already strips from the prose.
 FENCE = re.compile(r"^( *)(~{3,})(.*)$")
 INLINE_CODE = re.compile(r"`+[^`]*`+")
-BOILERPLATE = re.compile(r'The key words "MUST"')
+# A keyword in double quotes is named, not used: the BCP 14 boilerplate ('The key words
+# "MUST", "MUST NOT", ...') and prose about a keyword. Removing just the quoted names keeps a
+# real requirement appended to the boilerplate paragraph visible.
+QUOTED_KEYWORDS = re.compile(r'"(?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED|MUST|REQUIRED|SHALL|SHOULD|RECOMMENDED|MAY|OPTIONAL)"')
 # A table cell that only marks a field present or absent: the marker alone or
 # ending its own clause ("REQUIRED", "OPTIONAL. Defaults to 0", "OPTIONAL: Units
 # consumed"). A marker that opens a condition ("REQUIRED if jwksUri is absent",
@@ -79,16 +94,22 @@ class Segment:
     """A paragraph or list item and the requirement IDs attached to it."""
 
     line: int
-    text: str
+    first: str
     end: int = 0
     ids: list[str] = field(default_factory=list)
     # Column of a list item's text; an IAL indented less applies to the whole list.
     indent: int = 0
+    # Continuation lines, joined only when read (appending to one string is quadratic).
+    rest: list[str] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        return " ".join([self.first, *self.rest])
 
     @property
     def is_requirement(self) -> bool:
         text = INLINE_CODE.sub("", self.text)
-        return bool(KEYWORD.search(text)) and not BOILERPLATE.search(text)
+        return bool(KEYWORD.search(QUOTED_KEYWORDS.sub("", text)))
 
 
 @dataclass
@@ -122,13 +143,14 @@ def short_name(path: Path) -> str:
 
 def segments(
     lines: list[str],
-) -> tuple[list[Segment], list[tuple[int, str]], list[tuple[int, str]]]:
+) -> tuple[list[Segment], list[tuple[int, str]], list[tuple[int, str]], set[int]]:
     """Split a draft into paragraphs and list items.
 
     Returns the segments, any requirement IDs that are not attached to a
     segment (an IAL after a blank line applies to the next block), and IDs
     after a list item but indented less than its text (kramdown applies
-    those to the whole list).
+    those to the whole list), and the numbers of lines that are code (fence lines,
+    fenced and indented code), which table_keywords skips with the same rules.
     """
     result: list[Segment] = []
     detached: list[tuple[int, str]] = []
@@ -138,6 +160,7 @@ def segments(
     # so a later paragraph indented to one (a loose-list continuation) still belongs
     # to that item, even after a nested item has closed.
     list_stack: list[int] = []
+    code_lines: set[int] = set()
     fence: Fence | None = None
     # Text column of a list item whose ID line just closed it. kramdown still reads the next
     # line as that item's text (a lazy continuation) unless a blank line comes first.
@@ -151,7 +174,7 @@ def segments(
             continue
         # Tabs stop every 4 columns, as kramdown counts them; then drop a blockquote marker,
         # so a quoted fence or list is read like an unquoted one.
-        line = re.sub(r"^ {0,3}> ?", "", raw.expandtabs(4))
+        line = re.sub(r"^( *)> ?", r"\1", raw.expandtabs(4))
         stripped = line.strip()
         column = len(line) - len(line.lstrip())
         if fence is None and FENCE.match(line):
@@ -160,14 +183,17 @@ def segments(
                 list_stack.pop()
         fence, is_fence = fence_step(line, fence, list_stack[-1] if list_stack else 0)
         if is_fence:
+            code_lines.add(number)
             current = None
             lazy_indent = 0
             continue
         if fence:
+            code_lines.add(number)
             continue
         if stripped and current is None and column >= (list_stack[-1] if list_stack else 0) + 4:
             # Indented four or more past the open item's text (or the margin) with no
             # paragraph to continue: kramdown renders it as a code block, not prose.
+            code_lines.add(number)
             continue
         ial = None if ALD_LINE.match(line) else IAL_LINE.match(line)
         if ial:
@@ -194,6 +220,14 @@ def segments(
         if ALD_LINE.match(line):
             current = None
             continue
+        if BLOCK_END.match(stripped):
+            current = None
+            if not stripped.startswith("^"):
+                list_stack.clear()
+            continue
+        if current is None and THEMATIC_BREAK.match(stripped):
+            list_stack.clear()
+            continue
         marker = LIST_MARKER.match(line)
         if not marker and current is None and lazy and column < lazy:
             # Lazy continuation: still the item's text, so its ID must be indented to it.
@@ -217,23 +251,24 @@ def segments(
             current = Segment(number, stripped, number, indent=indent)
             result.append(current)
         else:
-            current.text += " " + stripped
+            current.rest.append(stripped)
             current.end = number
-    return result, detached, misindented
+    return result, detached, misindented, code_lines
 
 
-def table_keywords(lines: list[str]) -> list[int]:
+def table_keywords(lines: list[str], code_lines: set[int] | None = None) -> list[int]:
     """Return lines of table rows with a keyword beyond a field's presence marker.
 
-    A table cell can't carry an ID, so such a rule has to move to prose.
+    A table cell can't carry an ID, so such a rule has to move to prose. code_lines
+    (from segments) are skipped, so fences nested in list items count as they do there.
     """
+    if code_lines is None:
+        code_lines = segments(lines)[3]
     found: list[int] = []
-    fence: Fence | None = None
     for number, raw in enumerate(lines, start=1):
         line = re.sub(r"^ {0,3}> ?", "", raw.expandtabs(4))
-        fence, is_fence = fence_step(line, fence)
         stripped = line.strip()
-        if is_fence or fence or not stripped.startswith("|"):
+        if number in code_lines or not stripped.startswith("|"):
             continue
         for cell in stripped.strip("|").split("|"):
             cell = INLINE_CODE.sub("", cell).strip()
@@ -250,9 +285,9 @@ def lint_file(path: Path) -> Report:
     prefix = f"req-{short_name(path)}-"
     id_pattern = re.compile(rf"^{re.escape(prefix)}(\d{{3}})$")
     lines = path.read_text(encoding="utf-8").splitlines()
-    found, detached, misindented = segments(lines)
+    found, detached, misindented, code_lines = segments(lines)
 
-    for number in table_keywords(lines):
+    for number in table_keywords(lines, code_lines):
         report.errors.append(
             f"line {number}: keyword in a table cell; state the rule in a tagged paragraph"
         )

@@ -251,6 +251,64 @@ class TestIdProblems:
         report = lint_file(spec)
         assert report.total == 1
 
+    def test_requirement_appended_to_boilerplate_is_seen(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            'The key words "MUST", "MUST NOT" and "MAY" are to be interpreted as described '
+            "in BCP 14. Clients MUST send x.\n",
+        )
+        report = lint_file(spec)
+        assert len(report.untagged) == 1
+
+    def test_boilerplate_alone_is_not_a_requirement(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            'The key words "MUST", "MUST NOT", "NOT RECOMMENDED" and "OPTIONAL" are to be '
+            "interpreted as described in BCP 14 when, and only when, they appear in all capitals.\n",
+        )
+        assert lint_file(spec).total == 0
+
+    def test_table_after_list_nested_fence_is_checked(self, tmp_path):
+        # The fence opens inside the item (column 2) and closes at column 4, 2 past the item's
+        # text, which kramdown accepts; the table after it must still be checked.
+        spec = write_spec(
+            tmp_path,
+            "- item\n\n  ~~~\n  code\n    ~~~\n\n| f | MUST be set if x |\n",
+        )
+        report = lint_file(spec)
+        assert any("table cell" in e for e in report.errors)
+
+    def test_emphasised_keyword_is_a_keyword(self, tmp_path):
+        spec = write_spec(tmp_path, "Clients _MUST_ reject it.\n\nServers *SHOULD* log.\n")
+        assert len(lint_file(spec).untagged) == 2
+
+    def test_block_end_lines_end_the_paragraph(self, tmp_path):
+        for end in ("^", "<div>"):
+            spec = write_spec(tmp_path, f"A MUST b.\n{end}\n{{: #req-test-charge-001}}\n")
+            report = lint_file(spec)
+            assert report.tagged == 0, end
+            assert any("not directly after" in e for e in report.errors), end
+
+    def test_rule_line_after_paragraph_text_stays_in_it(self, tmp_path):
+        # kramdown-rfc keeps a *** right after a paragraph line as that paragraph's text.
+        spec = write_spec(tmp_path, "A MUST b.\n***\n{: #req-test-charge-001}\n")
+        assert lint_file(spec).tagged == 1
+
+    def test_quote_in_list_item_keeps_the_list_open(self, tmp_path):
+        spec = write_spec(
+            tmp_path,
+            "- Item MUST a.\n  {: #req-test-charge-001}\n\n  > quoted\n\n  More MUST b.\n{: #req-test-charge-002}\n",
+        )
+        report = lint_file(spec)
+        assert any("req-test-charge-002 is not indented" in e for e in report.errors)
+
+    def test_long_paragraph_is_linear(self, tmp_path):
+        import time
+        spec = write_spec(tmp_path, "Clients MUST x\n" + "word " * 20 + "\n" * 0 + ("more text\n" * 40000))
+        start = time.perf_counter()
+        lint_file(spec)
+        assert time.perf_counter() - start < 2
+
 class TestMain:
     def test_warn_mode_exits_zero(self, tmp_path):
         spec = write_spec(tmp_path, "Clients MUST NOT reuse it.\n")
