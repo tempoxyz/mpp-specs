@@ -71,7 +71,7 @@ theorem inv_step {cfg : Cfg} (hg : cfg.Guarded) {s s' : St} {a : Act}
     | exact ⟨_, List.mem_cons_self .., rfl, rfl, rfl⟩
     | exact ⟨_, upd_same .., by grind [before, hg.expiry]⟩
     | exact Nat.le_trans (hs sid t ht).paid_le_cur (cur_mono t (Nat.le_add_right _ _))
-    | grind [SubInv, Sub.cur, upd_apply, before, List.pairwise_cons, hg.single, hg.current,
+    | grind [SubInv, Sub.cur, upd_apply, before, List.pairwise_cons, hg.current,
       hg.bounded, hg.expiry]
 
 /-- Every reachable state satisfies Inv (every guard on). -/

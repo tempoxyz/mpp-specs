@@ -23,23 +23,22 @@ def sumAll : List Transfer → Nat
   | c :: cs => c.amount + sumAll cs
 
 /-- Taking out a fitting transfer removes exactly r.amount from the total in r.token. -/
-theorem take1_sum (r : Transfer) : ∀ (l l' : List Transfer), take1 r l = some l' →
+theorem takeAll_sum (r : Transfer) : ∀ (l l' : List Transfer), l' ∈ takeAll r l →
     sumOn r.token l = r.amount + sumOn r.token l'
-  | [], _, h => by simp [take1] at h
+  | [], _, h => by simp [takeAll] at h
   | c :: cs, l', h => by
-    simp only [take1] at h
-    split at h
-    · cases h
-      simp only [fits, Bool.and_eq_true, beq_iff_eq] at *
-      simp [sumOn, *]
-    · cases h' : take1 r cs with
-      | none => simp [h'] at h
-      | some l'' =>
-        simp only [h', Option.map_some, Option.some.injEq] at h
+    simp only [takeAll, List.mem_append, List.mem_map] at h
+    rcases h with h | ⟨l'', h', rfl⟩
+    · split at h
+      · simp only [List.mem_singleton] at h
         subst h
-        have := take1_sum r cs l'' h'
-        simp only [sumOn]
-        omega
+        rename_i hf
+        simp only [fits, Bool.and_eq_true, beq_iff_eq] at hf
+        simp [sumOn, hf]
+      · simp at h
+    · have := takeAll_sum r cs l'' h'
+      simp only [sumOn]
+      omega
 
 /-- If every required transfer is in token tok and they match one-to-one, the calls move at
   least their total in tok. -/
@@ -47,16 +46,14 @@ theorem matchOne_sum (tok : Nat) : ∀ (rs calls : List Transfer), (∀ r ∈ rs
     matchOne calls rs = true → sumAll rs ≤ sumOn tok calls
   | [], _, _, _ => by simp [sumAll]
   | r :: rs, calls, ht, h => by
-    simp only [matchOne] at h
-    split at h
-    · cases h
-    · rename_i rest hrest
-      have hr : r.token = tok := ht r (by simp)
-      have h1 := take1_sum r calls rest hrest
-      have h2 := matchOne_sum tok rs rest (fun q hq => ht q (by simp [hq])) h
-      rw [hr] at h1
-      simp only [sumAll]
-      omega
+    simp only [matchOne, List.any_eq_true] at h
+    obtain ⟨rest, hrest, h⟩ := h
+    have hr : r.token = tok := ht r (by simp)
+    have h1 := takeAll_sum r calls rest hrest
+    have h2 := matchOne_sum tok rs rest (fun q hq => ht q (by simp [hq])) h
+    rw [hr] at h1
+    simp only [sumAll]
+    omega
 
 /-- The split transfers total sumSplits. -/
 theorem sumAll_splits (cur : Nat) : ∀ ss : List Split,

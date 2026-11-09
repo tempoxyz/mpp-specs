@@ -180,17 +180,16 @@ def Request.required (r : Request) : List Transfer :=
 def fits (r c : Transfer) : Bool :=
   c.token == r.token && c.dst == r.dst && c.amount == r.amount && (r.memo.isNone || c.memo == r.memo)
 
-/-- Remove the first transfer that fits r; none when none does. -/
-def take1 (r : Transfer) : List Transfer → Option (List Transfer)
-  | [] => none
-  | c :: cs => if fits r c then some cs else (take1 r cs).map (c :: ·)
+/-- Every way to remove one transfer that fits r (empty when none does). -/
+def takeAll (r : Transfer) : List Transfer → List (List Transfer)
+  | [] => []
+  | c :: cs => (if fits r c then [cs] else []) ++ (takeAll r cs).map (c :: ·)
 
-/-- One-to-one matching: every required transfer consumes its own distinct transfer. -/
-def matchOne (calls : List Transfer) : List Transfer → Bool
-  | [] => true
-  | r :: rs => match take1 r calls with
-    | none => false
-    | some rest => matchOne rest rs
+/-- One-to-one matching: some assignment gives every required transfer its own distinct
+  transfer, whatever the order of the calls (§Ordering). -/
+def matchOne : List Transfer → List Transfer → Bool
+  | _, [] => true
+  | calls, r :: rs => (takeAll r calls).any fun rest => matchOne rest rs
 
 /-- The payment check of §Transaction Verification / §Hash Verification. With G4 off it is the
   literal "each required effect is present", which one transfer can satisfy twice. -/

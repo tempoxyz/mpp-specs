@@ -9,7 +9,7 @@ namespace IntentSubscription.Witnesses
 open IntentSubscription IntentSubscription.Examples
 
 /-- The configuration the traces use satisfies every guard, so the theorems apply to it. -/
-theorem guarded_ok : guarded.Guarded := ⟨rfl, rfl, rfl, rfl⟩
+theorem guarded_ok : guarded.Guarded := ⟨rfl, rfl, rfl⟩
 
 /-- Activation, then service in period 0. -/
 def trAct : List Act := [.issue req none, .sign (cred 0), .activate (cred 0), .serve PAYER 0]
@@ -53,6 +53,13 @@ theorem W_other_caller_refused : rejectedAt guarded (trAct ++ [.serve 9 0]) trAc
 
 /-- A replayed Credential is rejected (§Single-Use). -/
 theorem W_replay_rejected : rejectedAt guarded (trAct ++ [.activate (cred 0)]) trAct.length = true := by
+  decide
+
+/-- A second grant for the same Challenge, with a different payload, is rejected (core §Status
+  Codes: already-used challenge id), so one 402 activates one subscription. -/
+theorem W_second_grant_rejected :
+    rejectedAt guarded [.issue req none, .sign (cred 0), .sign (cred 1), .activate (cred 0),
+      .activate (cred 1)] 4 = true := by
   decide
 
 /-- One payer holds two subscriptions from two Challenges. -/

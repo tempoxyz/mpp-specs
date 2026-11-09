@@ -40,6 +40,22 @@ theorem W_split_memo_required :
       .submit { echo := chSplit, payload := .transaction { txSplit with calls := [{ pay with dst := 12, amount := 5 },
         { pay with amount := 85 }, { pay with dst := PLATFORM, amount := 10 }] } }] 3 = true := by decide
 
+/-- Order does not matter (§Ordering): with a primary transfer needing no memo and a split of
+  the same recipient and amount needing memo 7, the calls settle in either order. -/
+def reqSameDst : Request :=
+  { req with amount := 10, splits := [{ recipient := MERCHANT, amount := 5, memo := some 7 }] }
+def chSameDst : Challenge := { chA with request := reqSameDst }
+def txMemoFirst : Tx := { tx1 with calls := [{ pay with amount := 5, memo := some 7 }, { pay with amount := 5 }] }
+def txMemoLast : Tx := { tx1 with calls := [{ pay with amount := 5 }, { pay with amount := 5, memo := some 7 }] }
+theorem W_split_order_memo_first :
+    check guarded [.fund TOKEN PAYER 10, .issue chSameDst, .signTx txMemoFirst,
+      .submit { echo := chSameDst, payload := .transaction txMemoFirst }]
+      (fun st => st.bal TOKEN MERCHANT == 10 && st.receipts.length == 1) = some true := by decide
+theorem W_split_order_memo_last :
+    check guarded [.fund TOKEN PAYER 10, .issue chSameDst, .signTx txMemoLast,
+      .submit { echo := chSameDst, payload := .transaction txMemoLast }]
+      (fun st => st.bal TOKEN MERCHANT == 10 && st.receipts.length == 1) = some true := by decide
+
 /-- Push (§Hash Settlement): the client broadcasts, then submits the hash. -/
 theorem W_push :
     check guarded [.fund TOKEN PAYER 100, .issue chA, .signTx tx1, .broadcast tx1,

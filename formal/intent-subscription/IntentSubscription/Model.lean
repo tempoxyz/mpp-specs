@@ -98,23 +98,19 @@ deriving DecidableEq, Repr
 
 /-- Guard flags for rules the draft leaves out; each defaults to true (the guarded reading). -/
 structure Cfg where
-  /-- A Challenge activates at most one subscription (G1). §Single-Use makes only the
-      Credential single-use per Challenge. -/
-  challengeSingleUse : Bool := true
-  /-- A renewal may collect only the current billing period (G2). §Renewal forbids
+  /-- A renewal may collect only the current billing period (G1). §Renewal forbids
       accumulating missed periods but not charging future ones in advance. -/
   renewCurrentOnly : Bool := true
-  /-- A cancellation takes effect by the end of the current billing period (G3).
+  /-- A cancellation takes effect by the end of the current billing period (G2).
       §Cancellation leaves the effective time to the method. -/
   cancelBounded : Bool := true
-  /-- Activation is refused once subscriptionExpires is reached (G4). §Optional Fields only
+  /-- Activation is refused once subscriptionExpires is reached (G3). §Optional Fields only
       stops future billing periods. -/
   activateBeforeExpiry : Bool := true
 deriving Repr
 
 /-- The guarded reading: every flag on. -/
 structure Cfg.Guarded (cfg : Cfg) : Prop where
-  single : cfg.challengeSingleUse = true
   current : cfg.renewCurrentOnly = true
   bounded : cfg.cancelBounded = true
   expiry : cfg.activateBeforeExpiry = true
@@ -188,11 +184,11 @@ def step (cfg : Cfg) (st : St) : Act → Option St
   | .issue req ex =>
     some { st with nextChal := st.nextChal + 1, issued := ⟨st.nextChal, req, ex⟩ :: st.issued }
   | .sign c => some { st with creds := c :: st.creds }
-  -- §Activation steps 1-4; core §Challenge Binding, §Status Codes (expired id), §Replay
+  -- §Activation steps 1-4; core §Challenge Binding, §Status Codes (expired or already-used id), §Replay
   -- Protection; §Single-Use; §Shared Fields (positive amount and period)
   | .activate c =>
     if c ∈ st.creds ∧ c.chal ∈ st.issued ∧ before c.chal.expires st.now = true ∧
-       c ∉ st.usedCred ∧ (cfg.challengeSingleUse = true → c.chal.id ∉ st.usedChal) ∧
+       c ∉ st.usedCred ∧ c.chal.id ∉ st.usedChal ∧
        0 < c.chal.req.amount ∧ 0 < c.chal.req.len ∧
        (cfg.activateBeforeExpiry = true → before c.chal.req.subExp st.now = true) then
       some { st with
@@ -205,7 +201,7 @@ def step (cfg : Cfg) (st : St) : Act → Option St
           c.chal.req.recipient, st.now⟩ :: st.charges
         receipts := ⟨st.nextSub, 0, c.chal.req.amount⟩ :: st.receipts }
     else none
-  -- §Renewal: one charge per period, no accumulated missed periods, (G2) current period only;
+  -- §Renewal: one charge per period, no accumulated missed periods, (G1) current period only;
   -- §Optional Fields: not once subscriptionExpires is reached; §Cancellation: no period
   -- after cancellation takes effect
   | .renew sid p =>
@@ -220,7 +216,7 @@ def step (cfg : Cfg) (st : St) : Act → Option St
             :: st.charges
           receipts := ⟨sid, p, s.req.amount⟩ :: st.receipts }
       else none
-  -- §Cancellation: the payer cancels once; (G3) effective by the end of the current period
+  -- §Cancellation: the payer cancels once; (G2) effective by the end of the current period
   | .cancel caller sid eff =>
     match st.subs sid with
     | none => none

@@ -128,10 +128,11 @@ theorem P4_replayed_credential_rejected {c : Cred} (hu : c ∈ s.usedCred) :
     step cfg s (.activate c) = none := by
   grind [step]
 
-/-- P4 (sanity): a second Credential for an answered Challenge is rejected (G1). -/
-theorem P4_answered_challenge_rejected (hg : cfg.Guarded) {c : Cred} (hu : c.chal.id ∈ s.usedChal) :
+/-- P4 (sanity): a second Credential for an answered Challenge is rejected (core §Status
+  Codes: unknown or already-used challenge id). -/
+theorem P4_answered_challenge_rejected {c : Cred} (hu : c.chal.id ∈ s.usedChal) :
     step cfg s (.activate c) = none := by
-  grind [step, hg.single]
+  grind [step]
 
 /-- P4 (sanity): a Credential for an expired Challenge is rejected. -/
 theorem P4_expired_challenge_rejected {c : Cred} {e : Nat} (he : c.chal.expires = some e)

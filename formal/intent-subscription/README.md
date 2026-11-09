@@ -25,7 +25,7 @@ bash formal/intent-subscription/check.sh   # clean build plus axiom audit; print
 
 ## Properties
 
-Every state property holds in all reachable states with the guards on (`Cfg.Guarded`: four flags).
+Every state property holds in all reachable states with the guards on (`Cfg.Guarded`: three flags).
 
 | # | Property | Theorems |
 |---|---|---|
@@ -42,7 +42,7 @@ Every state property holds in all reachable states with the guards on (`Cfg.Guar
 | P11 | Renewal is idempotent: a retry or a missed period is rejected; `lastPaid` only grows | `P11_*` |
 
 - One-step theorems that only read a guard back (`P4_*_rejected`, `P11_missed_period_rejected`) are sanity checks that `step` encodes the rule.
-- 52 hand-written theorems; the audit counts 146 including generated equation lemmas.
+- 50 hand-written theorems; the audit counts 143 including generated equation lemmas.
 
 ## Abstractions
 
