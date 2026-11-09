@@ -1550,10 +1550,7 @@ To prevent fund loss from server crashes:
 - For v1, servers MUST persist every accepted voucher whose
   `cumulativeAmount` is at least `max(spent, settledOnChain)` until
   the channel closes, since a v1 close uses the lowest of them (see
-  {{cooperative-close}}). Servers MAY discard lower vouchers. So that
-  a payer cannot grow this storage without bound, servers MAY cap how
-  many such vouchers they keep per channel and refuse a voucher beyond
-  the cap with 402; they MUST NOT discard one to stay under the cap.
+  {{cooperative-close}}). Servers MAY discard lower vouchers.
 
 - Implementations SHOULD use transactional storage or write-ahead logging
   to ensure atomicity between state updates and service delivery.
