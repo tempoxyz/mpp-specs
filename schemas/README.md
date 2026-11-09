@@ -28,9 +28,11 @@ JSON Schemas for MPP protocol values.
     them for `method` and, where present, `intent`.
   - HttpServerOffer `method` is a `PaymentMethodId`, narrowed from
     `^[a-z][a-z0-9-]*$`.
-  - Challenge and Credential allow extra members
-    (`additionalProperties: true`), since the core draft allows custom
-    parameters and requires receivers to ignore unknown fields.
+  - Challenge allows extra members as strings
+    (`additionalProperties: {type: string}`): custom parameters are
+    auth-params (token or quoted-string), and receivers ignore unknown ones.
+  - Credential allows extra members of any type
+    (`additionalProperties: true`), since receivers ignore unknown fields.
 - The drafts are normative. Where a schema and a draft disagree, the
   draft wins and the schema is the bug.
 - JSON Schema draft 2020-12. Nothing in CI validates the drafts'
