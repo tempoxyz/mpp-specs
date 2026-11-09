@@ -132,9 +132,11 @@ def submitter(sha: str) -> str | None:
     anyone can set:
     - the merged pull request that brought the commit in (its opener);
     - else, for a commit pushed without a pull request, its GitHub author, but
-      only when GitHub verified the commit's signature against that account.
-      An unsigned commit is matched to an account by author email alone, which
-      is forgeable.
+      only when GitHub verified the commit's signature and the author is also
+      the committer. GitHub's "verified" ties the signature to the committer, so
+      a contributor could sign their own commit while naming someone else as
+      author; and an unsigned commit is matched to an account by email alone,
+      which anyone can set.
     The API returns each account's current login, so a rename can't leave a
     stale owner. None leaves the entry to DEFAULT_OWNERS.
     """
@@ -149,8 +151,14 @@ def submitter(sha: str) -> str | None:
     if not isinstance(commit, dict):
         return None
     author = commit.get("author") or {}
+    committer = commit.get("committer") or {}
     verification = (commit.get("commit") or {}).get("verification") or {}
-    if author.get("login") and verification.get("verified") is True:
+    if (
+        author.get("login")
+        and author.get("id") is not None
+        and author.get("id") == committer.get("id")
+        and verification.get("verified") is True
+    ):
         return author["login"]
     return None
 

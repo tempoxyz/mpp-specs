@@ -59,7 +59,7 @@ def test_submitter_uses_verified_author_without_pull_request(monkeypatch):
     def lookup(url):
         if url.endswith("/pulls"):
             return []
-        return {"author": {"login": "renamed"}, "commit": {"verification": {"verified": True}}}
+        return {"author": {"login": "renamed", "id": 7}, "committer": {"login": "renamed", "id": 7}, "commit": {"verification": {"verified": True}}}
 
     monkeypatch.setattr(gen_codeowners, "github", lookup)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
@@ -83,7 +83,7 @@ def test_submitter_ignores_unmerged_pull_requests(monkeypatch):
     def lookup(url):
         if url.endswith("/pulls"):
             return [{"merged_at": None, "user": {"login": "someone-else"}}]
-        return {"author": {"login": "brendanjryan"}, "commit": {"verification": {"verified": True}}}
+        return {"author": {"login": "brendanjryan", "id": 1}, "committer": {"login": "brendanjryan", "id": 1}, "commit": {"verification": {"verified": True}}}
 
     monkeypatch.setattr(gen_codeowners, "github", lookup)
     monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
@@ -150,3 +150,19 @@ def test_first_commit_ignores_backdated_descendants(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     added = gen_codeowners.first_commit("specs/draft-a-01.md")
     assert added is not None and added[1] == "first@x"
+
+
+def test_submitter_ignores_author_signed_by_someone_else(monkeypatch):
+    def lookup(url):
+        if url.endswith("/pulls"):
+            return []
+        # Verified, but the signature is the committer's (mallory), who named brendanjryan as author.
+        return {
+            "author": {"login": "brendanjryan", "id": 1},
+            "committer": {"login": "mallory", "id": 2},
+            "commit": {"verification": {"verified": True}},
+        }
+
+    monkeypatch.setattr(gen_codeowners, "github", lookup)
+    monkeypatch.setattr(gen_codeowners, "LOOKUP_FAILURES", [])
+    assert submitter("abc123") is None
