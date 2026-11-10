@@ -1486,6 +1486,7 @@ For each channel, keyed by `channelId`, servers MUST maintain:
 | `settledOnChain` | uint128 | Last cumulative amount settled on-chain (informational) |
 | `deposit` | uint128 or uint96 | Latest verified on-chain deposit |
 | `closeRequestedAt` | uint64 | Latest verified close-request timestamp, or zero |
+| `closing` | bool | Whether a close was accepted or started |
 
 For v2 channels, `acceptedCumulative`, `spent`, `settledOnChain`, and
 `deposit` are uint96 values. Servers MUST key channel state by normalized
@@ -1494,8 +1495,8 @@ channel across concurrent requests. Every service and instance that
 accepts vouchers on the same channel, for example several services
 sharing one payee address, MUST share that channel's accounting
 state, since the escrow pays each increment once. The shared state
-includes the disclosed amount (see {{voucher-disclosure}}), whether
-the channel is closing (see {{cooperative-close}}), and for v1 the
+includes the disclosed amount (see {{voucher-disclosure}}),
+`closing` (see {{cooperative-close}}), and for v1 the
 retained vouchers (see {{crash-safety}}).
 
 Accounting is per channel, not per session: `acceptedCumulative` and
@@ -1530,7 +1531,8 @@ servers MUST follow this procedure:
      cover it, since a `topUp` alone adds no credit
 
 3. **Charge and deliver** (if the credential carries a voucher that
-   step 1 accepts, `available >= cost` and `closeRequestedAt == 0`):
+   step 1 accepts, `available >= cost`, `closeRequestedAt == 0`
+   and `closing` is false):
    - **MUST persist** `spent := spent + cost` to durable storage BEFORE
      or atomically with delivering the metered service
    - Deliver the response (or next chunk/token window for streaming)
@@ -1546,7 +1548,8 @@ server completes the action and returns 402 with a fresh Challenge to
 the metered request, and the client sends a voucher.
 
 Servers MUST NOT charge metered service on a channel whose
-`closeRequestedAt` is non-zero, even against accepted vouchers that
+`closeRequestedAt` is non-zero or whose `closing` is true, even
+against accepted vouchers that
 `spent` has not yet consumed. A request whose `spent` increment
 persisted before the server observed the close request MUST still be
 delivered, since `spent`, and so the capture, already includes it.
