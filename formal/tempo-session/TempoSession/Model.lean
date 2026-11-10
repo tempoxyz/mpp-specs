@@ -1,3 +1,4 @@
+import MppCore
 /-
   Tempo session payment method (draft-tempo-session-00), on-chain escrow + server accounting.
   Section numbers (§) refer to specs/methods/tempo/draft-tempo-session-00.md. The contract
@@ -39,6 +40,8 @@
   * run / Reachable: traces and the set of states reachable from the empty escrow.
 -/
 namespace TempoSession
+
+export MppCore (upd upd_same upd_other upd_apply)
 
 /-- channelId preimage (§6.1, v2 descriptor): payer, payee, token, salt, authorizedSigner
   (0 = payer) and the open transaction's expiringNonceHash.
@@ -172,20 +175,6 @@ structure St where
 def St.init : St :=
   ⟨1, fun _ => none, [], fun _ => 0, fun _ => 0, fun _ => 0, fun _ => 0, fun _ => 0, fun _ => none,
    fun _ => 0, fun _ => 0⟩
-
-/-- Point update of a per-channel map: k gets b, every other key is unchanged. -/
-def upd {β : Type} (f : Key → β) (k : Key) (b : β) : Key → β :=
-  fun k' => if k' = k then b else f k'
-
-/-- Reading the updated key returns the new value. -/
-@[simp] theorem upd_same {β} (f : Key → β) (k : Key) (b : β) : upd f k b k = b := by simp [upd]
-/-- Reading any other key returns the old value: the frame rule that keeps the proofs per-channel. -/
-@[simp] theorem upd_other {β} (f : Key → β) (k k' : Key) (b : β) (h : k' ≠ k) :
-    upd f k b k' = f k' := by simp [upd, h]
-/-- Reading an updated map at any key, as one case split: the form the proofs give grind
-  (grind [upd_apply]), which then splits on k' = k, so upd_same and upd_other are its two cases. -/
-theorem upd_apply {β} (f : Key → β) (k k' : Key) (b : β) :
-    upd f k b k' = if k' = k then b else f k' := rfl
 
 /-- Every action of the model. caller is the msg.sender of a contract call. -/
 inductive Act where
@@ -357,16 +346,10 @@ def step (cfg : Cfg) (st : St) : Act → Option St
     if cfg.spentPerChannel = true then some st else some { st with spent := upd st.spent k 0 }
 
 /-- Run a list of actions; none if any step reverts. Used by the counterexample traces and P4. -/
-def run (cfg : Cfg) : St → List Act → Option St
-  | st, [] => some st
-  | st, a :: as => match step cfg st a with
-    | none => none
-    | some st' => run cfg st' as
+abbrev run (cfg : Cfg) : St → List Act → Option St := MppCore.run (step cfg)
 
 /-- Reachable states from the empty escrow: St.init, closed under successful steps.
   "Holds in every reachable state" is proved by induction on this predicate. -/
-inductive Reachable (cfg : Cfg) : St → Prop where
-  | init : Reachable cfg St.init
-  | step {s s' : St} (a : Act) : Reachable cfg s → step cfg s a = some s' → Reachable cfg s'
+abbrev Reachable (cfg : Cfg) : St → Prop := MppCore.Reachable (step cfg) St.init
 
 end TempoSession
