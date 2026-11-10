@@ -18,7 +18,7 @@ bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 
 - `lakefile.toml` sets `warningAsError`, so a `sorry`, a deprecated name or an unused hypothesis fails the build.
 - `Audit.lean` fails when any declaration is an axiom or depends on one beyond Lean's three standard axioms. That rules out `sorry`, `admit` and `native_decide`.
-- `check.sh` runs `Audit.lean` after the build as its own program, over every module under `TempoSession/` and the root. It imports only `Lean` and loads the built modules at run time, so no model module can redefine its syntax or print its result for it.
+- `check.sh` runs the shared gate in [`../core`](../core). It runs `Audit.lean` after the build as its own program, over every module under `TempoSession/`, the root and `MppCore`. It imports only `Lean` and loads the built modules at run time, so no model module can redefine its syntax or print its result for it.
 - `check.sh` fails when any file uses `set_option` (which could raise `maxHeartbeats` or turn warnings back off), imports `Lean`, runs metaprograms or names `skipKernelTC`. `Audit.lean` also replays every declaration through Lean's kernel, so one that skipped the kernel check when it was built fails.
 
 ## Files
@@ -30,7 +30,7 @@ bash formal/tempo-session/check.sh   # clean build plus axiom audit; prints OK
 | `Properties.lean` | P1–P9, below |
 | `Counterexamples.lean` | One trace per spec gap with its guard off, checked by `decide` ([GAPS.md](./GAPS.md)) |
 | `Witnesses.lean` | Fixed traces in which every action succeeds with the guards on, so the guarded model is not vacuous |
-| `../Audit.lean` | Axiom audit, run by `check.sh` (outside `TempoSession/`, not part of the library) |
+| `../core` | Shared `run`, `Reachable`, `upd`, and the gate `check.sh` runs (`check-lib.sh`, `Audit.lean`) |
 
 ## Proofs
 

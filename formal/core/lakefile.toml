@@ -1,0 +1,13 @@
+name = "MppCore"
+version = "0.1.0"
+defaultTargets = ["MppCore"]
+
+# Every warning is a build error: a sorry, a deprecated name, an unused variable or simp
+# argument fails 'lake build' itself, not only the axiom audit.
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "MppCore"
+# Build every module under MppCore/, even one nothing imports, so no proof goes unchecked.
+globs = ["MppCore", "MppCore.+"]
