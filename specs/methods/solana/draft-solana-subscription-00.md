@@ -34,7 +34,7 @@ normative:
     date: 2026-01
   I-D.payment-intent-subscription:
     title: "Subscription Intent for HTTP Payment Authentication"
-    target: https://datatracker.ietf.org/doc/draft-payment-intent-subscription/
+    target: https://paymentauth.org/draft-payment-intent-subscription-00.html
     author:
       - name: Jake Moxey
       - name: Brendan Ryan
