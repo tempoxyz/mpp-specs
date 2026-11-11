@@ -1007,9 +1007,10 @@ in-flight claim, as defined in {{I-D.nearintents-charge}}.
     voucher.cumulative`, `spent = "0"`, and `status = "open"`; mark
     the challenge consumed; and consume `hash`. Then serve the request
     per {{streaming}} and return a receipt. The server MUST NOT create
-    the session or return a receipt before `SUCCESS`. For long-running
-    settlements, servers MAY return `202 Accepted` with a retry
-    location as permitted by {{I-D.nearintents-charge}}.
+    the session or return a receipt before `SUCCESS`. While the deposit
+    is not yet detected or the swap has not reached a terminal status,
+    servers MAY respond as defined in {{pending}} instead of holding
+    the connection.
 11. On `FAILED` or `REFUNDED`, reject with `settlement-failed`. On
     `INCOMPLETE_DEPOSIT`, reject with `payment-insufficient`. In both
     cases mark the challenge consumed and consume `hash` as defined in
@@ -1072,7 +1073,7 @@ depends on it.
 6. Verify the deposit, claim `hash`, record it as a pending deposit of
    the session, and drive the swap to a terminal status as in steps 8
    and 9 of {{open-verification}}, using the echoed challenge's
-   funding object.
+   funding object. A pending response is permitted as in {{pending}}.
 7. On `SUCCESS`, atomically add `funding.amountOut` to `funded`,
    record `hash`, remove it from the pending deposits, mark the
    challenge consumed, and consume `hash`. Then, if the session is
@@ -1116,6 +1117,45 @@ when that status is known, without sending a response.
    result with the final one, and return HTTP 200 with the close body
    of {{close-action}} and a final receipt ({{receipt}}).
 
+## Pending Settlement {#pending}
+
+Between the submission of an `open` or `topUp` credential and the
+terminal status of its swap, the deposit may not yet be visible on the
+origin chain or to the 1Click backend, or the swap may still be
+running. Neither is a failure of the credential. A server that does
+not hold the connection while it polls the status endpoint MAY instead
+respond with HTTP 202 (Accepted) and a `Retry-After` header
+{{RFC9110}}, with no `Payment-Receipt` and no `WWW-Authenticate`
+header, without consuming the challenge or the hash. It keeps the
+in-flight claim of the hash and continues to drive the swap, applying
+the terminal step of the verification procedure when the status is
+known, as for a pending top-up deposit.
+
+A credential re-presented unchanged while its hash is in flight for the
+same challenge is not a concurrent submission: the server verifies it
+and returns the current state, a further 202 while the swap is pending
+or the terminal outcome. A session or credit created in the meantime
+is recognised as a retry by step 4 of {{open-verification}} or step 4
+of {{topup-verification}}. A 202 is not a final outcome and MUST NOT
+be stored as the response for the request's `Idempotency-Key`
+({{idempotency}}).
+
+Clients MUST treat a 202 as undecided: they re-present the same
+credential after the `Retry-After` delay and MUST NOT request a fresh
+challenge or make another deposit for it. They stop on any response
+other than 202, not at the challenge expiry, since a deposit detected
+before expiry remains claimable ({{expiry}}). Clients SHOULD present
+the credential once the backend reports the deposit as detected, which
+keeps the pending interval short.
+
+`verification-failed` is reserved for a deposit that is definitively
+wrong: a transaction confirmed on the origin chain that does not
+transfer `funding.asset` to `funding.depositAddress` with the required
+memo; a confirmed deposit below `funding.minAmountIn` is
+`payment-insufficient`. A deposit that is merely not yet detected is
+pending while the challenge is unexpired; after expiry with no deposit
+detected, step 5 of {{open-verification}} applies.
+
 # Idempotency {#idempotency}
 
 Retrying a credential after a network failure MUST NOT result in
@@ -1148,8 +1188,11 @@ or create a record keyed by `(reference, Idempotency-Key)` holding the
 request method, the target URI, a digest of the request body, and the
 state `in progress`. The record is retained for at least 24 hours, and
 no less than the validity of the echoed challenge, and is completed
-with the response, including its receipt, when the request finishes. A duplicate that finds a completed record receives
-the stored response without being charged again. A duplicate that
+with the response, including its receipt, when the request finishes.
+A 202 response ({{pending}}) does not complete the record: the server
+releases it, so that the re-presented credential is processed anew. A
+duplicate that finds a completed record receives the stored response
+without being charged again. A duplicate that
 finds an `in progress` record MUST NOT execute the request; the
 server either waits and returns the stored response or responds with
 HTTP 409 Conflict. A reuse of the key with a different method, URI,
@@ -1542,7 +1585,7 @@ conditions reuse the problem types of {{I-D.httpauth-payment}} and
 | Payload field has an invalid value: session key not a valid Ed25519 point, amount not an integer, unsupported refund destination | `invalid-payload` | 402 | |
 | Challenge unknown, modified, or consumed; `voucher` or `close` echoing a challenge other than the opening one; top-up challenge terms differ from the session's | `invalid-challenge` | 402 | |
 | Challenge expired (`open`, `topUp`) | `payment-expired` | 402 | |
-| Deposit not found, wrong recipient, wrong asset, or wrong memo | `verification-failed` | 402 | |
+| Confirmed deposit transaction with wrong recipient, wrong asset, or wrong memo; a deposit not yet detected is pending, not an error ({{pending}}) | `verification-failed` | 402 | |
 | Deposit below `funding.minAmountIn` | `payment-insufficient` | 402 | |
 | Swap failed or refunded after a verified deposit | `settlement-failed` | 402 | |
 | Signature invalid; session key already bound; open replayed with a different session key | `session/invalid-proof` | 402 | |
@@ -1551,6 +1594,7 @@ conditions reuse the problem types of {{I-D.httpauth-payment}} and
 | Voucher below the highest accepted voucher | `session/stale-update` | 402 | `reference`, `acceptedCumulative` |
 | Voucher above `funded` or advancing by less than `minVoucherDelta`; authorized value exhausted | `session/insufficient-value` | 402 | `reference`, `acceptedCumulative`, `requiredCumulative`, `funded` |
 | 1Click Swap API or origin chain unavailable | none | 5xx | Credential not consumed |
+| Deposit not yet detected or swap not yet terminal, connection not held | none | 202 | `Retry-After`; credential not consumed ({{pending}}) |
 
 The problem types defined by this document are:
 
