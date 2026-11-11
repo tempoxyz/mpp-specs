@@ -841,12 +841,19 @@ that credential, since another server or an earlier settlement may
 already have counted it. Before broadcasting, servers MUST compute
 the transaction hash and fetch its receipt (for example with
 `eth_getTransactionReceipt`). If the transaction is already
-included, servers MUST reject the credential with
-`verification-failed`, even when the accepted-transfer record
-({{accepted-transfers}}) holds no entry for it. When the broadcast
-fails because the node already knows the transaction, servers MAY
-wait for its receipt and accept it only if the transaction was not
-yet included at the pre-broadcast check.
+included, servers MUST reject the credential as a replayed
+credential (`invalid-challenge`), even when the accepted-transfer
+record ({{accepted-transfers}}) holds no entry for it, so that
+clients do not pay a fresh challenge for a transfer already made.
+When the broadcast fails because the node already knows the
+transaction, servers MAY wait for its receipt and accept it only if
+the transaction was not yet included at the pre-broadcast check and
+a transfer the server counts carries an attribution memo bound to
+this challenge ({{attribution-memo}}). The node may know the
+transaction because someone else submitted it: another server, or
+anyone who saw the transaction pending. A transfer without such a
+memo is not bound to this challenge, so its receipt proves nothing
+for this credential.
 
 A server MAY settle a transaction credential whose transaction is
 already onchain only when it holds its own broadcast-pending record
@@ -854,8 +861,11 @@ for that transaction hash, written before it broadcast that
 transaction for the same challenge. This covers a retry of the same
 credential after the server broadcast the transaction but lost the
 response, timed out waiting for the receipt, or could not tell
-whether the broadcast succeeded. Without such a record, the rule
-above applies and the server MUST reject the credential. A server
+whether the broadcast succeeded. Servers MUST NOT keep this record
+after the node definitively rejected the broadcast, and SHOULD let it
+expire once the challenge and the transaction's validity window have
+both ended. Without such a record, the rule above applies and the
+server MUST reject the credential. A server
 that settles under this exception MUST still verify the receipt as
 it would after its own broadcast, MUST add the transfers it counts
 to the accepted-transfer record ({{accepted-transfers}}), and MUST
