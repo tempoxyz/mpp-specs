@@ -1,8 +1,8 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-httpauth-payment-02
-version: "02"
+docname: draft-httpauth-payment-01
+version: "01"
 category: std
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -53,6 +53,7 @@ normative:
   RFC9530:
 
 informative:
+  RFC9421:
   W3C-DID:
     title: "Decentralized Identifiers (DIDs) v1.0"
     target: https://www.w3.org/TR/did-core/
@@ -168,10 +169,8 @@ conditions.
 | Condition | Status | Response |
 |-----------|--------|----------|
 | Resource requires payment, no credential provided | 402 | Fresh challenge in `WWW-Authenticate` |
-| More than one Payment credential | 400 | No challenge; `bad-request` problem |
 | Malformed credential (invalid base64url, bad JSON) | 402 | Fresh challenge + `malformed-credential` problem |
-| Unknown or already-used challenge `id`, or binding mismatch | 402 | Fresh challenge + `invalid-challenge` problem |
-| Request body does not match challenge `digest` | 402 | Fresh challenge + `invalid-challenge` problem |
+| Unknown or already-used challenge `id` | 402 | Fresh challenge + `invalid-challenge` problem |
 | Expired challenge `id` | 402 | Fresh challenge + `payment-expired` problem |
 | Payment proof invalid or verification failed | 402 | Fresh challenge + `verification-failed` problem |
 | Payment verified, access granted | 200 | Resource + optional `Payment-Receipt` |
@@ -184,62 +183,7 @@ payment is required or when a payment credential fails validation
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
 
-Accepting a credential consumes its challenge, unless the payment
-intent or method specification defines later credentials that
-continue the same challenge (for example, the voucher and close
-credentials of a session). A credential for a consumed challenge is a
-replay. Servers MUST respond to it with `invalid-challenge`, not
-`verification-failed`, even when the payment proof itself is valid.
-
-## Credential Processing {#credential-processing}
-
-A Payment credential is a field value whose auth-scheme is "Payment".
-Fields carrying other schemes, such as a Bearer credential in
-`Authorization`, are not Payment credentials.
-
-Servers MUST process a request for a resource that requires payment
-in the following order, and MUST respond with the result of the
-first step that fails:
-
-1. Count the Payment credentials in the request, across
-   `Authorization` and `Payment-Authorization`, across repeated
-   field lines, and within a comma-separated field value. If there
-   is more than one, respond with 400 and a `bad-request` problem,
-   without a challenge.
-
-2. Locate the credential in the field that the server's challenge
-   for the resource selects ({{credential-header}}). A credential in
-   any other field MUST be ignored, as if absent. A field value of
-   "Payment" with no token is also absent. If no credential is
-   present, respond with 402, a fresh challenge and a
-   `payment-required` problem.
-
-3. Decode the token. If it is not base64url-encoded JSON as defined
-   in {{credential-header}}, or exceeds the size the server accepts
-   ({{size-considerations}}), respond with `malformed-credential`.
-
-4. Verify the challenge binding ({{challenge-binding}}): the echoed
-   challenge parameters, a `realm` this server issues, the resource
-   or route the challenge was issued for, and the request body
-   digest when the challenge has `digest`
-   ({{request-body-digest-binding}}). On any mismatch, or an unknown
-   challenge `id`, respond with `invalid-challenge`.
-
-5. If the challenge has expired, respond with `payment-expired`.
-
-6. If the challenge has been consumed ({{response-status-codes}}),
-   respond with `invalid-challenge`. Credentials that the payment
-   intent or method defines as continuing an accepted challenge are
-   not replays; the method verifies them in step 7.
-
-7. Verify the payment with the payment method. If the payload does
-   not match the method's schema, respond with `invalid-payload`;
-   if the proof fails verification, respond with
-   `verification-failed`.
-
-Every 402 response in these steps carries a fresh challenge.
-
-## Relationship to 401 Unauthorized
+## Relationship to 401 Unauthorized {#relationship-to-401}
 
 This specification uses 402 (Payment Required) consistently for all
 payment-related challenges, including failed credential validation.
@@ -248,7 +192,11 @@ authentication schemes. The distinction is intentional:
 
 - **402** indicates a payment barrier (initial challenge or retry needed)
 - **401** is reserved for authentication failures unrelated to payment
-- **403** indicates the payment succeeded but access is denied by policy
+- **403** indicates access is denied by policy. After a paid request,
+  it means either that the payment succeeded but policy denies access
+  ({{response-status-codes}}), or that other authentication denied
+  access and no payment settled ({{other-authentication}}). Servers
+  SHOULD say which in the Problem Details {{RFC9457}} body.
 
 This design ensures clients can distinguish payment requirements from
 other authentication schemes that use 401.
@@ -281,37 +229,58 @@ Servers SHOULD NOT return 402 when:
 Servers MUST NOT return 402 without including a `WWW-Authenticate` header
 containing at least one Payment challenge.
 
-### Interaction with Other Authentication Schemes
+### Interaction with Other Authentication Schemes {#other-authentication}
 
-When a resource requires both authentication and payment, servers SHOULD:
+The Payment scheme carries payment. Apart from the payer identifier
+(`source`) and any proof a payment method defines inside `payload`,
+it does not identify the client, the payer's principal, or any other
+party. A resource MAY require any other HTTP authentication scheme,
+or any other means of authenticating a request, alongside Payment,
+such as a Bearer token, HTTP Message Signatures {{RFC9421}}, or an
+attestation carried in an application-defined header field. This
+specification calls these "other authentication" and does not define,
+register, or constrain them. Proofs that a payment method defines
+inside a Payment credential are part of the Payment scheme, not other
+authentication. The rules in this section apply to every other
+authentication mechanism, so that any of them composes with Payment
+without changes to either.
 
-1. First verify authentication credentials
-2. Return 401 if authentication fails
-3. Return 402 with a Payment challenge only after successful authentication
+#### Ordering
 
-This ordering prevents information leakage about payment requirements to
-unauthenticated clients.
+When a resource requires both other authentication and payment,
+servers SHOULD:
 
-When authentication succeeds but the resource also requires payment, the
-server MAY include the `header` parameter in its Payment challenge to
-select `Payment-Authorization` instead of the default `Authorization`
-for the Payment credential (see {{credential-header}}). A challenge that
-omits `header` defaults to `Authorization`. A challenge that includes
-`header="Payment-Authorization"` requires the client to send the Payment
-credential in the `Payment-Authorization` header. This allows the client
-to retain its ordinary authentication credential in `Authorization`.
+1. First verify the other authentication
+2. If it is missing or fails verification, return 401 with that
+   mechanism's challenge, or, for a mechanism that defines no
+   `WWW-Authenticate` challenge, the error response that mechanism
+   defines; if it verifies but policy denies access, return 403
+3. Return 402 with a Payment challenge only after the other
+   authentication succeeds
 
-For example, the server can issue:
+This ordering prevents information leakage about payment requirements
+to unauthenticated clients. A response sent under step 2 SHOULD NOT
+include a Payment challenge.
 
-~~~http
-HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
-    realm="api.example.com",
-    method="example",
-    intent="charge",
-    header="Payment-Authorization",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
-~~~
+When a request carries a Payment credential, servers MUST verify the
+other authentication before verifying, consuming, or settling the
+Payment credential. When the response denies access on the basis of
+other authentication, whether with 401, 403, or a mechanism-defined
+error, servers MUST NOT settle the payment, MUST NOT consume the
+challenge or the Payment credential, and MUST NOT issue a
+`Payment-Receipt`.
+
+#### Field Selection
+
+When the other authentication uses the `Authorization` header field,
+the server SHOULD include the `header` parameter in its Payment
+challenge to select `Payment-Authorization` instead of the default
+`Authorization` for the Payment credential (see {{credential-header}}).
+A challenge that omits `header` defaults to `Authorization`. A
+challenge that includes `header="Payment-Authorization"` requires the
+client to send the Payment credential in the `Payment-Authorization`
+header. This allows the client to retain its other authentication
+credential in `Authorization`.
 
 The subsequent request can then carry both a Bearer credential and a
 Payment credential:
@@ -322,6 +291,47 @@ Host: api.example.com
 Authorization: Bearer mF_9.B5f-4.1JqM
 Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOiJ...
 ~~~
+
+#### Retries
+
+When a client retries a request with a Payment credential, it MUST
+send the other authentication it sent on the request that elicited
+the 402, refreshed if that mechanism requires a fresh proof per
+request (for example, a new signature with a new nonce).
+
+A 401 never follows settlement, because servers verify other
+authentication first and do not consume the Payment credential when
+it fails. A client that receives a 401 in response to a request
+carrying a Payment credential MAY therefore refresh its other
+authentication and resend the same Payment credential while its
+challenge has not expired. This lets a client recover from, for
+example, an access token that expired between the 402 and the paid
+retry, without paying twice when the payment method requires paying
+before presenting the credential. A server MUST process such a
+resent credential as if presented for the first time. Clients MUST
+NOT resend a Payment credential with a different challenge.
+
+A 403 does not by itself tell the client whether the payment settled
+(see {{relationship-to-401}}). Clients SHOULD NOT resend a Payment
+credential to recover from a 403, unless the response states, in its
+Problem Details body or as the other authentication mechanism
+defines, that other authentication denied access and no payment
+settled. In that case the client MAY resend the same Payment
+credential under the same conditions as after a 401. This section
+does not restrict retries that other sections permit, such as
+retries with an `Idempotency-Key`
+({{idempotency-and-side-effects}}).
+
+#### Binding Other Authentication to a Challenge
+
+Other authentication MAY bind its proof to a specific Payment
+challenge, so that the proof cannot be reused with a different
+payment. This specification does not define such a binding. A
+mechanism that defines one SHOULD cover the challenge `id`, which
+servers already bind to the payment terms ({{challenge-binding}}). For
+example, an HTTP Message Signature {{RFC9421}} that covers the field
+carrying the Payment credential covers the echoed challenge, and
+through it the challenge `id`.
 
 # The Payment Authentication Scheme
 
@@ -472,8 +482,7 @@ The computation proceeds as follows:
    omitted). The `header` slot is omitted entirely when the parameter is
    absent.
 
-3. Compute HMAC-SHA256 over the resulting string using a server secret
-   of at least 32 bytes ({{challenge-binding-secret-management}}).
+3. Compute HMAC-SHA256 over the resulting string using a server secret.
 
 4. Encode the HMAC output as base64url without padding ({{RFC4648}}
    Section 5).
@@ -505,8 +514,8 @@ same challenge.
 
 ###### HMAC-SHA256 Test Vectors
 
-The following vectors use the 32-byte UTF-8 server secret
-`mpp-hmac-test-vector-secret-32by` and this request object:
+The following vectors use the UTF-8 server secret `test-vector-secret` and
+this request object:
 
 ~~~json
 {"amount":"1000000"}
@@ -526,7 +535,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-2S2NsFcCINq8QUKV8OZHdRm_JhhbJf5X8Cii4gZ_UyI
+X6v1eo7fJ76gAxqY0xN9Jd__4lUyDDYmriryOM-5FO4
 ~~~
 
 With `header="Payment-Authorization"` and no `opaque`, the input is:
@@ -540,7 +549,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-CfIT3MTJbcDQ7kdEJD9GbLQPvlRZQLnEXyerMinsFMg
+S91xi-OFGZPMs-j7GsX0FDpIkmCcZT1P9XyV58WNy_U
 ~~~
 
 Finally, with `header="Payment-Authorization"` and the following `opaque`
@@ -562,7 +571,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-fGVr3o_Ve1k0KQpddLKyEXRE7nk6chQOC5lN7Q54dR8
+CJ4X1O4aTDmS59hfdhnhBtxIQjWDOf0bcrhsswwMOW8
 ~~~
 
 #### Example Challenge
@@ -628,8 +637,7 @@ When verifying a credential with a `digest` parameter, servers MUST:
 
 1. Compute the digest of the current request body per [RFC9530]
 2. Compare it with the `digest` value from the challenge
-3. Reject the credential if the digests do not match, with 402, a
-   fresh challenge and an `invalid-challenge` problem
+3. Reject the credential if the digests do not match
 
 
 ## Credentials {#credential-header}
@@ -653,9 +661,7 @@ send a Payment credential for it.
 
 Servers MUST accept a Payment credential for a given challenge only from
 the field selected by that challenge. A Payment credential received in
-any other field MUST NOT satisfy the challenge: servers MUST ignore it,
-as if absent, and respond with 402, a fresh challenge and a
-`payment-required` problem ({{credential-processing}}).
+any other field MUST NOT satisfy the challenge.
 
 The field value uses base64url encoding without
 padding per {{RFC4648}} Section 5:
@@ -985,15 +991,11 @@ Implementations MAY define additional parameters in challenges:
 - Parameters MUST use lowercase names
 - Unknown parameters MUST be ignored by clients
 
-## Size Considerations {#size-considerations}
+## Size Considerations
 
 Servers SHOULD keep challenges under 8KB. Clients MUST be able to handle
-challenges of at least 4KB. Parsers of `WWW-Authenticate` MAY reject a
-field value longer than 16384 octets.
-
-Servers MUST be able to handle credentials of at least 4KB. Servers MAY
-reject a credential longer than 65536 octets with a
-`malformed-credential` problem.
+challenges of at least 4KB. Servers MUST be able to handle credentials
+of at least 4KB.
 
 # Internationalization Considerations
 
@@ -1048,10 +1050,7 @@ only in memory and cleared after use.
 ### Challenge-Binding Secret Management
 
 Implementations that use a shared secret for stateless challenge binding
-(for example, HMAC) MUST use a secret of at least 32 bytes and MUST
-refuse to issue or verify challenges with a shorter one. The secret
-SHOULD come from a cryptographically secure random source. Servers
-MUST keep that secret on trusted server-side systems
+(for example, HMAC) MUST keep that secret on trusted server-side systems
 only and MUST NOT disclose it to clients. Servers MUST NOT log the secret
 or include it in error messages, debugging output, or analytics.
 
@@ -1069,7 +1068,7 @@ attempts to use the same proof MUST be rejected by the payment method
 infrastructure.
 
 
-## Idempotency and Side Effects
+## Idempotency and Side Effects {#idempotency-and-side-effects}
 
 Servers MUST NOT perform side effects (database writes, external API
 calls, resource creation) for requests that have not been paid. The
@@ -1109,7 +1108,9 @@ while the actual `request` payload requests a different amount.
 
 ## Privacy
 
-- Servers MUST NOT require user accounts for payment.
+- Servers MUST NOT require user accounts for payment. A resource MAY
+  still require other authentication for access, as a policy separate
+  from payment.
 - Payment methods SHOULD support pseudonymous options where possible.
 - Servers SHOULD NOT log Payment credentials in plaintext
 
@@ -1117,6 +1118,19 @@ while the actual `request` payload requests a different amount.
 
 Implementations MUST treat any header carrying a Payment credential and
 `Payment-Receipt` headers as sensitive data.
+
+## Other Authentication Credentials
+
+Credentials for other authentication ({{other-authentication}}) can
+be bearer tokens that any holder can replay. Clients SHOULD send them
+only to the origins they were issued for, and MUST NOT send them on a
+redirect to another origin. Intermediaries that forward a paid
+request to another origin MUST NOT forward the client's other
+authentication credentials unless that mechanism permits it. Servers
+MUST NOT accept a proof of other authentication from a
+`Payment-Receipt` or from a Payment credential's `opaque` value.
+Proofs that a payment method defines inside `payload` are part of the
+Payment scheme and are governed by that method's specification.
 
 ## Intermediary Handling of 402
 
@@ -1505,9 +1519,8 @@ by that challenge ({{credential-header}}). A selected challenge that
 omits `header` uses `Authorization`; a selected challenge that includes
 `header` requires the credential in `Payment-Authorization`.
 
-Servers receiving more than one Payment credential in a single request
-MUST reject it with 400 (Bad Request) and a `bad-request` problem,
-without a challenge ({{credential-processing}}).
+Servers receiving multiple Payment credentials in a single request
+SHOULD reject with 400 (Bad Request).
 
 ## Failed Payment Verification
 

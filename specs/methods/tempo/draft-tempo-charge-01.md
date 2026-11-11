@@ -203,9 +203,10 @@ compare amounts by numeric value, not by string form: `"0100"` equals
 
 ## Attribution Memo {#attribution-memo}
 
-The attribution memo is OPTIONAL. It lets payers, servers and
-indexers recognize an MPP payment onchain and tie it to the
-challenge it answers.
+The attribution memo ties a transfer onchain to the challenge it
+answers. Payers, servers and indexers use it to recognize an MPP
+payment, and servers use it to verify that a transfer the client
+broadcast itself pays this challenge and no other.
 
 In this section, keccak256(x) is the Keccak-256 hash {{KECCAK}} of the
 UTF-8 bytes of string x, as used by Ethereum, and H[0..n] denotes the
@@ -223,23 +224,9 @@ first n bytes of H. The memo is 32 bytes:
 `id`. `clientId` is an optional identifier the client chooses for
 itself, such as an application name; a client without one uses 10
 zero bytes. A memo is in attribution format when its first 5 bytes
-are `0xef1ed71201`.
-
-When `methodDetails.memo` is absent, clients SHOULD pay the primary
-recipient with `transferWithMemo` and an attribution memo for the
-challenge. When `methodDetails.memo` is present, the primary transfer
-MUST carry exactly that memo, and attribution does not apply. Split
-transfers use only `splits[i].memo`.
-
-Servers MUST NOT require an attribution memo. When
-`methodDetails.memo` is absent, servers:
-
-- MUST accept a primary transfer without a memo, or with a memo not
-  in attribution format;
-- MUST reject, with `verification-failed`, a primary transfer whose
-  memo is in attribution format but whose realm or challengeId
-  segment does not match this challenge;
-- MUST NOT reject a credential because of the clientId segment.
+are `0xef1ed71201`. An attribution memo matches a challenge when its
+realm and challengeId segments equal the values computed from that
+challenge; the clientId segment does not take part in the match.
 
 For example, with `realm` `"api.example.com"`, `clientId` `"my-app"`,
 and challenge `id` `"kM9xPqWvT2nJrHsY4aDfEb"`, the memo is:
@@ -247,6 +234,45 @@ and challenge `id` `"kM9xPqWvT2nJrHsY4aDfEb"`, the memo is:
 ~~~
 0xef1ed712011ece072f76bd8b82350e3a180fb9d0177aa2f3711128fb265e760d
 ~~~
+
+### Expected Memo {#expected-memo}
+
+The expected memo of a challenge is `methodDetails.memo` when the
+request sets it, and otherwise an attribution memo that matches the
+challenge. When `methodDetails.memo` is present, the primary transfer
+MUST carry exactly that memo, for every credential type, and
+attribution does not apply. Split transfers use only
+`splits[i].memo`.
+
+When `methodDetails.memo` is absent, clients SHOULD pay the primary
+recipient with `transferWithMemo` and an attribution memo for the
+challenge, whatever the credential type, and MUST do so for
+`type="hash"` credentials.
+
+### Memo Requirements by Credential Type {#memo-requirements}
+
+Push (`type="hash"`):
+: The memo is REQUIRED. The primary payment MUST carry the expected
+  memo. Servers MUST reject a hash credential with
+  `verification-failed` when no primary transfer carries it,
+  including when the primary transfer has no memo, a memo not in
+  attribution format, or an attribution memo for another challenge.
+  The client broadcast the transfer itself, so without a memo bound
+  to the challenge a server cannot tell this payment apart from any
+  other transfer of the same amount to the same recipient.
+
+Pull (`type="transaction"`):
+: The memo is OPTIONAL. When `methodDetails.memo` is absent, servers
+  MUST accept a primary transfer without a memo or with any memo,
+  including an attribution memo for another challenge, and MUST NOT
+  reject the credential because of the memo. The server broadcasts the
+  transaction the client signed for this credential, and the chain
+  rejects a second use of that transaction, so the transfer can settle
+  only once.
+
+Zero-amount proofs (`type="proof"`):
+: No transfer takes place, so no memo applies. Proofs bind to the
+  challenge through their signed message ({{proof-payload}}).
 
 ## Submission Modes
 
@@ -395,7 +421,8 @@ events on the `currency` token address:
 
 The top-level `methodDetails.memo`, if present, applies to the primary
 transfer. If it is absent, the primary transfer SHOULD carry an
-attribution memo ({{attribution-memo}}).
+attribution memo, and MUST carry one for a `type="hash"` credential
+({{memo-requirements}}).
 
 Clients MAY achieve these effects using any valid transaction structure,
 including batched calls, smart contract wallet invocations, or
@@ -767,9 +794,9 @@ Before broadcasting a transaction credential, servers MUST verify:
 3. Verify the `amount` matches the challenge request amount
 4. Verify the `recipient` matches the challenge request recipient
 5. If `methodDetails.memo` is present, verify the transaction uses
-   `transferWithMemo` with the matching memo value. If it is absent
-   and the primary transfer carries a memo in attribution format,
-   verify its realm and challengeId segments ({{attribution-memo}})
+   `transferWithMemo` with the matching memo value. If it is absent,
+   accept the primary transfer with or without a memo
+   ({{memo-requirements}})
 6. If `methodDetails.splits` is present, verify the transaction
    includes transfers satisfying each split entry: the primary
    recipient receives `amount - sum(splits[].amount)`, each split
@@ -788,9 +815,26 @@ verify that it indicates successful execution. Servers MUST verify
 that the receipt contains `Transfer` and/or `TransferWithMemo` event
 logs emitted by the `currency` token address whose payment effects
 satisfy the challenge parameters, including the primary recipient
-amount, any split amounts, and any required memo values. When
-`methodDetails.memo` is absent, servers MUST check an attribution memo
-on the primary transfer as {{attribution-memo}} specifies.
+amount, any split amounts, and any required memo values.
+
+Only a transfer to the primary recipient that carries the expected
+memo ({{expected-memo}}) counts toward the primary amount. Servers
+MUST ignore other transfers in the same transaction, such as
+transfers that pay other challenges in a batched transaction, and
+MUST reject the credential with `verification-failed` only when the
+transfers that carry the expected memo do not satisfy the primary
+amount ({{memo-requirements}}).
+
+Servers MUST accept a given transaction hash for at most one
+challenge. A server MUST record each hash it accepts before returning
+a receipt, and MUST reject a credential whose hash it has already
+accepted with `verification-failed`. The record MUST last at least
+until the challenge it was accepted for expires, and MUST NOT be
+dropped earlier, for example by a cache eviction or a time-to-live
+shorter than the challenge lifetime. When the expected memo is a
+`methodDetails.memo` that the server reuses across challenges, the
+same transfer can satisfy more than one challenge, so the record MUST
+last as long as any challenge with that memo can be accepted.
 
 If `methodDetails.supportedModes` is present, servers MUST verify it
 includes `push` before accepting a hash credential.
@@ -826,6 +870,14 @@ Tempo Transactions include chain ID, nonce, and optional `validBefore`/
 - Chain ID binding prevents cross-chain replay
 - Nonce consumption prevents same-chain replay
 - Validity windows limit temporal replay windows
+
+These protections apply to transactions the server broadcasts.
+A `type="hash"` credential names a transaction that is already
+onchain, so the chain does not stop the same hash from being
+presented again. Servers rely on the expected memo
+({{memo-requirements}}) to bind the transfer to one challenge and on
+their record of accepted hashes ({{hash-verification}}) to accept it
+once.
 
 ## Amount Verification
 
