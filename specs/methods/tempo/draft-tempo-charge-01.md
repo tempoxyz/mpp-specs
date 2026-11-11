@@ -262,16 +262,23 @@ Push (`type="hash"`):
   other transfer of the same amount to the same recipient.
 
 Pull (`type="transaction"`):
-: The memo is OPTIONAL. When `methodDetails.memo` is absent, servers
-  MUST accept a primary transfer without a memo or with any memo,
-  except an attribution memo whose realm segment matches this
-  challenge's `realm` and whose challengeId segment does not match
-  this challenge's `id`. Servers MUST reject that memo with
-  `verification-failed`. An attribution memo for another realm, or a
-  memo not in attribution format, is accepted. The server broadcasts
-  the transaction the client signed for this credential, and the chain
-  rejects a second use of that transaction, so the transfer can settle
-  only once.
+: The memo is OPTIONAL. For each transfer whose memo the request does
+  not set (the primary transfer when `methodDetails.memo` is absent,
+  or a split transfer when its `splits[i].memo` is absent), servers
+  MUST accept a plain `transfer` or a `transferWithMemo` whose memo
+  is not in attribution format. Servers MUST reject, with
+  `verification-failed`, any such transfer that carries an attribution
+  memo that does not match this challenge, that is, whose realm segment
+  does not match this challenge's `realm` or whose challengeId segment
+  does not match this challenge's `id`. This includes an attribution
+  memo for another realm: once settled, the transfer would carry the
+  expected memo of a challenge at that realm, which keeps its own
+  accepted-transfer record and could accept the transaction hash as a
+  `type="hash"` credential ({{transaction-replay}}). Memos the
+  request sets (`methodDetails.memo` and `splits[i].memo`) MUST match
+  exactly. The server broadcasts the transaction the client signed for
+  this credential, and the chain rejects a second use of that
+  transaction, so the transfer can settle only once.
 
 Zero-amount proofs (`type="proof"`):
 : No transfer takes place, so no memo applies. Proofs bind to the
@@ -798,14 +805,15 @@ Before broadcasting a transaction credential, servers MUST verify:
 4. Verify the `recipient` matches the challenge request recipient
 5. If `methodDetails.memo` is present, verify the transaction uses
    `transferWithMemo` with the matching memo value. If it is absent,
-   accept the primary transfer with or without a memo, unless it
-   carries an attribution memo for this realm and another challenge
-   ({{memo-requirements}})
+   accept the primary transfer without a memo or with a memo not in
+   attribution format, and reject it if it carries an attribution memo
+   for any other realm or challenge ({{memo-requirements}})
 6. If `methodDetails.splits` is present, verify the transaction
    includes transfers satisfying each split entry: the primary
    recipient receives `amount - sum(splits[].amount)`, each split
    recipient receives its specified amount, and any required memo
-   values are present
+   values are present. A split transfer without `splits[i].memo`
+   follows the memo rule of step 5 ({{memo-requirements}})
 7. If `methodDetails.supportedModes` is present, verify it includes
    `pull`
 
@@ -911,7 +919,7 @@ The receipt payload for Tempo charge:
 
 # Security Considerations
 
-## Transaction Replay
+## Transaction Replay {#transaction-replay}
 
 Tempo Transactions include chain ID, nonce, and optional `validBefore`/
 `validAfter` timestamps that prevent replay attacks:
@@ -929,27 +937,31 @@ the accepted-transfer record ({{accepted-transfers}}) to count each
 transfer once.
 
 A transaction the server broadcast for a pull credential is also
-onchain once it settles. If its transfers carry another realm's
-attribution memo or a `methodDetails.memo` the server reuses, they
-can match the expected memo of another challenge, and the transaction
-hash could be presented as a `type="hash"` credential for it.
-Recording pull transfers in the same accepted-transfer record that
-hash credentials are checked against prevents one transfer from
-paying two challenges.
+onchain once it settles. If its transfers carry a `methodDetails.memo`
+the server reuses, they can match the expected memo of another
+challenge, and the transaction hash could be presented as a
+`type="hash"` credential for it. Recording pull transfers in the same
+accepted-transfer record that hash credentials are checked against
+prevents one transfer from paying two challenges.
 
-A pull transaction whose primary transfer carries an attribution memo
-for this realm and another challenge would, once settled, carry the
-expected memo of that other challenge. Rejecting such pull credentials
-({{memo-requirements}}) keeps the transfer from being redeemed for that
-challenge even after its accepted-transfer entry expires.
+A pull transaction whose transfer carries an attribution memo for
+another challenge would, once settled, carry the expected memo of
+that challenge. When that challenge belongs to this realm, its
+accepted-transfer entry can expire. When it belongs to another realm,
+that server keeps a separate accepted-transfer record that never saw
+this pull transaction, even though it pays the same recipient, and
+would accept the transaction hash as a `type="hash"` credential.
+Rejecting pull credentials that carry any attribution memo not
+matching this challenge, whatever its realm ({{memo-requirements}}),
+keeps a pull transfer from being redeemed for a second challenge.
 
 Accepted-transfer entries can expire, and a server that runs as
 several instances can keep them per instance. A pull transaction
-whose transfers carry no memo or another realm's memo would otherwise
-be redeemable twice, by presenting the already-settled transaction
-again as a pull credential. Rejecting a pull credential whose
-transaction is already onchain before the server's own broadcast
-({{transaction-verification}}) prevents this.
+whose transfers carry no memo or a memo not in attribution format
+would otherwise be redeemable twice, by presenting the
+already-settled transaction again as a pull credential. Rejecting a
+pull credential whose transaction is already onchain before the
+server's own broadcast ({{transaction-verification}}) prevents this.
 
 ## Amount Verification
 
