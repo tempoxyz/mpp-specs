@@ -812,6 +812,12 @@ Before broadcasting a transaction credential, servers MUST verify:
 Servers MAY impose additional structural requirements (such as
 exact call count or ordering) as local policy before broadcasting.
 
+After the broadcast transaction succeeds, servers MUST add the
+transfers they counted toward the challenge to the accepted-transfer
+record ({{accepted-transfers}}) before returning a receipt, so that
+the settled transaction cannot be presented again as a hash
+credential.
+
 ## Hash Verification {#hash-verification}
 
 For hash credentials, servers MUST fetch the transaction receipt and
@@ -829,19 +835,45 @@ MUST reject the credential with `verification-failed` only when the
 transfers that carry the expected memo do not satisfy the primary
 amount ({{memo-requirements}}).
 
-Servers MUST accept a given transaction hash for at most one
-challenge. A server MUST record each hash it accepts before returning
-a receipt, and MUST reject a credential whose hash it has already
-accepted with `verification-failed`. The record MUST last at least
-until the challenge it was accepted for expires, and MUST NOT be
-dropped earlier, for example by a cache eviction or a time-to-live
-shorter than the challenge lifetime. When the expected memo is a
-`methodDetails.memo` that the server reuses across challenges, the
-same transfer can satisfy more than one challenge, so the record MUST
-last as long as any challenge with that memo can be accepted.
+A transfer already in the server's accepted-transfer record
+({{accepted-transfers}}) does not count toward any challenge. Servers
+MUST reject a hash credential with `verification-failed` when a
+transfer it needs to satisfy the challenge has already been counted,
+and MUST record the transfers it counts before returning a receipt.
 
 If `methodDetails.supportedModes` is present, servers MUST verify it
 includes `push` before accepting a hash credential.
+
+## Accepted-Transfer Record {#accepted-transfers}
+
+Servers MUST keep one accepted-transfer record for both submission
+modes. Each entry identifies a transfer the server counted toward a
+challenge by its transaction hash and log index:
+
+- For a hash credential, the server records each `Transfer` or
+  `TransferWithMemo` log it counted toward the challenge, before
+  returning a receipt.
+- For a transaction credential, after the transaction succeeds onchain
+  and before returning a receipt, the server records each transfer
+  log of the broadcast transaction that it counted toward the
+  challenge.
+
+Servers MUST reject, with `verification-failed`, a credential whose
+required transfer is already in the record. One batched transaction
+can therefore pay several challenges, each with its own transfers,
+but no transfer pays twice. Servers MAY key the record by transaction
+hash alone. That is stricter, since a batched transaction then pays
+only one challenge, but servers that do so MUST still add the hashes
+of transactions they broadcast for pull credentials to the same
+record that hash credentials are checked against.
+
+An entry MUST last at least until the challenge it was counted for
+expires, and MUST NOT be dropped earlier, for example by a cache
+eviction or a time-to-live shorter than the challenge lifetime. When
+the expected memo is a `methodDetails.memo` that the server reuses
+across challenges, the same transfer can satisfy more than one
+challenge, so the entry MUST last as long as any challenge with that
+memo can be accepted.
 
 Servers MAY additionally inspect the transaction call data as a
 local-policy check, but call-data decoding is not required for
@@ -880,16 +912,23 @@ A `type="hash"` credential names a transaction that is already
 onchain, so the chain does not stop the same hash from being
 presented again. Servers rely on the expected memo
 ({{memo-requirements}}) to bind the transfer to one challenge and on
-their record of accepted hashes ({{hash-verification}}) to accept it
-once.
+the accepted-transfer record ({{accepted-transfers}}) to count each
+transfer once.
+
+A transaction the server broadcast for a pull credential is also
+onchain once it settles. If its transfers carry another realm's
+attribution memo or a `methodDetails.memo` the server reuses, they
+can match the expected memo of another challenge, and the transaction
+hash could be presented as a `type="hash"` credential for it.
+Recording pull transfers in the same accepted-transfer record that
+hash credentials are checked against prevents one transfer from
+paying two challenges.
 
 A pull transaction whose primary transfer carries an attribution memo
-for this realm and another challenge would, once settled, also carry
-the expected memo of that other challenge. After the server's record
-of accepted hashes for it expires, the same transaction hash could be
-presented as a `type="hash"` credential for the other challenge.
-Rejecting such pull credentials ({{memo-requirements}}) prevents one
-transfer from paying two challenges.
+for this realm and another challenge would, once settled, carry the
+expected memo of that other challenge. Rejecting such pull credentials
+({{memo-requirements}}) keeps the transfer from being redeemed for that
+challenge even after its accepted-transfer entry expires.
 
 ## Amount Verification
 
