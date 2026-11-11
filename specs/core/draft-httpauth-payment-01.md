@@ -53,6 +53,7 @@ normative:
   RFC9530:
 
 informative:
+  RFC9421:
   W3C-DID:
     title: "Decentralized Identifiers (DIDs) v1.0"
     target: https://www.w3.org/TR/did-core/
@@ -182,7 +183,7 @@ payment is required or when a payment credential fails validation
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
 
-## Relationship to 401 Unauthorized
+## Relationship to 401 Unauthorized {#relationship-to-401}
 
 This specification uses 402 (Payment Required) consistently for all
 payment-related challenges, including failed credential validation.
@@ -191,7 +192,11 @@ authentication schemes. The distinction is intentional:
 
 - **402** indicates a payment barrier (initial challenge or retry needed)
 - **401** is reserved for authentication failures unrelated to payment
-- **403** indicates the payment succeeded but access is denied by policy
+- **403** indicates access is denied by policy. After a paid request,
+  it means either that the payment succeeded but policy denies access
+  ({{response-status-codes}}), or that other authentication denied
+  access and no payment settled ({{other-authentication}}). Servers
+  SHOULD say which in the Problem Details {{RFC9457}} body.
 
 This design ensures clients can distinguish payment requirements from
 other authentication schemes that use 401.
@@ -224,37 +229,58 @@ Servers SHOULD NOT return 402 when:
 Servers MUST NOT return 402 without including a `WWW-Authenticate` header
 containing at least one Payment challenge.
 
-### Interaction with Other Authentication Schemes
+### Interaction with Other Authentication Schemes {#other-authentication}
 
-When a resource requires both authentication and payment, servers SHOULD:
+The Payment scheme carries payment. Apart from the payer identifier
+(`source`) and any proof a payment method defines inside `payload`,
+it does not identify the client, the payer's principal, or any other
+party. A resource MAY require any other HTTP authentication scheme,
+or any other means of authenticating a request, alongside Payment,
+such as a Bearer token, HTTP Message Signatures {{RFC9421}}, or an
+attestation carried in an application-defined header field. This
+specification calls these "other authentication" and does not define,
+register, or constrain them. Proofs that a payment method defines
+inside a Payment credential are part of the Payment scheme, not other
+authentication. The rules in this section apply to every other
+authentication mechanism, so that any of them composes with Payment
+without changes to either.
 
-1. First verify authentication credentials
-2. Return 401 if authentication fails
-3. Return 402 with a Payment challenge only after successful authentication
+#### Ordering
 
-This ordering prevents information leakage about payment requirements to
-unauthenticated clients.
+When a resource requires both other authentication and payment,
+servers SHOULD:
 
-When authentication succeeds but the resource also requires payment, the
-server MAY include the `header` parameter in its Payment challenge to
-select `Payment-Authorization` instead of the default `Authorization`
-for the Payment credential (see {{credential-header}}). A challenge that
-omits `header` defaults to `Authorization`. A challenge that includes
-`header="Payment-Authorization"` requires the client to send the Payment
-credential in the `Payment-Authorization` header. This allows the client
-to retain its ordinary authentication credential in `Authorization`.
+1. First verify the other authentication
+2. If it is missing or fails verification, return 401 with that
+   mechanism's challenge, or, for a mechanism that defines no
+   `WWW-Authenticate` challenge, the error response that mechanism
+   defines; if it verifies but policy denies access, return 403
+3. Return 402 with a Payment challenge only after the other
+   authentication succeeds
 
-For example, the server can issue:
+This ordering prevents information leakage about payment requirements
+to unauthenticated clients. A response sent under step 2 SHOULD NOT
+include a Payment challenge.
 
-~~~http
-HTTP/1.1 402 Payment Required
-WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
-    realm="api.example.com",
-    method="example",
-    intent="charge",
-    header="Payment-Authorization",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
-~~~
+When a request carries a Payment credential, servers MUST verify the
+other authentication before verifying, consuming, or settling the
+Payment credential. When the response denies access on the basis of
+other authentication, whether with 401, 403, or a mechanism-defined
+error, servers MUST NOT settle the payment, MUST NOT consume the
+challenge or the Payment credential, and MUST NOT issue a
+`Payment-Receipt`.
+
+#### Field Selection
+
+When the other authentication uses the `Authorization` header field,
+the server SHOULD include the `header` parameter in its Payment
+challenge to select `Payment-Authorization` instead of the default
+`Authorization` for the Payment credential (see {{credential-header}}).
+A challenge that omits `header` defaults to `Authorization`. A
+challenge that includes `header="Payment-Authorization"` requires the
+client to send the Payment credential in the `Payment-Authorization`
+header. This allows the client to retain its other authentication
+credential in `Authorization`.
 
 The subsequent request can then carry both a Bearer credential and a
 Payment credential:
@@ -265,6 +291,47 @@ Host: api.example.com
 Authorization: Bearer mF_9.B5f-4.1JqM
 Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOiJ...
 ~~~
+
+#### Retries
+
+When a client retries a request with a Payment credential, it MUST
+send the other authentication it sent on the request that elicited
+the 402, refreshed if that mechanism requires a fresh proof per
+request (for example, a new signature with a new nonce).
+
+A 401 never follows settlement, because servers verify other
+authentication first and do not consume the Payment credential when
+it fails. A client that receives a 401 in response to a request
+carrying a Payment credential MAY therefore refresh its other
+authentication and resend the same Payment credential while its
+challenge has not expired. This lets a client recover from, for
+example, an access token that expired between the 402 and the paid
+retry, without paying twice when the payment method requires paying
+before presenting the credential. A server MUST process such a
+resent credential as if presented for the first time. Clients MUST
+NOT resend a Payment credential with a different challenge.
+
+A 403 does not by itself tell the client whether the payment settled
+(see {{relationship-to-401}}). Clients SHOULD NOT resend a Payment
+credential to recover from a 403, unless the response states, in its
+Problem Details body or as the other authentication mechanism
+defines, that other authentication denied access and no payment
+settled. In that case the client MAY resend the same Payment
+credential under the same conditions as after a 401. This section
+does not restrict retries that other sections permit, such as
+retries with an `Idempotency-Key`
+({{idempotency-and-side-effects}}).
+
+#### Binding Other Authentication to a Challenge
+
+Other authentication MAY bind its proof to a specific Payment
+challenge, so that the proof cannot be reused with a different
+payment. This specification does not define such a binding. A
+mechanism that defines one SHOULD cover the challenge `id`, which
+servers already bind to the payment terms ({{challenge-binding}}). For
+example, an HTTP Message Signature {{RFC9421}} that covers the field
+carrying the Payment credential covers the echoed challenge, and
+through it the challenge `id`.
 
 # The Payment Authentication Scheme
 
@@ -1001,7 +1068,7 @@ attempts to use the same proof MUST be rejected by the payment method
 infrastructure.
 
 
-## Idempotency and Side Effects
+## Idempotency and Side Effects {#idempotency-and-side-effects}
 
 Servers MUST NOT perform side effects (database writes, external API
 calls, resource creation) for requests that have not been paid. The
@@ -1041,7 +1108,9 @@ while the actual `request` payload requests a different amount.
 
 ## Privacy
 
-- Servers MUST NOT require user accounts for payment.
+- Servers MUST NOT require user accounts for payment. A resource MAY
+  still require other authentication for access, as a policy separate
+  from payment.
 - Payment methods SHOULD support pseudonymous options where possible.
 - Servers SHOULD NOT log Payment credentials in plaintext
 
@@ -1049,6 +1118,19 @@ while the actual `request` payload requests a different amount.
 
 Implementations MUST treat any header carrying a Payment credential and
 `Payment-Receipt` headers as sensitive data.
+
+## Other Authentication Credentials
+
+Credentials for other authentication ({{other-authentication}}) can
+be bearer tokens that any holder can replay. Clients SHOULD send them
+only to the origins they were issued for, and MUST NOT send them on a
+redirect to another origin. Intermediaries that forward a paid
+request to another origin MUST NOT forward the client's other
+authentication credentials unless that mechanism permits it. Servers
+MUST NOT accept a proof of other authentication from a
+`Payment-Receipt` or from a Payment credential's `opaque` value.
+Proofs that a payment method defines inside `payload` are part of the
+Payment scheme and are governed by that method's specification.
 
 ## Intermediary Handling of 402
 
