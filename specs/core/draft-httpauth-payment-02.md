@@ -260,9 +260,7 @@ servers SHOULD:
 
 This ordering prevents information leakage about payment requirements
 to unauthenticated clients. A response sent under step 2 SHOULD NOT
-include a Payment challenge. A server that does not need to withhold
-payment terms from unauthenticated clients MAY instead advertise both
-requirements in one 402, as described in {{advertising-other}}.
+include a Payment challenge.
 
 When a request carries a Payment credential, servers MUST verify the
 other authentication before verifying, consuming, or settling the
@@ -271,31 +269,6 @@ other authentication, whether with 401, 403, or a mechanism-defined
 error, servers MUST NOT settle the payment, MUST NOT consume the
 challenge or the Payment credential, and MUST NOT issue a
 `Payment-Receipt`.
-
-#### Advertising Other Requirements {#advertising-other}
-
-A 401 or 402 response MAY carry challenges for several schemes, in
-one or more `WWW-Authenticate` field values, as {{RFC9110}} permits.
-A server that advertises payment terms to clients that have not yet
-presented other authentication SHOULD include the other mechanism's
-challenge in the 402 alongside the Payment challenge, so that the
-client can satisfy both in a single retry:
-
-~~~http
-HTTP/1.1 402 Payment Required
-WWW-Authenticate: Bearer realm="api.example.com"
-WWW-Authenticate: Payment id="x7Tg2pLqR9mKvNwY3hBcZa",
-    realm="api.example.com",
-    method="example",
-    intent="charge",
-    header="Payment-Authorization",
-    request="eyJhbW91bnQiOiIxMDAwIiwiY3VycmVuY3kiOiJ1c2QiLCJyZWNpcGllbnQiOiJhY2N0XzEyMyJ9"
-~~~
-
-Mechanisms that do not use `WWW-Authenticate` MAY advertise their
-requirements in their own header fields. Clients MUST ignore
-challenges and fields for mechanisms they do not support, and MUST
-NOT treat their presence as a reason to reject the Payment challenge.
 
 #### Field Selection
 
@@ -324,10 +297,7 @@ Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOiJ...
 When a client retries a request with a Payment credential, it MUST
 send the other authentication it sent on the request that elicited
 the 402, refreshed if that mechanism requires a fresh proof per
-request (for example, a new signature with a new nonce). It SHOULD
-also send any other authentication the 402 advertised that it
-supports and holds. A client that cannot meet a requirement the 402
-advertised SHOULD NOT pay.
+request (for example, a new signature with a new nonce).
 
 A 401 never follows settlement, because servers verify other
 authentication first and do not consume the Payment credential when
