@@ -812,6 +812,19 @@ Before broadcasting a transaction credential, servers MUST verify:
 Servers MAY impose additional structural requirements (such as
 exact call count or ordering) as local policy before broadcasting.
 
+Servers MUST NOT accept a transaction credential whose transaction
+was already included onchain before the server's own broadcast for
+that credential, since another server or an earlier settlement may
+already have counted it. Before broadcasting, servers MUST compute
+the transaction hash and fetch its receipt (for example with
+`eth_getTransactionReceipt`). If the transaction is already
+included, servers MUST reject the credential with
+`verification-failed`, even when the accepted-transfer record
+({{accepted-transfers}}) holds no entry for it. When the broadcast
+fails because the node already knows the transaction, servers MAY
+wait for its receipt and accept it only if the transaction was not
+yet included at the pre-broadcast check.
+
 After the broadcast transaction succeeds, servers MUST add the
 transfers they counted toward the challenge to the accepted-transfer
 record ({{accepted-transfers}}) before returning a receipt, so that
@@ -929,6 +942,14 @@ for this realm and another challenge would, once settled, carry the
 expected memo of that other challenge. Rejecting such pull credentials
 ({{memo-requirements}}) keeps the transfer from being redeemed for that
 challenge even after its accepted-transfer entry expires.
+
+Accepted-transfer entries can expire, and a server that runs as
+several instances can keep them per instance. A pull transaction
+whose transfers carry no memo or another realm's memo would otherwise
+be redeemable twice, by presenting the already-settled transaction
+again as a pull credential. Rejecting a pull credential whose
+transaction is already onchain before the server's own broadcast
+({{transaction-verification}}) prevents this.
 
 ## Amount Verification
 
