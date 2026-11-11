@@ -323,9 +323,11 @@ Payment-Authorization: Payment eyJjaGFsbGVuZ2UiOiJ...
 
 When a client retries a request with a Payment credential, it MUST
 send the other authentication it sent on the request that elicited
-the 402, or that the 402 advertised, refreshed if that mechanism
-requires a fresh proof per request (for example, a new signature with
-a new nonce).
+the 402, refreshed if that mechanism requires a fresh proof per
+request (for example, a new signature with a new nonce). It SHOULD
+also send any other authentication the 402 advertised that it
+supports and holds. A client that cannot meet a requirement the 402
+advertised SHOULD NOT pay.
 
 A 401 never follows settlement, because servers verify other
 authentication first and do not consume the Payment credential when
@@ -340,10 +342,15 @@ resent credential as if presented for the first time. Clients MUST
 NOT resend a Payment credential with a different challenge.
 
 A 403 does not by itself tell the client whether the payment settled
-(see {{relationship-to-401}}), so clients SHOULD NOT resend a Payment
-credential to recover from a 403. This section does not restrict
-retries that other sections permit, such as retries with an
-`Idempotency-Key` ({{idempotency-and-side-effects}}).
+(see {{relationship-to-401}}). Clients SHOULD NOT resend a Payment
+credential to recover from a 403, unless the response states, in its
+Problem Details body or as the other authentication mechanism
+defines, that other authentication denied access and no payment
+settled. In that case the client MAY resend the same Payment
+credential under the same conditions as after a 401. This section
+does not restrict retries that other sections permit, such as
+retries with an `Idempotency-Key`
+({{idempotency-and-side-effects}}).
 
 #### Binding Other Authentication to a Challenge
 
