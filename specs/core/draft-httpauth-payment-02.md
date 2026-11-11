@@ -253,8 +253,10 @@ to unauthenticated clients. A 401 or 403 sent under this ordering
 SHOULD NOT include a Payment challenge.
 
 When a request carries a Payment credential, servers MUST verify the
-other authentication before settling the payment and MUST NOT settle a
-Payment credential when the other authentication fails. Servers MUST
+other authentication before verifying, consuming, or settling the
+Payment credential. When the other authentication fails, servers MUST
+NOT settle the payment and MUST NOT consume the challenge or the
+Payment credential. Servers MUST
 NOT issue a `Payment-Receipt` for a response that denies access on the
 basis of other authentication.
 
@@ -311,11 +313,17 @@ send the other authentication it sent on the request that elicited
 the 402, refreshed if that mechanism requires a fresh proof per
 request (for example, a new signature with a new nonce).
 
-Clients MUST NOT resend a request that carried a Payment credential
-in order to recover from a 401 or 403 caused by other authentication,
-because the server may already have acted on the payment. A client
-that receives such a response MUST obtain a fresh Payment challenge
-before paying again.
+Because a server does not consume a Payment credential when other
+authentication fails, a client that receives a 401 or 403 caused by
+other authentication in response to a request carrying a Payment
+credential MAY refresh that authentication and resend the same Payment
+credential while its challenge has not expired. This lets a client
+recover from, for example, an access token that expired between the
+402 and the paid retry, without paying twice when the payment method
+requires paying before presenting the credential. A server MUST
+process such a resent credential as if presented for the first time.
+Clients MUST NOT resend a Payment credential in response to any other
+status, and MUST NOT resend it with a different challenge.
 
 #### Binding Other Authentication to a Challenge
 
