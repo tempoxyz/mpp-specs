@@ -1,8 +1,8 @@
 ---
 title: Tempo Charge Intent for HTTP Payment Authentication
 abbrev: Tempo Charge
-docname: draft-tempo-charge-00
-version: 00
+docname: draft-tempo-charge-01
+version: "01"
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -54,6 +54,20 @@ informative:
     target: https://docs.tempo.xyz/protocol/transactions/spec-tempo-transaction
     author:
       - org: Tempo Labs
+  TEMPO-KEYCHAIN:
+    title: "AccountKeychain precompile"
+    target: https://github.com/tempoxyz/tempo/tree/main/crates/precompiles/src/account_keychain
+    author:
+      - org: Tempo Labs
+  KECCAK:
+    title: "The Keccak reference, version 3.0"
+    target: https://keccak.team/files/Keccak-reference-3.0.pdf
+    author:
+      - name: Guido Bertoni
+      - name: Joan Daemen
+      - name: Michael Peeters
+      - name: Gilles Van Assche
+    date: 2011-01
 ---
 
 --- abstract
@@ -133,6 +147,15 @@ Tempo Transaction
 : Tempo's nonce system where each account has multiple independent nonce
   lanes (`nonce_key`), enabling parallel transaction submission.
 
+Access Key
+: A key that an account authorizes, through Tempo's AccountKeychain
+  precompile {{TEMPO-KEYCHAIN}}, to sign on its behalf. See
+  {{access-keys}}.
+
+Attribution Memo
+: A 32-byte memo that identifies a transfer as an MPP payment for a
+  specific challenge. See {{attribution-memo}}.
+
 Fee Payer
 : An account that pays transaction fees on behalf of another account.
   Tempo Transactions support fee payment via a separate signature
@@ -150,7 +173,7 @@ per {{I-D.httpauth-payment}}.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Amount in base units (stringified number) |
+| `amount` | string | REQUIRED | Amount in base units (see {{amount-encoding}}) |
 | `currency` | string | REQUIRED | TIP-20 token address (e.g., `"0x20c0..."`) |
 | `recipient` | string | REQUIRED | Recipient address |
 | `description` | string | OPTIONAL | Human-readable payment description |
@@ -159,15 +182,71 @@ per {{I-D.httpauth-payment}}.
 Challenge expiry is conveyed by the `expires` auth-param in
 `WWW-Authenticate` per {{I-D.httpauth-payment}}.
 
+## Amount Encoding {#amount-encoding}
+
+`amount` and each `splits[i].amount` are base-10 integer strings in
+base units of `currency`, with no sign, decimal point, exponent, or
+surrounding whitespace. Senders MUST NOT emit leading zeros; the
+value zero is `"0"`. Receivers MUST accept leading zeros and MUST
+compare amounts by numeric value, not by string form: `"0100"` equals
+`"100"`, and `"00"` is a zero-amount charge.
+
 ## Method Details
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
-| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
+| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. When absent, see {{attribution-memo}}. |
 | `methodDetails.splits` | array | OPTIONAL | Additional recipients that receive a portion of `amount`. See {{split-payments}}. |
 | `methodDetails.supportedModes` | array | OPTIONAL | Supported non-zero submission modes. Values are `"pull"` and/or `"push"`. |
+
+## Attribution Memo {#attribution-memo}
+
+The attribution memo is OPTIONAL. It lets payers, servers and
+indexers recognize an MPP payment onchain and tie it to the
+challenge it answers.
+
+In this section, keccak256(x) is the Keccak-256 hash {{KECCAK}} of the
+UTF-8 bytes of string x, as used by Ethereum, and H[0..n] denotes the
+first n bytes of H. The memo is 32 bytes:
+
+| Offset | Length | Value |
+|--------|--------|-------|
+| 0 | 4 | keccak256("mpp")[0..4] (`0xef1ed712`) |
+| 4 | 1 | Version, `0x01` |
+| 5 | 10 | keccak256(realm)[0..10] |
+| 15 | 10 | keccak256(clientId)[0..10], or 10 zero bytes |
+| 25 | 7 | keccak256(challengeId)[0..7] |
+
+`realm` is the challenge `realm` and `challengeId` is the challenge
+`id`. `clientId` is an optional identifier the client chooses for
+itself, such as an application name; a client without one uses 10
+zero bytes. A memo is in attribution format when its first 5 bytes
+are `0xef1ed71201`.
+
+When `methodDetails.memo` is absent, clients SHOULD pay the primary
+recipient with `transferWithMemo` and an attribution memo for the
+challenge. When `methodDetails.memo` is present, the primary transfer
+MUST carry exactly that memo, and attribution does not apply. Split
+transfers use only `splits[i].memo`.
+
+Servers MUST NOT require an attribution memo. When
+`methodDetails.memo` is absent, servers:
+
+- MUST accept a primary transfer without a memo, or with a memo not
+  in attribution format;
+- MUST reject, with `verification-failed`, a primary transfer whose
+  memo is in attribution format but whose realm or challengeId
+  segment does not match this challenge;
+- MUST NOT reject a credential because of the clientId segment.
+
+For example, with `realm` `"api.example.com"`, `clientId` `"my-app"`,
+and challenge `id` `"kM9xPqWvT2nJrHsY4aDfEb"`, the memo is:
+
+~~~
+0xef1ed712011ece072f76bd8b82350e3a180fb9d0177aa2f3711128fb265e760d
+~~~
 
 ## Submission Modes
 
@@ -244,9 +323,8 @@ Each entry in the `splits` array is a JSON object:
 | `memo` | string | OPTIONAL | A `bytes32` hex value for `transferWithMemo` |
 | `recipient` | string | REQUIRED | Recipient address |
 
-The `amount` field in each split entry MUST be a base-10 integer string
-with no sign, decimal point, exponent, or surrounding whitespace. Each
-`splits[i].amount` MUST be greater than zero. The syntax and encoding
+The `amount` field in each split entry follows {{amount-encoding}}.
+Each `splits[i].amount` MUST be greater than zero. The syntax and encoding
 requirements for `splits[i].memo` are identical to those for
 `methodDetails.memo`, but apply only to that split transfer. Address
 fields are compared by decoded 20-byte value, not by string form.
@@ -316,7 +394,8 @@ events on the `currency` token address:
    `transferWithMemo`.
 
 The top-level `methodDetails.memo`, if present, applies to the primary
-transfer.
+transfer. If it is absent, the primary transfer SHOULD carry an
+attribution memo ({{attribution-memo}}).
 
 Clients MAY achieve these effects using any valid transaction structure,
 including batched calls, smart contract wallet invocations, or
@@ -497,9 +576,28 @@ Servers MUST verify proof credentials as follows:
    (ERC-1271).
 5. If step 4 fails, servers MAY instead recover the signer of
    `payload.signature` and accept the credential only if that signer
-   is an access key currently authorized on-chain for the account in
+   is an active access key ({{access-keys}}) for the account in
    `source`. Servers MUST NOT otherwise accept a credential whose
    signer differs from the address in `source`.
+
+### Access Keys {#access-keys}
+
+To check an access key, servers read the key's record from the
+AccountKeychain precompile {{TEMPO-KEYCHAIN}} at
+`0xAAAAAAAA00000000000000000000000000000000` with
+`getKey(account, keyId)` against the latest block, where `account` is
+the address from `source` and `keyId` is the recovered signer. The key
+is active only when all of the following hold:
+
+- the returned `keyId` is non-zero and equals the signer;
+- `isRevoked` is false;
+- `expiry` is non-zero and greater than the block timestamp.
+
+An `expiry` of 0 means that no key is registered: `getKey` returns a
+zero `keyId` and a zero `expiry` for a missing or revoked key. It never
+means that the key does not expire. A key without an expiry is
+registered with the maximum `uint64` value. A key is expired once the
+block timestamp is equal to or greater than its `expiry`.
 
 ### Proof Receipt
 
@@ -669,7 +767,9 @@ Before broadcasting a transaction credential, servers MUST verify:
 3. Verify the `amount` matches the challenge request amount
 4. Verify the `recipient` matches the challenge request recipient
 5. If `methodDetails.memo` is present, verify the transaction uses
-   `transferWithMemo` with the matching memo value
+   `transferWithMemo` with the matching memo value. If it is absent
+   and the primary transfer carries a memo in attribution format,
+   verify its realm and challengeId segments ({{attribution-memo}})
 6. If `methodDetails.splits` is present, verify the transaction
    includes transfers satisfying each split entry: the primary
    recipient receives `amount - sum(splits[].amount)`, each split
@@ -688,7 +788,9 @@ verify that it indicates successful execution. Servers MUST verify
 that the receipt contains `Transfer` and/or `TransferWithMemo` event
 logs emitted by the `currency` token address whose payment effects
 satisfy the challenge parameters, including the primary recipient
-amount, any split amounts, and any required memo values.
+amount, any split amounts, and any required memo values. When
+`methodDetails.memo` is absent, servers MUST check an attribution memo
+on the primary transfer as {{attribution-memo}} specifies.
 
 If `methodDetails.supportedModes` is present, servers MUST verify it
 includes `push` before accepting a hash credential.

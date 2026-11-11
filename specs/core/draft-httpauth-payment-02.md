@@ -1,8 +1,8 @@
 ---
 title: The "Payment" HTTP Authentication Scheme
 abbrev: Payment Auth Scheme
-docname: draft-httpauth-payment-01
-version: "01"
+docname: draft-httpauth-payment-02
+version: "02"
 category: std
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -168,8 +168,10 @@ conditions.
 | Condition | Status | Response |
 |-----------|--------|----------|
 | Resource requires payment, no credential provided | 402 | Fresh challenge in `WWW-Authenticate` |
+| More than one Payment credential | 400 | No challenge; `bad-request` problem |
 | Malformed credential (invalid base64url, bad JSON) | 402 | Fresh challenge + `malformed-credential` problem |
-| Unknown or already-used challenge `id` | 402 | Fresh challenge + `invalid-challenge` problem |
+| Unknown or already-used challenge `id`, or binding mismatch | 402 | Fresh challenge + `invalid-challenge` problem |
+| Request body does not match challenge `digest` | 402 | Fresh challenge + `invalid-challenge` problem |
 | Expired challenge `id` | 402 | Fresh challenge + `payment-expired` problem |
 | Payment proof invalid or verification failed | 402 | Fresh challenge + `verification-failed` problem |
 | Payment verified, access granted | 200 | Resource + optional `Payment-Receipt` |
@@ -181,6 +183,56 @@ payment is required or when a payment credential fails validation
 
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
+
+A credential whose challenge `id` the server has already accepted is
+a replay. Servers MUST respond to it with `invalid-challenge`, not
+`verification-failed`, even when the payment proof itself is valid.
+
+## Credential Processing {#credential-processing}
+
+A Payment credential is a field value whose auth-scheme is "Payment".
+Fields carrying other schemes, such as a Bearer credential in
+`Authorization`, are not Payment credentials.
+
+Servers MUST process a request for a resource that requires payment
+in the following order, and MUST respond with the result of the
+first step that fails:
+
+1. Count the Payment credentials in the request, across
+   `Authorization` and `Payment-Authorization`, across repeated
+   field lines, and within a comma-separated field value. If there
+   is more than one, respond with 400 and a `bad-request` problem,
+   without a challenge.
+
+2. Locate the credential in the field that the server's challenge
+   for the resource selects ({{credential-header}}). A credential in
+   any other field MUST be ignored, as if absent. A field value of
+   "Payment" with no token is also absent. If no credential is
+   present, respond with 402, a fresh challenge and a
+   `payment-required` problem.
+
+3. Decode the token. If it is not base64url-encoded JSON as defined
+   in {{credential-header}}, or exceeds the size the server accepts
+   ({{size-considerations}}), respond with `malformed-credential`.
+
+4. Verify the challenge binding ({{challenge-binding}}): the echoed
+   challenge parameters, a `realm` this server issues, the resource
+   or route the challenge was issued for, and the request body
+   digest when the challenge has `digest`
+   ({{request-body-digest-binding}}). On any mismatch, or an unknown
+   challenge `id`, respond with `invalid-challenge`.
+
+5. If the challenge has expired, respond with `payment-expired`.
+
+6. If the challenge `id` has already been used, respond with
+   `invalid-challenge`.
+
+7. Verify the payment with the payment method. If the payload does
+   not match the method's schema, respond with `invalid-payload`;
+   if the proof fails verification, respond with
+   `verification-failed`.
+
+Every 402 response in these steps carries a fresh challenge.
 
 ## Relationship to 401 Unauthorized
 
@@ -415,7 +467,8 @@ The computation proceeds as follows:
    omitted). The `header` slot is omitted entirely when the parameter is
    absent.
 
-3. Compute HMAC-SHA256 over the resulting string using a server secret.
+3. Compute HMAC-SHA256 over the resulting string using a server secret
+   of at least 32 bytes ({{challenge-binding-secret-management}}).
 
 4. Encode the HMAC output as base64url without padding ({{RFC4648}}
    Section 5).
@@ -447,8 +500,8 @@ same challenge.
 
 ###### HMAC-SHA256 Test Vectors
 
-The following vectors use the UTF-8 server secret `test-vector-secret` and
-this request object:
+The following vectors use the 32-byte UTF-8 server secret
+`mpp-hmac-test-vector-secret-32by` and this request object:
 
 ~~~json
 {"amount":"1000000"}
@@ -468,7 +521,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-X6v1eo7fJ76gAxqY0xN9Jd__4lUyDDYmriryOM-5FO4
+2S2NsFcCINq8QUKV8OZHdRm_JhhbJf5X8Cii4gZ_UyI
 ~~~
 
 With `header="Payment-Authorization"` and no `opaque`, the input is:
@@ -482,7 +535,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-S91xi-OFGZPMs-j7GsX0FDpIkmCcZT1P9XyV58WNy_U
+CfIT3MTJbcDQ7kdEJD9GbLQPvlRZQLnEXyerMinsFMg
 ~~~
 
 Finally, with `header="Payment-Authorization"` and the following `opaque`
@@ -504,7 +557,7 @@ input = "api.example.com|tempo|charge|"
 Its challenge `id` is:
 
 ~~~
-CJ4X1O4aTDmS59hfdhnhBtxIQjWDOf0bcrhsswwMOW8
+fGVr3o_Ve1k0KQpddLKyEXRE7nk6chQOC5lN7Q54dR8
 ~~~
 
 #### Example Challenge
@@ -570,7 +623,8 @@ When verifying a credential with a `digest` parameter, servers MUST:
 
 1. Compute the digest of the current request body per [RFC9530]
 2. Compare it with the `digest` value from the challenge
-3. Reject the credential if the digests do not match
+3. Reject the credential if the digests do not match, with 402, a
+   fresh challenge and an `invalid-challenge` problem
 
 
 ## Credentials {#credential-header}
@@ -594,7 +648,9 @@ send a Payment credential for it.
 
 Servers MUST accept a Payment credential for a given challenge only from
 the field selected by that challenge. A Payment credential received in
-any other field MUST NOT satisfy the challenge.
+any other field MUST NOT satisfy the challenge: servers MUST ignore it,
+as if absent, and respond with 402, a fresh challenge and a
+`payment-required` problem ({{credential-processing}}).
 
 The field value uses base64url encoding without
 padding per {{RFC4648}} Section 5:
@@ -924,11 +980,15 @@ Implementations MAY define additional parameters in challenges:
 - Parameters MUST use lowercase names
 - Unknown parameters MUST be ignored by clients
 
-## Size Considerations
+## Size Considerations {#size-considerations}
 
 Servers SHOULD keep challenges under 8KB. Clients MUST be able to handle
-challenges of at least 4KB. Servers MUST be able to handle credentials
-of at least 4KB.
+challenges of at least 4KB. Parsers of `WWW-Authenticate` MAY reject a
+field value longer than 16384 octets.
+
+Servers MUST be able to handle credentials of at least 4KB. Servers MAY
+reject a credential longer than 65536 octets with a
+`malformed-credential` problem.
 
 # Internationalization Considerations
 
@@ -983,7 +1043,10 @@ only in memory and cleared after use.
 ### Challenge-Binding Secret Management
 
 Implementations that use a shared secret for stateless challenge binding
-(for example, HMAC) MUST keep that secret on trusted server-side systems
+(for example, HMAC) MUST use a secret of at least 32 bytes and MUST
+refuse to issue or verify challenges with a shorter one. The secret
+SHOULD come from a cryptographically secure random source. Servers
+MUST keep that secret on trusted server-side systems
 only and MUST NOT disclose it to clients. Servers MUST NOT log the secret
 or include it in error messages, debugging output, or analytics.
 
@@ -1437,8 +1500,9 @@ by that challenge ({{credential-header}}). A selected challenge that
 omits `header` uses `Authorization`; a selected challenge that includes
 `header` requires the credential in `Payment-Authorization`.
 
-Servers receiving multiple Payment credentials in a single request
-SHOULD reject with 400 (Bad Request).
+Servers receiving more than one Payment credential in a single request
+MUST reject it with 400 (Bad Request) and a `bad-request` problem,
+without a challenge ({{credential-processing}}).
 
 ## Failed Payment Verification
 

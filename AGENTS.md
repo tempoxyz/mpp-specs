@@ -20,7 +20,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 
 - `specs/core/`: the scheme itself, `draft-httpauth-payment-NN.md`.
 - `specs/intents/`: standardized payment intents (`draft-payment-intent-{name}-NN.md`).
-- `specs/methods/<network>/`: payment methods, one draft per intent (`draft-{network}-{intent}-NN.md`, such as `tempo/draft-tempo-charge-00.md`).
+- `specs/methods/<network>/`: payment methods, one draft per intent (`draft-{network}-{intent}-NN.md`, such as `tempo/draft-tempo-charge-01.md`).
 - `specs/extensions/`: optional extensions (`draft-payment-discovery-NN.md`) and `transports/` (MCP).
 - `examples/`: templates for new intents, methods and extensions, with the required sections per track (`examples/README.md`).
 - `scripts/`: `gen.sh` (Markdown → XML → HTML/TXT/PDF), `check.sh`, the `lint_*.py` linters and their `test_*.py`, `bump_and_rename.sh`, `gen_index.py` and `gen_problems.py` for the site, `serve.py`.
