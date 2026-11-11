@@ -184,8 +184,11 @@ payment is required or when a payment credential fails validation
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
 
-A credential whose challenge `id` the server has already accepted is
-a replay. Servers MUST respond to it with `invalid-challenge`, not
+Accepting a credential consumes its challenge, unless the payment
+intent or method specification defines later credentials that
+continue the same challenge (for example, the voucher and close
+credentials of a session). A credential for a consumed challenge is a
+replay. Servers MUST respond to it with `invalid-challenge`, not
 `verification-failed`, even when the payment proof itself is valid.
 
 ## Credential Processing {#credential-processing}
@@ -224,8 +227,10 @@ first step that fails:
 
 5. If the challenge has expired, respond with `payment-expired`.
 
-6. If the challenge `id` has already been used, respond with
-   `invalid-challenge`.
+6. If the challenge has been consumed ({{response-status-codes}}),
+   respond with `invalid-challenge`. Credentials that the payment
+   intent or method defines as continuing an accepted challenge are
+   not replays; the method verifies them in step 7.
 
 7. Verify the payment with the payment method. If the payload does
    not match the method's schema, respond with `invalid-payload`;
