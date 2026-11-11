@@ -264,9 +264,12 @@ Push (`type="hash"`):
 Pull (`type="transaction"`):
 : The memo is OPTIONAL. When `methodDetails.memo` is absent, servers
   MUST accept a primary transfer without a memo or with any memo,
-  including an attribution memo for another challenge, and MUST NOT
-  reject the credential because of the memo. The server broadcasts the
-  transaction the client signed for this credential, and the chain
+  except an attribution memo whose realm segment matches this
+  challenge's `realm` and whose challengeId segment does not match
+  this challenge's `id`. Servers MUST reject that memo with
+  `verification-failed`. An attribution memo for another realm, or a
+  memo not in attribution format, is accepted. The server broadcasts
+  the transaction the client signed for this credential, and the chain
   rejects a second use of that transaction, so the transfer can settle
   only once.
 
@@ -795,7 +798,8 @@ Before broadcasting a transaction credential, servers MUST verify:
 4. Verify the `recipient` matches the challenge request recipient
 5. If `methodDetails.memo` is present, verify the transaction uses
    `transferWithMemo` with the matching memo value. If it is absent,
-   accept the primary transfer with or without a memo
+   accept the primary transfer with or without a memo, unless it
+   carries an attribution memo for this realm and another challenge
    ({{memo-requirements}})
 6. If `methodDetails.splits` is present, verify the transaction
    includes transfers satisfying each split entry: the primary
@@ -878,6 +882,14 @@ presented again. Servers rely on the expected memo
 ({{memo-requirements}}) to bind the transfer to one challenge and on
 their record of accepted hashes ({{hash-verification}}) to accept it
 once.
+
+A pull transaction whose primary transfer carries an attribution memo
+for this realm and another challenge would, once settled, also carry
+the expected memo of that other challenge. After the server's record
+of accepted hashes for it expires, the same transaction hash could be
+presented as a `type="hash"` credential for the other challenge.
+Rejecting such pull credentials ({{memo-requirements}}) prevents one
+transfer from paying two challenges.
 
 ## Amount Verification
 
