@@ -240,8 +240,9 @@ and challenge `id` `"kM9xPqWvT2nJrHsY4aDfEb"`, the memo is:
 The expected memo of a challenge is `methodDetails.memo` when the
 request sets it, and otherwise an attribution memo that matches the
 challenge. When `methodDetails.memo` is present, the primary transfer
-MUST carry exactly that memo, for every credential type, and
-attribution does not apply. Split transfers use only
+MUST carry exactly that memo, attribution does not apply, and only
+`type="transaction"` credentials can pay the challenge
+({{submission-modes}}). Split transfers use only
 `splits[i].memo`.
 
 When `methodDetails.memo` is absent, clients SHOULD pay the primary
@@ -260,6 +261,8 @@ Push (`type="hash"`):
   The client broadcast the transfer itself, so without a memo bound
   to the challenge a server cannot tell this payment apart from any
   other transfer of the same amount to the same recipient.
+  Servers MUST NOT accept hash credentials for a challenge whose
+  request sets `methodDetails.memo` ({{submission-modes}}).
 
 Pull (`type="transaction"`):
 : The memo is OPTIONAL. For each transfer whose memo the request does
@@ -284,7 +287,7 @@ Zero-amount proofs (`type="proof"`):
 : No transfer takes place, so no memo applies. Proofs bind to the
   challenge through their signed message ({{proof-payload}}).
 
-## Submission Modes
+## Submission Modes {#submission-modes}
 
 The `supportedModes` field allows a server to advertise which non-zero
 charge submission modes it supports for a specific challenge.
@@ -304,6 +307,15 @@ version 00 implementations. Servers MUST omit `supportedModes` only when
 they support both non-zero modes for the challenge. A server that
 supports only `pull` or only `push` for a challenge MUST include
 `supportedModes` explicitly and omit the unsupported mode.
+
+When `methodDetails.memo` is present, servers MUST NOT offer `push`:
+they MUST include `supportedModes` without `push`, and MUST reject a
+`type="hash"` credential for that challenge with
+`verification-failed`, whatever `supportedModes` contains. Clients
+MUST NOT use `type="hash"` credentials for such a challenge. A memo
+the server sets is shared by every payer of the route, so it does not
+bind a transfer the client broadcast to the client that claims it
+({{shared-memo}}).
 
 For zero-amount charges, mode negotiation does not apply. Clients use a
 `type="proof"` credential regardless of `supportedModes`.
@@ -789,6 +801,9 @@ the transaction. The server verifies the transaction onchain:
 
 - Clients MUST NOT use `type="hash"` when `methodDetails.feePayer` is
   `true`. Servers MUST reject such credentials.
+- Clients MUST NOT use `type="hash"` when `methodDetails.memo` is
+  present. Servers MUST reject such credentials with
+  `verification-failed` ({{submission-modes}}).
 - If `methodDetails.supportedModes` is present and does not include
   `push`, clients MUST NOT use `type="hash"` credentials. Servers MUST
   reject such credentials.
@@ -833,6 +848,20 @@ fails because the node already knows the transaction, servers MAY
 wait for its receipt and accept it only if the transaction was not
 yet included at the pre-broadcast check.
 
+A server MAY settle a transaction credential whose transaction is
+already onchain only when it holds its own broadcast-pending record
+for that transaction hash, written before it broadcast that
+transaction for the same challenge. This covers a retry of the same
+credential after the server broadcast the transaction but lost the
+response, timed out waiting for the receipt, or could not tell
+whether the broadcast succeeded. Without such a record, the rule
+above applies and the server MUST reject the credential. A server
+that settles under this exception MUST still verify the receipt as
+it would after its own broadcast, MUST add the transfers it counts
+to the accepted-transfer record ({{accepted-transfers}}), and MUST
+reject the credential with `verification-failed` when they are
+already in that record, so the transfer settles once.
+
 After the broadcast transaction succeeds, servers MUST add the
 transfers they counted toward the challenge to the accepted-transfer
 record ({{accepted-transfers}}) before returning a receipt, so that
@@ -863,7 +892,9 @@ transfer it needs to satisfy the challenge has already been counted,
 and MUST record the transfers it counts before returning a receipt.
 
 If `methodDetails.supportedModes` is present, servers MUST verify it
-includes `push` before accepting a hash credential.
+includes `push` before accepting a hash credential. Servers MUST
+reject a hash credential with `verification-failed` when
+`methodDetails.memo` is present ({{submission-modes}}).
 
 ## Accepted-Transfer Record {#accepted-transfers}
 
@@ -962,6 +993,23 @@ would otherwise be redeemable twice, by presenting the
 already-settled transaction again as a pull credential. Rejecting a
 pull credential whose transaction is already onchain before the
 server's own broadcast ({{transaction-verification}}) prevents this.
+
+## Shared Server Memos {#shared-memo}
+
+A `type="hash"` credential claims a transfer that the client
+broadcast itself, so the server learns of it only from the hash the
+client presents. The expected memo is what binds that transfer to
+the claimant. An attribution memo does so because it commits to the
+challenge `id`, which the server issued to one client. A
+`methodDetails.memo` does not: a server typically sets the same
+memo for every challenge of a route, so every payer of that route
+uses it. Any client could then present the hash of another payer's
+transfer, or of a pull transaction the server settled, as payment
+for its own challenge, and the first claim to reach the server
+would win. Accepting only `type="transaction"` credentials when
+`methodDetails.memo` is present ({{submission-modes}}) means the
+server counts only transfers it broadcast itself for the credential
+it verified.
 
 ## Amount Verification
 
