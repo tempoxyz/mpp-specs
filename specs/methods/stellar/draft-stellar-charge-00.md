@@ -555,19 +555,30 @@ For push mode credentials (`type="hash"`), the server MUST fetch the
 transaction via Stellar RPC `getTransaction` {{STELLAR-RPC}} and verify:
 
 1. The challenge `id` matches an outstanding, unsettled challenge issued
-   by this server.
+   by this server, and the current time is before the challenge `expires`
+   auth-param.
 
 2. The transaction hash has not been previously consumed (see
    {{replay-protection}}).
 
 3. The transaction exists and has status `SUCCESS`.
 
-4. The transaction contains exactly one `invokeHostFunction` operation
+4. The transaction's network passphrase MUST correspond to
+   `methodDetails.network`.
+
+5. The transaction's ledger close time MUST fall within the challenge
+   validity window. Servers MUST reject transactions that were confirmed
+   before the challenge was issued: because the ledger is public and the
+   challenge publishes `recipient` and `amount`, an unrelated prior
+   payment matching those values would otherwise satisfy the remaining
+   checks.
+
+6. The transaction contains exactly one `invokeHostFunction` operation
    calling `transfer(from, to, amount)` on the contract matching
    `currency`. The `to` argument MUST equal `recipient` and the `amount`
    argument MUST equal `amount` (as i128) from the challenge request.
 
-5. Mark the transaction hash as consumed.
+7. Mark the transaction hash as consumed.
 
 # Error Codes {#error-codes}
 
