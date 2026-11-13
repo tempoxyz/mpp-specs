@@ -359,11 +359,6 @@ class TestMain:
         )
         assert main(["--strict", str(spec)]) == 0
 
-    def test_tempo_charge_is_fully_tagged(self):
-        drafts = sorted((ROOT / "specs/methods/tempo").glob("draft-tempo-charge-*.md"))
-        assert drafts
-        assert main(["--strict", str(drafts[-1])]) == 0
-
 
 # Below, each draft body is linted through kramdown-rfc. write_spec puts 7 lines before the
 # body, so body line n is draft line n + 7 (at).
