@@ -235,6 +235,25 @@ and challenge `id` `"kM9xPqWvT2nJrHsY4aDfEb"`, the memo is:
 0xef1ed712011ece072f76bd8b82350e3a180fb9d0177aa2f3711128fb265e760d
 ~~~
 
+### Memo Versions {#memo-versions}
+
+Byte 4 of an attribution memo is its version. This document defines
+version `0x01` with the layout above. Earlier implementations sent
+the same version byte with a different last segment:
+
+| Version | Bytes 25-31 | Status |
+|---------|-------------|--------|
+| `0x01` | keccak256(challengeId)[0..7] | Current; defined by this document |
+| `0x01` (pre-standard) | 7 random bytes | Obsolete; sent by early implementations before the challenge binding |
+| `0x00`, `0x02`-`0xff` | | Reserved |
+
+A pre-standard memo is in attribution format, but its last segment
+matches no challenge, so it is an attribution memo for another
+challenge ({{memo-requirements}}). Clients MUST NOT send it. A memo
+whose version byte is reserved is not in attribution format.
+Documents that update this one define new versions by adding rows to
+this table.
+
 ### Expected Memo {#expected-memo}
 
 The expected memo of a challenge is `methodDetails.memo` when the
