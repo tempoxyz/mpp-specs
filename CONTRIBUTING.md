@@ -25,7 +25,7 @@ Before submitting a PR:
 
 1. **Build succeeds**: `make check` passes
 2. **Lint passes**: `make lint` passes
-3. **Version bumped**: If modifying a spec, increment the version number in the filename and frontmatter
+3. **No revision bump**: Edit the draft in place; don't rename it or change its `docname` or `version`. Only the core draft gets a new revision, when it is submitted to the IETF. See [Draft Revisions](STYLE.md#draft-revisions)
 4. **References are stable**: Avoid new hardcoded external references like `Section X.Y of {{I-D...}}`
 
 ### Types of Changes

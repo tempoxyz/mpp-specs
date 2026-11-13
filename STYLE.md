@@ -216,6 +216,19 @@ compatibility rules as the core protocol:
 This keeps intent schemas simple and avoids version
 negotiation complexity in the request blob.
 
+### Draft Revisions
+
+Draft revision numbers (`-00`, `-01`) are not protocol
+versions. Edit intent, method and extension drafts in
+place: keep the file name, `docname` and `version`, and
+let the rendered page on paymentauth.org change. A
+breaking change to a method uses `methodDetails.version`
+as above, which implementations can see on the wire.
+
+The core draft gets a new revision only when it is
+submitted to the IETF datatracker. Landing a revision
+bump of the core draft on `main` submits it.
+
 ### Compatibility Rules
 
 All layers follow the same rule:
