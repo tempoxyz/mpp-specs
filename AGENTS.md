@@ -85,7 +85,8 @@ Use each language's standard toolchain, run through the commands in `## Commands
 ### Changes
 
 - Commits and pull request titles use Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, optionally scoped.
-- Never edit `CHANGELOG.md` by hand. Record a release note the way `## Conventions` says (changeset, `.changelog/` fragment, or none when a workflow writes it), in the past tense.
+- Never edit `CHANGELOG.md` by hand. Record a release note the way `## Conventions` says (changeset, `.changelog/` fragment, or none when a workflow writes it).
+- Keep changelog entries concise and in the past tense: at most two sentences on what changed for users. Leave design details and edge cases to the pull request.
 - Before 1.0, bump `patch` for everything except a breaking public API change, which is `minor`.
 - Don't edit README files unless asked.
 - Never force-push.
