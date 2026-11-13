@@ -2,7 +2,7 @@
 title: Tempo Charge Intent for HTTP Payment Authentication
 abbrev: Tempo Charge
 docname: draft-tempo-charge-00
-version: 00
+version: "00"
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -85,6 +85,7 @@ Servers SHOULD support `pull` mode. Servers MAY additionally support
 `push` mode. Servers that do not support both non-zero modes for a
 challenge MUST advertise the supported subset via
 `methodDetails.supportedModes`.
+{: #req-tempo-charge-001}
 
 ## Pull Mode (Default)
 
@@ -145,6 +146,7 @@ The `request` parameter in the `WWW-Authenticate` challenge contains a
 base64url-encoded JSON object. The JSON MUST be serialized using JSON
 Canonicalization Scheme (JCS) {{RFC8785}} before base64url encoding,
 per {{I-D.httpauth-payment}}.
+{: #req-tempo-charge-002}
 
 ## Shared Fields
 
@@ -165,9 +167,13 @@ Challenge expiry is conveyed by the `expires` auth-param in
 |-------|------|----------|-------------|
 | `methodDetails.chainId` | number | OPTIONAL | Tempo chain ID (default: 42431) |
 | `methodDetails.feePayer` | boolean | OPTIONAL | If `true`, server pays transaction fees (default: `false`) |
-| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value. When present, the client MUST use `transferWithMemo` instead of `transfer`. |
+| `methodDetails.memo` | string | OPTIONAL | A `bytes32` hex value for `transferWithMemo` (see below) |
 | `methodDetails.splits` | array | OPTIONAL | Additional recipients that receive a portion of `amount`. See {{split-payments}}. |
 | `methodDetails.supportedModes` | array | OPTIONAL | Supported non-zero submission modes. Values are `"pull"` and/or `"push"`. |
+
+When `methodDetails.memo` is present, the client MUST use
+`transferWithMemo` instead of `transfer`.
+{: #req-tempo-charge-003}
 
 ## Submission Modes
 
@@ -182,6 +188,7 @@ charge submission modes it supports for a specific challenge.
 
 If `supportedModes` is present, it MUST contain at least one of `pull`
 or `push`, and clients MUST choose one of the advertised modes.
+{: #req-tempo-charge-004}
 
 If `supportedModes` is omitted, clients MAY assume both `pull` and
 `push` are supported for that challenge for backwards compatibility with
@@ -189,6 +196,7 @@ version 00 implementations. Servers MUST omit `supportedModes` only when
 they support both non-zero modes for the challenge. A server that
 supports only `pull` or only `push` for a challenge MUST include
 `supportedModes` explicitly and omit the unsupported mode.
+{: #req-tempo-charge-005}
 
 For zero-amount charges, mode negotiation does not apply. Clients use a
 `type="proof"` credential regardless of `supportedModes`.
@@ -214,12 +222,14 @@ on the specified `currency` (token address),
 with `validBefore` no later than the challenge `expires` auth-param. The client MAY use a dedicated
 `nonceKey` (2D nonce lane) for payment transactions to avoid blocking
 other account activity if the transaction is not immediately settled.
+{: #req-tempo-charge-006}
 
 If `methodDetails.feePayer` is `true`, the client signs with
 `fee_payer_signature` set to `0x00` and `fee_token` empty, allowing the
 server to sponsor fees. If `feePayer` is `false` or omitted, the client
 MUST set `fee_token` and either pay the fees themselves or obtain a fee
 payer signature from a sponsor.
+{: #req-tempo-charge-007}
 
 ## Split Payments {#split-payments}
 
@@ -250,6 +260,7 @@ with no sign, decimal point, exponent, or surrounding whitespace. Each
 requirements for `splits[i].memo` are identical to those for
 `methodDetails.memo`, but apply only to that split transfer. Address
 fields are compared by decoded 20-byte value, not by string form.
+{: #req-tempo-charge-008}
 
 ### Constraints
 
@@ -258,6 +269,7 @@ values is greater than or equal to `amount`. Clients MUST reject any
 request that violates this constraint. This ensures the primary
 recipient always receives a non-zero remainder, avoiding the need to
 define zero-value transfer semantics.
+{: #req-tempo-charge-009}
 
 Additional constraints:
 
@@ -266,13 +278,16 @@ Additional constraints:
   single block's budget (~29,000 gas per additional TIP-20
   transfer). Servers MAY reject requests exceeding their supported
   split count.
+  {: #req-tempo-charge-010}
 - All transfers MUST target the same `currency` token address.
+  {: #req-tempo-charge-011}
 
 ### Ordering
 
 The order of entries in `splits` is not significant for verification.
 Clients SHOULD emit calls in array order. Servers MUST verify that the
 required payment effects are present regardless of call ordering.
+{: #req-tempo-charge-012}
 
 ### Example
 
@@ -309,11 +324,13 @@ The platform receives 0.05 pathUSD, the affiliate receives 0.01 pathUSD
 When `splits` is present, the client MUST produce a transaction whose
 on-chain effects include the following `Transfer` or `TransferWithMemo`
 events on the `currency` token address:
+{: #req-tempo-charge-013}
 
 1. The primary `recipient` receives `amount - sum(splits[].amount)`.
 2. Each `splits[i].recipient` receives `splits[i].amount`. If
    `splits[i].memo` is present, the corresponding transfer MUST use
    `transferWithMemo`.
+   {: #req-tempo-charge-014}
 
 The top-level `methodDetails.memo`, if present, applies to the primary
 transfer.
@@ -322,6 +339,7 @@ Clients MAY achieve these effects using any valid transaction structure,
 including batched calls, smart contract wallet invocations, or
 intermediary operations such as token swaps — provided all required
 transfer events are emitted atomically.
+{: #req-tempo-charge-015}
 
 # Credential Schema
 
@@ -338,6 +356,7 @@ JSON object per {{I-D.httpauth-payment}}.
 
 The `source` field, if present, SHOULD use the `did:pkh` method with the
 chain ID applicable to the challenge and the payer's Ethereum address.
+{: #req-tempo-charge-016}
 
 ## Transaction Payload (type="transaction")
 
@@ -349,6 +368,7 @@ parameters, using one
 or more `transfer` and/or `transferWithMemo` calls. When `splits` are
 present, the transaction MUST include transfers for each split entry
 (see {{split-payments}}). This payload type corresponds to `pull` mode.
+{: #req-tempo-charge-017}
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -416,6 +436,7 @@ type is used exclusively for zero-amount charges: clients MUST use
 `type="proof"` when `amount` is `"0"`, and MUST NOT use `type="proof"`
 when `amount` is non-zero. The `supportedModes` field does not apply
 to zero-amount charges.
+{: #req-tempo-charge-018}
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -424,6 +445,7 @@ to zero-amount charges.
 
 The `source` field MUST be present on proof credentials and MUST be a
 `did:pkh:eip155:<chainId>:<address>` DID identifying the signer.
+{: #req-tempo-charge-019}
 
 ### EIP-712 Domain and Types
 
@@ -461,6 +483,7 @@ controlled by the same signing key. The `realm` MUST be the `realm`
 from the challenge, binding the proof to the issuing origin and
 preventing cross-realm replay of a proof obtained from a different
 server.
+{: #req-tempo-charge-020}
 
 ### Proof Contract Versions
 
@@ -478,10 +501,12 @@ the EIP-712 digest, so a signature produced under version `"1"` or
 `"2"` does not verify against the version `"3"` typed data. Servers
 MUST NOT accept proof signatures made under domain version `"1"` or
 `"2"`.
+{: #req-tempo-charge-021}
 
 ### Proof Verification
 
 Servers MUST verify proof credentials as follows:
+{: #req-tempo-charge-022}
 
 1. Verify `credential.source` is present and parses as
    `did:pkh:eip155:<chainId>:<address>`
@@ -495,11 +520,13 @@ Servers MUST verify proof credentials as follows:
    comparing it to the address from `source` satisfies this check;
    servers MAY additionally accept contract-account signatures
    (ERC-1271).
+   {: #req-tempo-charge-023}
 5. If step 4 fails, servers MAY instead recover the signer of
    `payload.signature` and accept the credential only if that signer
    is an access key currently authorized on-chain for the account in
    `source`. Servers MUST NOT otherwise accept a credential whose
    signer differs from the address in `source`.
+   {: #req-tempo-charge-024}
 
 ### Proof Receipt
 
@@ -560,6 +587,7 @@ valid USD TIP-20 token address and arrange payment of the fees, either
 by paying the fees themselves or by obtaining a fee payer signature
 from a sponsor. The server broadcasts the transaction as-is without
 adding a fee payer signature.
+{: #req-tempo-charge-025}
 
 ## Server Requirements
 
@@ -567,17 +595,22 @@ When acting as fee payer, servers:
 
 - MUST maintain sufficient balance of a USD TIP-20 token to pay
   transaction fees
+  {: #req-tempo-charge-026}
 - MAY use any USD-denominated TIP-20 token with sufficient AMM
   liquidity as the fee token
+  {: #req-tempo-charge-027}
 - MAY recover fee costs through pricing or other business logic
+  {: #req-tempo-charge-028}
 
 ## Client Requirements
 
 - When `feePayer: true`: Clients MUST sign with `fee_payer_signature` set
   to `0x00` and `fee_token` empty or `0x80` (RLP null)
+  {: #req-tempo-charge-029}
 - When `feePayer: false` or omitted: Clients MUST set `fee_token` to a
   valid USD TIP-20 token. The client or sponsor paying the fee MUST have
   sufficient balance of that token
+  {: #req-tempo-charge-030}
 
 # Settlement Procedure
 
@@ -654,14 +687,17 @@ the transaction. The server verifies the transaction onchain:
 
 - Clients MUST NOT use `type="hash"` when `methodDetails.feePayer` is
   `true`. Servers MUST reject such credentials.
+  {: #req-tempo-charge-031}
 - If `methodDetails.supportedModes` is present and does not include
   `push`, clients MUST NOT use `type="hash"` credentials. Servers MUST
   reject such credentials.
+  {: #req-tempo-charge-032}
 - Server cannot modify or enhance the transaction.
 
 ## Transaction Verification {#transaction-verification}
 
 Before broadcasting a transaction credential, servers MUST verify:
+{: #req-tempo-charge-033}
 
 1. Deserialize the RLP-encoded transaction from `payload.signature`
 2. Verify the transaction contains `transfer` or `transferWithMemo`
@@ -680,6 +716,7 @@ Before broadcasting a transaction credential, servers MUST verify:
 
 Servers MAY impose additional structural requirements (such as
 exact call count or ordering) as local policy before broadcasting.
+{: #req-tempo-charge-034}
 
 ## Hash Verification {#hash-verification}
 
@@ -689,13 +726,16 @@ that the receipt contains `Transfer` and/or `TransferWithMemo` event
 logs emitted by the `currency` token address whose payment effects
 satisfy the challenge parameters, including the primary recipient
 amount, any split amounts, and any required memo values.
+{: #req-tempo-charge-035}
 
 If `methodDetails.supportedModes` is present, servers MUST verify it
 includes `push` before accepting a hash credential.
+{: #req-tempo-charge-036}
 
 Servers MAY additionally inspect the transaction call data as a
 local-policy check, but call-data decoding is not required for
 conformance.
+{: #req-tempo-charge-037}
 
 ## Receipt Generation
 
@@ -703,6 +743,7 @@ Upon successful settlement, servers MUST return a `Payment-Receipt` header
 per {{I-D.httpauth-payment}}. Servers MUST NOT include a
 `Payment-Receipt` header on error responses; failures are communicated via
 HTTP status codes and Problem Details.
+{: #req-tempo-charge-038}
 
 The receipt payload for Tempo charge:
 
@@ -728,6 +769,7 @@ Tempo Transactions include chain ID, nonce, and optional `validBefore`/
 ## Amount Verification
 
 Clients MUST parse and verify the `request` payload before signing:
+{: #req-tempo-charge-039}
 
 1. Verify `amount` is reasonable for the service
 2. Verify `currency` is the expected token address
@@ -743,15 +785,18 @@ When `splits` are present, additional risks apply:
 SHOULD present each split recipient and amount so the user can verify
 the payment distribution. Clients SHOULD highlight when the primary
 recipient receives a small remainder relative to the total `amount`.
+{: #req-tempo-charge-040}
 
 **Gas Overhead**: Each additional split adds approximately 29,000 gas
 for the TIP-20 precompile transfer execution. A charge with 10 splits
 adds approximately 290,000 gas beyond a single-transfer charge. Servers
 sponsoring fees via `feePayer: true` MUST budget for the increased gas
 limit.
+{: #req-tempo-charge-041}
 
 **Split Count Bound**: Servers SHOULD limit `splits` to 10 entries.
 See {{split-payments}} for rationale.
+{: #req-tempo-charge-042}
 
 ## Server-Paid Fees
 
@@ -762,9 +807,11 @@ providing a seamless payment experience.
 credentials that fail onchain, causing the server to pay fees without
 receiving payment. Servers SHOULD implement rate limiting and MAY require
 client authentication before accepting payment credentials.
+{: #req-tempo-charge-043}
 
 **Fee Token Exhaustion**: Servers MUST monitor their fee token balance
 and reject new payment requests when balance is insufficient.
+{: #req-tempo-charge-044}
 
 # IANA Considerations
 
