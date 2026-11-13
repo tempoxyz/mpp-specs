@@ -26,6 +26,7 @@ lint:
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_external_section_refs.py
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_examples.py
 	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_problem_types.py
+	docker run --rm -v "$$(pwd)":/data ietf-spec-tools python3 /data/scripts/lint_requirements.py
 
 test:
 	docker run --rm -v "$$(pwd)":/data -w /data/scripts ietf-spec-tools pytest -v
