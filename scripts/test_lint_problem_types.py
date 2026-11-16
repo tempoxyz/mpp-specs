@@ -141,7 +141,7 @@ class TestCitedStatuses:
         }
 
     def test_a_full_uri_in_a_table_carries_its_status(self, tmp_path):
-        # draft-tempo-session-00 writes the whole URI in its IANA table.
+        # draft-tempo-session-01 writes the whole URI in its IANA table.
         write_spec(tmp_path, self.TABLE.replace(".../", BASE_URI).format(status="410"))
 
         assert cited_statuses(tmp_path / "specs") == {

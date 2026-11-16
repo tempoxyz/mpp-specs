@@ -59,7 +59,7 @@ Methods may define new intent types that are not yet formalized in `specs/intent
 **Example**: A session payment method might define:
 
 ```
-specs/methods/draft-tempo-session-00.md     ← defines "session" intent (experimental)
+specs/methods/draft-tempo-session-01.md     ← defines "session" intent (experimental)
 specs/methods/draft-lightning-session-00.md ← second implementation
 specs/intents/draft-payment-intent-session-00.md ← formalized after adoption
 ```
