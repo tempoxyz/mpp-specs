@@ -284,7 +284,7 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 | address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
 | bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
 | v1 sig | 130-132 chars (0x + 128-130 hex) | 65-byte (r‖s‖v) or 64-byte EIP-2098 compact |
-| v2 sig | 132 chars or more | secp256k1, P256, WebAuthn, or `0x05`; see {{signature-encodings}} |
+| v2 sig | 130-132 chars, or longer for `0x05` | secp256k1 as for v1, or `0x05`; see {{signature-encodings}} |
 
 Implementations MUST use lowercase hex. Implementations SHOULD accept
 mixed-case input but normalize to lowercase before comparison.
@@ -446,7 +446,10 @@ transaction.
 signature according to the following table. "Primitive" means a
 secp256k1, P256, or WebAuthn signature; "keychain" means an access-key
 signature (type `0x03` or `0x04`); and `0x05` means a
-configurable-account signature {{TIP-1107}}.
+configurable-account signature {{TIP-1107}}. This table describes the
+escrow precompile; for compatibility with earlier revisions of this
+document, the only primitive voucher signatures this protocol uses are
+secp256k1 (see {{signature-encodings}}).
 
 | Signer snapshot | Signature | Accepted when |
 |-----------------|-----------|---------------|
@@ -816,10 +819,10 @@ derives the voucher signer's address, MUST NOT open the channel unless
 deposit is locked. Such a client SHOULD instead report an error, or open
 the channel with an `authorizedSigner` that is not a configurable
 account. This requirement applies only to such opens. Clients that will
-sign primitive vouchers, including on a zero-snapshot channel whose
+sign secp256k1 vouchers, including on a zero-snapshot channel whose
 voucher signer registers a configuration after open, MUST NOT require
 `configurableVouchers`. Servers that set it MUST continue to accept
-primitive voucher signatures on channels whose signer snapshot is
+secp256k1 voucher signatures on channels whose signer snapshot is
 zero.
 
 **Example (configurable voucher signers accepted):**
@@ -1378,10 +1381,12 @@ To sign a voucher, implementations MUST:
 
 5. Encode signature as 65-byte `r || s || v` where `v` is 27 or 28
 
-For v2, a client MAY instead sign `signingHash` with any primitive
-encoding in {{signature-encodings}}, such as P256 or WebAuthn, and the
-signature MUST verify to the voucher signer. A v2 client chooses the
-signature type from the channel's signer snapshot:
+For v2, a primitive voucher signature MUST be a secp256k1 signature
+produced by steps 4 and 5. Clients MUST NOT send P256 or WebAuthn
+voucher signatures, even though the escrow precompile accepts them:
+servers that implement earlier revisions of this document reject them.
+A v2 client chooses the signature type from the channel's signer
+snapshot:
 
 - If the signer snapshot is non-zero, primitive signatures never settle.
   Steps 4 and 5 are replaced: the account's owners each sign the
@@ -1393,15 +1398,14 @@ signature type from the channel's signer snapshot:
   signature only when a version-0 configuration derives the voucher
   signer's address (an unregistered configurable account, which has no
   key of its own), and MUST then use that version-0 configuration.
-  Otherwise, the client MUST keep signing primitive voucher signatures
-  that verify to the voucher signer (steps 4 and 5, or another primitive
-  encoding), even if the voucher signer has registered a configuration
-  since the channel was opened: the escrow precompile still accepts
-  them on that channel.
+  Otherwise, the client MUST keep signing secp256k1 voucher signatures
+  that recover to the voucher signer (steps 4 and 5), even if the
+  voucher signer has registered a configuration since the channel was
+  opened: the escrow precompile still accepts them on that channel.
 
 Clients MUST NOT send `0x05` voucher signatures to a server that did
 not advertise `methodDetails.configurableVouchers: true` (see
-{{configurable-vouchers}}). A client that signs primitive vouchers does
+{{configurable-vouchers}}). A client that signs secp256k1 vouchers does
 not need `configurableVouchers`.
 
 ## Voucher Signature Encodings {#signature-encodings}
@@ -1412,25 +1416,34 @@ For v1, a voucher signature is either a 65-byte `r || s || v`
 secp256k1 signature, where `v` is 27 or 28, or a 64-byte EIP-2098
 compact signature.
 
-For v2, a voucher signature uses one of the following encodings, as
-verified by the escrow precompile through {{TIP-1020}} and
-{{TIP-1166}}:
+For v2, a voucher signature uses one of the following encodings:
 
 | Type | Encoding (concatenated in order) | Length |
 |------|----------------------------------|--------|
-| secp256k1 | r, s, v (no type byte) | Exactly 65 bytes |
-| P256 | `0x01`, r, s, x, y, prehash | Exactly 130 bytes |
-| WebAuthn | `0x02`, webauthn_data, r, s, x, y | 129 to 2049 bytes |
+| secp256k1 | r, s, v (no type byte), or EIP-2098 compact | 65 or 64 bytes |
 | Configurable account | `0x05`, `rlp([account, config, approvals])` | Variable |
 
-A 65-byte value is always a secp256k1 signature; any other length is
-identified by its first byte. Keychain signatures (type `0x03` or
-`0x04`) and unknown types MUST be rejected. A `0x05` signature
-carries one to eight primitive approvals of at most 2049 bytes each
-({{TIP-1107}}), and is accepted only under the rules in
-{{configurable-signers}}. secp256k1, P256, and WebAuthn signatures,
-including approvals inside a `0x05` signature, MUST use low-s values
-(see {{signature-malleability}}).
+The secp256k1 encodings are those of v1. A `0x05` signature is
+accepted only under the rules in {{configurable-signers}} and only by
+servers that advertise `configurableVouchers: true`. Servers MUST
+reject any other v2 voucher signature, including P256 (`0x01`),
+WebAuthn (`0x02`), keychain (`0x03`, `0x04`), and unknown types,
+although the escrow precompile accepts P256 and WebAuthn signatures.
+Restricting v2 primitive signatures to secp256k1 keeps them
+interoperable with servers that implement earlier revisions of this
+document.
+
+The escrow precompile verifies voucher signatures through {{TIP-1020}},
+which accepts secp256k1 only as exactly 65 bytes. A server that accepts
+a 64-byte compact signature MUST expand it to the equivalent 65-byte
+`r || s || v` form before submitting it to `settle` or `close`.
+Clients SHOULD send the 65-byte form.
+
+A `0x05` signature carries one to eight owner approvals, each of
+which follows {{TIP-1107}} unchanged: an approval may use any primitive
+type {{TIP-1107}} allows, including P256 and WebAuthn. secp256k1
+voucher signatures MUST use low-s values (see
+{{signature-malleability}}).
 
 ## Cumulative Semantics
 
@@ -1510,9 +1523,9 @@ On `action="voucher"`, servers MUST:
 
 1. Verify the credential descriptor for v2, including channel ID, payee,
    token, operator, escrow address, and chain ID binding.
-2. Verify the voucher signature over the EIP-712 signing hash: for v1,
-   by ECDSA recovery; for v2, in any encoding of
-   {{signature-encodings}}
+2. Verify the voucher signature over the EIP-712 signing hash: by
+   ECDSA recovery for a secp256k1 signature, or, for v2, as a `0x05`
+   signature (see {{signature-encodings}})
 3. Verify signature uses canonical low-s values (see {{signature-malleability}})
 4. Determine the signer and MUST verify it matches expected signer from
    on-chain state (for v2, servers MUST apply the signature rules in
@@ -2089,12 +2102,10 @@ Accepted signature formats for v1:
 - 65-byte `(r, s, v)` format where `v` is 27 or 28
 - 64-byte EIP-2098 compact format
 
-V2 accepts the encodings in {{signature-encodings}}: 65-byte
-secp256k1, P256, and WebAuthn signatures, and `0x05` signatures. The
-low-s requirement applies to secp256k1, P256, and WebAuthn signatures,
-including each approval inside a `0x05` signature. For P256 and
-WebAuthn, `s` MUST NOT exceed the P256 half-order
-`0x7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8`.
+V2 accepts the same secp256k1 formats, with the same low-s
+requirement, and `0x05` signatures (see {{signature-encodings}}).
+Each owner approval inside a `0x05` signature follows the
+canonical-signature rules of {{TIP-1107}} and {{TIP-1020}}.
 
 Implementations SHOULD use established libraries (e.g., OpenZeppelin ECDSA)
 that enforce these requirements.
@@ -2662,8 +2673,8 @@ prefer JSON Schema over CDDL.
     },
     "signature": {
       "type": "string",
-      "pattern": "^0x([0-9a-fA-F]{2}){64,}$",
-      "description": "Voucher signature: 64 or 65 bytes for v1; for v2, secp256k1, P256, WebAuthn, or 0x05 (see Voucher Signature Encodings)"
+      "pattern": "^0x([0-9a-fA-F]{128,130}|05([0-9a-fA-F]{2})+)$",
+      "description": "EIP-712 voucher signature: 64- or 65-byte secp256k1, or for v2 a 0x05 configurable-account signature"
     }
   },
   "$defs": {
