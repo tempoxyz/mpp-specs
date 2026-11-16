@@ -69,6 +69,11 @@ informative:
     target: https://docs.tempo.xyz/protocol/tip20/spec
     author:
       - org: Tempo Labs
+  TIP-1020:
+    title: "TIP-1020: Signature Verification Precompile"
+    target: https://github.com/tempoxyz/tempo/blob/main/tips/tip-1020.md
+    author:
+      - org: Tempo Labs
   TIP-1034:
     title: "TIP-1034: TIP-20 Channel Reserve Precompile"
     target: https://github.com/tempoxyz/tempo/blob/main/tips/tip-1034.md
@@ -278,8 +283,8 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 |------|--------|---------|
 | address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
 | bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
-| signature | 130-132 chars (0x + 128-130 hex) | 65-byte (r‖s‖v) or 64-byte EIP-2098 compact |
-| 0x05 sig | Varies | V2 `0x05` voucher signature; see {{configurable-signers}} |
+| v1 sig | 130-132 chars (0x + 128-130 hex) | 65-byte (r‖s‖v) or 64-byte EIP-2098 compact |
+| v2 sig | Varies | See {{signature-encodings}} |
 
 Implementations MUST use lowercase hex. Implementations SHOULD accept
 mixed-case input but normalize to lowercase before comparison.
@@ -474,8 +479,7 @@ The domain string is raw ASCII, `signingHash` is 32 bytes, `account`
 is 20 bytes, and `version` is the configuration version as eight bytes
 big-endian. The configuration commitment, address derivation, approval
 encoding, quorum, and decoding rules are those of {{TIP-1107}}. A
-`0x05` signature has a variable length, unlike a 64- or 65-byte
-primitive signature.
+`0x05` signature has a variable length (see {{signature-encodings}}).
 
 **Top-up.** A non-zero `topUp` reverts with
 `SignerConfigChanged(signer)` if the signer snapshot is non-zero and
@@ -671,8 +675,12 @@ The escrow contract MUST enforce the following access control:
 
 ## Signature Verification
 
-The escrow contract MUST perform the following signature verification for
-all functions that accept voucher signatures (`settle`, `close`):
+The escrow contract MUST perform the following signature verification
+for all functions that accept voucher signatures (`settle`, `close`).
+These rules describe the v1 contract. The v2 escrow precompile instead
+verifies voucher signatures with {{TIP-1020}} and the rules in
+{{configurable-signers}}, using the encodings in
+{{signature-encodings}}.
 
 1. **Canonical signatures**: The contract MUST reject ECDSA signatures
    with non-canonical (high-s) values. Signatures MUST have
@@ -794,15 +802,16 @@ the following hold:
   signatures as described in {{open-verification}} and
   {{voucher-verification}}.
 
-A client whose voucher signer is a configurable account MUST NOT open a
-new channel unless `configurableVouchers` is `true`: a server that
-does not accept `0x05` vouchers would reject every voucher the client
-can sign once the deposit is locked. Such a client SHOULD instead report
-an error, or open the channel with an `authorizedSigner` that is not a
-configurable account. Clients whose voucher signer is not a configurable
-account MUST NOT require `configurableVouchers`. Servers that set it
-MUST continue to accept primitive voucher signatures on channels whose
-signer snapshot is zero.
+A client whose voucher signer is a configurable account, so that it will
+sign `0x05` vouchers on the new channel (see {{voucher-format}}), MUST
+NOT open the channel unless `configurableVouchers` is `true`: a server
+that does not accept `0x05` vouchers would reject every voucher the
+client can sign once the deposit is locked. Such a client SHOULD instead
+report an error, or open the channel with an `authorizedSigner` that is
+not a configurable account. Clients that will sign primitive vouchers
+MUST NOT require `configurableVouchers`. Servers that set it MUST
+continue to accept primitive voucher signatures on channels whose signer
+snapshot is zero.
 
 **Example (configurable voucher signers accepted):**
 
@@ -1095,8 +1104,8 @@ controls the signing key and establishes the voucher chain.
 ~~~
 
 Note: The `transaction` field contains RLP-encoded transaction bytes.
-When provided, the `signature` field is the EIP-712 voucher signature
-(65 bytes r‖s‖v or 64 bytes EIP-2098 compact).
+When provided, the `signature` field is the EIP-712 voucher signature,
+encoded as described in {{signature-encodings}}.
 
 The `challenge` object MUST echo the challenge parameters from the server's
 `WWW-Authenticate` header per {{I-D.httpauth-payment}}.
@@ -1360,17 +1369,56 @@ To sign a voucher, implementations MUST:
 
 5. Encode signature as 65-byte `r || s || v` where `v` is 27 or 28
 
-For v2 channels whose voucher signer is a configurable account, steps 4
-and 5 are replaced: the account's owners each sign the
-configurable-account digest of `signingHash`, and the client encodes
-their approvals as a `0x05` signature, as defined in
-{{configurable-signers}}. The configuration in the `0x05` signature MUST
-be the one whose commitment equals the channel's signer snapshot; if the
-signer snapshot is zero, it MUST be the version-0 configuration that
-derives the voucher signer's address. Clients MUST NOT send `0x05`
-voucher signatures to a server that did not advertise
-`methodDetails.configurableVouchers: true` (see
-{{configurable-vouchers}}).
+For v2, a client MAY instead sign `signingHash` with any primitive
+encoding in {{signature-encodings}}, such as P256 or WebAuthn, and the
+signature MUST verify to the voucher signer. A v2 client chooses the
+signature type from the channel's signer snapshot:
+
+- If the signer snapshot is non-zero, primitive signatures never settle.
+  Steps 4 and 5 are replaced: the account's owners each sign the
+  configurable-account digest of `signingHash`, and the client encodes
+  their approvals as a `0x05` signature, as defined in
+  {{configurable-signers}}. The configuration in the `0x05` signature
+  MUST be the one whose commitment equals the signer snapshot.
+- If the signer snapshot is zero, the client MUST sign a primitive
+  voucher signature that recovers to the voucher signer, unless the
+  voucher signer has no such key and a version-0 configuration derives
+  its address (an unregistered configurable account). Only in that case
+  does the client sign a `0x05` signature with that version-0
+  configuration.
+
+Clients MUST NOT send `0x05` voucher signatures to a server that did
+not advertise `methodDetails.configurableVouchers: true` (see
+{{configurable-vouchers}}). A client that signs primitive vouchers does
+not need `configurableVouchers`.
+
+## Voucher Signature Encodings {#signature-encodings}
+
+Voucher signatures are hex-encoded as described in {{encoding}}.
+
+For v1, a voucher signature is either a 65-byte `r || s || v`
+secp256k1 signature, where `v` is 27 or 28, or a 64-byte EIP-2098
+compact signature.
+
+For v2, a voucher signature uses one of the following encodings, as
+verified by the escrow precompile through {{TIP-1020}} and
+{{TIP-1166}}:
+
+| Type | Encoding (concatenated in order) | Length |
+|------|----------------------------------|--------|
+| secp256k1 | r, s, v (no type byte) | Exactly 65 bytes |
+| P256 | `0x01`, r, s, x, y, prehash | Exactly 130 bytes |
+| WebAuthn | `0x02`, webauthn_data, r, s, x, y | 129 to 2049 bytes |
+| Configurable account | `0x05`, `rlp([account, config, approvals])` | Variable |
+
+A 65-byte value is always a secp256k1 signature; any other length is
+identified by its first byte. Keychain signatures (type `0x03` or
+`0x04`) and unknown types MUST be rejected. A `0x05` signature
+carries one to eight primitive approvals of at most 2049 bytes each
+({{TIP-1107}}), and is accepted only under the rules in
+{{configurable-signers}}. secp256k1 and P256 signatures, including
+approvals inside a `0x05` signature, MUST use low-s values (see
+{{signature-malleability}}).
 
 ## Cumulative Semantics
 
@@ -1414,10 +1462,14 @@ On `action="open"`, servers MUST:
    - `channel.closeRequestedAt == 0` (no pending close request)
 3. If `cumulativeAmount` and `signature` are provided, verify the initial
    voucher:
-   - Recover signer from EIP-712 signature, or for a v2 `0x05`
-     signature verify it as in {{voucher-verification}}
-   - Verify signature uses canonical low-s values (see {{signature-malleability}})
-   - Signer matches `channel.payer` or `channel.authorizedSigner`
+   - For v1, recover the signer from the EIP-712 signature, verify that
+     the signature uses canonical low-s values (see
+     {{signature-malleability}}), and verify that the signer matches
+     `channel.payer` or `channel.authorizedSigner`
+   - For v2, apply every signature rule of {{voucher-verification}},
+     whatever the signature type, using the signer snapshot from step 1:
+     in particular, reject keychain signatures, and reject primitive
+     signatures when the signer snapshot is non-zero
    - `voucher.channelId` matches
    - `voucher.cumulativeAmount >= channel.settled` (at or above current settlement)
 4. Initialize server-side channel state
@@ -1446,7 +1498,8 @@ On `action="voucher"`, servers MUST:
 
 1. Verify the credential descriptor for v2, including channel ID, payee,
    token, operator, escrow address, and chain ID binding.
-2. Verify voucher signature using EIP-712 recovery
+2. Verify voucher signature using EIP-712 recovery (for v2, with the
+   encodings in {{signature-encodings}})
 3. Verify signature uses canonical low-s values (see {{signature-malleability}})
 4. Recover signer and MUST verify it matches expected signer from on-chain state
    (for v2, servers MUST apply the signature rules in
@@ -1981,14 +2034,14 @@ signatures:
   `0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0`
 - Servers MUST reject signatures with `s` values exceeding this threshold
 
-Accepted signature formats:
+Accepted signature formats for v1:
 
 - 65-byte `(r, s, v)` format where `v` is 27 or 28
 - 64-byte EIP-2098 compact format
-- For v2 channels on servers that advertise
-  `configurableVouchers: true`, a variable-length `0x05`
-  configurable-account signature (see {{configurable-signers}}). The
-  low-s requirement applies to each secp256k1 approval inside it.
+
+V2 accepts the encodings in {{signature-encodings}}. The low-s
+requirement applies to secp256k1 and P256 signatures, including each
+approval inside a `0x05` signature.
 
 Implementations SHOULD use established libraries (e.g., OpenZeppelin ECDSA)
 that enforce these requirements.
@@ -2556,8 +2609,8 @@ prefer JSON Schema over CDDL.
     },
     "signature": {
       "type": "string",
-      "pattern": "^0x([0-9a-fA-F]{128,130}|05([0-9a-fA-F]{2})+)$",
-      "description": "EIP-712 voucher signature, or v2 0x05 envelope"
+      "pattern": "^0x([0-9a-fA-F]{2}){64,}$",
+      "description": "EIP-712 voucher signature (v2 encodings vary)"
     }
   },
   "$defs": {
