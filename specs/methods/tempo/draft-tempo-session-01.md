@@ -284,7 +284,7 @@ All byte arrays (addresses, hashes, signatures, channelId) use:
 | address | 42 chars (0x + 40 hex) | `0x742d35cc6634c0532925a3b844bc9e7595f8fe00` |
 | bytes32 | 66 chars (0x + 64 hex) | `0x6d0f4fdf1f2f6a1f6c1b0fbd6a7d5c2c0a8d3d7b1f6a9c1b3e2d4a5b6c7d8e9f` |
 | v1 sig | 130-132 chars (0x + 128-130 hex) | 65-byte (r‖s‖v) or 64-byte EIP-2098 compact |
-| v2 sig | Varies | See {{signature-encodings}} |
+| v2 sig | 132 chars or more | secp256k1, P256, WebAuthn, or `0x05`; see {{signature-encodings}} |
 
 Implementations MUST use lowercase hex. Implementations SHOULD accept
 mixed-case input but normalize to lowercase before comparison.
@@ -435,10 +435,12 @@ update earlier in the same transaction likewise changes the commitment
 
 The signer snapshot never changes while the channel exists. The channel
 state getter does not return it: servers learn it from the
-`SignerSnapshotCached` event in the open receipt. The `channelId`
-derivation is unchanged. Because the salt cannot vary, a payer can open
-only one channel per payee, operator, token, and configurable voucher
-signer in a single transaction.
+`SignerSnapshotCached` event, either in the open receipt or from the
+escrow contract's logs filtered by the indexed `channelId` (see
+{{signer-snapshot}}). The `channelId` derivation is unchanged. Because
+the salt cannot vary, a payer can open only one channel per payee,
+operator, token, and configurable voucher signer in a single
+transaction.
 
 **Voucher signatures.** `settle` and `close` accept a voucher
 signature according to the following table. "Primitive" means a
@@ -771,10 +773,13 @@ resuming an existing channel:
 - **Existing channel** (`channelId` provided): Client MUST verify
   `channel.deposit - channel.settled >= amount` before resuming. If
   insufficient, client SHOULD either call `topUp()` with the difference
-  or open a new channel. For a v2 channel whose signer snapshot is
-  non-zero, the client MUST sign vouchers with the configuration whose
-  commitment equals the signer snapshot, and a top-up fails once the
-  voucher signer's configuration has changed (see {{topup-payload}}).
+  or open a new channel. For a v2 channel, the client learns the signer
+  snapshot as servers do (see {{signer-snapshot}}) and chooses the
+  voucher signature type from it (see {{voucher-format}}). If the
+  signer snapshot is non-zero, the client MUST sign vouchers with the
+  configuration whose commitment equals the signer snapshot, and a
+  top-up fails once the voucher signer's configuration has changed (see
+  {{topup-payload}}).
 
 Servers MAY cache `(payer address, payee address, token) → channelId`
 mappings to suggest channel reuse, reducing on-chain transactions.
@@ -798,20 +803,24 @@ the following hold:
 - `methodDetails.sessionProtocol` is `"v2"`;
 - the escrow precompile on `methodDetails.chainId` enforces
   {{TIP-1166}};
-- the server records signer snapshots and verifies `0x05` voucher
-  signatures as described in {{open-verification}} and
-  {{voucher-verification}}.
+- the server learns signer snapshots and verifies `0x05` voucher
+  signatures as described in {{open-verification}},
+  {{voucher-verification}}, and {{signer-snapshot}}.
 
-A client whose voucher signer is a configurable account, so that it will
-sign `0x05` vouchers on the new channel (see {{voucher-format}}), MUST
-NOT open the channel unless `configurableVouchers` is `true`: a server
-that does not accept `0x05` vouchers would reject every voucher the
-client can sign once the deposit is locked. Such a client SHOULD instead
-report an error, or open the channel with an `authorizedSigner` that is
-not a configurable account. Clients that will sign primitive vouchers
-MUST NOT require `configurableVouchers`. Servers that set it MUST
-continue to accept primitive voucher signatures on channels whose signer
-snapshot is zero.
+A client that will sign `0x05` vouchers on a new channel (see
+{{voucher-format}}), because the voucher signer's commitment will be
+non-zero when `open` executes or because a version-0 configuration
+derives the voucher signer's address, MUST NOT open the channel unless
+`configurableVouchers` is `true`: a server that does not accept
+`0x05` vouchers would reject every voucher the client can sign once the
+deposit is locked. Such a client SHOULD instead report an error, or open
+the channel with an `authorizedSigner` that is not a configurable
+account. This requirement applies only to such opens. Clients that will
+sign primitive vouchers, including on a zero-snapshot channel whose
+voucher signer registers a configuration after open, MUST NOT require
+`configurableVouchers`. Servers that set it MUST continue to accept
+primitive voucher signatures on channels whose signer snapshot is
+zero.
 
 **Example (configurable voucher signers accepted):**
 
@@ -1380,12 +1389,15 @@ signature type from the channel's signer snapshot:
   their approvals as a `0x05` signature, as defined in
   {{configurable-signers}}. The configuration in the `0x05` signature
   MUST be the one whose commitment equals the signer snapshot.
-- If the signer snapshot is zero, the client MUST sign a primitive
-  voucher signature that recovers to the voucher signer, unless the
-  voucher signer has no such key and a version-0 configuration derives
-  its address (an unregistered configurable account). Only in that case
-  does the client sign a `0x05` signature with that version-0
-  configuration.
+- If the signer snapshot is zero, the client MUST sign a `0x05`
+  signature only when a version-0 configuration derives the voucher
+  signer's address (an unregistered configurable account, which has no
+  key of its own), and MUST then use that version-0 configuration.
+  Otherwise, the client MUST keep signing primitive voucher signatures
+  that verify to the voucher signer (steps 4 and 5, or another primitive
+  encoding), even if the voucher signer has registered a configuration
+  since the channel was opened: the escrow precompile still accepts
+  them on that channel.
 
 Clients MUST NOT send `0x05` voucher signatures to a server that did
 not advertise `methodDetails.configurableVouchers: true` (see
@@ -1416,9 +1428,9 @@ identified by its first byte. Keychain signatures (type `0x03` or
 `0x04`) and unknown types MUST be rejected. A `0x05` signature
 carries one to eight primitive approvals of at most 2049 bytes each
 ({{TIP-1107}}), and is accepted only under the rules in
-{{configurable-signers}}. secp256k1 and P256 signatures, including
-approvals inside a `0x05` signature, MUST use low-s values (see
-{{signature-malleability}}).
+{{configurable-signers}}. secp256k1, P256, and WebAuthn signatures,
+including approvals inside a `0x05` signature, MUST use low-s values
+(see {{signature-malleability}}).
 
 ## Cumulative Semantics
 
@@ -1451,8 +1463,8 @@ On `action="open"`, servers MUST:
    the escrow contract whose `channelId` matches, the signer snapshot is
    its `commitment`, which MUST equal `descriptor.salt` and whose
    `signer` MUST equal the voucher signer; otherwise the signer snapshot
-   is zero. Servers MUST store the signer snapshot with the channel
-   state (see {{server-accounting}}).
+   is zero. Servers MUST record this signer snapshot for the channel
+   (see {{signer-snapshot}}).
 2. Query the escrow contract to verify channel state:
    - Channel exists with the computed `channelId`
    - `channel.payee` matches server's address
@@ -1498,13 +1510,14 @@ On `action="voucher"`, servers MUST:
 
 1. Verify the credential descriptor for v2, including channel ID, payee,
    token, operator, escrow address, and chain ID binding.
-2. Verify voucher signature using EIP-712 recovery (for v2, with the
-   encodings in {{signature-encodings}})
+2. Verify the voucher signature over the EIP-712 signing hash: for v1,
+   by ECDSA recovery; for v2, in any encoding of
+   {{signature-encodings}}
 3. Verify signature uses canonical low-s values (see {{signature-malleability}})
-4. Recover signer and MUST verify it matches expected signer from on-chain state
-   (for v2, servers MUST apply the signature rules in
-   {{configurable-signers}} using the channel's stored signer snapshot,
-   as described below)
+4. Determine the signer and MUST verify it matches expected signer from
+   on-chain state (for v2, servers MUST apply the signature rules in
+   {{configurable-signers}} using the channel's signer snapshot from
+   {{signer-snapshot}}, as described below)
 5. Verify `channel.closeRequestedAt == 0` (no pending close request).
    Servers MUST reject vouchers on channels with a pending forced close
    to prevent service delivery that cannot be settled.
@@ -1529,16 +1542,16 @@ escrow precompile would accept it in `settle` and `close` (see
 settled:
 
 - Servers MUST reject keychain (`0x03`, `0x04`) voucher signatures.
-- If the stored signer snapshot is non-zero, servers MUST reject
+- If the channel's signer snapshot is non-zero, servers MUST reject
   primitive voucher signatures, whether or not they advertise
   `configurableVouchers`.
 - Servers that do not advertise `configurableVouchers: true` MUST
   reject `0x05` voucher signatures.
 - Servers that advertise `configurableVouchers: true` MUST verify a
   `0x05` voucher signature by checking that its `account` equals the
-  expected signer; that, if the stored signer snapshot is non-zero, the
-  commitment of its configuration equals the signer snapshot, or, if the
-  stored signer snapshot is zero, its configuration has version 0 and
+  expected signer; that, if the channel's signer snapshot is non-zero,
+  the commitment of its configuration equals the signer snapshot, or, if
+  the signer snapshot is zero, its configuration has version 0 and
   derives the expected signer's address; that every approval is a valid
   primitive signature over the configurable-account digest of the
   voucher `signingHash`, from a distinct owner in ascending owner order;
@@ -1547,12 +1560,42 @@ settled:
 
 Servers MUST check `0x05` configurations against the signer snapshot
 recorded at open, never against the voucher signer's current commitment:
-the escrow precompile ignores later configuration changes. Checking a
-`0x05` voucher against the signer snapshot needs no chain state read.
+the escrow precompile ignores later configuration changes. Once the
+server knows the signer snapshot, checking a `0x05` voucher against it
+needs no chain state read.
 
 Servers MUST persist the highest voucher to durable storage before
 providing the corresponding service. Failure to do so may result in
 unrecoverable fund loss if the server crashes after service delivery.
+
+### Signer Snapshot Lookup {#signer-snapshot}
+
+For v2, the signer snapshot belongs to the channel, not to a session.
+A server can receive a voucher for a channel without having verified
+its open in the same session, for example when a client reuses the
+channel in a new session without an `open` action, or when the
+server's channel records predate signer snapshot tracking. Servers MUST
+treat a missing signer snapshot as unknown and MUST NOT assume it is
+zero.
+
+Before verifying a v2 voucher signature, including a close voucher, on
+a channel whose signer snapshot is unknown, servers MUST look it up from
+the escrow contract's `SignerSnapshotCached` logs whose indexed
+`channelId` equals the channel's `channelId`:
+
+- If such a log exists, the signer snapshot is its `commitment`, which
+  MUST equal the descriptor `salt`, and its `signer` MUST equal the
+  voucher signer.
+- If no such log exists, the signer snapshot is zero.
+
+The lookup MUST cover every block in which the channel could have been
+opened, from the Tempo T15 network upgrade (or the channel's open block,
+when known) to the latest block. A server that cannot complete the
+lookup, for example because its node has pruned the logs, MUST NOT
+treat the signer snapshot as zero and MUST NOT accept the voucher until
+it learns the snapshot. Because the signer snapshot never changes while
+the channel exists, servers SHOULD cache it keyed by normalized
+`channelId` alone and reuse it across sessions on the channel.
 
 ## Idempotency {#idempotency}
 
@@ -1622,12 +1665,14 @@ MUST maintain:
 | `settledOnChain` | uint128 | Last cumulative amount settled on-chain (informational) |
 | `deposit` | uint128 or uint96 | Latest verified on-chain deposit |
 | `closeRequestedAt` | uint64 | Latest verified close-request timestamp, or zero |
-| `signerSnapshot` | bytes32 | V2 only: signer snapshot from the open receipt (see {{open-verification}}); a missing value means zero |
+| `signerSnapshot` | bytes32 | V2 only: the channel's signer snapshot (see {{signer-snapshot}}); a missing value means unknown, never zero |
 
 For v2 channels, `acceptedCumulative`, `spent`, `settledOnChain`, and
-`deposit` are uint96 values. Servers MUST key channel state by normalized
-lowercase `channelId`. Channel state updates MUST be linearizable per
-channel across concurrent requests.
+`deposit` are uint96 values. The signer snapshot is the same for every
+session on a channel; servers SHOULD store it keyed by `channelId`
+alone (see {{signer-snapshot}}). Servers MUST key channel state by
+normalized lowercase `channelId`. Channel state updates MUST be
+linearizable per channel across concurrent requests.
 
 The `available` balance is computed as:
 
@@ -1778,8 +1823,10 @@ same amount will only refund the payer the remaining deposit.
 When the client sends `action="close"`:
 
 1. Server receives the signed close request
-2. Server verifies the close voucher covers at least the greater of
-   server-recorded `spent` and current on-chain `settled`
+2. Server verifies the close voucher signature as in
+   {{voucher-verification}}, and that the close voucher covers at least
+   the greater of server-recorded `spent` and current on-chain
+   `settled`
 3. Server closes on-chain, capturing only the amount actually owed to the
    payee and refunding the remainder to the payer
 4. Server returns receipt with transaction hash
@@ -2021,6 +2068,9 @@ channel's lifetime {{TIP-1166}}:
 - When the signer snapshot is non-zero, a primitive signature from the
   voucher signer's address (for example, from a root key retired when
   the account became configurable) never settles, so servers reject it.
+- A server that treated an unknown signer snapshot as zero could accept
+  such primitive vouchers and reject valid `0x05` vouchers. Servers
+  look the snapshot up instead (see {{signer-snapshot}}).
 
 ## Signature Malleability {#signature-malleability}
 
@@ -2039,9 +2089,12 @@ Accepted signature formats for v1:
 - 65-byte `(r, s, v)` format where `v` is 27 or 28
 - 64-byte EIP-2098 compact format
 
-V2 accepts the encodings in {{signature-encodings}}. The low-s
-requirement applies to secp256k1 and P256 signatures, including each
-approval inside a `0x05` signature.
+V2 accepts the encodings in {{signature-encodings}}: 65-byte
+secp256k1, P256, and WebAuthn signatures, and `0x05` signatures. The
+low-s requirement applies to secp256k1, P256, and WebAuthn signatures,
+including each approval inside a `0x05` signature. For P256 and
+WebAuthn, `s` MUST NOT exceed the P256 half-order
+`0x7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8`.
 
 Implementations SHOULD use established libraries (e.g., OpenZeppelin ECDSA)
 that enforce these requirements.
@@ -2610,7 +2663,7 @@ prefer JSON Schema over CDDL.
     "signature": {
       "type": "string",
       "pattern": "^0x([0-9a-fA-F]{2}){64,}$",
-      "description": "EIP-712 voucher signature (v2 encodings vary)"
+      "description": "Voucher signature: 64 or 65 bytes for v1; for v2, secp256k1, P256, WebAuthn, or 0x05 (see Voucher Signature Encodings)"
     }
   },
   "$defs": {

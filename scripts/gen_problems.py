@@ -127,6 +127,33 @@ LIGHTNING_PROBLEMS = [
 ]
 
 
+def latest_docname(spec_label):
+    """Return the stem of the highest revision of a draft under specs/."""
+    revisions = {}
+    for path in Path(ROOT, "specs").rglob(f"{spec_label}-*.md"):
+        revision = path.stem[len(spec_label) + 1:]
+        if revision.isdigit():
+            revisions[int(revision)] = path.stem
+    if not revisions:
+        raise ValueError(f"No spec file found for {spec_label}")
+    return revisions[max(revisions)]
+
+
+def link_latest_revisions(problems):
+    """Point each problem without a spec_docname at its draft's latest revision.
+
+    The site publishes only the current revision of each draft, so a link to
+    an older revision 404s once the draft is bumped.
+    """
+    for problem in problems:
+        problem.setdefault("spec_docname", latest_docname(problem["spec_label"]))
+    return problems
+
+
+for _problems in (SESSION_PROBLEMS, CHARGE_PROBLEMS, LIGHTNING_PROBLEMS):
+    link_latest_revisions(_problems)
+
+
 def problem_groups():
     """Sections of the index page, in display order."""
     return [
