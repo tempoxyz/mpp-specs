@@ -91,7 +91,7 @@ def build_tree(specs):
     # Group methods by intent they implement
     # e.g. "draft-tempo-charge-00" -> intent "charge"
     #       "draft-stripe-charge-00" -> intent "charge"
-    #       "draft-tempo-session-00" -> intent "session"
+    #       "draft-tempo-session-01" -> intent "session"
     method_by_intent = {}
     for s in methods:
         # Extract intent from docname: draft-{provider}-{intent}-00
