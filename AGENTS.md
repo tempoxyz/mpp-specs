@@ -11,6 +11,7 @@ make test           # pytest over scripts/ (scripts/test_*.py)
 make check          # build every draft to XML/HTML/TXT/PDF in artifacts/, then rfclint the XML
 make build          # build only (scripts/gen.sh in Docker)
 make site           # build, generate the index and problem pages, serve them locally
+make codeowners     # regenerate .github/CODEOWNERS from who submitted each spec; needs full git history
 ```
 
 CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script test with `docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools pytest -v test_lint_frontmatter.py`. Everything runs in Docker; without it, `bundle install` and `pip install -r requirements.txt` and then `./scripts/gen.sh` (or `make build-local`) build locally. No test needs a localnet or secrets.

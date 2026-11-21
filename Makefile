@@ -1,4 +1,4 @@
-.PHONY: docker-build build build-docker build-local check shell clean lint test site
+.PHONY: docker-build build build-docker build-local check shell clean lint test site codeowners
 
 docker-build:
 	docker build -t ietf-spec-tools .
@@ -34,3 +34,7 @@ site: build
 	@python3 scripts/gen_index.py
 	@python3 scripts/gen_problems.py
 	@python3 scripts/serve.py
+
+# Regenerate .github/CODEOWNERS from who submitted each spec (needs full git history).
+codeowners:
+	python3 scripts/gen_codeowners.py
