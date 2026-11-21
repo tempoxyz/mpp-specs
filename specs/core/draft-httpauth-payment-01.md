@@ -175,10 +175,13 @@ conditions.
 | Payment proof invalid or verification failed | 402 | Fresh challenge + `verification-failed` problem |
 | Payment verified, access granted | 200 | Resource + optional `Payment-Receipt` |
 | Payment verified, but policy denies access | 403 | No challenge (payment was valid) |
+| Payment credential presented, but resource no longer exists | 404 or 410 | No challenge; credential not consumed; no settlement |
 
 Servers MUST return 402 with a `WWW-Authenticate: Payment` header when
 payment is required or when a payment credential fails validation
-(see {{usage-of-402}} for details).
+(see {{usage-of-402}} for details). Servers MUST check that the
+resource exists before consuming a credential (see
+{{resource-availability}}).
 
 Error details are provided in the response body using Problem Details
 {{RFC9457}} rather than in the `WWW-Authenticate` header parameters.
@@ -197,6 +200,9 @@ authentication schemes. The distinction is intentional:
   ({{response-status-codes}}), or that other authentication denied
   access and no payment settled ({{other-authentication}}). Servers
   SHOULD say which in the Problem Details {{RFC9457}} body.
+- **404** or **410** indicates the target resource was removed after
+  the challenge was issued; the credential is not consumed and no
+  payment is settled (see {{resource-availability}})
 
 This design ensures clients can distinguish payment requirements from
 other authentication schemes that use 401.
@@ -223,7 +229,9 @@ Servers SHOULD NOT return 402 when:
 
 - The client lacks authentication credentials (use 401)
 - The client is authenticated but lacks authorization (use 403)
-- The resource does not exist (use 404)
+- The resource does not exist (use 404), including when a Payment
+  credential is presented for a resource removed after the challenge
+  was issued (see {{resource-availability}})
 - No Payment challenge can be constructed for the request
 
 Servers MUST NOT return 402 without including a `WWW-Authenticate` header
@@ -1081,6 +1089,23 @@ retries a request with the same `Idempotency-Key` and a valid Payment
 credential, the server SHOULD return the same response as the original
 successful request without re-executing the operation.
 
+## Resource Availability Before Settlement {#resource-availability}
+
+A resource can be removed between challenge issuance and credential
+presentation. Servers MUST determine that the target resource exists
+and can be delivered before consuming the challenge `id` or settling
+the payment. If it does not, the server MUST respond with 404 (Not
+Found), or 410 (Gone) when the removal is known to be permanent, and
+MUST NOT include a `WWW-Authenticate: Payment` challenge, MUST NOT
+settle the payment, MUST NOT mark the challenge as consumed, and MUST
+NOT include a `Payment-Receipt` header.
+
+Clients receiving 404 or 410 in response to a Payment credential MUST
+NOT retry with the same credential. For payment methods in which value
+is transferred before the credential is presented, the disposition of
+that value is defined by the payment method specification; this
+document does not define refund semantics.
+
 ## Concurrent Request Handling
 
 Servers MUST ensure that concurrent requests with the same Payment
@@ -1540,6 +1565,30 @@ WWW-Authenticate: Payment id="aB1cDeF2gHiJ3kLmN4oPqR", realm="api.example.com", 
 
 The server returns 402 with a fresh challenge, allowing the client to
 retry with a new payment credential.
+
+## Resource Removed After Challenge
+
+A client presents a Payment credential for a resource that was removed
+after the challenge was issued.
+
+~~~http
+HTTP/1.1 404 Not Found
+Cache-Control: no-store
+Content-Type: application/problem+json
+
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "The requested resource no longer exists."
+}
+~~~
+
+The server returns 404 without a `WWW-Authenticate` header or a
+`Payment-Receipt` header. The challenge is not consumed and no payment
+is settled (see {{resource-availability}}). The `about:blank` problem
+type {{RFC9457}} is sufficient; no payment-specific problem type is
+defined for this case.
 
 # Acknowledgements
 
