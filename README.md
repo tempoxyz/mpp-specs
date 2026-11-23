@@ -8,7 +8,7 @@ The open protocol for machine-to-machine payments.
 
 ## What is MPP?
 
-The [Machine Payments Protocol (MPP)](https://mpp.dev/) is an open standard for machine-to-machine payments, co-authored by [Tempo](https://tempo.xyz/) and [Stripe](https://stripe.com/). Paying for an internet resource, such as an API call, a dataset, or a unit of compute, still typically requires an account, API key, or billing relationship set up in advance. MPP lets any client pay as part of the HTTP exchange using the native `402 Payment Required` status code.
+The [Machine Payments Protocol (MPP)](https://mpp.dev/) is an open standard for machine-to-machine payments, co-authored by [Tempo](https://tempo.com/) and [Stripe](https://stripe.com/). Paying for an internet resource, such as an API call, a dataset, or a unit of compute, still typically requires an account, API key, or billing relationship set up in advance. MPP lets any client pay as part of the HTTP exchange using the native `402 Payment Required` status code.
 
 Primary use cases include agentic payments, such as an AI agent paying per API call, machine-to-machine commerce, and usage-based billing without pre-provisioned accounts.
 
@@ -62,7 +62,7 @@ The [MPP repository](https://github.com/tempoxyz/mpp) contains the [mpp.dev](htt
 
 The Machine Payments Protocol specification is currently maintained by the following organizations:
 
-* [Tempo Labs](https://tempo.xyz)
+* [Tempo Labs](https://tempo.com)
 * [Stripe](https://stripe.com)
 
 We welcome contributions from a wide variety of individuals and organizations.
