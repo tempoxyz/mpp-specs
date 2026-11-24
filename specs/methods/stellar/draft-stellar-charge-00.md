@@ -31,7 +31,7 @@ normative:
   I-D.payment-intent-charge:
     title: "'charge' Intent for HTTP Payment Authentication"
     target: >
-      https://datatracker.ietf.org/doc/draft-payment-intent-charge/
+      https://paymentauth.org/draft-payment-intent-charge-00.html
     author:
       - name: Jake Moxey
       - name: Brendan Ryan

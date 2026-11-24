@@ -32,6 +32,14 @@ normative:
     author:
       - name: Maxime Dienger
     date: 2026
+  I-D.payment-intent-session:
+    title: "Session Intent for HTTP Payment Authentication"
+    target: https://paymentauth.org/draft-payment-intent-session-00.html
+    author:
+      - name: Brendan Ryan
+      - name: Jake Moxey
+      - name: Tom Meagher
+    date: 2026-06
 
 informative:
   XRPL-PAYCHAN:
@@ -116,9 +124,9 @@ informative:
 
 --- abstract
 
-This document defines the "session" intent for the "xrpl" payment
-method within the Payment HTTP Authentication Scheme. A session is
-carried by an XRP Ledger Payment Channel: the client locks XRP
+This document defines the "xrpl" payment method implementation of
+the "session" intent within the Payment HTTP Authentication Scheme.
+A session is carried by an XRP Ledger Payment Channel: the client locks XRP
 on-chain once, then authorises a series of off-chain claims, each a
 signature over a cumulative total. The server redeems the final
 claim in a single closing transaction.
@@ -126,10 +134,6 @@ claim in a single closing transaction.
 Two on-chain transactions therefore settle an unbounded number of
 payments, which is what makes per-request and per-token billing
 viable at amounts where a transaction fee would otherwise dominate.
-
-The "session" intent is experimental. It is defined here rather than
-in a standalone intent document because it is not yet formalized in
-the intent registry.
 
 --- middle
 
@@ -264,7 +268,7 @@ Channel identifiers:
 | `amount` | string | yes | increment charged for this request, in drops |
 | `channelId` | string | yes | 64-hex channel ID, or `""` on an open |
 | `recipient` | string | yes | classic address the channel must pay |
-| `currency` | string | no | always `"XRP"` when present |
+| `currency` | string | yes | always `"XRP"` |
 | `description` | string | no | display only |
 
 `amount` is the increment for this request, and the cumulative total
@@ -669,10 +673,11 @@ redemption, which [](#redemption) permits. Its presence is therefore
 what tells a client whether settlement has happened, and a client
 MUST NOT infer settlement from the action alone.
 
-The base `reference` remains method-specific and MAY carry these
-values in a composite form. A server MUST NOT rely on a client
-parsing one: a composite cannot be read without method knowledge,
-which is what the named fields are for.
+The base `intent` field MUST be `"session"`, and the base
+`reference` MUST equal `channelId` on every receipt, so a client
+can correlate open, voucher and close receipts for one session. A
+server MUST NOT put `txHash` or a composite of these values in
+`reference`: transaction identifiers belong in `txHash`.
 
 # Error Responses {#errors}
 
@@ -774,20 +779,10 @@ register it again.
 
 ## Payment Intent Registration
 
-This document requests registration of the following entry in the
-"HTTP Payment Intents" registry established by
-{{I-D.httpauth-payment}}:
-
-| Intent | Applicable Methods | Description | Reference |
-|---|---|---|---|
-| `session` | `xrpl` | Off-ledger payment channel vouchers | This document |
-
-Contact: Maxime Dienger (<maximed@ripple.com>)
-
-`session` is an experimental intent, defined by method documents
-rather than by an intent document of its own. Should it be
-formalized, this document should be updated to reference that
-document rather than define the intent here.
+The `session` intent is registered by
+{{I-D.payment-intent-session}}.  This document does not register a new
+payment intent; it defines how the `xrpl` payment method implements
+the registered `session` intent.
 
 ## Problem Types
 
@@ -820,6 +815,7 @@ Decoding `request`:
   "amount": "100000",
   "channelId":
     "2D398F9458B0CF96284E3602E57A83E787C1A01658512F972CEDDB1819607E89",
+  "currency": "XRP",
   "methodDetails": {
     "cumulativeAmount": "200000",
     "network": "testnet",
