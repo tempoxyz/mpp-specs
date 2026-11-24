@@ -3,7 +3,8 @@ version: 2
 # Patch and minor updates are grouped per ecosystem and merge on their own
 # through the Dependabot workflow once checks pass. A major update opens its
 # own pull request, so a breaking release holds back only itself. Security
-# updates are grouped separately and are not held to the weekly schedule.
+# updates are grouped separately, majors again on their own, and are not held
+# to the weekly schedule.
 updates:
   - package-ecosystem: pip
     directory: /
@@ -21,6 +22,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: bundler
     directory: /
@@ -38,6 +40,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
@@ -56,6 +59,7 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /
@@ -73,3 +77,4 @@ updates:
       security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: [minor, patch]
