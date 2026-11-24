@@ -1,8 +1,8 @@
 ---
 title: Tempo Session Intent for HTTP Payment Authentication
 abbrev: Tempo Session
-docname: draft-tempo-session-01
-version: "01"
+docname: draft-tempo-session-00
+version: 00
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF

@@ -58,22 +58,3 @@ def test_invalid_error_table_fails_build(tmp_path, rows):
     spec.write_text("## Error Codes\n" + rows)
     with pytest.raises(ValueError):
         gen_problems.read_core_problems(spec)
-
-def test_problem_pages_link_latest_spec_revision():
-    """A bumped draft's problem pages link the revision the site publishes."""
-    for problem in gen_problems.ALL_PROBLEMS:
-        docname = problem["spec_docname"]
-        assert docname == gen_problems.latest_docname(problem["spec_label"])
-        assert list(gen_problems.Path(gen_problems.ROOT, "specs").rglob(f"{docname}.md"))
-    session = next(p for p in gen_problems.ALL_PROBLEMS if p["slug"] == "session/invalid-signature")
-    assert session["spec_docname"] == "draft-tempo-session-01"
-
-
-def test_latest_docname_compares_revisions_numerically(tmp_path, monkeypatch):
-    for revision in ("09", "10", "draft"):
-        (tmp_path / "specs").mkdir(exist_ok=True)
-        (tmp_path / "specs" / f"draft-example-session-{revision}.md").write_text("")
-    monkeypatch.setattr(gen_problems, "ROOT", str(tmp_path))
-    assert gen_problems.latest_docname("draft-example-session") == "draft-example-session-10"
-    with pytest.raises(ValueError):
-        gen_problems.latest_docname("draft-missing-session")
