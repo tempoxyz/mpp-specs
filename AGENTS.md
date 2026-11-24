@@ -31,7 +31,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 
 ## Conventions
 
-- A modified draft bumps its revision: rename the file (`-00` → `-01`) and update `docname` and `version` in its frontmatter to match. `scripts/bump_and_rename.sh` does this for the core draft.
+- Edit drafts in place: don't rename a draft or change its `docname` or `version` because its content changed. Only the core draft gets a new revision, and only to submit it to the IETF datatracker (`scripts/bump_and_rename.sh`, see Pull requests and publishing). Breaking changes to a method use `methodDetails.version` (STYLE.md, Versioning).
 - New intents, methods and extensions start from the matching template in `examples/`. A method may define a new intent in its own draft (experimental); extract it to `specs/intents/` once two or more methods implement it. Core protocol changes start with an issue.
 - Frontmatter needs `title`, `abbrev`, `docname`, `version`, `category`, `ipr` (`noModificationTrust200902`), `submissiontype`, `consensus` and `author` (`name`, `ins`, `email`, `org` in that order); `lint_frontmatter.py` enforces it.
 - Avoid new hardcoded external section references such as `Section X.Y of {{I-D...}}`; allowed ones are listed in `scripts/allowed_external_section_refs.txt`.
