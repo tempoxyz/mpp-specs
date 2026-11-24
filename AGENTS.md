@@ -12,6 +12,7 @@ make check          # build every draft to XML/HTML/TXT/PDF in artifacts/, then 
 make build          # build only (scripts/gen.sh in Docker)
 make site           # build, generate the index and problem pages, serve them locally
 make codeowners     # regenerate .github/CODEOWNERS from who submitted each spec; needs full git history
+bash formal/tempo-session/check.sh   # Lean proofs of the tempo-session model (needs elan; formal.yml runs it)
 ```
 
 CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script test with `docker run --rm -v "$(pwd)":/data -w /data/scripts ietf-spec-tools pytest -v test_lint_frontmatter.py`. Everything runs in Docker; without it, `bundle install` and `pip install -r requirements.txt` and then `./scripts/gen.sh` (or `make build-local`) build locally. No test needs a localnet or secrets.
@@ -23,6 +24,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 - `specs/methods/<network>/`: payment methods, one draft per intent (`draft-{network}-{intent}-NN.md`, such as `tempo/draft-tempo-charge-00.md`).
 - `specs/extensions/`: optional extensions (`draft-payment-discovery-NN.md`) and `transports/` (MCP).
 - `examples/`: templates for new intents, methods and extensions, with the required sections per track (`examples/README.md`).
+- `formal/tempo-session/`: Lean 4 model of draft-tempo-session-00: proofs of its safety properties and a counterexample per spec gap (README.md, GAPS.md).
 - `scripts/`: `gen.sh` (Markdown → XML → HTML/TXT/PDF), `check.sh`, the `lint_*.py` linters and their `test_*.py`, `bump_and_rename.sh`, `gen_index.py` and `gen_problems.py` for the site, `serve.py`.
 - `pages/templates/`: HTML templates for the paymentauth.org index and `/problems/` pages.
 - `artifacts/`: generated output (gitignored).
@@ -38,6 +40,7 @@ CI (`pr-check.yml`) runs the same steps inside the Docker image. Run one script 
 - Write in RFC 7322 style with RFC 2119/8174 keywords, terms defined before use, and Security and IANA Considerations in every draft (STYLE.md). Keep Markdown source lines under 72 characters.
 - JSON and encoded examples must be valid and decode to what they claim; problem types used in drafts must have pages (`lint_problem_types.py`).
 - Cross-references flow downward: core → intents → methods.
+- When you change draft-tempo-session's contract functions or server accounting, update `formal/tempo-session` to match and keep `check.sh` passing.
 - Versioning: the core carries no wire version, intents carry none, and methods may add `methodDetails.version` (absent means 1) for breaking changes. Implementations ignore unknown fields.
 - Disclose significant AI assistance in the PR description.
 

@@ -1,0 +1,13 @@
+name = "TempoSession"
+version = "0.1.0"
+defaultTargets = ["TempoSession"]
+
+# Every warning is a build error: a sorry, a deprecated name, an unused variable or simp
+# argument fails 'lake build' itself, not only the axiom audit.
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "TempoSession"
+# Build every module under TempoSession/, even one nothing imports, so no proof goes unchecked.
+globs = ["TempoSession", "TempoSession.+"]
