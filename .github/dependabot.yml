@@ -3,8 +3,8 @@ version: 2
 # Patch and minor updates are grouped per ecosystem and merge on their own
 # through the Dependabot workflow once checks pass. A major update opens its
 # own pull request, so a breaking release holds back only itself. Security
-# updates are grouped separately, majors again on their own, and are not held
-# to the weekly schedule.
+# updates are grouped separately, majors again on their own, are not held to
+# the weekly schedule, and wait for a person to merge them.
 updates:
   - package-ecosystem: pip
     directory: /
