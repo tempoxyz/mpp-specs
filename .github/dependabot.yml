@@ -1,39 +1,80 @@
 version: 2
 
-multi-ecosystem-groups:
-  weekly-dependencies:
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: America/Los_Angeles
-
+# Patch and minor updates are grouped per ecosystem and merge on their own
+# through the Dependabot workflow once checks pass. A major update opens its
+# own pull request, so a breaking release holds back only itself. Security
+# updates are grouped separately, majors again on their own, are not held to
+# the weekly schedule, and wait for a person to merge them.
 updates:
   - package-ecosystem: pip
     directory: /
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: weekly-dependencies
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: bundler
     directory: /
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: weekly-dependencies
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
     cooldown:
       # Buffer the scanner's seven-day minimum: Dependabot reads date-only tag metadata.
       default-days: 8
-    patterns: ["*"]
-    multi-ecosystem-group: weekly-dependencies
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /
     cooldown:
       default-days: 7
-    patterns: ["*"]
-    multi-ecosystem-group: weekly-dependencies
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      weekly-dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
