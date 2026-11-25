@@ -1,8 +1,8 @@
 ---
 title: Charge Intent for HTTP Payment Authentication
 abbrev: Payment Intent Charge
-docname: draft-payment-intent-charge-00
-version: 00
+docname: draft-payment-intent-charge-01
+version: "01"
 category: info
 ipr: noModificationTrust200902
 submissiontype: IETF
@@ -34,6 +34,14 @@ normative:
     author:
       - name: Jake Moxey
     date: 2026-01
+
+informative:
+  I-D.payment-attestation:
+    title: "Attestation Extension for HTTP Payment Authentication"
+    target: https://datatracker.ietf.org/doc/draft-payment-attestation/
+    author:
+      - name: Ludo Galabru
+    date: 2026
 ---
 
 --- abstract
@@ -110,7 +118,11 @@ of a specified amount in exchange for resource access.
 The "charge" intent implies atomic exchange: the server MUST NOT
 provide partial access if payment verification fails. Either the full
 resource is provided (payment succeeded) or access is denied (payment
-failed). This aligns with the unpaid-request side-effect boundary
+failed).
+
+When the request carries an `attestations` requirement, the exchange
+also covers the attestations: a server MUST NOT settle a payment whose
+attestations fail verification ({{verification}}). This aligns with the unpaid-request side-effect boundary
 already required by {{I-D.httpauth-payment}} under "Idempotency and
 Side Effects".
 
@@ -158,6 +170,7 @@ to REQUIRED in their method specification (e.g., `recipient` and
 | `recipient` | string | Payment recipient in method-native format |
 | `description` | string | Human-readable payment description |
 | `externalId` | string | Merchant's reference (order ID, invoice number, etc.) |
+| `attestations` | object | Attestations the payer must present, per {{I-D.payment-attestation}} |
 | `methodDetails` | object | Method-specific extension data |
 
 Challenge expiry is conveyed by the `expires` auth-param in
@@ -254,7 +267,7 @@ method-specific:
 Each credential MUST be usable only once per challenge. Servers MUST
 reject replayed credentials.
 
-# Verification
+# Verification {#verification}
 
 ## Server Responsibilities
 
@@ -262,9 +275,12 @@ Servers verifying a "charge" credential MUST:
 
 1. Verify the `id` matches an outstanding challenge
 2. Verify the challenge has not expired
-3. Verify the payment proof using method-specific procedures
-4. Verify the payment amount matches the request
-5. Verify the payment recipient matches the request
+3. If the request carries `attestations`, verify the credential's
+   presentations per {{I-D.payment-attestation}}, before any of the
+   following steps
+4. Verify the payment proof using method-specific procedures
+5. Verify the payment amount matches the request
+6. Verify the payment recipient matches the request
 
 ## Settlement
 
