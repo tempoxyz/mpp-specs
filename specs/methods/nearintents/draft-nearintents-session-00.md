@@ -134,14 +134,15 @@ This document defines the "session" intent for the "nearintents" payment
 method in the Payment HTTP Authentication Scheme
 {{I-D.httpauth-payment}}. It specifies a prepaid session model for
 incremental, metered payments, suitable for streaming services where the
-per-request cost is unknown upfront. A client funds the session with a
-cross-chain swap through the NEAR Intents 1Click Swap API
-{{ONECLICK-API}} from any supported origin chain; the funds are
-credited to the merchant's account in the NEAR Intents Verifier. The
-client then authorizes metered service by signing cumulative vouchers
-with a per-session key, so no chain transaction and no swap is needed
-per request. When the session closes, the merchant refunds the unspent
-balance to a payer-controlled account.
+per-request cost is unknown upfront. A client first requests a funding
+quote that is bound to its per-session key and to its refund
+addresses, then funds the session with a cross-chain swap through the
+NEAR Intents 1Click Swap API {{ONECLICK-API}} from any supported
+origin chain; the funds are credited to the merchant's account in the
+NEAR Intents Verifier. The client then authorizes metered service by
+signing cumulative vouchers with that key, so no chain transaction and
+no swap is needed per request. When the session closes, the merchant
+refunds the unspent balance to the destination the payer named.
 
 --- middle
 
@@ -155,16 +156,17 @@ implementation of the "session" intent registered by
 
 The "charge" intent for this method {{I-D.nearintents-charge}} settles
 one cross-chain swap per request. A session instead funds a prepaid
-balance once: the client deposits on any supported origin chain
+balance once: the client generates a session key and obtains a funding
+quote bound to it, deposits on any supported origin chain
 {{NEAR-INTENTS-CHAINS}}, the NEAR Intents solver network swaps the
 deposit into the merchant's balance in the NEAR Intents Verifier, and
 the server meters many units of service against that balance. The
-client authorizes consumption by signing cumulative vouchers with a
-session key that it generates for the session. The server verifies
-each voucher locally, without contacting the 1Click Swap API
-{{ONECLICK-API}} or any chain. A future revision MAY define an
-additional funding path for clients that hold balances in the
-Verifier; such a credential is out of scope for this document.
+client authorizes consumption by signing cumulative vouchers with the
+session key. The server verifies each voucher locally, without
+contacting the 1Click Swap API {{ONECLICK-API}} or any chain. A future
+revision MAY define an additional funding path for clients that hold
+balances in the Verifier; such a credential is out of scope for this
+document.
 
 The custody model is merchant-prepaid, as in
 {{draft-lightning-session-00}}: the merchant holds the unspent balance
@@ -180,19 +182,24 @@ merchant. The challenge discloses the custody model through
 The typical session flow proceeds as follows:
 
 1. Client requests a streaming completion (SSE response)
-2. Server returns 402 with a session challenge that carries a 1Click
-   funding quote
-3. Client pays the quote on the origin chain, generates a session key,
+2. Server returns 402 with an unquoted session challenge: the
+   merchant's terms and funding limits, and no quote
+3. Client generates a session key and sends a `quote` action that
+   names the key, its refund destinations, the asset it will deposit,
+   and the value to fund
+4. Server mints a 1Click funding quote and returns 402 with a payable
+   challenge bound to that key
+5. Client verifies the challenge, pays the quote on the origin chain,
    and opens the session with the deposit hash and a first voucher
-4. Server verifies the deposit, drives the swap to completion, creates
+6. Server verifies the deposit, drives the swap to completion, creates
    the session, and begins streaming; it deducts the cost of each unit
    from the authorized value
-5. If the authorized value is exhausted mid-stream, the server emits a
+7. If the authorized value is exhausted mid-stream, the server emits a
    `payment-need-voucher` SSE event and pauses; the client signs a
-   higher voucher, or tops up the session with a new deposit when the
-   funded value is exhausted, and the server resumes
-6. Client closes the session; the server refunds the unspent balance to
-   the payer's Intents account
+   higher voucher, or tops up the session with a new quote and deposit
+   when the funded value is exhausted, and the server resumes
+8. Client closes the session; the server refunds the unspent balance to
+   the refund destination fixed in the payable challenge
 
 ## Session Flow
 
@@ -201,44 +208,54 @@ Client                 Server            Origin Chain    1Click / Verifier
   |                       |                    |                  |
   | (1) GET /generate     |                    |                  |
   |---------------------->|                    |                  |
-  |                       | (2) EXACT_OUTPUT quote into merchant  |
-  |                       |    Intents account (recipientType=    |
-  |                       |    INTENTS)                           |
-  |                       |-------------------------------------->|
-  | (3) 402 session       |                    |                  |
+  | (2) 402 unquoted      |                    |                  |
   |     challenge         |                    |                  |
   |<----------------------|                    |                  |
-  | (4) Deposit to funding.depositAddress      |                  |
+  | (3) GET /generate     |                    |                  |
+  |     action="quote"    |                    |                  |
+  |     sessionKey,       |                    |                  |
+  |     refund, asset,    |                    |                  |
+  |     amountOut         |                    |                  |
+  |---------------------->| (4) EXACT_OUTPUT quote into merchant  |
+  |                       |     Intents account, refund address   |
+  |                       |     from the client                   |
+  |                       |-------------------------------------->|
+  | (5) 402 payable       |                    |                  |
+  |     challenge bound   |                    |                  |
+  |     to sessionKey     |                    |                  |
+  |<----------------------|                    |                  |
+  | (6) Deposit to funding.depositAddress      |                  |
   |------------------------------------------->|                  |
-  | (5) GET /generate     |                    |                  |
+  | (7) GET /generate     |                    |                  |
   |     action="open"     |                    |                  |
-  |     hash, sessionKey, |                    |                  |
-  |     first voucher     |                    |                  |
-  |---------------------->| (6) verify signatures and deposit;    |
+  |     hash, first       |                    |                  |
+  |     voucher           |                    |                  |
+  |---------------------->| (8) verify signatures and deposit;    |
   |                       |     poll swap to SUCCESS              |
   |                       |-------------------------------------->|
   |                       |     amountOut credited to recipient   |
   |                       |<--------------------------------------|
-  | (7) 200 OK + receipt  |                    |                  |
+  | (9) 200 OK + receipt  |                    |                  |
   |     (streaming)       |                    |                  |
   |<----------------------|                    |                  |
-  | (8) GET /generate     |                    |                  |
-  |     action="voucher"  | (local signature   |                  |
+  | (10) GET /generate    |                    |                  |
+  |      action="voucher" | (local signature   |                  |
   |---------------------->|  check only)       |                  |
-  | (9) 200 OK + receipt  |                    |                  |
+  | (11) 200 OK + receipt |                    |                  |
   |<----------------------|                    |                  |
-  |         ...           |                     |                  |
-  | (10) action="close"   |                    |                  |
-  |---------------------->| (11) Intents transfer of unspent      |
-  |                       |      balance to payer account         |
+  |         ...           |                    |                  |
+  | (12) action="close"   |                    |                  |
+  |---------------------->| (13) Intents transfer of unspent      |
+  |                       |      balance to refund destination    |
   |                       |-------------------------------------->|
-  | (12) 200 closed       |                    |                  |
+  | (14) 200 closed       |                    |                  |
   |      + final receipt  |                    |                  |
   |<----------------------|                    |                  |
 ~~~
 
-Steps 8 and 9 repeat for every metered request. They involve no chain
-transaction and no 1Click call.
+Steps 10 and 11 repeat for every metered request. They involve no chain
+transaction and no 1Click call. Step 2 involves no 1Click call either:
+a quote is minted only for a `quote` action.
 
 ## Relationship to the Charge Intent {#charge-relationship}
 
@@ -246,12 +263,13 @@ This document reuses the following parts of {{I-D.nearintents-charge}}
 without restating them: the CAIP-19 asset identifier rules, the
 semantics of the deposit fields of a 1Click quote, the deposit
 verification and settlement procedures, the single-use rules for
-deposit transaction hashes, the client recovery rules after a
-non-success settlement, and the `settlement-failed` problem type. Where
+deposit transaction hashes, and the `settlement-failed` problem type,
+each with the differences stated in {{verification}}. Where
 this document says that a step is performed "as defined by
 {{I-D.nearintents-charge}}", the deposit fields are read from the
 funding object ({{funding-object}}) of the echoed challenge instead of
-from a charge request.
+from a charge request. Unlike a charge, a funding quote always takes
+its origin refund address from the payer ({{quote-action}}).
 
 ## Mapping to the Session Intent {#intent-mapping}
 
@@ -265,20 +283,24 @@ operations of {{I-D.payment-intent-session}} as follows:
 | Top-Up | `topUp` | Deposit transaction hash, session-key signature |
 | Close | `close` | Session-key signature |
 
+The `quote` action ({{quote-action}}) precedes Open and Top-Up. It
+requests the payable challenge that the deposit is made against and is
+not a proof.
+
 The shared concepts of {{I-D.payment-intent-session}} map as follows:
 
 | Concept | This Method |
 |---------|-------------|
 | Session | A record in the server's store, backed by funds in the merchant's Intents account |
 | `reference` | Identifier derived from the opening deposit address ({{reference}}) |
-| `amount` | Price per metered unit, in base units of `currency` |
+| `amount` | Price per metered unit of the requested resource, in base units of `currency` |
 | `currency` | CAIP-19 identifier of the balance asset held in the Verifier |
 | `recipient` | The merchant's Intents account identifier |
 | Authorized value | `authorized`: the cumulative amount of the highest accepted voucher |
 | Spent value | `spent`: value debited for units committed to responses ({{streaming}}) |
 | Remaining value | `authorized - spent` |
-| Top-up | A new funding quote credited to the same `reference` |
-| Close | Refund of `funded - spent` to the payer; the session becomes terminal |
+| Top-up | A funding quote bound to the same `reference` |
+| Close | Refund of `funded - spent` to the refund destination; the session becomes terminal |
 | `settlementRef` | Reference of the refund transfer at close |
 
 # Requirements Language
@@ -318,7 +340,8 @@ Session
 
 Session Key
 : An Ed25519 key pair generated by the client for one session. Its
-  public key is bound to the session at open; its private key signs
+  public key is bound to the payable challenge that funds the session
+  and to the session itself; its private key signs the `open` and
   every later action.
 
 Voucher
@@ -326,9 +349,21 @@ Voucher
   Vouchers are monotonically increasing in amount.
 
 Funding Object
-: The `methodDetails.funding` object of a challenge, describing one
-  1Click quote that credits `currency` to the merchant's Intents
-  account.
+: The `methodDetails.funding` object of a payable challenge,
+  describing one 1Click quote that credits `currency` to the
+  merchant's Intents account.
+
+Unquoted Challenge
+: A session challenge without a funding object. It states the
+  merchant's terms and funding limits and cannot be paid.
+
+Payable Challenge
+: A session challenge that carries a funding object and is bound to
+  one session key, to open a session, or to one existing session, to
+  top it up. It is issued only in response to a `quote` action.
+
+Opening Challenge
+: The payable challenge whose funding quote opened a session.
 
 Funded Value
 : `funded`: the sum of the funding `amountOut` of every open and top-up
@@ -355,8 +390,8 @@ characters (`=`). Implementations MUST NOT append `=` padding when
 encoding, and MUST accept input with or without padding when decoding.
 
 This encoding convention applies to: the `request` auth-param in
-`WWW-Authenticate`, the credential token in `Authorization`, and the
-receipt token in `Payment-Receipt`.
+`WWW-Authenticate`, the credential token, and the receipt token in
+`Payment-Receipt`.
 
 ## Identifiers {#identifier-formats}
 
@@ -384,23 +419,26 @@ signature bytes. Base58 uses the Bitcoin alphabet. These encodings
 match the key and signature formats used by NEAR {{NEP-413}}.
 
 The implicit account of a session key is the lowercase hexadecimal
-encoding of its 32 raw key bytes, without a prefix.
+encoding of its 32 raw key bytes, without a prefix. Servers compare
+session keys by these 32 bytes.
 
 # Session Lifecycle
 
 A session progresses through three phases, each corresponding to one
 or more credential actions:
 
-1. **Open**: The client pays the funding quote on the origin chain,
-   generates a session key, and submits an `open` action carrying the
-   deposit transaction hash, the session key, and a first voucher. The
-   server verifies the deposit, drives the swap to completion, stores
-   the session, and serves the request against the first voucher.
+1. **Open**: The client generates a session key, obtains a payable
+   challenge bound to it with a `quote` action, pays the funding quote
+   on the origin chain, and submits an `open` action carrying the
+   deposit transaction hash and a first voucher. The server verifies
+   the deposit, drives the swap to completion, stores the session, and
+   serves the request against the first voucher.
 2. **Metered use**: The client submits `voucher` actions whose
    cumulative amount grows as service is consumed. No chain transaction
    and no 1Click call is involved. When the funded value is exhausted,
-   the client pays a fresh funding quote and submits a `topUp` action,
-   which raises the funded value of the same session.
+   the client obtains a payable challenge bound to the session with
+   another `quote` action, pays it, and submits a `topUp` action, which
+   raises the funded value of the same session.
 3. **Closed**: The client submits a `close` action, or the server
    closes the session after the idle timeout. The server stops
    delivery, refunds the unspent balance, and marks the session closed.
@@ -409,10 +447,10 @@ or more credential actions:
 A session has status `open`, `closing`, or `closed`. The `closing`
 status covers the interval between the decision to close and the
 completion of the close procedure. A session in `closing` or `closed`
-status is terminal: servers MUST reject `voucher` actions against it,
-MUST NOT credit `topUp` actions to it, and MUST NOT deliver paid
-service for it. A top-up deposit that settles for a terminal session
-is refunded ({{late-refunds}}).
+status is terminal: servers MUST reject `voucher` actions against it
+and MUST NOT deliver paid service for it. A top-up deposit that
+settles for a terminal session cannot be spent and is refunded in
+full ({{late-refunds}}).
 
 Every session has an idle timeout, advertised in the challenge as
 `methodDetails.idleTimeout`. When a server closes a session without a
@@ -436,10 +474,17 @@ WWW-Authenticate: Payment id="<challenge-id>",
   expires="<RFC3339 timestamp>"
 ~~~
 
-Any session challenge issued by a server can be used either to open a
-new session or to top up an existing one. The server mints one 1Click
-quote per challenge; the quote's deposit fields form the funding
-object ({{funding-object}}).
+This document defines version 2 of the session challenge of this
+method ({{version}}). A session challenge has one of two forms:
+
+- An **unquoted challenge** has no funding object. It states the
+  merchant's terms and funding limits. Servers return it to requests
+  without a credential and with every rejection. Issuing it involves
+  no call to the 1Click Swap API.
+- A **payable challenge** carries the funding object of one 1Click
+  quote ({{funding-object}}) and is bound either to one session key,
+  to open a session, or to one existing session, to top it up. Servers
+  issue it only in response to a `quote` action ({{quote-action}}).
 
 ## Shared Fields
 
@@ -448,15 +493,20 @@ The `request` object carries the shared fields of
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
-| `amount` | string | REQUIRED | Price per metered unit, in base units of `currency`. For streaming responses, the cost per emitted unit. MUST be a positive integer. |
+| `amount` | string | REQUIRED | Price per metered unit of the resource the challenge was issued for, in base units of `currency`. For streaming responses, the cost per emitted unit. MUST be a positive integer. |
 | `currency` | string | REQUIRED | CAIP-19 {{CAIP-19}} identifier of the balance asset, of the form `near:mainnet/nep141:<contract>`. The asset is held in the Verifier under its Verifier token identifier. Other Verifier token standards are out of scope for this document. |
 | `recipient` | string | REQUIRED | The merchant's Intents account identifier in the Verifier named by `methodDetails.verifier`. |
 | `unitType` | string | OPTIONAL | Human-readable label for the metered unit (e.g., `"token"`, `"request"`). Informational only. |
 | `description` | string | OPTIONAL | Human-readable description of the service. MUST NOT be relied upon for verification per {{I-D.httpauth-payment}}. |
 | `externalId` | string | OPTIONAL | Merchant reference. |
 
-The unit price `amount`, the `currency`, and the `recipient` of a
-session are fixed by its opening challenge for the life of the session.
+A payable challenge repeats the shared fields of the unquoted
+challenge that its `quote` action echoed. The `currency` and the
+`recipient` of a session are fixed by its opening challenge for the
+life of the session. The unit price is not: every paid request is
+priced by the `amount` that the server currently advertises for the
+requested resource ({{echoed-challenge}}), so one session pays for any
+resource of the realm that shares its `currency` and `recipient`.
 The merchant selects one NEAR-side token as `currency`, for example the
 native issuance of a stablecoin or one bridged copy of it; every funding
 quote, from any origin chain or asset, is swapped into that token.
@@ -465,18 +515,42 @@ quote, from any origin chain or asset, is swapped into that token.
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
+| `methodDetails.version` | integer | REQUIRED | `2` (see {{version}}). |
 | `methodDetails.verifier` | string | REQUIRED | Account identifier of the Verifier contract that holds the balances. This document defines the value `"intents.near"`. |
 | `methodDetails.custody` | string | REQUIRED | Custody model for unspent funds (see {{custody}}). This document defines the value `"merchant"`. |
 | `methodDetails.settlementBackend` | string | OPTIONAL | Discloses the settlement backend. Value `"near-intents"` for this method. |
-| `methodDetails.funding` | object | REQUIRED | Funding object (see {{funding-object}}). |
+| `methodDetails.minDeposit` | string | REQUIRED | Smallest value a `quote` action may ask to fund, in base units of `currency` (see {{deposit-amount}}). MUST be at least `amount`. |
+| `methodDetails.maxFunded` | string | OPTIONAL | Largest funded value one session may hold, in base units of `currency`. |
 | `methodDetails.idleTimeout` | integer | REQUIRED | Idle timeout in seconds. The server closes the session after this long without session activity (see {{server-initiated-close}}). |
 | `methodDetails.maxSessionLifetime` | integer | OPTIONAL | Maximum session lifetime in seconds, measured from the creation of the session. When present, the server closes the session once it has elapsed, whatever the session's activity (see {{server-initiated-close}}). |
 | `methodDetails.minVoucherDelta` | string | REQUIRED | Smallest allowed increase between accepted vouchers, in base units of `currency`. MUST be at least `"1"`. |
 | `methodDetails.refundTypes` | array | REQUIRED | Refund destination types the server supports (see {{refund-destination}}). MUST contain `"intents"`; MAY contain `"origin"`. |
 | `methodDetails.minOriginRefund` | string | CONDITIONAL | REQUIRED when `refundTypes` contains `"origin"`. Refunds below this amount, in base units of `currency`, fall back to an `intents` refund (see {{origin-refunds}}). |
+| `methodDetails.funding` | object | CONDITIONAL | Funding object (see {{funding-object}}). REQUIRED in a payable challenge; MUST be absent from an unquoted challenge. |
+| `methodDetails.sessionKey` | string | CONDITIONAL | Session public key the challenge is bound to (see {{encoding}}). REQUIRED in a payable challenge that opens a session; absent otherwise. |
+| `methodDetails.refund` | object | CONDITIONAL | Refund destination of the session (see {{refund-destination}}). REQUIRED together with `sessionKey`; absent otherwise. |
+| `methodDetails.reference` | string | CONDITIONAL | Reference of the session the challenge tops up. REQUIRED in a payable challenge issued for a top-up; absent otherwise. |
 
-Clients MUST NOT open a session whose `methodDetails.custody` or
+A payable challenge carries `funding` and exactly one binding: either
+`sessionKey` with `refund`, or `reference`. An unquoted challenge
+carries none of these four fields. The binding is part of the
+`request` and therefore covered by the challenge `id` per
+{{I-D.httpauth-payment}}.
+
+Clients MUST NOT deposit against a challenge whose
+`methodDetails.version`, `methodDetails.custody`, or
 `methodDetails.verifier` value they do not recognize.
+
+## Version {#version}
+
+The `methodDetails.version` value `2` identifies the challenge and
+credential formats of this document. An earlier text of this draft
+defined a single-step flow whose challenges had no `version` field and
+carried a funding object in every challenge. That flow is withdrawn: a
+copy of such a challenge was sufficient to claim the deposit made
+against it ({{deposit-claims}}). Servers MUST NOT issue a session
+challenge of this method without `version` `2`, and clients MUST NOT
+deposit against one.
 
 ## Funding Object {#funding-object}
 
@@ -495,62 +569,53 @@ fields have the meaning of the corresponding charge request fields of
 | `depositMemo` | string \| null | OPTIONAL | Deposit memo required by some origin chains. Absent or `null` when not required. | `methodDetails.depositMemo` |
 | `slippageTolerance` | number | OPTIONAL | Slippage tolerance in basis points. | `methodDetails.slippageTolerance` |
 | `timeEstimate` | number | OPTIONAL | Estimated swap completion time in seconds. | `methodDetails.timeEstimate` |
-| `refundTo` | string | REQUIRED | Origin-chain address that receives the deposit if the swap fails, or any excess. The rules of {{I-D.nearintents-charge}} for `methodDetails.refundTo` apply. | `methodDetails.refundTo` |
+| `deadline` | string | REQUIRED | {{RFC3339}} time until which the 1Click backend executes a deposit to this quote (see {{expiry}}). A deposit that arrives later is refunded to `refundTo` instead of being swapped. | Challenge `expires` |
+| `refundTo` | string | REQUIRED | Origin-chain address that receives the deposit if the swap fails, any excess, and an unclaimed deposit ({{unclaimed}}). Copied from the `quote` action. | `methodDetails.refundTo` |
 
 The server obtains the funding object from an executable 1Click quote
 {{ONECLICK-API}} requested with: `dry` set to false, swap type
-`EXACT_OUTPUT`, amount `amountOut`, origin asset the 1Click identifier
-of `funding.asset`, destination asset the Verifier token identifier of
-`currency`, recipient `recipient` with recipient type `INTENTS`,
-deposit type `ORIGIN_CHAIN`, refund address `funding.refundTo` with
-refund type `ORIGIN_CHAIN`, and a deadline no earlier than the
-challenge `expires`.
-
-## Funding Preferences {#funding-preferences}
-
-Minting the funding quote requires inputs that only the payer knows:
-the origin chain and asset to deposit from, an origin-chain refund
-address under the payer's control, and the deposit size the payer is
-prepared to make. This document does not define how a server learns
-them. A server MAY take them from authenticated request context, from
-application-level parameters of the request that triggered the
-challenge, or from an earlier request in the same realm, and otherwise
-applies its documented defaults, including the recovery policy of
-{{I-D.nearintents-charge}} for `funding.refundTo`. The session key is
-not among these inputs; it is bound at open. Whatever the source, the
-challenge is authoritative, and the client verification of the funding
-object before depositing ({{amount-verification}}) is unchanged.
+`EXACT_OUTPUT`, amount the `amountOut` of the `quote` action, origin
+asset the 1Click identifier of the `quote` action's `asset`,
+destination asset the Verifier token identifier of `currency`,
+recipient `recipient` with recipient type `INTENTS`, deposit type
+`ORIGIN_CHAIN`, refund address the `quote` action's `refundTo` with
+refund type `ORIGIN_CHAIN`, the slippage tolerance of the `quote`
+action when it names one, and a deadline no earlier than
+`funding.deadline`. The funding object's `asset`, `refundTo`, and
+`amountOut` MUST equal the values of the `quote` action.
 
 ## Challenge Expiry and Reuse {#expiry}
 
-The challenge `expires` auth-param MUST be set to the 1Click quote
-deadline, or to a slightly earlier time, so that a deposit made before
-`expires` is still within the quote's validity window, as defined in
-{{I-D.nearintents-charge}}. Clients MUST NOT broadcast a deposit
-transaction after the challenge `expires` timestamp. Servers SHOULD set
-`expires` such that the remaining window before the quote deadline
-accommodates origin-chain confirmation plus `funding.timeEstimate`.
-`expires` applies only to `open` and `topUp` credentials; see
-{{echoed-challenge}}. Expiry limits when a deposit may be made, not
-when a successful deposit may be claimed: a deposit whose swap reached
-`SUCCESS` remains claimable by an `open` or `topUp` presenting its
-challenge for at least 30 days from the time the backend reported
-`SUCCESS`, and the funds it delivered are held for the payer while it
-remains claimable. Servers MUST document how they dispose of a deposit
-that is still unclaimed when that period ends. The RECOMMENDED policy
-is to return its value, net of swap fees, to `funding.refundTo` through
-a swap into `funding.asset`; when `funding.refundTo` is a merchant
-recovery address, the recovery policy disclosed under
-{{I-D.nearintents-charge}} applies.
+A payable challenge has two times. `funding.deadline` limits when the
+deposit may be made: it MUST be the 1Click quote deadline, or slightly
+earlier, and clients MUST NOT broadcast a deposit transaction after
+it. Servers SHOULD choose it such that the time left accommodates
+origin-chain confirmation plus `funding.timeEstimate`. The `expires`
+auth-param limits when the deposit may be claimed: it MUST be no
+earlier than 24 hours after `funding.deadline`. The interval between
+the two is the claim window ({{unclaimed}}). A payable challenge is
+thus unexpired for as long as a credential can be presented for it,
+unlike a charge challenge, whose `expires` is the quote deadline.
 
-Servers MUST NOT advertise the same `funding.depositAddress` to two
-different clients. A server that cannot associate a challenge with a
-single client MUST mint a fresh quote for every 402 response, and
-SHOULD rate limit challenge issuance.
+A payable challenge is consumed by exactly one settled `open` or
+`topUp`, or by the return of its deposit ({{unclaimed}}). Servers MUST
+NOT issue the same deposit address and memo in two payable challenges.
 
-## Example
+The `expires` of an unquoted challenge is chosen by the server; no
+quote constrains it. An unquoted challenge is not consumed, and a
+client MAY echo the same unexpired one in any number of the
+credentials that {{echoed-challenge}} allows it for. A client MAY keep
+one from an earlier exchange in order to send a `quote` action without
+a preceding unauthenticated request.
 
-Decoded `request`:
+Session challenges of this method MUST NOT carry the `digest`
+parameter of {{I-D.httpauth-payment}}: the credentials of a session
+are bound to the session, not to one request body, and control
+requests are sent without the body of a resource request.
+
+## Examples
+
+Decoded `request` of an unquoted challenge:
 
 ~~~json
 {
@@ -560,9 +625,46 @@ Decoded `request`:
   "unitType": "token",
   "description": "Streaming inference",
   "methodDetails": {
+    "version": 2,
     "verifier": "intents.near",
     "custody": "merchant",
     "settlementBackend": "near-intents",
+    "minDeposit": "1000000",
+    "maxFunded": "100000000",
+    "idleTimeout": 900,
+    "minVoucherDelta": "1000",
+    "refundTypes": ["intents", "origin"],
+    "minOriginRefund": "1000000"
+  }
+}
+~~~
+
+This prices each token at 10 base units of USDC (0.00001 USDC). A
+session is funded with at least 1 USDC and holds at most 100 USDC.
+Each voucher step is at least 1,000 base units, or 100 tokens.
+
+Decoded `request` of the payable challenge returned to a `quote`
+action that asked to fund 5,000,000 base units from USDC on Arbitrum
+({{quote-action}}):
+
+~~~json
+{
+  "amount": "10",
+  "currency": "near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+  "recipient": "merchant.near",
+  "unitType": "token",
+  "description": "Streaming inference",
+  "methodDetails": {
+    "version": 2,
+    "verifier": "intents.near",
+    "custody": "merchant",
+    "settlementBackend": "near-intents",
+    "minDeposit": "1000000",
+    "maxFunded": "100000000",
+    "idleTimeout": 900,
+    "minVoucherDelta": "1000",
+    "refundTypes": ["intents", "origin"],
+    "minOriginRefund": "1000000",
     "funding": {
       "originNetwork": "eip155:42161",
       "asset": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
@@ -573,30 +675,34 @@ Decoded `request`:
       "depositMemo": null,
       "slippageTolerance": 100,
       "timeEstimate": 60,
+      "deadline": "2026-11-20T15:10:00Z",
       "refundTo": "0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317"
     },
-    "idleTimeout": 900,
-    "minVoucherDelta": "1000",
-    "refundTypes": ["intents", "origin"],
-    "minOriginRefund": "1000000"
+    "sessionKey": "ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai",
+    "refund": {
+      "type": "intents",
+      "account": "d5bdd38fe760603eaac6821bdc961e296708d2804911c663ea2c79ea581799c3"
+    }
   }
 }
 ~~~
 
-This prices each token at 10 base units of USDC (0.00001 USDC). A
-deposit of about 5.025 USDC on Arbitrum funds the session with
-5.000000 USDC, enough for 500,000 tokens. Each voucher step is at
-least 1,000 base units, or 100 tokens. The resulting session
-`reference` is
+A deposit of about 5.025 USDC on Arbitrum funds the session with
+5.000000 USDC, enough for 500,000 tokens at this price. The deposit
+has to be broadcast by 15:10; the challenge itself expires 24 hours
+later. Only the holder of the named session key can open it. The
+resulting session `reference` is
 `eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8`.
 
 # Credential Schema {#credential}
 
 ## Structure
 
-The `Authorization` header carries a single base64url-encoded JSON
-token (no auth-params) per {{I-D.httpauth-payment}}. The decoded object
-contains three top-level fields:
+The credential is a single base64url-encoded JSON token (no
+auth-params), carried in the header field that the challenge selects
+per {{I-D.httpauth-payment}}, which is `Authorization` unless the
+challenge names another. The decoded object contains three top-level
+fields:
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
@@ -604,27 +710,44 @@ contains three top-level fields:
 | `payload` | object | REQUIRED | Session action payload. The `action` field discriminates the type; action-specific fields are placed alongside it. |
 | `source` | string | OPTIONAL | Payer DID. If present, SHOULD use the `did:pkh` method {{DID-PKH}} with the CAIP-2 origin network identifier and the payer's origin-chain address (e.g., `did:pkh:eip155:42161:0x2527...`). Informational only; servers MUST NOT require it and MUST NOT rely on it for verification. |
 
-`payload.action` is REQUIRED and MUST be one of `"open"`,
+`payload.action` is REQUIRED and MUST be one of `"quote"`, `"open"`,
 `"voucher"`, `"topUp"`, or `"close"`. Implementations MUST ignore
 unknown fields in request objects, credential payloads, and receipts.
 
 ## Echoed Challenge {#echoed-challenge}
 
-| Action | Echoed challenge | Expiry enforced |
-|--------|------------------|--------------------|
-| `open` | The challenge whose funding quote was paid | Yes |
-| `topUp` | A fresh challenge whose funding quote was paid | Yes |
-| `voucher` | The session's opening challenge | No |
-| `close` | The session's opening challenge | No |
+| Action | Echoed challenge |
+|--------|------------------|
+| `quote` | The unquoted challenge of the requested resource |
+| `open` | The payable challenge whose funding quote was paid |
+| `topUp` | The payable challenge issued for the session, whose funding quote was paid |
+| `voucher` | A challenge of the requested resource |
+| `close` | Any session challenge of the realm |
 
-A `voucher` or `close` credential is not bound to a fresh challenge.
-It is bound to the session by echoing the opening challenge, whose
-`id` the server stores with the session, and by the signed message of
-{{signing}}, which carries the realm, the session `reference`, and the
-`currency`, and names the merchant's Intents account as its NEP-413
-recipient. The challenge `expires` auth-param limits opening and
-topping up, not later use of an open session; the idle timeout applies
-instead.
+The challenge echoed by any action MUST be unexpired, MUST have been
+issued by this server for this method and intent, and MUST carry
+`methodDetails.version` `2`.
+
+A `voucher` credential echoes a challenge that the server issued for
+the resource it requests, unquoted or payable. That challenge states
+the unit price of the request: its `amount`, `currency`, and
+`recipient` MUST equal those the server currently advertises for the
+resource, and its `currency` and `recipient` MUST equal the session's
+({{voucher-verification}}). A client learns the current challenge of a
+resource from any 402 response for it; a price change shows as a
+rejection that carries the new challenge.
+
+A `close` credential echoes any session challenge of the realm whose
+`currency` and `recipient` equal the session's.
+
+A `voucher` or `close` credential is bound to its session by the
+signed message of {{signing}}, which carries the realm, the session
+`reference`, and the `currency`, and names the merchant's Intents
+account as its NEP-413 recipient. The signature does not cover the
+echoed challenge. A client whose challenge has expired, or no longer
+matches the resource, builds a new credential around a current
+challenge, such as the one carried by the 402 response that reported
+it, and does not need to sign again.
 
 ## Session Reference {#reference}
 
@@ -636,31 +759,118 @@ deposit address. When the opening challenge carries a non-null
 `funding.depositMemo`, the memo is appended after a further `:`. The
 result is an opaque identifier.
 
-The client computes `reference` from the challenge before opening, so
-it can sign the first voucher without a round trip. Servers MUST
-compare `reference` values as exact strings.
+The client computes `reference` from the payable challenge before
+opening, so it can sign the first voucher without a round trip.
+Servers MUST compare `reference` values as exact strings.
+
+## Quote Action {#quote-action}
+
+The `quote` action asks the server for a payable challenge. It carries
+what the server needs to mint the funding quote and what the challenge
+is to be bound to. It is not signed and is not a proof: the binding it
+requests is enforced when the deposit is claimed.
+
+| Field | Type | Presence | Description |
+|-------|------|----------|-------------|
+| `action` | string | REQUIRED | `"quote"` |
+| `sessionKey` | string | CONDITIONAL | Session public key of the session to open (see {{encoding}}). REQUIRED unless `reference` is present. |
+| `refund` | object | CONDITIONAL | Refund destination of the session to open (see {{refund-destination}}). REQUIRED together with `sessionKey`. |
+| `reference` | string | CONDITIONAL | Reference of the open session to top up. REQUIRED unless `sessionKey` is present. |
+| `asset` | string | REQUIRED | CAIP-19 {{CAIP-19}} identifier of the asset the client will deposit. Its chain is the origin chain of the funding quote. |
+| `refundTo` | string | REQUIRED | Address on the origin chain, controlled by the payer, that receives the deposit if the swap fails, any excess, and an unclaimed deposit ({{unclaimed}}). |
+| `amountOut` | string | REQUIRED | Value to fund, in base units of `currency` (see {{deposit-amount}}). |
+| `slippageTolerance` | number | OPTIONAL | Slippage tolerance in basis points for the funding quote. |
+
+The payload MUST carry exactly one of `sessionKey` and `reference`.
+
+A `quote` credential is sent on a request for a protected resource
+and echoes the unquoted challenge of that resource. When it opens a
+session, the `currency`, the `recipient`, and the method details of
+that challenge become the terms of the session ({{session-state}}).
+
+The server MUST NOT serve paid content in response to a `quote`
+credential. After the checks of {{quote-verification}} it mints the
+1Click quote and responds with HTTP 402, `Cache-Control: no-store`, a
+payable challenge, and a problem body of the type
+`payment-action-required` of {{I-D.httpauth-payment}}, which is
+REQUIRED for this response. The `request` of the payable challenge
+repeats the shared fields and method details of the echoed challenge
+and adds the funding object and the binding:
+`methodDetails.sessionKey` and `methodDetails.refund`, copied from the
+payload, or `methodDetails.reference`. The response carries no
+`Payment-Receipt`. A client recognises it by the funding object and
+the binding of the returned challenge.
+
+Every accepted `quote` action yields a new quote and a new payable
+challenge. The action is not idempotent: a client that did not receive
+the response sends another `quote` action, and MUST NOT deposit
+against a challenge that it did not receive.
+
+Before depositing, the client MUST verify the payable challenge as
+required by {{amount-verification}}.
+
+Example credential (decoded), echoing the unquoted challenge of
+{{challenge}}:
+
+~~~json
+{
+  "challenge": {
+    "id": "uQ1nHs5KdP8wLr2XcVbTmA",
+    "realm": "api.example.com",
+    "method": "nearintents",
+    "intent": "session",
+    "request": "eyJ...",
+    "expires": "2026-11-20T15:30:00Z"
+  },
+  "payload": {
+    "action": "quote",
+    "sessionKey": "ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai",
+    "refund": {
+      "type": "intents",
+      "account": "d5bdd38fe760603eaac6821bdc961e296708d2804911c663ea2c79ea581799c3"
+    },
+    "asset": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "refundTo": "0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317",
+    "amountOut": "5000000",
+    "slippageTolerance": 100
+  },
+  "source": "did:pkh:eip155:42161:0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317"
+}
+~~~
 
 ## Open Action {#open-action}
 
-The `open` action proves the funding deposit, binds the session key and
-the refund destination to the session, and carries the first voucher.
+The `open` action proves the funding deposit made against a payable
+challenge and carries the first voucher. The session key and the
+refund destination are those of the echoed challenge
+(`methodDetails.sessionKey`, `methodDetails.refund`); the payload does
+not repeat them.
 
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
 | `action` | string | REQUIRED | `"open"` |
 | `hash` | string | REQUIRED | Transaction hash of the client's deposit to `funding.depositAddress` on `funding.originNetwork`. Format is origin-chain-native. |
-| `sessionKey` | string | REQUIRED | The session public key (see {{encoding}}). |
-| `refund` | object | OPTIONAL | Refund destination (see {{refund-destination}}). When absent, the refund destination is `{"type": "intents", "account": <implicit account of sessionKey>}`. |
-| `signature` | string | REQUIRED | Session-key signature over the open message (see {{signing}}). |
+| `signature` | string | REQUIRED | Signature over the open message (see {{signing}}) by the session key the echoed challenge is bound to. |
 | `voucher` | object | REQUIRED | First voucher: `{"cumulative": <string>, "signature": <string>}`, signed over the voucher message for the session `reference` (see {{signing}}). `cumulative` MAY be `"0"`. |
 
 An `open` credential is sent on a request for a protected resource.
 When the request method is not `HEAD`, the server serves the request
 against the first voucher after creating the session. When the request
 method is `HEAD`, the server creates the session and returns a receipt
-without content. If the first voucher does not cover the request, the
-session is nonetheless created and the server responds as defined in
-{{streaming}}; the problem body carries the `reference`.
+without content. After creating the session, the server treats the
+request as that of a `voucher` credential that echoes the opening
+challenge. If the first voucher does not cover the request, or the
+unit price of the resource is no longer the `amount` of the opening
+challenge, the session exists nonetheless and the server answers with
+the corresponding rejection, whose problem body carries the
+`reference`.
+
+Clients SHOULD present the `open` credential as soon as they have
+broadcast the deposit; a server that cannot yet see the deposit
+answers as defined in {{pending}}. When `funding.timeEstimate` is
+long, clients SHOULD open with a `HEAD` request and send the paid
+request once the session exists, so that the first response is not
+held for the duration of the settlement.
 
 Example credential (decoded):
 
@@ -672,16 +882,15 @@ Example credential (decoded):
     "method": "nearintents",
     "intent": "session",
     "request": "eyJ...",
-    "expires": "2026-11-20T15:10:00Z"
+    "expires": "2026-11-21T15:10:00Z"
   },
   "payload": {
     "action": "open",
     "hash": "0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a",
-    "sessionKey": "ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai",
-    "signature": "ed25519:4Zgh...15",
+    "signature": "ed25519:39sY...8r",
     "voucher": {
       "cumulative": "1000",
-      "signature": "ed25519:4o66...AB"
+      "signature": "ed25519:3NGD...cA"
     }
   },
   "source": "did:pkh:eip155:42161:0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317"
@@ -722,13 +931,13 @@ Example credential (decoded):
     "method": "nearintents",
     "intent": "session",
     "request": "eyJ...",
-    "expires": "2026-11-20T15:10:00Z"
+    "expires": "2026-11-21T15:10:00Z"
   },
   "payload": {
     "action": "voucher",
     "reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8",
     "cumulative": "25000",
-    "signature": "ed25519:3thD...re"
+    "signature": "ed25519:3Ybd...dW"
   }
 }
 ~~~
@@ -745,19 +954,22 @@ The `topUp` action proves a new funding deposit and adds its
 | `hash` | string | REQUIRED | Transaction hash of the client's deposit to the echoed challenge's `funding.depositAddress`. |
 | `signature` | string | REQUIRED | Session-key signature over the topUp message (see {{signing}}). |
 
-To obtain a challenge for a top-up, the client submits an
-unauthenticated request to any protected resource URI in the same
-realm. The server issues a fresh challenge with a new quote and
-deposit address. The challenge's `currency` and `recipient` MUST equal
-those of the session; its `amount` is ignored for the top-up, since
-the session keeps its opening unit price; and its funding object MAY
-name a different origin chain or asset than the opening challenge.
+To top up, the client sends a `quote` action that carries the session
+`reference` ({{quote-action}}), verifies the payable challenge it
+receives, and pays its funding quote. That challenge is bound to the
+session by `methodDetails.reference`, which `payload.reference` MUST
+equal. Its funding object MAY name a different origin chain or asset
+than the opening challenge. Its `amount` plays no role.
 
-Clients SHOULD submit the `topUp` credential as soon as the 1Click
-backend reports the deposit as detected, rather than waiting for
-origin-chain confirmation themselves. The server records the deposit as
-pending while the swap settles, which defers an idle close of the
-session ({{server-initiated-close}}).
+Clients SHOULD submit the `topUp` credential as soon as they have
+broadcast the deposit. Once the backend detects the deposit, the
+server records it as pending while the swap settles, which defers an
+idle close of the session ({{server-initiated-close}}).
+
+A top-up takes as long as the origin chain and the swap require.
+Clients SHOULD top up between requests, when a receipt shows that
+`funded - spent` will not cover the next request, rather than during a
+stream ({{streaming}}).
 
 A `topUp` credential is a control request. It MAY be sent to any
 protected resource URI in the realm. The server MUST NOT serve paid
@@ -778,13 +990,13 @@ Example credential (decoded):
     "method": "nearintents",
     "intent": "session",
     "request": "eyJ...",
-    "expires": "2026-11-20T15:50:00Z"
+    "expires": "2026-11-21T15:50:00Z"
   },
   "payload": {
     "action": "topUp",
     "reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8",
     "hash": "0x4d1e8a7c3b2f9e6d5c4b3a2918f7e6d5c4b3a29187f6e5d4c3b2a1908f7e6d5c",
-    "signature": "ed25519:5kTw...gH"
+    "signature": "ed25519:3RxW...Yu"
   }
 }
 ~~~
@@ -823,8 +1035,9 @@ the form:
 }
 ~~~
 
-The fields other than `status` form the close result (see
-{{session-state}}). Closing is idempotent: a `close` credential for a
+`status` is the session status, `"closing"` or `"closed"`. The other
+fields form the close result (see {{session-state}}). Closing is
+idempotent: a `close` credential for a
 session that is already `closing` or `closed` returns the current close
 result without executing a second refund. While the session is
 `closing`, the close result is provisional: `refund.status` is
@@ -837,34 +1050,38 @@ Example credential (decoded):
 ~~~json
 {
   "challenge": {
-    "id": "sQ7mT2vLx9KpR4nB8cWdYe",
+    "id": "vK8pTz3NwE6yBq1RhLsDfC",
     "realm": "api.example.com",
     "method": "nearintents",
     "intent": "session",
     "request": "eyJ...",
-    "expires": "2026-11-20T15:10:00Z"
+    "expires": "2026-11-20T16:15:00Z"
   },
   "payload": {
     "action": "close",
     "reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8",
-    "signature": "ed25519:3aw6...Um"
+    "signature": "ed25519:5Eso...Ro"
   }
 }
 ~~~
 
 ## Refund Destination {#refund-destination}
 
-The `refund` object of an `open` action selects where the unspent
-balance is sent at close.
+The `refund` object of a `quote` action selects where the unspent
+balance is sent at close. The server copies it into the payable
+challenge as `methodDetails.refund`, so that it is fixed before the
+client deposits and is covered by the challenge binding. It cannot be
+changed afterwards.
 
 | Type | Fields | Meaning |
 |--------|--------|---------|
 | `"intents"` | `account` | Intents account identifier that receives the refund as a Verifier transfer. |
 | `"origin"` | `asset`, `address` | Refund handed to the 1Click backend as a swap into the CAIP-19 asset `asset` for `address` on that asset's chain. Allowed only when `methodDetails.refundTypes` contains `"origin"`. By selecting this type the payer accepts the swap fees and slippage, and the fallback to an `intents` refund at the session key's implicit account defined in {{origin-refunds}}. |
 
-When `refund` is absent, the destination is an `intents` refund to the
-implicit account of `sessionKey`. The refund destination is fixed at
-open and cannot be changed.
+There is no default: a `quote` action that opens a session names its
+refund destination. A client that wants its refund held in the
+Verifier under the session key names the implicit account of that key
+as `account`.
 
 # Signature Format {#signing}
 
@@ -879,19 +1096,22 @@ signature.
 ## Messages
 
 Every message carries `domain` with the value
-`"mpp-nearintents-session-v1"` and `realm` with the value of the
+`"mpp-nearintents-session-v2"` and `realm` with the value of the
 challenge `realm`. Any change to the message objects or to the signing
-construction requires a new `domain` value.
+construction requires a new `domain` value. The `quote` action is not
+signed.
 
 | Action | Message object (keys in JCS order) |
 |--------|-----------------------------------|
-| `open` | `{"action":"open","challengeId":<echoed challenge id>,"domain":...,"hash":<payload.hash>,"realm":...,"refund":<payload.refund>,"sessionKey":<payload.sessionKey>}`. `refund` is present only when it is present in the payload, with exactly the payload's value. |
+| `open` | `{"action":"open","challengeId":<echoed challenge id>,"domain":...,"hash":<payload.hash>,"realm":...,"refund":<methodDetails.refund of the echoed challenge>,"sessionKey":<methodDetails.sessionKey of the echoed challenge>}` |
 | `voucher` (also the first voucher inside `open`) | `{"action":"voucher","cumulative":<cumulative>,"currency":<opening challenge currency>,"domain":...,"realm":...,"reference":<reference>}` |
 | `topUp` | `{"action":"topUp","challengeId":<echoed challenge id>,"domain":...,"hash":<payload.hash>,"realm":...,"reference":<reference>}` |
 | `close` | `{"action":"close","domain":...,"realm":...,"reference":<reference>}` |
 
 For the first voucher inside `open`, `reference` is computed from the
-echoed challenge as defined in {{reference}}.
+echoed challenge as defined in {{reference}}. The open message repeats
+the session key and the refund destination of the challenge, so that
+the signature records the key holder's consent to both.
 
 ## NEP-413 Construction {#nep413}
 
@@ -926,16 +1146,24 @@ not an intent. A signing example is given in {{signing-example}}.
 
 # Deposit Amount {#deposit-amount}
 
-The server determines `funding.amountOut` when it requests the quote
-for a challenge. It MUST be at least `amount`, so that the deposit
-covers one unit of service. Servers SHOULD choose a value such that
-the fees of the funding quote stay below a documented share of
-`amountOut`, and MUST document their deposit policy. Clients SHOULD
-inspect `funding.amount` and `funding.amountOut` before paying to
-confirm the deposit size and the resulting funded value.
+The client chooses the value to fund, `amountOut`, in its `quote`
+action, within the limits the merchant advertises: it MUST be at least
+`methodDetails.minDeposit`, and the funded value of the session after
+crediting it MUST NOT exceed `methodDetails.maxFunded` when that field
+is present. `minDeposit` MUST be at least `amount`, so that a deposit
+covers one unit of service. Servers SHOULD set `minDeposit` such that
+the fees of a funding quote stay below a documented share of the
+deposit.
 
-The deposit amount is fixed by the quote; the client cannot deposit a
-different amount than `funding.amount` against the same challenge.
+The quote then fixes the deposit: `funding.amount` is what the client
+sends to fund `funding.amountOut`. Clients MUST compare both with
+their own limits before paying ({{amount-verification}}). A deposit
+below `funding.minAmountIn` does not settle, and what a larger deposit
+leaves unused is returned to `funding.refundTo` by the backend.
+
+The limits are checked when the quote is requested. Top-ups requested
+at the same time can together exceed `maxFunded`; the limit bounds
+what a merchant agrees to hold, not what a payer can lose.
 
 # Verification Procedure {#verification}
 
@@ -943,89 +1171,157 @@ Checks are listed in order. Servers MUST perform the syntactic and
 signature checks before any call to the 1Click Swap API or to an origin
 chain. If the origin-chain RPC or the 1Click status endpoint is
 unavailable for a required check, servers MUST respond with a server
-error (HTTP 5xx), MUST NOT consume the credential, and MUST release any
-in-flight claim, as defined in {{I-D.nearintents-charge}}.
+error (HTTP 5xx) and MUST NOT consume the credential.
+
+For every action, a payload that cannot be parsed or lacks a required
+field is rejected with `malformed-credential`, and a field with an
+invalid value with `invalid-payload`. An echoed challenge that this
+server did not issue for this method and intent, or whose
+`methodDetails.version` is not `2`, is rejected with
+`invalid-challenge`. The steps below restate these checks only where
+an action adds to them.
+
+## Quote Verification {#quote-verification}
+
+A `quote` action carries no signature. Its checks precede the one
+1Click call it causes.
+
+1. Parse the payload. If it cannot be parsed, a required field is
+   absent or of the wrong type, or it does not carry exactly one of
+   `sessionKey` and `reference`, reject with `malformed-credential`.
+   `sessionKey`, when present, MUST decode to 32 bytes that form a
+   valid Ed25519 public key; `refund.type` MUST be listed in
+   `methodDetails.refundTypes`; `refund.account`, when present, MUST
+   be a valid NEAR account identifier; `refund.asset`, when present,
+   MUST be an asset the server can quote as a 1Click destination, and
+   `refund.address` a valid address on its chain; `asset` MUST be an
+   asset the server accepts for deposits; `refundTo` MUST be a valid
+   address on the chain of `asset`; and `amountOut` MUST be a positive
+   integer string. Otherwise reject with `invalid-payload`.
+2. Verify that the echoed challenge was issued by this server with a
+   binding that matches its `id` per {{I-D.httpauth-payment}}, that it
+   is an unquoted challenge, and that its `request` equals the one the
+   server currently issues for the requested resource. Otherwise
+   reject with `invalid-challenge`. If it has expired, reject with
+   `payment-expired`.
+3. For a `quote` action with `sessionKey`: verify that the key is not
+   bound to any session in the store, open or closed; otherwise reject
+   with `session/invalid-proof`. Verify that `amountOut` is at least
+   `methodDetails.minDeposit` and at most `methodDetails.maxFunded`,
+   when present; otherwise reject with `invalid-payload`.
+4. For a `quote` action with `reference`: look up the session. If not
+   found, reject with `session/not-found`; if it is `closing` or
+   `closed`, reject with `session/closed`, without the close result,
+   since the action is not authenticated. Verify that the echoed
+   challenge's `currency` and `recipient` equal the session's;
+   otherwise reject with `invalid-challenge`. Verify that `amountOut`
+   is at least the session's `minDeposit` and that `funded` plus
+   `amountOut` does not exceed the session's `maxFunded`, when it has
+   one; otherwise reject with `invalid-payload`.
+5. Apply the rate limits of {{dos}}.
+6. Request the 1Click quote as defined in {{funding-object}}. If the
+   backend cannot quote the asset or the amount, reject with
+   `invalid-payload`.
+7. Durably record the payable challenge: its `id`, its `expires`, its
+   funding object, and its binding. Respond as defined in
+   {{quote-action}}.
+
+No session state is created or changed by a `quote` action, and no
+session key is reserved by it: a key becomes bound only when a signed
+`open` settles.
 
 ## Open Verification {#open-verification}
 
 1. Parse the payload. If it cannot be parsed or a required field is
    absent or of the wrong type, reject with `malformed-credential`.
-   `sessionKey` MUST decode to 32 bytes that form a valid Ed25519
-   public key; `voucher.cumulative` MUST be a non-negative integer
-   string; `refund.type`, when present, MUST be listed in
-   `methodDetails.refundTypes`; `refund.account`, when present, MUST
-   be a valid NEAR account identifier; and `refund.asset`, when
-   present, MUST be an asset the server can quote as a 1Click
-   destination. Otherwise reject with `invalid-payload`.
+   `voucher.cumulative` MUST be a non-negative integer string.
+   Otherwise reject with `invalid-payload`.
 2. Verify that the echoed challenge was issued by this server with a
-   binding that matches its `id` per {{I-D.httpauth-payment}}.
-   Otherwise reject with `invalid-challenge`.
+   binding that matches its `id` per {{I-D.httpauth-payment}}, and
+   that it is a payable challenge bound to a session key. Otherwise
+   reject with `invalid-challenge`.
 3. Compute `reference` from the echoed challenge ({{reference}}).
    Verify the open signature and the first voucher's signature with
-   `sessionKey` ({{signing}}). Otherwise reject with
-   `session/invalid-proof`.
-4. If a session with this `reference` exists, the open is a retry or a
-   replay. If the session's `sessionKey` equals the payload's, treat
+   the challenge's `methodDetails.sessionKey` ({{signing}}). Otherwise
+   reject with `session/invalid-proof`.
+4. If a session with this `reference` exists, the open is a retry.
+   Verify that the echoed challenge is the session's opening
+   challenge; otherwise reject with `invalid-challenge`. Then treat
    the embedded voucher as a `voucher` action for that session and
-   continue at step 4 of {{voucher-verification}}. Otherwise reject
-   with `session/invalid-proof`.
-5. Verify that the challenge has not been consumed by a settled `open`
-   or `topUp`; otherwise reject with `invalid-challenge`. If the
-   challenge has expired, query the 1Click status endpoint for the
-   challenge's deposit address: if no deposit has been detected, reject
-   with `payment-expired`; otherwise continue, because expiry limits
-   when a deposit may be made, not when a successful deposit may be
-   claimed.
-6. Verify that `sessionKey` is not bound to any session in the store,
-   open or closed. Otherwise reject with `session/invalid-proof`.
+   continue at step 4 of {{voucher-verification}}.
+5. Verify that the challenge has not expired; otherwise reject with
+   `payment-expired`. Verify that it has not been consumed; otherwise
+   reject with `invalid-challenge`.
+6. Verify that the challenge's session key is not bound to any session
+   in the store, open or closed. Otherwise reject with
+   `session/invalid-proof`; the deposit is then returned as an
+   unclaimed deposit ({{unclaimed}}).
 7. Verify `voucher.cumulative <= funding.amountOut`. Otherwise reject
-   with `session/insufficient-value`.
+   with `invalid-payload`.
 8. Verify the deposit as defined by the verification procedure of
    {{I-D.nearintents-charge}}, reading `funding.originNetwork`,
    `funding.asset`, `funding.depositAddress`, `funding.minAmountIn`,
    and `funding.depositMemo` in place of the charge request's deposit
    fields. Of that procedure, this document inherits the checks that
-   `hash` has not previously been consumed, that the transaction
-   exists on the origin chain, is confirmed, and transfers at least
-   `funding.minAmountIn` of `funding.asset` to the deposit address
-   including the memo, verified on the origin chain or through backend
-   detection, and the claim of `hash` as in-flight. It replaces the
-   charge expiry check with step 5, and the active-quote check with:
-   the quote identified by the deposit address was issued by this
-   server and has not been settled by a credential; a quote whose swap
-   already reached `SUCCESS` is acceptable for a late claim.
+   `hash` has not settled another challenge, and that the transaction
+   exists on the origin chain, is confirmed, and pays `funding.asset`
+   to the deposit address including the memo, verified on the origin
+   chain or through backend detection. Otherwise reject with
+   `verification-failed`. This document does not claim `hash` as
+   in-flight: the payable challenge, which only its bound key can
+   present, is the unit of settlement, and a `hash` is recorded only
+   when it settles. It replaces the charge expiry check with step 5,
+   and the active-quote check with: the quote identified by the
+   deposit address was issued by this server and has not been settled
+   by a credential; a quote whose swap already reached `SUCCESS` is
+   acceptable.
 9. Drive the swap to a terminal status as defined by the settlement
    procedure of {{I-D.nearintents-charge}}: notify the 1Click backend
-   of the deposit, poll the status endpoint until a terminal status,
+   of the deposit, poll the status endpoint until a terminal status
+   (`SUCCESS`, `FAILED`, or `REFUNDED`),
    and confirm that the backend reports a detected deposit of at least
    `funding.minAmountIn` and lists `hash` among the transactions
    observed for the deposit address. The listed transactions can
    include refunds; membership binds the credential to the deposit
    address and does not by itself prove a deposit.
-10. On `SUCCESS`, atomically create the session ({{session-state}})
-    with `funded = funding.amountOut`, `authorized =
+10. On `SUCCESS`, atomically verify once more that the session key is
+    unbound and create the session ({{session-state}}) with the
+    session key, the refund destination, and the terms of the
+    challenge, `funded = funding.amountOut`, `authorized =
     voucher.cumulative`, `spent = "0"`, and `status = "open"`; mark
-    the challenge consumed; and consume `hash`. Then serve the request
-    per {{streaming}} and return a receipt. The server MUST NOT create
-    the session or return a receipt before `SUCCESS`. While the deposit
+    the challenge consumed; and consume `hash`. Then process the
+    request as that of a `voucher` credential echoing the opening
+    challenge, from step 2 of {{voucher-verification}}, and return a
+    receipt. The server MUST NOT create the session or return a
+    receipt before `SUCCESS`. While the deposit
     is not yet detected or the swap has not reached a terminal status,
     servers MAY respond as defined in {{pending}} instead of holding
     the connection.
-11. On `FAILED` or `REFUNDED`, reject with `settlement-failed`. On
-    `INCOMPLETE_DEPOSIT`, reject with `payment-insufficient`. In both
-    cases mark the challenge consumed and consume `hash` as defined in
-    {{I-D.nearintents-charge}}. No session is created. The backend
-    refunds the deposit to `funding.refundTo`, and the client recovers
-    with a fresh challenge as defined in {{I-D.nearintents-charge}}.
+11. On `FAILED` or `REFUNDED`, mark the challenge consumed, consume
+    `hash`, and reject with `settlement-failed`, or with
+    `payment-insufficient` when the backend reports that it refunded a
+    deposit that stayed below `funding.minAmountIn`. No session is
+    created. The backend refunds the deposit to `funding.refundTo`,
+    and the client recovers by sending a new `quote` action; it MUST
+    NOT send another deposit against the spent challenge.
+
+`INCOMPLETE_DEPOSIT` is not a terminal status in this document, unlike
+in {{I-D.nearintents-charge}}: a deposit below `funding.minAmountIn`
+can still be completed before `funding.deadline`. Until the backend
+reports a terminal status, the credential is pending ({{pending}}) and
+the challenge is not consumed.
 
 ## Voucher Verification {#voucher-verification}
 
 1. Look up the session by `payload.reference`. If not found, reject
    with `session/not-found`.
-2. Verify the echoed challenge has a binding that matches its `id` and
-   that `id` equals the session's stored opening challenge `id`.
-   Otherwise reject with `invalid-challenge`. The challenge `expires`
-   is not checked.
+2. Verify that the echoed challenge was issued by this server with a
+   binding that matches its `id`, that its `amount`, `currency`, and
+   `recipient` equal those the server currently advertises for the
+   requested resource, and that its `currency` and `recipient` equal
+   the session's. Otherwise reject with `invalid-challenge`. If it has
+   expired, reject with `payment-expired`. The `amount` of the echoed
+   challenge is the unit price of this request ({{streaming}}).
 3. Verify the voucher signature with the session's stored
    `sessionKey` ({{signing}}). Otherwise reject with
    `session/invalid-proof`.
@@ -1045,9 +1341,10 @@ in-flight claim, as defined in {{I-D.nearintents-charge}}.
    reject with `session/insufficient-value`. Then durably store
    `authorized = cumulative` together with the voucher signature before
    delivering any service.
-9. Record session activity. If the request method is `HEAD`, return
-   HTTP 200 with a receipt and no content. Otherwise serve the request
-   per {{streaming}} and return a receipt.
+9. If the request method is `HEAD`, return HTTP 200 with a receipt
+   and no content. Otherwise serve the request per {{streaming}} and
+   return a receipt. Session activity is recorded as defined in
+   {{server-initiated-close}}.
 
 ## TopUp Verification {#topup-verification}
 
@@ -1056,11 +1353,10 @@ depends on it.
 
 1. Look up the session by `payload.reference`. If not found, reject
    with `session/not-found`.
-2. Verify that the echoed challenge has a binding that matches its
-   `id`, and that its `currency` and `recipient` equal the session's.
-   Otherwise reject with `invalid-challenge`. The challenge's `amount`
-   is not compared; the session keeps the unit price of its opening
-   challenge.
+2. Verify that the echoed challenge was issued by this server with a
+   binding that matches its `id`, and that it is a payable challenge
+   whose `methodDetails.reference` equals `payload.reference`.
+   Otherwise reject with `invalid-challenge`.
 3. Verify the topUp signature with the session's `sessionKey`
    ({{signing}}). Otherwise reject with `session/invalid-proof`.
 4. If `hash` is already recorded for this session: when the session
@@ -1068,12 +1364,13 @@ depends on it.
    receipt reflecting the current state, without crediting again;
    otherwise reject with `session/closed` carrying the current close
    result.
-5. Verify that the challenge has not been consumed, and apply the
-   expiry rule of step 5 of {{open-verification}}.
-6. Verify the deposit, claim `hash`, record it as a pending deposit of
-   the session, and drive the swap to a terminal status as in steps 8
-   and 9 of {{open-verification}}, using the echoed challenge's
-   funding object. A pending response is permitted as in {{pending}}.
+5. Verify that the challenge has not expired and has not been
+   consumed, as in step 5 of {{open-verification}}.
+6. Verify the deposit as in step 8 of {{open-verification}}, using
+   the echoed challenge's funding object. Once the backend reports the
+   deposit as detected, record it as a pending deposit of the session
+   and drive the swap to a terminal status as in step 9. A pending
+   response is permitted as in {{pending}}.
 7. On `SUCCESS`, atomically add `funding.amountOut` to `funded`,
    record `hash`, remove it from the pending deposits, mark the
    challenge consumed, and consume `hash`. Then, if the session is
@@ -1089,7 +1386,7 @@ depends on it.
 Resolution of a pending deposit does not depend on the client
 re-sending the credential. When the server recorded a pending deposit
 in step 6 but returned no terminal outcome to the client, for example
-after a backend error or a lost connection, it SHOULD continue to drive
+after a backend error or a lost connection, it MUST continue to drive
 the swap to a terminal status on its own and apply step 7 or step 8
 when that status is known, without sending a response.
 
@@ -1097,10 +1394,12 @@ when that status is known, without sending a response.
 
 1. Look up the session by `payload.reference`. If not found, reject
    with `session/not-found`.
-2. Verify the echoed challenge as in step 2 of
-   {{voucher-verification}}; otherwise reject with
-   `invalid-challenge`. Verify the close signature with the session's
-   `sessionKey`; otherwise reject with `session/invalid-proof`.
+2. Verify that the echoed challenge was issued by this server with a
+   binding that matches its `id` and that its `currency` and
+   `recipient` equal the session's; otherwise reject with
+   `invalid-challenge`, or with `payment-expired` when it has expired.
+   Verify the close signature with the session's `sessionKey`;
+   otherwise reject with `session/invalid-proof`.
 3. If `session.status` is `closing` or `closed`, return HTTP 200 with
    the current close result and a receipt.
 4. Atomically set `session.status = "closing"`, fix the final charge
@@ -1126,35 +1425,33 @@ running. Neither is a failure of the credential. A server that does
 not hold the connection while it polls the status endpoint MAY instead
 respond with HTTP 202 (Accepted) and a `Retry-After` header
 {{RFC9110}}, with no `Payment-Receipt` and no `WWW-Authenticate`
-header, without consuming the challenge or the hash. It keeps the
-in-flight claim of the hash and continues to drive the swap, applying
-the terminal step of the verification procedure when the status is
-known, as for a pending top-up deposit.
+header, without consuming the challenge or the hash. For an `open`,
+the server need not act further on its own: the session is created
+when the client presents the credential again after the swap reached
+`SUCCESS`. For a `topUp`, see {{topup-verification}}.
 
-A credential re-presented unchanged while its hash is in flight for the
-same challenge is not a concurrent submission: the server verifies it
-and returns the current state, a further 202 while the swap is pending
-or the terminal outcome. A session or credit created in the meantime
-is recognised as a retry by step 4 of {{open-verification}} or step 4
-of {{topup-verification}}. A 202 is not a final outcome and MUST NOT
+A server processes one presentation of a payable challenge at a time.
+A credential presented while another presentation of the same
+challenge is being processed receives a 202 or the outcome of that
+presentation. A session or credit created in the meantime is
+recognised as a retry by step 4 of {{open-verification}} or step 4 of
+{{topup-verification}}. A 202 is not a final outcome and MUST NOT
 be stored as the response for the request's `Idempotency-Key`
 ({{idempotency}}).
 
 Clients MUST treat a 202 as undecided: they re-present the same
-credential after the `Retry-After` delay and MUST NOT request a fresh
-challenge or make another deposit for it. They stop on any response
-other than 202, not at the challenge expiry, since a deposit detected
-before expiry remains claimable ({{expiry}}). Clients SHOULD present
-the credential once the backend reports the deposit as detected, which
-keeps the pending interval short.
+credential after the `Retry-After` delay and MUST NOT send another
+`quote` action or make another deposit for it. They re-present until
+they receive a response other than 202 or the challenge expires.
+Clients SHOULD present the credential as soon as they have broadcast
+the deposit.
 
 `verification-failed` is reserved for a deposit that is definitively
 wrong: a transaction confirmed on the origin chain that does not
 transfer `funding.asset` to `funding.depositAddress` with the required
-memo; a confirmed deposit below `funding.minAmountIn` is
-`payment-insufficient`. A deposit that is merely not yet detected is
-pending while the challenge is unexpired; after expiry with no deposit
-detected, step 5 of {{open-verification}} applies.
+memo, or a `hash` that already settled another challenge. A deposit
+that is not yet detected, or that is still below
+`funding.minAmountIn`, is pending while the challenge is unexpired.
 
 # Idempotency {#idempotency}
 
@@ -1164,16 +1461,20 @@ double-refunding. Servers MUST enforce:
 
 * Deposit transaction hashes are single-use, and are stored and
   compared under the canonical transaction identifier rules of
-  {{I-D.nearintents-charge}}. An `open` presenting the opening hash of
-  an existing session with the same `sessionKey` is processed as a
-  `voucher` action (step 4 of {{open-verification}}); replay of the
-  application response is governed by `Idempotency-Key`. A `topUp`
+  {{I-D.nearintents-charge}}. An `open` for a `reference` that already
+  has a session is processed as a `voucher` action (step 4 of
+  {{open-verification}}); replay of the application response is
+  governed by `Idempotency-Key`. A `topUp`
   presenting a hash already recorded for the session returns
   `{"status":"ok"}` and a receipt without crediting again (step 4 of
   {{topup-verification}}). An `open` or `topUp` presenting a hash
   whose settlement reached a non-success terminal status is rejected;
-  the client needs a fresh challenge and a new deposit.
-* A challenge is consumed by exactly one settled `open` or `topUp`.
+  the client needs a new payable challenge and a new deposit.
+* A payable challenge is consumed by exactly one settled `open` or
+  `topUp`, or by the return of its deposit ({{unclaimed}}). Unquoted
+  challenges are not consumed.
+* The `quote` action is not idempotent: every accepted one yields a
+  new payable challenge ({{quote-action}}).
 * A voucher equal to the highest accepted voucher does not change
   session state.
 * Close is idempotent: a repeated `close` returns the stored close
@@ -1244,9 +1545,11 @@ response and SHOULD open a new session.
 
 # Streaming and Per-Chunk Billing {#streaming}
 
-The challenge `amount` is the cost of one metered unit. Voucher
-verification does not deduct from the session; the delivery layer
-does.
+The unit price of a paid request is the `amount` of the challenge
+that its credential echoes ({{voucher-verification}}). It applies to
+the whole request, including a stream that outlives the challenge. In
+this section `amount` is that unit price. Voucher verification does
+not deduct from the session; the delivery layer does.
 
 A unit becomes billable when the server commits it to the response.
 For a streaming response, each emitted unit is one billable event.
@@ -1305,9 +1608,9 @@ Upon `session/insufficient-value` or a `payment-need-voucher` event
    paused stream, the client keeps the stream open and submits the
    voucher on a separate request, for example a `HEAD` request to the
    same resource URI.
-2. If `requiredCumulative > funded`, obtains a fresh challenge with an
-   unauthenticated request to a protected resource URI in the realm,
-   pays its funding quote, submits a `topUp` credential, and then
+2. If `requiredCumulative > funded`, sends a `quote` action with the
+   session `reference`, pays the funding quote of the payable
+   challenge it receives, submits a `topUp` credential, and then
    submits a higher voucher.
 
 The server resumes a paused stream once a voucher advancing
@@ -1319,9 +1622,13 @@ timeout (RECOMMENDED: 60 seconds). Before closing it, the server
 SHOULD emit a `session-timeout` event with the same data fields as
 `payment-need-voucher`, so that the client can distinguish the timeout
 from a completed stream, and MUST emit the final `payment-receipt`
-event ({{payment-receipt-event}}). A top-up from a slow origin chain
-exceeds that timeout; the client then continues with a new request on
-the same session.
+event ({{payment-receipt-event}}).
+
+A top-up from a slow origin chain exceeds that timeout: the stream
+ends, and the client continues with a new request on the same session
+once the top-up is credited. Clients SHOULD therefore top up between
+requests. When a receipt shows that `funded - spent` will not cover
+the next request, the client tops up before sending it.
 
 ## Streaming Receipt Event {#payment-receipt-event}
 
@@ -1348,19 +1655,24 @@ Servers MUST persist session state in a durable store keyed by
 |-------|-------------|
 | `reference` | Session reference ({{reference}}). |
 | `openChallengeId` | `id` of the opening challenge. |
-| `sessionKey` | Session public key bound at open. |
-| `refund` | Refund destination, with the default resolved. |
-| `amount`, `currency`, `recipient` | Fixed from the opening challenge. |
+| `sessionKey` | Session public key, from the opening challenge. |
+| `refund` | Refund destination, from the opening challenge. |
+| `currency`, `recipient` | Fixed from the opening challenge. |
+| `terms` | The values of the opening challenge that govern the session: `idleTimeout`, `maxSessionLifetime`, `minVoucherDelta`, `refundTypes`, `minOriginRefund`, `minDeposit`, `maxFunded`, and `externalId`. |
 | `funded` | Funded value. |
 | `authorized`, `authorizedSignature` | Highest accepted voucher and its signature, kept as evidence of consent. |
 | `spent` | Spent value. |
 | `status` | `open`, `closing`, or `closed`. |
 | `depositHashes` | Transaction hashes of the opening deposit and every top-up deposit. |
-| `pendingDeposits` | Transaction hashes of top-up deposits whose swap has not reached a terminal status. This record persists until a terminal status is known, independently of the in-flight claim, which a backend error releases. |
+| `pendingDeposits` | Top-up deposits that the backend has detected and whose swap has not reached a terminal status. A record persists until that status is known. |
 | `lastActivityAt` | Time of the last session activity. |
 | `closeResult` | From the start of close: `reference`, `funded`, `spent` (the final charge), `settlementRef` when known, the `refund` object of {{refunds}}, and the `lateRefunds` list of {{late-refunds}} when non-empty. `funded` is the session's current `funded`. Provisional while `closing`. |
 
 The invariant `spent <= authorized <= funded` MUST hold at all times.
+
+Wherever this document applies one of the `terms` to an existing
+session, it is the value stored with the session, whatever challenge a
+later credential echoes.
 
 Servers MUST serialize all updates to a session's state. Concurrent
 requests and streams on one session are permitted, and voucher
@@ -1374,6 +1686,12 @@ Closed sessions MUST be retained for at least 30 days so that late
 credentials are rejected with `session/closed` and the close result
 remains available. Deposit transaction hashes and session keys MUST
 never be released for reuse.
+
+Servers MUST also persist every payable challenge they issue: its
+`id`, its `expires`, its funding object, and its binding. The record
+is kept until the challenge expires, so that its deposit can be
+claimed throughout the claim window and returned if it is not
+({{unclaimed}}).
 
 # Refunds {#refunds}
 
@@ -1480,19 +1798,61 @@ receipt means that usage of the session has ended; financial recovery
 can continue through late refunds, which later `close` responses and
 `session/closed` bodies expose.
 
+## Unclaimed Deposits {#unclaimed}
+
+A deposit is unclaimed when its swap reached `SUCCESS` and it has not
+become a session or a credit. The value it delivered is held for the
+payer and remains claimable, by a credential that satisfies the
+binding of its payable challenge, until that challenge expires. The
+interval between `funding.deadline` and `expires` is the claim window
+({{expiry}}). A top-up deposit that the server recorded as pending is
+not unclaimed: the server resolves it on its own
+({{topup-verification}}).
+
+Servers MUST keep the record of a payable challenge until it expires,
+and MUST detect unclaimed deposits: before discarding the record of a
+challenge that no credential settled, the server queries the 1Click
+status endpoint for its deposit address and memo and follows a deposit
+found there to its terminal status.
+
+When a challenge expires with an unclaimed deposit, the server MUST
+mark it consumed and return the value to the payer. It requests a
+1Click quote with: swap type `EXACT_INPUT`, deposit type `INTENTS`,
+origin asset the Verifier token identifier of `currency`, amount
+`funding.amountOut`, destination asset `funding.asset`, recipient
+`funding.refundTo` with recipient type `DESTINATION_CHAIN`, and refund
+type `INTENTS` with the merchant's `recipient` as the refund address,
+so that a failed swap comes back to the merchant and is retried. The
+server funds the quote under the rules of {{intents-refunds}}. The
+payer bears the fees and slippage of the swap.
+
+If the backend cannot quote that swap at all, because the amount is
+too small or the asset is no longer supported, the server MUST instead
+transfer the amount within the Verifier: to the `account` of the
+refund destination that the challenge, or the session it tops up,
+names, when that destination is of type `intents`; otherwise to the
+implicit account of the bound session key. Unavailability of the
+1Click API is not a reason to fall back; it is retried.
+
+A deposit whose swap ended in a non-success terminal status is not
+held by the merchant at all: the 1Click backend refunds it to
+`funding.refundTo`, as defined in {{I-D.nearintents-charge}}.
+
 ## Properties
 
 A payer can bound its refund from data it already holds: `funded`
 from its receipts, minus the highest voucher it signed. The final
-receipt discloses the exact final charge. The default refund
-destination is controlled by the session key, whose control the open
-signature already proved, so a refund can be received whatever origin
-chain the payer funded from.
+receipt discloses the exact final charge. The refund destination was
+named by the payer before it deposited and is fixed in the opening
+challenge, which the open signature covers. A deposit that never
+becomes a session returns to the origin address the payer named, or,
+when it cannot be swapped back, to the payer's refund destination.
 
 # Receipt {#receipt}
 
-Upon successful verification of any action, including close, the
-server MUST attach a payment receipt to the response via the
+Upon successful verification of an `open`, `voucher`, `topUp`, or
+`close` action, the server MUST attach a payment receipt to the
+response via the
 `Payment-Receipt` header per {{I-D.httpauth-payment}}, and for
 streaming responses MUST also emit the final `payment-receipt` event
 ({{payment-receipt-event}}). Servers MUST NOT include a
@@ -1510,7 +1870,7 @@ streaming responses MUST also emit the final `payment-receipt` event
 | `authorized` | string | REQUIRED | Current `authorized`. |
 | `spent` | string | REQUIRED | Current `spent`. At close, the final charge. |
 | `remaining` | string | REQUIRED | `authorized - spent`, at close as well. |
-| `originTxHash` | string | CONDITIONAL | REQUIRED for `open` and `topUp`: the deposit transaction hash. |
+| `originTxHash` | string | CONDITIONAL | REQUIRED in the receipt of an `open` or `topUp`, including a retried one: the deposit transaction hash. |
 | `final` | boolean | CONDITIONAL | REQUIRED at close, with value `true`: usage of the session has ended. Financial recovery can continue through late refunds ({{late-refunds}}). |
 | `settlementRef` | string | CONDITIONAL | At close, when the refund status is `succeeded` or `submitted`: the refund reference of {{refunds}}. |
 | `refund` | object | CONDITIONAL | REQUIRED at close: the refund object of {{refunds}}. |
@@ -1547,7 +1907,7 @@ Example final receipt at close, after one top-up raised `funded` to
 {
   "method": "nearintents",
   "intent": "session",
-  "challengeId": "sQ7mT2vLx9KpR4nB8cWdYe",
+  "challengeId": "vK8pTz3NwE6yBq1RhLsDfC",
   "reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8",
   "status": "success",
   "timestamp": "2026-11-20T16:12:45Z",
@@ -1569,10 +1929,12 @@ Example final receipt at close, after one top-up raised `funded` to
 # Error Responses {#errors}
 
 When rejecting a credential, the server MUST return HTTP 402 (Payment
-Required) with `Cache-Control: no-store` and a fresh
-`WWW-Authenticate: Payment` challenge per {{I-D.httpauth-payment}}.
+Required) with `Cache-Control: no-store` and a fresh unquoted
+challenge in `WWW-Authenticate: Payment` per {{I-D.httpauth-payment}}.
 The server SHOULD include a Problem Details {{RFC9457}} body with
-`Content-Type: application/problem+json`.
+`Content-Type: application/problem+json`. The 402 response to an
+accepted `quote` action is not a rejection; it is defined in
+{{quote-action}}.
 
 Session conditions use problem types under
 `https://paymentauth.org/problems/session/`. Deposit and settlement
@@ -1582,41 +1944,49 @@ conditions reuse the problem types of {{I-D.httpauth-payment}} and
 | Condition | Problem type | HTTP | Body extras |
 |-----------|--------------|------|-------------|
 | Credential unparseable, or required fields absent or of the wrong type | `malformed-credential` | 402 | |
-| Payload field has an invalid value: session key not a valid Ed25519 point, amount not an integer, unsupported refund destination | `invalid-payload` | 402 | |
-| Challenge unknown, modified, or consumed; `voucher` or `close` echoing a challenge other than the opening one; top-up challenge terms differ from the session's | `invalid-challenge` | 402 | |
-| Challenge expired (`open`, `topUp`) | `payment-expired` | 402 | |
-| Confirmed deposit transaction with wrong recipient, wrong asset, or wrong memo; a deposit not yet detected is pending, not an error ({{pending}}) | `verification-failed` | 402 | |
-| Deposit below `funding.minAmountIn` | `payment-insufficient` | 402 | |
+| Payload field has an invalid value: session key not a valid Ed25519 point, amount not an integer, unsupported asset or refund destination, value to fund outside the merchant's limits, first voucher above the funded value | `invalid-payload` | 402 | |
+| Challenge unknown, modified, or consumed; challenge of another method, intent, or version; wrong form for the action (`quote` echoing a payable challenge, `open` or `topUp` echoing an unquoted one); `quote` or `voucher` whose challenge does not match the requested resource; `topUp` whose challenge is bound to another session; challenge whose `currency` or `recipient` differ from the session's | `invalid-challenge` | 402 | |
+| Challenge expired | `payment-expired` | 402 | |
+| Confirmed deposit transaction with wrong recipient, wrong asset, or wrong memo; `hash` that already settled another challenge. A deposit not yet detected or still incomplete is pending, not an error ({{pending}}) | `verification-failed` | 402 | |
+| Swap refunded because the deposit stayed below `funding.minAmountIn` | `payment-insufficient` | 402 | |
 | Swap failed or refunded after a verified deposit | `settlement-failed` | 402 | |
-| Signature invalid; session key already bound; open replayed with a different session key | `session/invalid-proof` | 402 | |
+| Signature invalid; session key already bound to a session | `session/invalid-proof` | 402 | |
 | Unknown `reference` | `session/not-found` | 402 | |
 | Session is `closing` or `closed` | `session/closed` | 402 | Close result fields |
 | Voucher below the highest accepted voucher | `session/stale-update` | 402 | `reference`, `acceptedCumulative` |
 | Voucher above `funded` or advancing by less than `minVoucherDelta`; authorized value exhausted | `session/insufficient-value` | 402 | `reference`, `acceptedCumulative`, `requiredCumulative`, `funded` |
+| `quote` actions over the server's rate limit | none | 429 | `Retry-After` |
+| `Idempotency-Key` reused with a different method, URI, or body | `bad-request` | 400 | |
+| Duplicate of a request that is still in progress ({{idempotency}}) | none | 409 | |
 | 1Click Swap API or origin chain unavailable | none | 5xx | Credential not consumed |
 | Deposit not yet detected or swap not yet terminal, connection not held | none | 202 | `Retry-After`; credential not consumed ({{pending}}) |
 
 The problem types defined by this document are:
 
 https://paymentauth.org/problems/session/invalid-proof
-: HTTP 402. A session-key signature did not verify, the `sessionKey`
-  of an `open` is already bound to a session, or an `open` replays a
-  recorded deposit hash with a different session key.
+: HTTP 402. A session-key signature did not verify, or the session key
+  named by a `quote` action or bound to a payable challenge is already
+  bound to a session.
 
 https://paymentauth.org/problems/session/not-found
 : HTTP 402. The `payload.reference` does not match any session stored
   by this server.
 
 https://paymentauth.org/problems/session/closed
-: HTTP 402. The session is `closing` or `closed`. The body carries the
-  current close result: `reference`, `funded`, `spent`, `settlementRef`
-  when known, the `refund` object of {{refunds}}, and `lateRefunds`
-  when present ({{late-refunds}}). While the session is `closing`,
+: HTTP 402. The session is `closing` or `closed`. Except in response
+  to a `quote` action, the body carries the current close result:
+  `reference`, `funded`, `spent`, `settlementRef` when known, the
+  `refund` object of {{refunds}}, and `lateRefunds` when present
+  ({{late-refunds}}). While the session is `closing`,
   `refund.status` is `pending` and `settlementRef` is absent.
 
 https://paymentauth.org/problems/session/stale-update
 : HTTP 402. The voucher's `cumulative` is below the highest accepted
   voucher. The body carries `reference` and `acceptedCumulative`.
+
+This document also uses the following problem type, which is
+registered by {{I-D.payment-intent-session}}, and defines its body
+members for this method:
 
 https://paymentauth.org/problems/session/insufficient-value
 : HTTP 402. The voucher's `cumulative` exceeds `funded` or does not
@@ -1652,15 +2022,27 @@ only be transmitted over HTTPS connections.
 
 ## Amount and Asset Verification {#amount-verification}
 
-Before broadcasting a deposit, clients MUST decode and verify the
-challenge `request` per {{I-D.httpauth-payment}}: that `amount`,
-`currency`, `recipient`, `methodDetails.verifier`, and
-`methodDetails.custody` are as expected, and that the funding object
-names the intended origin chain, asset, deposit address, and deposit
-size. Clients MUST also verify that `funding.refundTo` is controlled by
-the payer or is otherwise acceptable under an explicit merchant
-recovery policy, as required by {{I-D.nearintents-charge}}. Clients
-MUST NOT rely on `description`.
+Before broadcasting a deposit, clients MUST decode the `request` of
+the payable challenge per {{I-D.httpauth-payment}} and verify all of
+the following:
+
+- `methodDetails.version` is `2`, and `amount`, `currency`,
+  `recipient`, `methodDetails.verifier`, and `methodDetails.custody`
+  are as expected and equal those of the unquoted challenge that the
+  `quote` action echoed;
+- to open a session, `methodDetails.sessionKey` is the client's own
+  session key and `methodDetails.refund` equals the refund destination
+  of its `quote` action; to top up, `methodDetails.reference` is the
+  client's own session;
+- `funding.asset`, `funding.refundTo`, and `funding.amountOut` equal
+  the values of its `quote` action;
+- `funding.amount` does not exceed what the client is prepared to
+  deposit for that value, and `funding.deadline` leaves time for the
+  deposit to confirm.
+
+A client MUST NOT deposit against a challenge that fails any of these
+checks, or that it did not obtain in response to its own `quote`
+action. Clients MUST NOT rely on `description`.
 
 ## Deposit Address Authenticity
 
@@ -1681,18 +2063,16 @@ the merchant disappears. The payer's exposure is bounded by `funded`.
 The merchant bears no financial risk: it is paid before it serves and
 only ever serves up to `authorized`.
 
-Funds that back open sessions MUST remain in `recipient`: refunds are
-Verifier transfers from that account, and every server supports
-`intents` refunds. How the merchant pays itself out is out of scope. A
-merchant MAY move value out of `recipient` at any time, including while
-sessions are open, to any destination the Verifier or the 1Click API
-can reach, provided the account keeps at least the sum of
-`funded - spent` over its `open` and `closing` sessions, of refunds not
-yet executed, and of the value delivered by deposits that remain
-claimable ({{expiry}}). Because refunds are signed automatically, the
-key the server holds can move the whole balance of `recipient`;
-merchants SHOULD dedicate an Intents account to sessions and sweep the
-surplus to an account that key does not control.
+Refunds are Verifier transfers from `recipient`, and every server
+supports `intents` refunds. The merchant MUST therefore keep in
+`recipient` at least the sum of `funded - spent` over its `open` and
+`closing` sessions, of refunds not yet executed, and of the value
+delivered by unclaimed deposits ({{unclaimed}}). Above that floor it
+MAY move value out at any time, including while sessions are open; how
+it pays itself out is out of scope. Because refunds are signed
+automatically, the key the server holds can move the whole balance of
+`recipient`; merchants SHOULD dedicate an Intents account to sessions
+and sweep the surplus to an account that key does not control.
 
 A compliant merchant charges at most the highest voucher the payer
 signed and refunds the rest; nothing enforces this, and a malicious
@@ -1734,25 +2114,36 @@ spending credential bounded by `authorized - spent` on the session
 
 If the session private key is compromised, an attacker can sign
 vouchers up to `funded` and reduce the refund. The refund destination
-cannot be changed after open, but when it is the session key's
-implicit account, whether by default or by fallback, the attacker can
-also withdraw the refund from that account. The exposure is therefore
-the remaining session value plus any refund held under the key.
-Clients SHOULD keep the session key in a secure store, use short
-sessions, and keep `funded` small. Clients funding larger sessions
-SHOULD name a separately held, durable Intents account as the refund
-destination instead of relying on the session key.
+cannot be changed once the payable challenge is issued, but when it is
+the session key's implicit account, whether by the payer's choice or
+by fallback, the attacker can also withdraw the refund from that
+account. The exposure is therefore the remaining session value plus
+any refund held under the key. Clients SHOULD keep the session key in
+a secure store, use short sessions, and keep `funded` small. Clients
+funding larger sessions SHOULD name a separately held, durable Intents
+account as the refund destination instead of the session key's
+implicit account.
 
-A client that relies on the session key's implicit account, by default
-or through the `origin` fallback, MUST be able to sign Verifier
-withdrawals with that key and MUST retain the private key until every
-refund that can land in that account has been withdrawn. Refunds can
-arrive after the client process has exited, for example after a
-server-initiated close.
+A client that names the session key's implicit account as its refund
+destination, or selects an `origin` refund with its fallback, MUST be
+able to sign Verifier withdrawals with that key and MUST retain the
+private key until every refund that can land in that account has been
+withdrawn. Refunds can arrive after the client process has exited, for
+example after a server-initiated close.
 
-Servers MUST reject a session key that has been bound before, so that
-no voucher or close signature can be replayed against a later session
-and no two sessions share a refund account by accident.
+A client that loses the session key after depositing and before
+opening cannot open the session. Its deposit is returned as an
+unclaimed deposit ({{unclaimed}}): to `funding.refundTo`, or, when it
+cannot be swapped back, to the refund destination the client named.
+Only a client that selected an `origin` refund can then find the value
+under the lost key.
+
+Clients MUST generate a new session key for every session and MUST NOT
+deposit against more than one payable challenge that names the same
+session key: only one of them can open a session. Servers MUST reject
+a session key that has been bound before, so that no voucher or close
+signature can be replayed against a later session and no two sessions
+share a refund account by accident.
 
 ## Signature Binding
 
@@ -1764,22 +2155,49 @@ merchant in one realm. The NEP-413 prefix ensures that a signed message
 cannot be interpreted as a NEAR transaction, so a session key that is
 also a NEAR account key cannot be tricked into signing one.
 
-## Deposit Claims and Challenge Confidentiality
+## Deposit Claims and Challenge Binding {#deposit-claims}
 
-A deposit transaction hash is public once broadcast. A party that also
-holds the challenge could present an `open` or `topUp` for that
-deposit with its own session key before the payer does; the first
-valid claim of a deposit wins. Servers and clients MUST treat
-challenges as confidential and MUST NOT log them. The single-use
-deposit address binds each deposit to one challenge, as described in
+A deposit transaction hash is public once broadcast, and a payable
+challenge names the address that the deposit pays. Neither is a
+secret, and holding both is not sufficient to claim a deposit: an
+`open` has to be signed by the session key the challenge is bound to,
+and a `topUp` by the key of the session it is bound to. A party that
+obtains a copy of a payable challenge, for example from a log or from
+the transcript of an agent, can neither open the session nor change
+where its refund goes. The most it can do is deposit its own funds for
+the benefit of the key holder. The single-use deposit address binds
+each deposit to one challenge, as described in
 {{I-D.nearintents-charge}}.
+
+The `quote` action is deliberately unauthenticated. A party can
+request a payable challenge that names a session key, a refund
+destination, or a session of another party. It gains nothing: it
+cannot sign for the key, and a client deposits only against a
+challenge that it requested and verified ({{amount-verification}}).
+Servers MUST NOT treat a `quote` action as evidence of anything, and
+MUST NOT bind or reserve a session key before a signed `open` settles,
+so that naming a key in a `quote` action cannot deny its holder the
+use of it.
+
+The binding depends on the client's checks. A client that deposits
+against a payable challenge without verifying its `sessionKey` and its
+refund destinations can fund a session that it cannot open, or one
+whose refund goes elsewhere.
+
+Challenges and credentials remain sensitive. A captured voucher
+credential can be replayed within the limits of
+{{replay-protection}}, and a payable challenge discloses the payer's
+refund addresses. Servers and clients SHOULD NOT log challenges or
+credentials, in whichever header field the credential is carried.
 
 ## Replay Protection {#replay-protection}
 
 Deposit transaction hashes are single-use. Vouchers only advance
 `authorized`; an equal voucher is a no-op and a lower one is rejected.
 Close is idempotent. Session keys are never re-bound. Closed sessions
-are retained so that late credentials are rejected.
+are retained so that late credentials are rejected. The signing
+`domain` differs from that of the withdrawn single-step flow
+({{version}}), so no signature made under it verifies here.
 
 Vouchers are bound to a session, not to a resource URI or to an
 individual request. A voucher credential replayed against any
@@ -1802,21 +2220,42 @@ persist `authorized` before delivering against it, and MUST persist
 
 ## Refund Account Control {#refund-account-control}
 
-The default refund destination is the implicit account of the session
-key. Its control is proved by the open signature, so the server never
-needs the payer's identity, and the client accepts it by omitting
-`refund` from a signed `open`. A payer that names another Intents
-account or an origin address is responsible for controlling it. Origin
-refunds are handed to a swap and may arrive in a different asset and
-on a different chain than the payer deposited, net of fees.
+The payer names the refund destination in its `quote` action and is
+responsible for controlling it. The server does not verify that
+control; the signed `open` records the session key's consent to the
+destination ({{signing}}). Naming the implicit account of the session
+key keeps the refund under a key whose control the open signature
+proves, whatever origin chain the payer funded from. Origin refunds
+are handed to a swap and may arrive in a different asset and on a
+different chain than the payer deposited, net of fees.
 
-## Denial of Service
+The refund destination and `funding.refundTo` are named by the payer
+and are not tied to the source of the deposit. A session that is
+opened and closed unused, or a deposit that is never claimed, moves
+value from one address to another through the merchant's account, at
+the payer's cost. A merchant that has to screen its counterparties
+does so before it accepts a `quote` action, and can withhold the
+`origin` refund type.
 
-Servers MUST perform format validation and signature verification
-before any 1Click or origin-chain call, so that unauthenticated callers
-cannot generate backend traffic. Servers SHOULD rate limit challenge
-issuance, opens, top-ups, voucher submissions, and streaming pauses.
-Servers MUST enforce `minVoucherDelta` to prevent tiny increments.
+## Denial of Service {#dos}
+
+A server answers a request without a credential with an unquoted
+challenge and MUST NOT call the 1Click Swap API or an origin chain to
+do so. The `quote` action is the only unauthenticated request that
+causes a backend call: every accepted one mints a quote. Servers MUST
+validate the payload and the echoed challenge of a `quote` action
+before requesting the quote, and MUST rate limit `quote` actions per
+client. A limit MUST NOT be keyed on the `sessionKey` or `reference`
+of the payload alone: both are public, and a third party could
+otherwise exhaust another client's allowance. A server MAY require
+other authentication before it accepts `quote` actions, as provided by
+{{I-D.httpauth-payment}}.
+
+For `open`, `voucher`, `topUp`, and `close`, servers MUST perform
+format validation and signature verification before any 1Click or
+origin-chain call. Servers SHOULD rate limit opens, top-ups, voucher
+submissions, and streaming pauses, and MUST enforce `minVoucherDelta`
+to prevent tiny increments.
 
 ## Idempotency and Side Effects
 
@@ -1849,15 +2288,17 @@ Problem Types" registry established by {{RFC9457}}:
 | `https://paymentauth.org/problems/session/not-found` | Session Not Found | 402 | This document |
 | `https://paymentauth.org/problems/session/closed` | Session Closed | 402 | This document |
 | `https://paymentauth.org/problems/session/stale-update` | Stale Update | 402 | This document |
-| `https://paymentauth.org/problems/session/insufficient-value` | Insufficient Value | 402 | This document |
 
-Each problem type is defined in {{errors}}.
+Each problem type is defined in {{errors}}. The problem type
+`https://paymentauth.org/problems/session/insufficient-value` is
+registered by {{I-D.payment-intent-session}}; this document uses it
+with the body members defined in {{errors}}.
 
 --- back
 
 # Examples
 
-## Challenge (Unauthenticated Request)
+## Unquoted Challenge (Unauthenticated Request)
 
 ~~~http
 GET /generate HTTP/1.1
@@ -1866,12 +2307,12 @@ Host: api.example.com
 HTTP/1.1 402 Payment Required
 Cache-Control: no-store
 Content-Type: application/problem+json
-WWW-Authenticate: Payment id="sQ7mT2vLx9KpR4nB8cWdYe",
+WWW-Authenticate: Payment id="uQ1nHs5KdP8wLr2XcVbTmA",
   realm="api.example.com",
   method="nearintents",
   intent="session",
   request="eyJ...",
-  expires="2026-11-20T15:10:00Z"
+  expires="2026-11-20T15:30:00Z"
 
 {
   "type": "https://paymentauth.org/problems/payment-required",
@@ -1881,9 +2322,41 @@ WWW-Authenticate: Payment id="sQ7mT2vLx9KpR4nB8cWdYe",
 }
 ~~~
 
-The decoded `request` is the example of {{challenge}}. The client
-sends 5.025 USDC to `0x76b4c560...` on Arbitrum, generates a session
-key, computes the `reference`
+The decoded `request` is the unquoted example of {{challenge}}. The
+server has not contacted the 1Click Swap API.
+
+## Quote Action and Payable Challenge
+
+The client generates a session key and asks for a funding quote:
+
+~~~http
+GET /generate HTTP/1.1
+Host: api.example.com
+Authorization: Payment eyJ...
+
+HTTP/1.1 402 Payment Required
+Cache-Control: no-store
+Content-Type: application/problem+json
+WWW-Authenticate: Payment id="sQ7mT2vLx9KpR4nB8cWdYe",
+  realm="api.example.com",
+  method="nearintents",
+  intent="session",
+  request="eyJ...",
+  expires="2026-11-21T15:10:00Z"
+
+{
+  "type": "https://paymentauth.org/problems/payment-action-required",
+  "title": "Payment Action Required",
+  "status": 402,
+  "detail": "Deposit against the payable challenge, then open the session."
+}
+~~~
+
+The decoded credential is the example of {{quote-action}}, and the
+decoded `request` of the returned challenge is the payable example of
+{{challenge}}. The client verifies that the challenge names its own
+session key and refund addresses, sends 5.025 USDC to `0x76b4c560...`
+on Arbitrum, computes the `reference`
 `eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8`, and signs
 the open message and a first voucher for 1,000 base units.
 
@@ -1911,7 +2384,7 @@ data: {"token": " answer"}
 ...
 
 event: payment-receipt
-data: {"method":"nearintents","intent":"session","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8","status":"success","timestamp":"2026-11-20T15:02:11Z","funded":"5000000","authorized":"1000","spent":"870","remaining":"130","originTxHash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a"}
+data: {"method":"nearintents","intent":"session","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8","status":"success","timestamp":"2026-11-20T15:02:19Z","funded":"5000000","authorized":"1000","spent":"870","remaining":"130","originTxHash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a"}
 
 data: [DONE]
 ~~~
@@ -1968,9 +2441,25 @@ data: {"reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8","ac
 
 ## TopUp Credential and Response
 
-The client obtains a fresh challenge with an unauthenticated request,
-pays its funding quote, and submits the top-up to any protected URI in
-the realm:
+The client asks for a funding quote bound to its session, echoing a
+current unquoted challenge. Decoded payload of the `quote` credential:
+
+~~~json
+{
+  "action": "quote",
+  "reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8",
+  "asset": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "refundTo": "0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317",
+  "amountOut": "5000000"
+}
+~~~
+
+The server answers 402 with a payable challenge, `id`
+`tV3kLm9QxZ2pRwN7bYcHfA`, whose `methodDetails` carry a new funding
+object and
+`"reference": "eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"`
+in place of `sessionKey` and `refund`. The client pays its funding
+quote and submits the top-up to any protected URI in the realm:
 
 ~~~http
 GET /generate HTTP/1.1
@@ -2069,28 +2558,28 @@ WWW-Authenticate: Payment id="uW4nPq8RyA3sTxM6cZdJgB",
 
 ## Origin Refund
 
-An `open` that selects an origin refund to USDC on Base:
+Decoded payload of a `quote` credential that selects an origin refund
+to USDC on Base:
 
 ~~~json
 {
-  "action": "open",
-  "hash": "0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a",
+  "action": "quote",
   "sessionKey": "ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai",
   "refund": {
     "type": "origin",
     "asset": "eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     "address": "0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317"
   },
-  "signature": "ed25519:2wGT...P2",
-  "voucher": {
-    "cumulative": "1000",
-    "signature": "ed25519:4o66...AB"
-  }
+  "asset": "eip155:42161/erc20:0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "refundTo": "0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317",
+  "amountOut": "5000000"
 }
 ~~~
 
-The `refund` object of the close result after the swap has been
-handed to the 1Click backend:
+The payable challenge carries the same object as
+`methodDetails.refund`, and the open message signs it
+({{vector-open-refund}}). The `refund` object of the close result
+after the swap has been handed to the 1Click backend:
 
 ~~~json
 {
@@ -2137,10 +2626,10 @@ The first voucher carried by the `open` of {{open-action}}:
 
 ~~~
 message:
-{"action":"voucher","cumulative":"1000","currency":"near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1","domain":"mpp-nearintents-session-v1","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
+{"action":"voucher","cumulative":"1000","currency":"near:mainnet/nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1","domain":"mpp-nearintents-session-v2","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
 
 nonce:
-987dda771aa672e8d3dd6dfc9bde68935cc166afca836932c9df1b625392deb9
+e543e3aef537d0cbea89b0c4549d44c8ccac0b3aacfb76e5e90ef3a0849733d6
 
 payload (hex):
 9d010080100100007b22616374696f6e223a22766f7563686572222c2263756d
@@ -2148,55 +2637,57 @@ payload (hex):
 3a6d61696e6e65742f6e65703134313a31373230383632386638346635643661
 6433336630646133626262656232376666636233393865616335303161333162
 64366164323031316533363133336131222c22646f6d61696e223a226d70702d
-6e656172696e74656e74732d73657373696f6e2d7631222c227265616c6d223a
+6e656172696e74656e74732d73657373696f6e2d7632222c227265616c6d223a
 226170692e6578616d706c652e636f6d222c227265666572656e6365223a2265
 69703135353a34323136313a3078373662346335363038354544313336613837
-34344435326245393536333936363234613733304538227d987dda771aa672e8
-d3dd6dfc9bde68935cc166afca836932c9df1b625392deb90d0000006d657263
+34344435326245393536333936363234613733304538227de543e3aef537d0cb
+ea89b0c4549d44c8ccac0b3aacfb76e5e90ef3a0849733d60d0000006d657263
 68616e742e6e65617200
 
 digest:
-c2ce8a32fe61a25c19981b3665b6d0607a7a9b850addd2548ae8129ff1f27d3b
+59cb93a6c9345de08a33fb8415f6ce7b9f29d448de0b32e1767aec9de325bd45
 
 signature:
-ed25519:4o66twpTBMPaspJqWzHREVtj85p18YznYRNvPMUyooEZgNeZgiMBJUimEnAV5QRVNN2249ZrYANXrjYcGS3c8TAB
+ed25519:3NGDTHMoLJiLqU9pvyQfDsXacCx9aPr4b3j925zR2trh1bZS3aBBWKhGsxZQBbY6QJRGnTJZ7r86nG1wcsLJBCcA
 ~~~
 
 ## Open {#vector-open}
 
-The open signature of {{open-action}}, with no `refund` object:
+The open signature of {{open-action}}. The challenge it echoes names
+the implicit account of the session key as refund destination:
 
 ~~~
 message:
-{"action":"open","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","domain":"mpp-nearintents-session-v1","hash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a","realm":"api.example.com","sessionKey":"ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai"}
+{"action":"open","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","domain":"mpp-nearintents-session-v2","hash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a","realm":"api.example.com","refund":{"account":"d5bdd38fe760603eaac6821bdc961e296708d2804911c663ea2c79ea581799c3","type":"intents"},"sessionKey":"ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai"}
 
 nonce:
-cc195ffdf3d32b2db5196aa28dafb29689f6d785b25e848e5eda5c762cc47f5d
+007634593662e6776c8258edc4ea752d1250444e1134eda9cc673399bed4ba2a
 
 digest:
-f15dae1de948f558e6130f88f916fedb67d2636c8e0499254127e44dc95fe628
+59c8b47605afab5dfc9adf40b7bfa5ae6ab9dc82d23075244fa49474d6d657a7
 
 signature:
-ed25519:4ZghzRsiSXkRmPJmx6T1rAajdLZRYQLpYXzA9uBU6BJLL8UCMhTeULfmSwGPHDWCz5KVnVU4iwaDoSYeTo9iW415
+ed25519:39sYVWfQ3g3SKkPK4S2QZfKhXHaMRgp73Tr9iLGNZdpsf2W8oP3oweE6JcypthFd2FHQ6PCJ2fdmmC1Myxmx8g8r
 ~~~
 
-## Open with Refund Destination {#vector-open-refund}
+## Open with Origin Refund {#vector-open-refund}
 
-The open signature of the origin-refund example in Appendix A, whose
-message carries the `refund` object in JCS key order:
+The open signature for the payable challenge of the origin-refund
+example in Appendix A, taken with the same challenge identifier and
+deposit hash:
 
 ~~~
 message:
-{"action":"open","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","domain":"mpp-nearintents-session-v1","hash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a","realm":"api.example.com","refund":{"address":"0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317","asset":"eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","type":"origin"},"sessionKey":"ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai"}
+{"action":"open","challengeId":"sQ7mT2vLx9KpR4nB8cWdYe","domain":"mpp-nearintents-session-v2","hash":"0x9bcff372aee89b648c922b850573b22387c31d693079f5e37cd255814e2d615a","realm":"api.example.com","refund":{"address":"0x2527D02599Ba641c19Fea793Cd0f9A6e8457c317","asset":"eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","type":"origin"},"sessionKey":"ed25519:FPMiwPws7RmVuqaAqqEwYNaVxf379PBvfmcqMisGbRai"}
 
 nonce:
-f9261b3ff6514ebeea6a931ca703eb6bfedc6f8da33551c107620a19cdc3836b
+5c24d55533d43dcd3348305249c526d10e8a6f1a7a73314dc55bd1d50317b4ad
 
 digest:
-3bc4519d2d13ec9b2c61a8bf9bc3f0ea7253362de64ffe4386460ca2b4af01e4
+46e9d3bebbff0af8156baec4c2f6250268f16f34fc2647b72a0b51ebd7bd8be8
 
 signature:
-ed25519:2wGT7UzGW8jTEidLm2vAXWD9EY9UG1PeWxjxLRkdVWNJxMaGRpnHg2bV7fRbWH6LbFVe1eczw8MBSnMuZDwxR9P2
+ed25519:49ngZ2oAuT976MxGzoR6XXuYXdT349GhwVPDS1X3SDraNyFfMLUwKQzQqXiQfBWLs3oSJeb5dKEuV243cBgfEHgf
 ~~~
 
 ## TopUp {#vector-topup}
@@ -2205,16 +2696,16 @@ The topUp signature of {{topup-action}}:
 
 ~~~
 message:
-{"action":"topUp","challengeId":"tV3kLm9QxZ2pRwN7bYcHfA","domain":"mpp-nearintents-session-v1","hash":"0x4d1e8a7c3b2f9e6d5c4b3a2918f7e6d5c4b3a29187f6e5d4c3b2a1908f7e6d5c","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
+{"action":"topUp","challengeId":"tV3kLm9QxZ2pRwN7bYcHfA","domain":"mpp-nearintents-session-v2","hash":"0x4d1e8a7c3b2f9e6d5c4b3a2918f7e6d5c4b3a29187f6e5d4c3b2a1908f7e6d5c","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
 
 nonce:
-26c8b241581d0d15fc9d7548459225b3331806bf7d6ab3ced7fdf262ee32337b
+9c4aad08876f0aa210dad208de3709d0445f99bfe22b80d753f54e3aa83477ab
 
 digest:
-66b8a5259cef8fe6d8b7c2dba015a105bfc68d622ab7855a097f7b513ef377fc
+a43abb81ec50666e767b8d97a4af16c3c9848bd0a516dcea5ee6986aaf78ee46
 
 signature:
-ed25519:5kTwCLkAKtsf2WZEJ9XpDHpAgdTL4GHBHjb5vg4iCF5E3D68f5mabat7eN9rHGCavhmchtCRtvn8ewtAuNvGj3gH
+ed25519:3RxWetavggcGzAor9WywB1kaBNxQNDG2fhod1JdsReWBHgL7keUy3RH2bRRvuKxcoGCCoFp7vV1uhto45ntm3aYu
 ~~~
 
 ## Close {#vector-close}
@@ -2223,16 +2714,16 @@ The close signature of {{close-action}}:
 
 ~~~
 message:
-{"action":"close","domain":"mpp-nearintents-session-v1","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
+{"action":"close","domain":"mpp-nearintents-session-v2","realm":"api.example.com","reference":"eip155:42161:0x76b4c56085ED136a8744D52bE956396624a730E8"}
 
 nonce:
-e57103bf3e94bb33256612203a72abf1a5bbabc2ca11a1f2972e777d7c1edd92
+397200d4ee7ec3e9f3e991bd0a5eb45c2b0ead263393f65b302808178ae72615
 
 digest:
-415c95dc779ea24a70ed208bf6060211eb543e539ff3cfac6d68d7d58d9834b1
+9cd1cfd109274a9a4d6dc42a0a337e56df3d71d65357912f6bc280dd43b082a3
 
 signature:
-ed25519:3aw69NKjrzcLxKWuDy3byMv2j4EzcCtSzVhfpFknkkgB6Rt1pP4PXPVwLXJ2JMmvwqVpDtXoajK5MVeAsSagZBUm
+ed25519:5EsonbjXGFtjWV8ivU7xsFne1mPqinGoHGtAgmiBrWTFg445giUMMxycXcpnb1faHDAjEirUikhhtHa6gByr7JRo
 ~~~
 
 # Schema Definitions
@@ -2243,6 +2734,10 @@ definitions are in the body of this document. No specific JSON Schema
 draft version is required or assumed.
 
 ## Challenge Request Schema
+
+A payable challenge additionally requires `funding` and either
+`sessionKey` with `refund`, or `reference`. An unquoted challenge
+carries none of them.
 
 ~~~json
 {
@@ -2258,18 +2753,30 @@ draft version is required or assumed.
     "methodDetails": {
       "type": "object",
       "required": [
-        "verifier", "custody", "funding", "idleTimeout",
-        "minVoucherDelta", "refundTypes"
+        "version", "verifier", "custody", "minDeposit",
+        "idleTimeout", "minVoucherDelta", "refundTypes"
       ],
       "properties": {
+        "version":           { "const": 2 },
         "verifier":          { "type": "string" },
         "custody":           { "type": "string", "enum": ["merchant"] },
         "settlementBackend": { "type": "string" },
+        "minDeposit":        { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "maxFunded":         { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "idleTimeout":       { "type": "integer", "minimum": 1 },
+        "maxSessionLifetime": { "type": "integer", "minimum": 1 },
+        "minVoucherDelta":   { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "refundTypes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["intents", "origin"] },
+          "contains": { "const": "intents" }
+        },
+        "minOriginRefund":   { "type": "string" },
         "funding": {
           "type": "object",
           "required": [
             "originNetwork", "asset", "depositAddress", "amount",
-            "minAmountIn", "amountOut", "refundTo"
+            "minAmountIn", "amountOut", "deadline", "refundTo"
           ],
           "properties": {
             "originNetwork":     { "type": "string" },
@@ -2281,19 +2788,37 @@ draft version is required or assumed.
             "depositMemo":       { "type": ["string", "null"] },
             "slippageTolerance": { "type": "number" },
             "timeEstimate":      { "type": "number" },
+            "deadline":          { "type": "string", "format": "date-time" },
             "refundTo":          { "type": "string" }
           }
         },
-        "idleTimeout":     { "type": "integer", "minimum": 1 },
-        "maxSessionLifetime": { "type": "integer", "minimum": 1 },
-        "minVoucherDelta": { "type": "string", "pattern": "^[1-9][0-9]*$" },
-        "refundTypes": {
-          "type": "array",
-          "items": { "type": "string", "enum": ["intents", "origin"] },
-          "contains": { "const": "intents" }
-        },
-        "minOriginRefund": { "type": "string" }
+        "sessionKey": { "type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]+$" },
+        "refund":     { "$ref": "#/$defs/refundDestination" },
+        "reference":  { "type": "string" }
       }
+    }
+  },
+  "$defs": {
+    "refundDestination": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "account"],
+          "properties": {
+            "type":    { "const": "intents" },
+            "account": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "asset", "address"],
+          "properties": {
+            "type":    { "const": "origin" },
+            "asset":   { "type": "string" },
+            "address": { "type": "string" }
+          }
+        }
+      ]
     }
   }
 }
@@ -2301,37 +2826,33 @@ draft version is required or assumed.
 
 ## Credential Payload Schema
 
+`refundDestination` is the definition of the challenge request schema.
+A `quote` payload carries exactly one of `sessionKey` (with `refund`)
+and `reference`.
+
 ~~~json
 {
   "oneOf": [
     {
       "type": "object",
-      "required": ["action", "hash", "sessionKey", "signature", "voucher"],
+      "required": ["action", "asset", "refundTo", "amountOut"],
+      "properties": {
+        "action":     { "const": "quote" },
+        "sessionKey": { "type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]+$" },
+        "refund":     { "$ref": "#/$defs/refundDestination" },
+        "reference":  { "type": "string" },
+        "asset":      { "type": "string" },
+        "refundTo":   { "type": "string" },
+        "amountOut":  { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "slippageTolerance": { "type": "number" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["action", "hash", "signature", "voucher"],
       "properties": {
         "action":     { "const": "open" },
         "hash":       { "type": "string" },
-        "sessionKey": { "type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]+$" },
-        "refund": {
-          "oneOf": [
-            {
-              "type": "object",
-              "required": ["type", "account"],
-              "properties": {
-                "type":    { "const": "intents" },
-                "account": { "type": "string" }
-              }
-            },
-            {
-              "type": "object",
-              "required": ["type", "asset", "address"],
-              "properties": {
-                "type":    { "const": "origin" },
-                "asset":   { "type": "string" },
-                "address": { "type": "string" }
-              }
-            }
-          ]
-        },
         "signature":  { "type": "string" },
         "voucher": {
           "type": "object",
